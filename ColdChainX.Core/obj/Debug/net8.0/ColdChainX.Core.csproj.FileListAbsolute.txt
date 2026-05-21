@@ -9,3 +9,4 @@ C:\Users\Lenovo\Downloads\ColdChainX\ColdChainX.Core\obj\Debug\net8.0\ColdChainX
 C:\Users\Lenovo\Downloads\ColdChainX\ColdChainX.Core\obj\Debug\net8.0\refint\ColdChainX.Core.dll
 C:\Users\Lenovo\Downloads\ColdChainX\ColdChainX.Core\obj\Debug\net8.0\ColdChainX.Core.pdb
 C:\Users\Lenovo\Downloads\ColdChainX\ColdChainX.Core\obj\Debug\net8.0\ref\ColdChainX.Core.dll
+C:\Users\Lenovo\Downloads\ColdChainX\ColdChainX.Core\obj\Debug\net8.0\ColdChainX.Core.sourcelink.json

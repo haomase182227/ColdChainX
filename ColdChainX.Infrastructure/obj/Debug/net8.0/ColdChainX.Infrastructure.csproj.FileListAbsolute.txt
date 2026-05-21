@@ -19,3 +19,4 @@ C:\Users\Lenovo\Downloads\ColdChainX\ColdChainX.Infrastructure\obj\Debug\net8.0\
 C:\Users\Lenovo\Downloads\ColdChainX\ColdChainX.Infrastructure\obj\Debug\net8.0\ColdChainX.Infrastructure.pdb
 C:\Users\Lenovo\Downloads\ColdChainX\ColdChainX.Infrastructure\obj\Debug\net8.0\ColdChainX.Infrastructure.genruntimeconfig.cache
 C:\Users\Lenovo\Downloads\ColdChainX\ColdChainX.Infrastructure\obj\Debug\net8.0\ref\ColdChainX.Infrastructure.dll
+C:\Users\Lenovo\Downloads\ColdChainX\ColdChainX.Infrastructure\obj\Debug\net8.0\ColdChainX.Infrastructure.sourcelink.json

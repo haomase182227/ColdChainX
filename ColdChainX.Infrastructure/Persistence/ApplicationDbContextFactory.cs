@@ -20,8 +20,8 @@ namespace ColdChainX.Infrastructure.Persistence
                 .AddEnvironmentVariables()
                 .Build();
 
-            var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
-                ?? configuration.GetConnectionString("DefaultConnection");
+            var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__LocalConnection")
+                ?? configuration.GetConnectionString("LocalConnection");
 
             if (string.IsNullOrWhiteSpace(connectionString))
             {

@@ -27,8 +27,11 @@ namespace ColdChainX.API.Extensions
         {
             services.Configure<JwtSettings>(configuration.GetSection("JwtSettings"));
 
+            var connectionString = configuration.GetConnectionString("LocalConnection")
+                ?? throw new InvalidOperationException("ConnectionStrings:LocalConnection was not found.");
+
             services.AddDbContext<ApplicationDbContext>(options =>
-                options.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
+                options.UseNpgsql(connectionString));
 
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IAuthService, AuthService>();
