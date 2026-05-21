@@ -1,0 +1,6 @@
+@ColdChainX.API_HostAddress = http://localhost:5244
+
+GET {{ColdChainX.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

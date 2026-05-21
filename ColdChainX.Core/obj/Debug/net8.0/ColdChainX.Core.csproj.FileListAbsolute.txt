@@ -1,0 +1,11 @@
+C:\Users\Lenovo\Downloads\ColdChainX\ColdChainX.Core\bin\Debug\net8.0\ColdChainX.Core.deps.json
+C:\Users\Lenovo\Downloads\ColdChainX\ColdChainX.Core\bin\Debug\net8.0\ColdChainX.Core.dll
+C:\Users\Lenovo\Downloads\ColdChainX\ColdChainX.Core\bin\Debug\net8.0\ColdChainX.Core.pdb
+C:\Users\Lenovo\Downloads\ColdChainX\ColdChainX.Core\obj\Debug\net8.0\ColdChainX.Core.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Lenovo\Downloads\ColdChainX\ColdChainX.Core\obj\Debug\net8.0\ColdChainX.Core.AssemblyInfoInputs.cache
+C:\Users\Lenovo\Downloads\ColdChainX\ColdChainX.Core\obj\Debug\net8.0\ColdChainX.Core.AssemblyInfo.cs
+C:\Users\Lenovo\Downloads\ColdChainX\ColdChainX.Core\obj\Debug\net8.0\ColdChainX.Core.csproj.CoreCompileInputs.cache
+C:\Users\Lenovo\Downloads\ColdChainX\ColdChainX.Core\obj\Debug\net8.0\ColdChainX.Core.dll
+C:\Users\Lenovo\Downloads\ColdChainX\ColdChainX.Core\obj\Debug\net8.0\refint\ColdChainX.Core.dll
+C:\Users\Lenovo\Downloads\ColdChainX\ColdChainX.Core\obj\Debug\net8.0\ColdChainX.Core.pdb
+C:\Users\Lenovo\Downloads\ColdChainX\ColdChainX.Core\obj\Debug\net8.0\ref\ColdChainX.Core.dll
