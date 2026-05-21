@@ -41,9 +41,10 @@ namespace ColdChainX.API.Extensions
 
             services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
 
-            services.AddControllers().AddFluentValidation();
+            services.AddControllers()
+                .AddFluentValidation(fv => fv.RegisterValidatorsFromAssemblyContaining<Application.Validators.RegisterRequestValidator>());
 
-            services.AddValidatorsFromAssemblyContaining(typeof(Application.Validators.RegisterRequestValidator));
+            // Removed duplicate validator registration line
 
             // JWT Authentication
             var jwt = configuration.GetSection("JwtSettings").Get<JwtSettings>()

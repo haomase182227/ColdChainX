@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ColdChainX.API")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+126a7589d04c2b6c880ea7374b8169446d088165")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+382e2b5a74bcc5a21617ff874d642846eb4beafc")]
 [assembly: System.Reflection.AssemblyProductAttribute("ColdChainX.API")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ColdChainX.API")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
