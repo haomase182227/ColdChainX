@@ -27,6 +27,20 @@ namespace ColdChainX.API.Extensions
         {
             services.Configure<JwtSettings>(configuration.GetSection("JwtSettings"));
 
+            // CORS
+            var allowedOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+                ?? Array.Empty<string>();
+            services.AddCors(options =>
+            {
+                options.AddPolicy("CorsPolicy", policy =>
+                {
+                    policy.WithOrigins(allowedOrigins)
+                          .AllowAnyHeader()
+                          .AllowAnyMethod()
+                          .AllowCredentials();
+                });
+            });
+
             var connectionString = configuration.GetConnectionString("LocalConnection")
                 ?? throw new InvalidOperationException("ConnectionStrings:LocalConnection was not found.");
 

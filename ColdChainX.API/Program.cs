@@ -59,6 +59,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseRouting();
+app.UseCors("CorsPolicy");
 app.UseAuthentication();
 app.UseAuthorization();
 
