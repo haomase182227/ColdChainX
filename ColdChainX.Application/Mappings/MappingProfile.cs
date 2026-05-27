@@ -10,6 +10,9 @@ namespace ColdChainX.Application.Mappings
         {
             CreateMap<User, AuthResponseDto>()
                 .ForMember(d => d.UserId, o => o.MapFrom(s => s.Id));
+
+            CreateMap<User, UserProfileDto>()
+                .ForMember(d => d.UserId, o => o.MapFrom(s => s.Id));
         }
     }
 }

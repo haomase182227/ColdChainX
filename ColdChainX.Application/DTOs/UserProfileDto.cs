@@ -1,20 +1,17 @@
 using System;
 using ColdChainX.Core.Enums;
 
-namespace ColdChainX.Core.Entities
+namespace ColdChainX.Application.DTOs
 {
-    public class User
+    public class UserProfileDto
     {
-        public Guid Id { get; set; }
+        public Guid UserId { get; set; }
         public string FullName { get; set; } = null!;
         public string Email { get; set; } = null!;
-        public string PasswordHash { get; set; } = null!;
         public string? PhoneNumber { get; set; }
         public Role Role { get; set; }
-        public UserStatus Status { get; set; } = UserStatus.Active;
+        public UserStatus Status { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
-        public string? RefreshToken { get; set; }
-        public DateTime? RefreshTokenExpiryTime { get; set; }
     }
 }

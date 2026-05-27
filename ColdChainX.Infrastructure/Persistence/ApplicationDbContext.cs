@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ColdChainX.Core.Entities;
+using ColdChainX.Core.Enums;
 
 namespace ColdChainX.Infrastructure.Persistence
 {
@@ -23,7 +24,9 @@ namespace ColdChainX.Infrastructure.Persistence
                 b.Property(u => u.PasswordHash).IsRequired();
                 b.Property(u => u.PhoneNumber).HasMaxLength(50);
                 b.Property(u => u.Role).IsRequired();
+                b.Property(u => u.Status).IsRequired().HasDefaultValue(UserStatus.Active);
                 b.Property(u => u.CreatedAt).IsRequired();
+                b.Property(u => u.UpdatedAt);
                 b.Property(u => u.RefreshToken).HasMaxLength(500);
             });
         }

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Identity;
 using ColdChainX.Application.DTOs;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
+using ColdChainX.Core.Enums;
 using ColdChainX.Core.Interfaces;
 using ColdChainX.Shared.Responses;
 
@@ -38,12 +39,13 @@ namespace ColdChainX.Application.Services
                 Email = request.Email.ToLowerInvariant(),
                 PhoneNumber = request.PhoneNumber,
                 Role = request.Role,
+                Status = UserStatus.Active,
                 CreatedAt = DateTime.UtcNow
             };
 
             user.PasswordHash = _passwordHasher.HashPassword(user, request.Password);
 
-            var accessExpiresAt = DateTime.UtcNow.AddMinutes(60); // will use jwt settings in jwt service
+            var accessExpiresAt = DateTime.UtcNow.AddMinutes(60);
             var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt);
             var refreshToken = _jwtService.GenerateRefreshToken();
 
@@ -66,6 +68,9 @@ namespace ColdChainX.Application.Services
             var user = await _userRepository.GetByEmailAsync(request.Email.ToLowerInvariant());
             if (user == null)
                 return ApiResponse<AuthResponseDto>.Failure("Invalid credentials");
+
+            if (user.Status == UserStatus.Inactive)
+                return ApiResponse<AuthResponseDto>.Failure("Account has been deactivated");
 
             var verify = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.Password);
             if (verify == PasswordVerificationResult.Failed)
@@ -127,6 +132,51 @@ namespace ColdChainX.Application.Services
             await _userRepository.SaveChangesAsync();
 
             return ApiResponse<bool>.SuccessResponse(true, "Logout successful");
+        }
+
+        public async Task<ApiResponse<UserProfileDto>> UpdateUserAsync(Guid userId, UpdateUserRequest request)
+        {
+            var user = await _userRepository.GetByIdAsync(userId);
+            if (user == null) return ApiResponse<UserProfileDto>.Failure("User not found");
+
+            if (user.Status == UserStatus.Inactive)
+                return ApiResponse<UserProfileDto>.Failure("Account has been deactivated");
+
+            if (!string.IsNullOrWhiteSpace(request.FullName))
+                user.FullName = request.FullName.Trim();
+
+            if (request.PhoneNumber != null)
+                user.PhoneNumber = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
+
+            if (!string.IsNullOrWhiteSpace(request.NewPassword))
+                user.PasswordHash = _passwordHasher.HashPassword(user, request.NewPassword);
+
+            user.UpdatedAt = DateTime.UtcNow;
+
+            await _userRepository.UpdateAsync(user);
+            await _userRepository.SaveChangesAsync();
+
+            var dto = _mapper.Map<UserProfileDto>(user);
+            return ApiResponse<UserProfileDto>.SuccessResponse(dto, "Profile updated successfully");
+        }
+
+        public async Task<ApiResponse<bool>> SoftDeleteUserAsync(Guid targetUserId)
+        {
+            var user = await _userRepository.GetByIdAsync(targetUserId);
+            if (user == null) return ApiResponse<bool>.Failure("User not found");
+
+            if (user.Status == UserStatus.Inactive)
+                return ApiResponse<bool>.Failure("User is already deactivated");
+
+            user.Status = UserStatus.Inactive;
+            user.RefreshToken = null;
+            user.RefreshTokenExpiryTime = null;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            await _userRepository.UpdateAsync(user);
+            await _userRepository.SaveChangesAsync();
+
+            return ApiResponse<bool>.SuccessResponse(true, "User deactivated successfully");
         }
     }
 }
