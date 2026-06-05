@@ -9,10 +9,12 @@ namespace ColdChainX.Application.Mappings
         public MappingProfile()
         {
             CreateMap<User, AuthResponseDto>()
-                .ForMember(d => d.UserId, o => o.MapFrom(s => s.Id));
+                .ForMember(d => d.UserId, o => o.MapFrom(s => s.UserId))
+                .ForMember(d => d.Role, o => o.MapFrom(s => s.Role != null ? s.Role.RoleName : null));
 
             CreateMap<User, UserProfileDto>()
-                .ForMember(d => d.UserId, o => o.MapFrom(s => s.Id));
+                .ForMember(d => d.UserId, o => o.MapFrom(s => s.UserId))
+                .ForMember(d => d.Role, o => o.MapFrom(s => s.Role != null ? s.Role.RoleName : null));
         }
     }
 }

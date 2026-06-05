@@ -23,12 +23,35 @@ namespace ColdChainX.Infrastructure.Repositories
 
         public async Task<User?> GetByEmailAsync(string email)
         {
-            return await _db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower());
+            var normalizedEmail = email.ToLower();
+
+            return await _db.Users
+                .Include(u => u.Role)
+                .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == normalizedEmail);
+        }
+
+        public async Task<User?> GetByUsernameAsync(string username)
+        {
+            var normalizedUsername = username.ToLower();
+
+            return await _db.Users
+                .Include(u => u.Role)
+                .FirstOrDefaultAsync(u => u.Username.ToLower() == normalizedUsername);
         }
 
         public async Task<User?> GetByIdAsync(Guid id)
         {
-            return await _db.Users.FindAsync(id);
+            return await _db.Users
+                .Include(u => u.Role)
+                .FirstOrDefaultAsync(u => u.UserId == id);
+        }
+
+        public async Task<Role?> GetRoleByNameAsync(string roleName)
+        {
+            var normalizedRoleName = roleName.ToLower();
+
+            return await _db.Roles
+                .FirstOrDefaultAsync(r => r.RoleName.ToLower() == normalizedRoleName);
         }
 
         public async Task UpdateAsync(User user)
@@ -44,7 +67,9 @@ namespace ColdChainX.Infrastructure.Repositories
 
         public async Task<User?> GetByRefreshTokenAsync(string refreshToken)
         {
-            return await _db.Users.FirstOrDefaultAsync(u => u.RefreshToken == refreshToken);
+            return await _db.Users
+                .Include(u => u.Role)
+                .FirstOrDefaultAsync(u => u.RefreshToken == refreshToken);
         }
     }
 }

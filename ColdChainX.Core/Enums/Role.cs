@@ -3,8 +3,9 @@ namespace ColdChainX.Core.Enums
     public enum Role
     {
         Admin = 0,
-        Manager = 1,
-        Staff = 2,
-        Driver = 3
+        Dispatcher = 1,
+        Driver = 2,
+        Sales = 3,
+        Customer = 4
     }
 }

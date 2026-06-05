@@ -22,54 +22,3047 @@ namespace ColdChainX.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("ColdChainX.Core.Entities.AlertLog", b =>
+                {
+                    b.Property<string>("AlertId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("alert_id");
+
+                    b.Property<string>("AlertType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("alert_type");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<decimal>("Latitude")
+                        .HasPrecision(10, 7)
+                        .HasColumnType("numeric(10,7)")
+                        .HasColumnName("latitude");
+
+                    b.Property<decimal>("Longitude")
+                        .HasPrecision(10, 7)
+                        .HasColumnType("numeric(10,7)")
+                        .HasColumnName("longitude");
+
+                    b.Property<string>("ResolutionNote")
+                        .HasColumnType("text")
+                        .HasColumnName("resolution_note");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("resolved_at");
+
+                    b.Property<string>("ResolvedBy")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("resolved_by");
+
+                    b.Property<string>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'NEW'::character varying");
+
+                    b.Property<string>("TripId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("trip_id");
+
+                    b.Property<decimal?>("Value")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("value");
+
+                    b.HasKey("AlertId")
+                        .HasName("alert_logs_pkey");
+
+                    b.HasIndex("ResolvedBy");
+
+                    b.HasIndex("TripId");
+
+                    b.ToTable("alert_logs", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Claim", b =>
+                {
+                    b.Property<string>("ClaimId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("claim_id");
+
+                    b.Property<string>("ClaimCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("claim_code");
+
+                    b.Property<string>("ClaimType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("claim_type");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<string>("FaultOwner")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("fault_owner");
+
+                    b.Property<string>("OrderId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("order_id");
+
+                    b.Property<string>("ResolutionNote")
+                        .HasColumnType("text")
+                        .HasColumnName("resolution_note");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("resolved_at");
+
+                    b.Property<string>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'OPEN'::character varying");
+
+                    b.HasKey("ClaimId")
+                        .HasName("claims_pkey");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex(new[] { "ClaimCode" }, "claims_claim_code_key")
+                        .IsUnique();
+
+                    b.ToTable("claims", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.ClaimEvidence", b =>
+                {
+                    b.Property<string>("EvidenceId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("evidence_id");
+
+                    b.Property<string>("AlertId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("alert_id");
+
+                    b.Property<string>("ClaimId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("claim_id");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("DocId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("doc_id");
+
+                    b.Property<string>("EvidenceType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("evidence_type");
+
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("image_url");
+
+                    b.Property<string>("UploadedBy")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("uploaded_by");
+
+                    b.HasKey("EvidenceId")
+                        .HasName("claim_evidences_pkey");
+
+                    b.HasIndex("AlertId");
+
+                    b.HasIndex("ClaimId");
+
+                    b.HasIndex("DocId");
+
+                    b.HasIndex("UploadedBy");
+
+                    b.ToTable("claim_evidences", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Customer", b =>
+                {
+                    b.Property<string>("CustomerId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("customer_id");
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("address");
+
+                    b.Property<string>("CompanyName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("company_name");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("email");
+
+                    b.Property<int?>("PaymentTerm")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(30)
+                        .HasColumnName("payment_term");
+
+                    b.Property<string>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'ACTIVE'::character varying");
+
+                    b.Property<string>("TaxCode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("tax_code");
+
+                    b.HasKey("CustomerId")
+                        .HasName("customers_pkey");
+
+                    b.HasIndex(new[] { "TaxCode" }, "customers_tax_code_key")
+                        .IsUnique();
+
+                    b.ToTable("customers", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.CustomerContract", b =>
+                {
+                    b.Property<string>("ContractId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("contract_id");
+
+                    b.Property<string>("ContractNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("contract_number");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("CustomerId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("customer_id");
+
+                    b.Property<DateOnly>("ExpiredDate")
+                        .HasColumnType("date")
+                        .HasColumnName("expired_date");
+
+                    b.Property<string>("FileUrl")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("file_url");
+
+                    b.Property<DateOnly>("SignedDate")
+                        .HasColumnType("date")
+                        .HasColumnName("signed_date");
+
+                    b.Property<string>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'ACTIVE'::character varying");
+
+                    b.HasKey("ContractId")
+                        .HasName("customer_contracts_pkey");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex(new[] { "ContractNumber" }, "customer_contracts_contract_number_key")
+                        .IsUnique();
+
+                    b.ToTable("customer_contracts", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.DeliveryEpod", b =>
+                {
+                    b.Property<string>("EpodId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("epod_id");
+
+                    b.Property<DateTime>("CheckinTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("checkin_time");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int?>("DeliveryRating")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(5)
+                        .HasColumnName("delivery_rating");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text")
+                        .HasColumnName("note");
+
+                    b.Property<string>("OrderId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("order_id");
+
+                    b.Property<string>("PdfUrl")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("pdf_url");
+
+                    b.Property<string>("ReceiverName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("receiver_name");
+
+                    b.Property<string>("ReceiverPhone")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("receiver_phone");
+
+                    b.Property<string>("SignImageUrl")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("sign_image_url");
+
+                    b.Property<decimal?>("SignLatitude")
+                        .HasPrecision(10, 7)
+                        .HasColumnType("numeric(10,7)")
+                        .HasColumnName("sign_latitude");
+
+                    b.Property<decimal?>("SignLongitude")
+                        .HasPrecision(10, 7)
+                        .HasColumnType("numeric(10,7)")
+                        .HasColumnName("sign_longitude");
+
+                    b.Property<DateTime?>("SignedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("signed_at");
+
+                    b.Property<string>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'PENDING'::character varying");
+
+                    b.HasKey("EpodId")
+                        .HasName("delivery_epods_pkey");
+
+                    b.HasIndex("OrderId");
+
+                    b.ToTable("delivery_epods", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Driver", b =>
+                {
+                    b.Property<string>("DriverId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("driver_id");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<DateOnly>("DateOfBirth")
+                        .HasColumnType("date")
+                        .HasColumnName("date_of_birth");
+
+                    b.Property<string>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'AVAILABLE'::character varying");
+
+                    b.HasKey("DriverId")
+                        .HasName("drivers_pkey");
+
+                    b.ToTable("drivers", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.DriverLicense", b =>
+                {
+                    b.Property<string>("LicenseId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("license_id");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("DocumentUrl")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("document_url");
+
+                    b.Property<string>("DriverId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("driver_id");
+
+                    b.Property<DateOnly>("ExpiryDate")
+                        .HasColumnType("date")
+                        .HasColumnName("expiry_date");
+
+                    b.Property<DateOnly>("IssueDate")
+                        .HasColumnType("date")
+                        .HasColumnName("issue_date");
+
+                    b.Property<string>("LicenseClass")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("license_class");
+
+                    b.Property<string>("LicenseNumber")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("license_number");
+
+                    b.Property<string>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'ACTIVE'::character varying");
+
+                    b.HasKey("LicenseId")
+                        .HasName("driver_licenses_pkey");
+
+                    b.HasIndex("DriverId");
+
+                    b.HasIndex(new[] { "LicenseNumber" }, "driver_licenses_license_number_key")
+                        .IsUnique();
+
+                    b.ToTable("driver_licenses", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.ExpenseAdvance", b =>
+                {
+                    b.Property<string>("AdvanceId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("advance_id");
+
+                    b.Property<string>("AdvanceCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("advance_code");
+
+                    b.Property<DateTime?>("AdvancedDate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("advanced_date")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<string>("ApprovedBy")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("approved_by");
+
+                    b.Property<string>("ClearanceStatus")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("clearance_status")
+                        .HasDefaultValueSql("'OPEN'::character varying");
+
+                    b.Property<decimal?>("ClearedAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("cleared_amount")
+                        .HasDefaultValueSql("0.00");
+
+                    b.Property<string>("DriverId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("driver_id");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text")
+                        .HasColumnName("note");
+
+                    b.Property<string>("PaymentMethod")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("payment_method")
+                        .HasDefaultValueSql("'CASH'::character varying");
+
+                    b.Property<decimal?>("ReturnedAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("returned_amount")
+                        .HasDefaultValueSql("0.00");
+
+                    b.Property<string>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'PENDING'::character varying");
+
+                    b.Property<string>("TripId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("trip_id");
+
+                    b.HasKey("AdvanceId")
+                        .HasName("expense_advances_pkey");
+
+                    b.HasIndex("ApprovedBy");
+
+                    b.HasIndex("DriverId");
+
+                    b.HasIndex("TripId");
+
+                    b.HasIndex(new[] { "AdvanceCode" }, "expense_advances_advance_code_key")
+                        .IsUnique();
+
+                    b.ToTable("expense_advances", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.ExpenseReceipt", b =>
+                {
+                    b.Property<string>("ReceiptId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("receipt_id");
+
+                    b.Property<string>("AdvanceId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("advance_id");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("description");
+
+                    b.Property<DateOnly>("ExpenseDate")
+                        .HasColumnType("date")
+                        .HasColumnName("expense_date");
+
+                    b.Property<string>("ExpenseType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("expense_type");
+
+                    b.Property<string>("ImageUrl")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("image_url");
+
+                    b.Property<string>("RejectReason")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("reject_reason");
+
+                    b.Property<string>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'PENDING'::character varying");
+
+                    b.Property<DateTime?>("UploadedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("uploaded_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<DateTime?>("VerifiedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("verified_at");
+
+                    b.Property<string>("VerifiedBy")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("verified_by");
+
+                    b.HasKey("ReceiptId")
+                        .HasName("expense_receipts_pkey");
+
+                    b.HasIndex("AdvanceId");
+
+                    b.HasIndex("VerifiedBy");
+
+                    b.ToTable("expense_receipts", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.GeoFence", b =>
+                {
+                    b.Property<int>("FenceId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("fence_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("FenceId"));
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int?>("LocationId")
+                        .HasColumnType("integer")
+                        .HasColumnName("location_id");
+
+                    b.Property<string>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'ACTIVE'::character varying");
+
+                    b.HasKey("FenceId")
+                        .HasName("geo_fences_pkey");
+
+                    b.HasIndex("LocationId");
+
+                    b.ToTable("geo_fences", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.IncidentReport", b =>
+                {
+                    b.Property<string>("IncidentId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("incident_id");
+
+                    b.Property<decimal?>("CurrentLatitude")
+                        .HasPrecision(10, 7)
+                        .HasColumnType("numeric(10,7)")
+                        .HasColumnName("current_latitude");
+
+                    b.Property<decimal?>("CurrentLongitude")
+                        .HasPrecision(10, 7)
+                        .HasColumnType("numeric(10,7)")
+                        .HasColumnName("current_longitude");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<string>("IncidentType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("incident_type");
+
+                    b.Property<DateTime?>("ReportedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("reported_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("ReportedBy")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("reported_by");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("resolved_at");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("severity");
+
+                    b.Property<string>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'REPORTED'::character varying");
+
+                    b.Property<string>("TripId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("trip_id");
+
+                    b.HasKey("IncidentId")
+                        .HasName("incident_reports_pkey");
+
+                    b.HasIndex("ReportedBy");
+
+                    b.HasIndex("TripId");
+
+                    b.ToTable("incident_reports", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Invoice", b =>
+                {
+                    b.Property<string>("InvoiceId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("invoice_id");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("CustomerId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("customer_id");
+
+                    b.Property<decimal?>("DeductionAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("deduction_amount")
+                        .HasDefaultValueSql("0.00");
+
+                    b.Property<DateOnly>("DueDate")
+                        .HasColumnType("date")
+                        .HasColumnName("due_date");
+
+                    b.Property<decimal>("GrandTotal")
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("grand_total");
+
+                    b.Property<string>("InvoiceCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("invoice_code");
+
+                    b.Property<DateOnly>("IssuedDate")
+                        .HasColumnType("date")
+                        .HasColumnName("issued_date");
+
+                    b.Property<decimal?>("PaidAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("paid_amount")
+                        .HasDefaultValueSql("0.00");
+
+                    b.Property<string>("PdfUrl")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("pdf_url");
+
+                    b.Property<string>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'DRAFT'::character varying");
+
+                    b.Property<decimal>("SubTotal")
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("sub_total");
+
+                    b.Property<decimal>("TaxAmount")
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("tax_amount");
+
+                    b.Property<decimal?>("TaxRate")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("tax_rate")
+                        .HasDefaultValueSql("8.00");
+
+                    b.Property<string>("VatInvoiceNo")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("vat_invoice_no");
+
+                    b.HasKey("InvoiceId")
+                        .HasName("invoices_pkey");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex(new[] { "InvoiceCode" }, "invoices_invoice_code_key")
+                        .IsUnique();
+
+                    b.ToTable("invoices", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.InvoiceLine", b =>
+                {
+                    b.Property<string>("LineId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("line_id");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<string>("ChargeType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("charge_type");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("InvoiceId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("invoice_id");
+
+                    b.Property<string>("OrderId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("order_id");
+
+                    b.Property<decimal?>("Quantity")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("quantity")
+                        .HasDefaultValueSql("1.00");
+
+                    b.Property<decimal?>("TaxRate")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("tax_rate")
+                        .HasDefaultValueSql("8.00");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("unit_price");
+
+                    b.HasKey("LineId")
+                        .HasName("invoice_lines_pkey");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.HasIndex("OrderId");
+
+                    b.ToTable("invoice_lines", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.IotDevice", b =>
+                {
+                    b.Property<string>("DeviceId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("device_id");
+
+                    b.Property<int?>("BatteryLevel")
+                        .HasColumnType("integer")
+                        .HasColumnName("battery_level");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<DateTime?>("LastPingTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("last_ping_time");
+
+                    b.Property<string>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'ACTIVE'::character varying");
+
+                    b.Property<string>("VehicleId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("vehicle_id");
+
+                    b.HasKey("DeviceId")
+                        .HasName("iot_devices_pkey");
+
+                    b.HasIndex("VehicleId");
+
+                    b.ToTable("iot_devices", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Location", b =>
+                {
+                    b.Property<int>("LocationId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("location_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("LocationId"));
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("address");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("CustomerId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("customer_id");
+
+                    b.Property<decimal>("Latitude")
+                        .HasPrecision(10, 7)
+                        .HasColumnType("numeric(10,7)")
+                        .HasColumnName("latitude");
+
+                    b.Property<string>("LocationName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("location_name");
+
+                    b.Property<decimal>("Longitude")
+                        .HasPrecision(10, 7)
+                        .HasColumnType("numeric(10,7)")
+                        .HasColumnName("longitude");
+
+                    b.Property<string>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'ACTIVE'::character varying");
+
+                    b.HasKey("LocationId")
+                        .HasName("locations_pkey");
+
+                    b.HasIndex("CustomerId");
+
+                    b.ToTable("locations", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.MaintenanceTicket", b =>
+                {
+                    b.Property<string>("TicketId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("ticket_id");
+
+                    b.Property<DateOnly?>("CompletionDate")
+                        .HasColumnType("date")
+                        .HasColumnName("completion_date");
+
+                    b.Property<decimal?>("Cost")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("cost")
+                        .HasDefaultValueSql("0.00");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<string>("GarageName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("garage_name");
+
+                    b.Property<DateOnly>("IssueDate")
+                        .HasColumnType("date")
+                        .HasColumnName("issue_date");
+
+                    b.Property<string>("MaintenanceType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("maintenance_type");
+
+                    b.Property<string>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'OPEN'::character varying");
+
+                    b.Property<string>("TicketCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("ticket_code");
+
+                    b.Property<string>("VehicleId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("vehicle_id");
+
+                    b.HasKey("TicketId")
+                        .HasName("maintenance_tickets_pkey");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("VehicleId");
+
+                    b.HasIndex(new[] { "TicketCode" }, "maintenance_tickets_ticket_code_key")
+                        .IsUnique();
+
+                    b.ToTable("maintenance_tickets", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.MasterTrip", b =>
+                {
+                    b.Property<string>("TripId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("trip_id");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int>("DestinationLocationId")
+                        .HasColumnType("integer")
+                        .HasColumnName("destination_location_id");
+
+                    b.Property<string>("DriverId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("driver_id");
+
+                    b.Property<int>("OriginLocationId")
+                        .HasColumnType("integer")
+                        .HasColumnName("origin_location_id");
+
+                    b.Property<DateTime>("PlannedEndTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("planned_end_time");
+
+                    b.Property<DateTime>("PlannedStartTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("planned_start_time");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'PLANNED'::character varying");
+
+                    b.Property<decimal>("TargetTemperature")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("target_temperature");
+
+                    b.Property<decimal?>("TotalDistanceKm")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)")
+                        .HasColumnName("total_distance_km");
+
+                    b.Property<string>("VehicleId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("vehicle_id");
+
+                    b.HasKey("TripId")
+                        .HasName("master_trips_pkey");
+
+                    b.HasIndex("DestinationLocationId");
+
+                    b.HasIndex("DriverId");
+
+                    b.HasIndex("OriginLocationId");
+
+                    b.HasIndex("VehicleId");
+
+                    b.ToTable("master_trips", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Messagetype", b =>
+                {
+                    b.Property<int>("TypeId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("type_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("TypeId"));
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("TypeName")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("type_name");
+
+                    b.HasKey("TypeId")
+                        .HasName("messagetype_pkey");
+
+                    b.ToTable("messagetype", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Notification", b =>
+                {
+                    b.Property<string>("NotiId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("noti_id");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<bool?>("IsRead")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_read");
+
+                    b.Property<string>("OrderId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("order_id");
+
+                    b.Property<string>("Params")
+                        .IsRequired()
+                        .HasColumnType("json")
+                        .HasColumnName("params");
+
+                    b.Property<string>("SenderId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("sender_id");
+
+                    b.Property<string>("TemplateId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("template_id");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("NotiId")
+                        .HasName("notifications_pkey");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("SenderId");
+
+                    b.HasIndex("TemplateId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("notifications", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.NotificationTemplate", b =>
+                {
+                    b.Property<string>("TemplateId")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("template_id");
+
+                    b.Property<string>("BodyTemplate")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("body_template");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("channel");
+
+                    b.Property<string>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'ACTIVE'::character varying");
+
+                    b.Property<string>("TitleTemplate")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("title_template");
+
+                    b.Property<int>("TypeId")
+                        .HasColumnType("integer")
+                        .HasColumnName("type_id");
+
+                    b.HasKey("TemplateId")
+                        .HasName("notification_templates_pkey");
+
+                    b.HasIndex("TypeId");
+
+                    b.ToTable("notification_templates", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Permission", b =>
+                {
+                    b.Property<int>("PermId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("perm_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("PermId"));
+
+                    b.Property<string>("Module")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("module");
+
+                    b.Property<string>("PermCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("perm_code");
+
+                    b.HasKey("PermId")
+                        .HasName("permissions_pkey");
+
+                    b.HasIndex(new[] { "PermCode" }, "permissions_perm_code_key")
+                        .IsUnique();
+
+                    b.ToTable("permissions", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.PricingMatrix", b =>
+                {
+                    b.Property<int>("PriceId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("price_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("PriceId"));
+
+                    b.Property<string>("DestCity")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("dest_city");
+
+                    b.Property<DateOnly>("EffectiveDate")
+                        .HasColumnType("date")
+                        .HasColumnName("effective_date");
+
+                    b.Property<string>("OriginCity")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("origin_city");
+
+                    b.Property<string>("PricingUnit")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("pricing_unit");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("unit_price");
+
+                    b.HasKey("PriceId")
+                        .HasName("pricing_matrix_pkey");
+
+                    b.ToTable("pricing_matrix", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Quotation", b =>
+                {
+                    b.Property<string>("QuoteId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("quote_id");
+
+                    b.Property<decimal>("BaseFreight")
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("base_freight");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<decimal>("FinalAmount")
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("final_amount");
+
+                    b.Property<decimal?>("LastMileSurcharge")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("last_mile_surcharge")
+                        .HasDefaultValueSql("0");
+
+                    b.Property<string>("OrderId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("order_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<decimal?>("VasAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("vas_amount")
+                        .HasDefaultValueSql("0");
+
+                    b.Property<decimal>("VatAmount")
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("vat_amount");
+
+                    b.HasKey("QuoteId")
+                        .HasName("quotations_pkey");
+
+                    b.HasIndex("OrderId");
+
+                    b.ToTable("quotations", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.ReturnedItem", b =>
+                {
+                    b.Property<string>("ReturnId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("return_id");
+
+                    b.Property<string>("EpodId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("epod_id");
+
+                    b.Property<string>("ItemCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("item_code");
+
+                    b.Property<string>("ItemName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("item_name");
+
+                    b.Property<DateTime?>("ProcessedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("processed_at");
+
+                    b.Property<string>("ProcessedBy")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("processed_by");
+
+                    b.Property<string>("ProcessingStatus")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("processing_status")
+                        .HasDefaultValueSql("'PENDING_INSPECT'::character varying");
+
+                    b.Property<string>("ReasonNote")
+                        .HasColumnType("text")
+                        .HasColumnName("reason_note");
+
+                    b.Property<string>("ReasonType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("reason_type");
+
+                    b.Property<DateTime?>("ReturnedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("returned_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<decimal>("ReturnedQty")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("returned_qty");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("unit");
+
+                    b.HasKey("ReturnId")
+                        .HasName("returned_items_pkey");
+
+                    b.HasIndex("EpodId");
+
+                    b.HasIndex("ProcessedBy");
+
+                    b.ToTable("returned_items", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Role", b =>
+                {
+                    b.Property<int>("RoleId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("role_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("RoleId"));
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("RoleName")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("role_name");
+
+                    b.HasKey("RoleId")
+                        .HasName("roles_pkey");
+
+                    b.HasIndex(new[] { "RoleName" }, "roles_role_name_key")
+                        .IsUnique();
+
+                    b.ToTable("roles", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Seal", b =>
+                {
+                    b.Property<int>("SealId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("seal_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("SealId"));
+
+                    b.Property<DateTime?>("AppliedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("applied_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("AppliedImageUrl")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("applied_image_url");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text")
+                        .HasColumnName("note");
+
+                    b.Property<DateTime?>("RemovedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("removed_at");
+
+                    b.Property<string>("RemovedImageUrl")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("removed_image_url");
+
+                    b.Property<string>("SealCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("seal_code");
+
+                    b.Property<string>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'APPLIED'::character varying");
+
+                    b.Property<string>("StopId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("stop_id");
+
+                    b.Property<string>("TripId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("trip_id");
+
+                    b.HasKey("SealId")
+                        .HasName("seals_pkey");
+
+                    b.HasIndex("StopId");
+
+                    b.HasIndex("TripId");
+
+                    b.ToTable("seals", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.TelemetryLog", b =>
+                {
+                    b.Property<long>("LogId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("log_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("LogId"));
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("DeviceId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("device_id");
+
+                    b.Property<decimal>("Latitude")
+                        .HasPrecision(10, 7)
+                        .HasColumnType("numeric(10,7)")
+                        .HasColumnName("latitude");
+
+                    b.Property<decimal>("Longitude")
+                        .HasPrecision(10, 7)
+                        .HasColumnType("numeric(10,7)")
+                        .HasColumnName("longitude");
+
+                    b.Property<decimal>("Temperature")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("temperature");
+
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("timestamp");
+
+                    b.Property<string>("TripId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("trip_id");
+
+                    b.HasKey("LogId")
+                        .HasName("telemetry_logs_pkey");
+
+                    b.HasIndex("DeviceId");
+
+                    b.HasIndex("TripId");
+
+                    b.ToTable("telemetry_logs", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.TransportDocument", b =>
+                {
+                    b.Property<string>("DocId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("doc_id");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("DocType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("doc_type");
+
+                    b.Property<string>("ImageUrl")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("image_url");
+
+                    b.Property<string>("OrderId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("order_id");
+
+                    b.Property<string>("RejectReason")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("reject_reason");
+
+                    b.Property<string>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'PENDING'::character varying");
+
+                    b.Property<string>("UploadedBy")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("uploaded_by");
+
+                    b.Property<DateTime?>("VerifiedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("verified_at");
+
+                    b.Property<string>("VerifiedBy")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("verified_by");
+
+                    b.HasKey("DocId")
+                        .HasName("transport_documents_pkey");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("UploadedBy");
+
+                    b.HasIndex("VerifiedBy");
+
+                    b.ToTable("transport_documents", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.TransportOrder", b =>
+                {
+                    b.Property<string>("OrderId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("order_id");
+
+                    b.Property<decimal?>("ActualCbm")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)")
+                        .HasColumnName("actual_cbm");
+
+                    b.Property<decimal>("ActualWeightKg")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("actual_weight_kg");
+
+                    b.Property<decimal>("CargoValue")
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("cargo_value");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("category");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("CustomerId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("customer_id");
+
+                    b.Property<int?>("DestLocation")
+                        .HasColumnType("integer")
+                        .HasColumnName("dest_location");
+
+                    b.Property<decimal>("ExpectedCbm")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)")
+                        .HasColumnName("expected_cbm");
+
+                    b.Property<decimal>("ExpectedWeightKg")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("expected_weight_kg");
+
+                    b.Property<string>("ItemName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("item_name");
+
+                    b.Property<string>("MasterTripId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("master_trip_id");
+
+                    b.Property<int?>("PickupLocation")
+                        .HasColumnType("integer")
+                        .HasColumnName("pickup_location");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("TempCondition")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("temp_condition");
+
+                    b.Property<string>("TrackingCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("tracking_code");
+
+                    b.HasKey("OrderId")
+                        .HasName("transport_order_pkey");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("DestLocation");
+
+                    b.HasIndex("MasterTripId");
+
+                    b.HasIndex("PickupLocation");
+
+                    b.HasIndex(new[] { "TrackingCode" }, "transport_order_tracking_code_key")
+                        .IsUnique();
+
+                    b.ToTable("transport_order", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.TripStop", b =>
+                {
+                    b.Property<string>("StopId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("stop_id");
+
+                    b.Property<DateTime?>("ActualArrivalTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("actual_arrival_time");
+
+                    b.Property<DateTime?>("ActualDepartureTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("actual_departure_time");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int?>("LocationId")
+                        .HasColumnType("integer")
+                        .HasColumnName("location_id");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text")
+                        .HasColumnName("note");
+
+                    b.Property<DateTime>("PlannedArrivalTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("planned_arrival_time");
+
+                    b.Property<DateTime>("PlannedDepartureTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("planned_departure_time");
+
+                    b.Property<string>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'PENDING'::character varying");
+
+                    b.Property<int>("StopSequence")
+                        .HasColumnType("integer")
+                        .HasColumnName("stop_sequence");
+
+                    b.Property<string>("StopType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("stop_type");
+
+                    b.Property<string>("TripId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("trip_id");
+
+                    b.HasKey("StopId")
+                        .HasName("trip_stops_pkey");
+
+                    b.HasIndex("LocationId");
+
+                    b.HasIndex("TripId");
+
+                    b.ToTable("trip_stops", (string)null);
+                });
+
             modelBuilder.Entity("ColdChainX.Core.Entities.User", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                    b.Property<string>("UserId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("user_id");
 
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<string>("Email")
                         .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                        .HasColumnType("text");
 
                     b.Property<string>("FullName")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("full_name");
 
                     b.Property<string>("PasswordHash")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("password_hash");
 
                     b.Property<string>("PhoneNumber")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                        .HasColumnType("text");
 
                     b.Property<string>("RefreshToken")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("text");
 
                     b.Property<DateTime?>("RefreshTokenExpiryTime")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("Role")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Status")
-                        .ValueGeneratedOnAdd()
+                    b.Property<int?>("RoleId")
                         .HasColumnType("integer")
-                        .HasDefaultValue(0);
+                        .HasColumnName("role_id");
+
+                    b.Property<string>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'ACTIVE'::character varying");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.HasKey("Id");
+                    b.Property<string>("Username")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("username");
 
-                    b.ToTable("Users");
+                    b.HasKey("UserId")
+                        .HasName("users_pkey");
+
+                    b.HasIndex("RoleId");
+
+                    b.HasIndex(new[] { "Username" }, "users_username_key")
+                        .IsUnique();
+
+                    b.ToTable("users", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Vehicle", b =>
+                {
+                    b.Property<string>("VehicleId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("vehicle_id");
+
+                    b.Property<string>("Brand")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("brand");
+
+                    b.Property<string>("ChassisNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("chassis_number");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("EngineNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("engine_number");
+
+                    b.Property<int?>("ManufactureYear")
+                        .HasColumnType("integer")
+                        .HasColumnName("manufacture_year");
+
+                    b.Property<decimal>("MaxCbm")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)")
+                        .HasColumnName("max_cbm");
+
+                    b.Property<decimal>("MaxTemp")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("max_temp");
+
+                    b.Property<decimal>("MaxWeight")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("max_weight");
+
+                    b.Property<decimal>("MinTemp")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("min_temp");
+
+                    b.Property<decimal?>("StandardFuelLiters")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("standard_fuel_liters");
+
+                    b.Property<string>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'ACTIVE'::character varying");
+
+                    b.Property<string>("TruckPlate")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("truck_plate");
+
+                    b.Property<string>("VehicleType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("vehicle_type");
+
+                    b.HasKey("VehicleId")
+                        .HasName("vehicles_pkey");
+
+                    b.HasIndex(new[] { "ChassisNumber" }, "vehicles_chassis_number_key")
+                        .IsUnique();
+
+                    b.HasIndex(new[] { "EngineNumber" }, "vehicles_engine_number_key")
+                        .IsUnique();
+
+                    b.HasIndex(new[] { "TruckPlate" }, "vehicles_truck_plate_key")
+                        .IsUnique();
+
+                    b.ToTable("vehicles", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.VehicleDocument", b =>
+                {
+                    b.Property<string>("DocId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("doc_id");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("DocumentNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("document_number");
+
+                    b.Property<DateOnly>("ExpireDate")
+                        .HasColumnType("date")
+                        .HasColumnName("expire_date");
+
+                    b.Property<string>("ImageUrl")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("image_url");
+
+                    b.Property<DateOnly>("IssueDate")
+                        .HasColumnType("date")
+                        .HasColumnName("issue_date");
+
+                    b.Property<string>("Issuer")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("issuer");
+
+                    b.Property<string>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'ACTIVE'::character varying");
+
+                    b.Property<string>("VehicleId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("vehicle_id");
+
+                    b.HasKey("DocId")
+                        .HasName("vehicle_documents_pkey");
+
+                    b.HasIndex("VehicleId");
+
+                    b.ToTable("vehicle_documents", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Warehouse", b =>
+                {
+                    b.Property<int>("WarehouseId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("warehouse_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("WarehouseId"));
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("address");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int?>("CurrentPallets")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("current_pallets");
+
+                    b.Property<int>("MaxPallets")
+                        .HasColumnType("integer")
+                        .HasColumnName("max_pallets");
+
+                    b.Property<string>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'ACTIVE'::character varying");
+
+                    b.Property<string>("WarehouseName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("warehouse_name");
+
+                    b.HasKey("WarehouseId")
+                        .HasName("warehouses_pkey");
+
+                    b.ToTable("warehouses", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.WarehouseReceipt", b =>
+                {
+                    b.Property<string>("ReceiptId")
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("receipt_id");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("DelivererName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("deliverer_name");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text")
+                        .HasColumnName("note");
+
+                    b.Property<string>("OrderId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("order_id");
+
+                    b.Property<string>("PdfUrl")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("pdf_url");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("reason");
+
+                    b.Property<string>("ReceiptCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("receipt_code");
+
+                    b.Property<string>("ReceiptType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("receipt_type");
+
+                    b.Property<string>("ReceiverId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("receiver_id");
+
+                    b.Property<decimal?>("RecordedTemperature")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("recorded_temperature");
+
+                    b.Property<string>("ReferenceDocNo")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("reference_doc_no");
+
+                    b.Property<decimal?>("TotalActualQty")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("total_actual_qty")
+                        .HasDefaultValueSql("0");
+
+                    b.Property<decimal?>("TotalExpectedQty")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("total_expected_qty")
+                        .HasDefaultValueSql("0");
+
+                    b.Property<int>("WarehouseId")
+                        .HasColumnType("integer")
+                        .HasColumnName("warehouse_id");
+
+                    b.HasKey("ReceiptId")
+                        .HasName("warehouse_receipts_pkey");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("ReceiverId");
+
+                    b.HasIndex("WarehouseId");
+
+                    b.HasIndex(new[] { "ReceiptCode" }, "warehouse_receipts_receipt_code_key")
+                        .IsUnique();
+
+                    b.ToTable("warehouse_receipts", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.WarehouseReceiptItem", b =>
+                {
+                    b.Property<long>("ItemId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("item_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("ItemId"));
+
+                    b.Property<decimal>("ActualQty")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("actual_qty");
+
+                    b.Property<string>("ConditionStatus")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("condition_status")
+                        .HasDefaultValueSql("'GOOD'::character varying");
+
+                    b.Property<decimal>("ExpectedQty")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("expected_qty");
+
+                    b.Property<string>("ItemCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("item_code");
+
+                    b.Property<string>("ItemName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("item_name");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text")
+                        .HasColumnName("note");
+
+                    b.Property<string>("ReceiptId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("receipt_id");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("unit");
+
+                    b.HasKey("ItemId")
+                        .HasName("warehouse_receipt_items_pkey");
+
+                    b.HasIndex("ReceiptId");
+
+                    b.ToTable("warehouse_receipt_items", (string)null);
+                });
+
+            modelBuilder.Entity("RolePermission", b =>
+                {
+                    b.Property<int>("RoleId")
+                        .HasColumnType("integer")
+                        .HasColumnName("role_id");
+
+                    b.Property<int>("PermId")
+                        .HasColumnType("integer")
+                        .HasColumnName("perm_id");
+
+                    b.HasKey("RoleId", "PermId")
+                        .HasName("role_permissions_pkey");
+
+                    b.HasIndex("PermId");
+
+                    b.ToTable("role_permissions", (string)null);
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.AlertLog", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.User", "ResolvedByNavigation")
+                        .WithMany("AlertLogs")
+                        .HasForeignKey("ResolvedBy")
+                        .HasConstraintName("fk_al_users");
+
+                    b.HasOne("ColdChainX.Core.Entities.MasterTrip", "Trip")
+                        .WithMany("AlertLogs")
+                        .HasForeignKey("TripId")
+                        .HasConstraintName("fk_al_mtrip");
+
+                    b.Navigation("ResolvedByNavigation");
+
+                    b.Navigation("Trip");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Claim", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.TransportOrder", "Order")
+                        .WithMany("Claims")
+                        .HasForeignKey("OrderId")
+                        .HasConstraintName("fk_claims_to");
+
+                    b.Navigation("Order");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.ClaimEvidence", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.AlertLog", "Alert")
+                        .WithMany("ClaimEvidences")
+                        .HasForeignKey("AlertId")
+                        .HasConstraintName("fk_ce_alert");
+
+                    b.HasOne("ColdChainX.Core.Entities.Claim", "Claim")
+                        .WithMany("ClaimEvidences")
+                        .HasForeignKey("ClaimId")
+                        .HasConstraintName("fk_ce_claims");
+
+                    b.HasOne("ColdChainX.Core.Entities.TransportDocument", "Doc")
+                        .WithMany("ClaimEvidences")
+                        .HasForeignKey("DocId")
+                        .HasConstraintName("fk_ce_doc");
+
+                    b.HasOne("ColdChainX.Core.Entities.User", "UploadedByNavigation")
+                        .WithMany("ClaimEvidences")
+                        .HasForeignKey("UploadedBy")
+                        .IsRequired()
+                        .HasConstraintName("fk_ce_users");
+
+                    b.Navigation("Alert");
+
+                    b.Navigation("Claim");
+
+                    b.Navigation("Doc");
+
+                    b.Navigation("UploadedByNavigation");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.CustomerContract", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.Customer", "Customer")
+                        .WithMany("CustomerContracts")
+                        .HasForeignKey("CustomerId")
+                        .HasConstraintName("fk_cc_customers");
+
+                    b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.DeliveryEpod", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.TransportOrder", "Order")
+                        .WithMany("DeliveryEpods")
+                        .HasForeignKey("OrderId")
+                        .HasConstraintName("fk_epod_to");
+
+                    b.Navigation("Order");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.DriverLicense", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.Driver", "Driver")
+                        .WithMany("DriverLicenses")
+                        .HasForeignKey("DriverId")
+                        .HasConstraintName("fk_dl_drivers");
+
+                    b.Navigation("Driver");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.ExpenseAdvance", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.User", "ApprovedByNavigation")
+                        .WithMany("ExpenseAdvances")
+                        .HasForeignKey("ApprovedBy")
+                        .IsRequired()
+                        .HasConstraintName("fk_ea_users");
+
+                    b.HasOne("ColdChainX.Core.Entities.Driver", "Driver")
+                        .WithMany("ExpenseAdvances")
+                        .HasForeignKey("DriverId")
+                        .IsRequired()
+                        .HasConstraintName("fk_ea_drivers");
+
+                    b.HasOne("ColdChainX.Core.Entities.MasterTrip", "Trip")
+                        .WithMany("ExpenseAdvances")
+                        .HasForeignKey("TripId")
+                        .IsRequired()
+                        .HasConstraintName("fk_ea_mtrip");
+
+                    b.Navigation("ApprovedByNavigation");
+
+                    b.Navigation("Driver");
+
+                    b.Navigation("Trip");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.ExpenseReceipt", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.ExpenseAdvance", "Advance")
+                        .WithMany("ExpenseReceipts")
+                        .HasForeignKey("AdvanceId")
+                        .IsRequired()
+                        .HasConstraintName("fk_er_ea");
+
+                    b.HasOne("ColdChainX.Core.Entities.User", "VerifiedByNavigation")
+                        .WithMany("ExpenseReceipts")
+                        .HasForeignKey("VerifiedBy")
+                        .HasConstraintName("fk_er_users");
+
+                    b.Navigation("Advance");
+
+                    b.Navigation("VerifiedByNavigation");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.GeoFence", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.Location", "Location")
+                        .WithMany("GeoFences")
+                        .HasForeignKey("LocationId")
+                        .HasConstraintName("fk_geo_locations");
+
+                    b.Navigation("Location");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.IncidentReport", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.User", "ReportedByNavigation")
+                        .WithMany("IncidentReports")
+                        .HasForeignKey("ReportedBy")
+                        .IsRequired()
+                        .HasConstraintName("fk_ir_users");
+
+                    b.HasOne("ColdChainX.Core.Entities.MasterTrip", "Trip")
+                        .WithMany("IncidentReports")
+                        .HasForeignKey("TripId")
+                        .HasConstraintName("fk_ir_mtrip");
+
+                    b.Navigation("ReportedByNavigation");
+
+                    b.Navigation("Trip");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Invoice", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.Customer", "Customer")
+                        .WithMany("Invoices")
+                        .HasForeignKey("CustomerId")
+                        .IsRequired()
+                        .HasConstraintName("fk_inv_customers");
+
+                    b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.InvoiceLine", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.Invoice", "Invoice")
+                        .WithMany("InvoiceLines")
+                        .HasForeignKey("InvoiceId")
+                        .IsRequired()
+                        .HasConstraintName("fk_il_inv");
+
+                    b.HasOne("ColdChainX.Core.Entities.TransportOrder", "Order")
+                        .WithMany("InvoiceLines")
+                        .HasForeignKey("OrderId")
+                        .IsRequired()
+                        .HasConstraintName("fk_il_to");
+
+                    b.Navigation("Invoice");
+
+                    b.Navigation("Order");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.IotDevice", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.Vehicle", "Vehicle")
+                        .WithMany("IotDevices")
+                        .HasForeignKey("VehicleId")
+                        .HasConstraintName("fk_iot_vehicles");
+
+                    b.Navigation("Vehicle");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Location", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.Customer", "Customer")
+                        .WithMany("Locations")
+                        .HasForeignKey("CustomerId")
+                        .HasConstraintName("fk_loc_customers");
+
+                    b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.MaintenanceTicket", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.User", "CreatedByNavigation")
+                        .WithMany("MaintenanceTickets")
+                        .HasForeignKey("CreatedBy")
+                        .IsRequired()
+                        .HasConstraintName("fk_mt_users");
+
+                    b.HasOne("ColdChainX.Core.Entities.Vehicle", "Vehicle")
+                        .WithMany("MaintenanceTickets")
+                        .HasForeignKey("VehicleId")
+                        .HasConstraintName("fk_mt_vehicles");
+
+                    b.Navigation("CreatedByNavigation");
+
+                    b.Navigation("Vehicle");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.MasterTrip", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.Location", "DestinationLocation")
+                        .WithMany("MasterTripDestinationLocations")
+                        .HasForeignKey("DestinationLocationId")
+                        .IsRequired()
+                        .HasConstraintName("fk_mtrip_dest");
+
+                    b.HasOne("ColdChainX.Core.Entities.Driver", "Driver")
+                        .WithMany("MasterTrips")
+                        .HasForeignKey("DriverId")
+                        .HasConstraintName("fk_mtrip_drivers");
+
+                    b.HasOne("ColdChainX.Core.Entities.Location", "OriginLocation")
+                        .WithMany("MasterTripOriginLocations")
+                        .HasForeignKey("OriginLocationId")
+                        .IsRequired()
+                        .HasConstraintName("fk_mtrip_orig");
+
+                    b.HasOne("ColdChainX.Core.Entities.Vehicle", "Vehicle")
+                        .WithMany("MasterTrips")
+                        .HasForeignKey("VehicleId")
+                        .HasConstraintName("fk_mtrip_vehicles");
+
+                    b.Navigation("DestinationLocation");
+
+                    b.Navigation("Driver");
+
+                    b.Navigation("OriginLocation");
+
+                    b.Navigation("Vehicle");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Notification", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.TransportOrder", "Order")
+                        .WithMany("Notifications")
+                        .HasForeignKey("OrderId")
+                        .HasConstraintName("fk_noti_order");
+
+                    b.HasOne("ColdChainX.Core.Entities.User", "Sender")
+                        .WithMany("NotificationSenders")
+                        .HasForeignKey("SenderId")
+                        .HasConstraintName("fk_noti_sender");
+
+                    b.HasOne("ColdChainX.Core.Entities.NotificationTemplate", "Template")
+                        .WithMany("Notifications")
+                        .HasForeignKey("TemplateId")
+                        .IsRequired()
+                        .HasConstraintName("fk_noti_template");
+
+                    b.HasOne("ColdChainX.Core.Entities.User", "User")
+                        .WithMany("NotificationUsers")
+                        .HasForeignKey("UserId")
+                        .IsRequired()
+                        .HasConstraintName("fk_noti_users");
+
+                    b.Navigation("Order");
+
+                    b.Navigation("Sender");
+
+                    b.Navigation("Template");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.NotificationTemplate", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.Messagetype", "Type")
+                        .WithMany("NotificationTemplates")
+                        .HasForeignKey("TypeId")
+                        .IsRequired()
+                        .HasConstraintName("fk_nt_msgtype");
+
+                    b.Navigation("Type");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Quotation", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.TransportOrder", "Order")
+                        .WithMany("Quotations")
+                        .HasForeignKey("OrderId")
+                        .HasConstraintName("fk_quote_to");
+
+                    b.Navigation("Order");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.ReturnedItem", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.DeliveryEpod", "Epod")
+                        .WithMany("ReturnedItems")
+                        .HasForeignKey("EpodId")
+                        .HasConstraintName("fk_ri_epod");
+
+                    b.HasOne("ColdChainX.Core.Entities.User", "ProcessedByNavigation")
+                        .WithMany("ReturnedItems")
+                        .HasForeignKey("ProcessedBy")
+                        .HasConstraintName("fk_ri_users");
+
+                    b.Navigation("Epod");
+
+                    b.Navigation("ProcessedByNavigation");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Seal", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.TripStop", "Stop")
+                        .WithMany("Seals")
+                        .HasForeignKey("StopId")
+                        .HasConstraintName("fk_seals_ts");
+
+                    b.HasOne("ColdChainX.Core.Entities.MasterTrip", "Trip")
+                        .WithMany("Seals")
+                        .HasForeignKey("TripId")
+                        .HasConstraintName("fk_seals_mtrip");
+
+                    b.Navigation("Stop");
+
+                    b.Navigation("Trip");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.TelemetryLog", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.IotDevice", "Device")
+                        .WithMany("TelemetryLogs")
+                        .HasForeignKey("DeviceId")
+                        .HasConstraintName("fk_tl_iot");
+
+                    b.HasOne("ColdChainX.Core.Entities.MasterTrip", "Trip")
+                        .WithMany("TelemetryLogs")
+                        .HasForeignKey("TripId")
+                        .HasConstraintName("fk_tl_mtrip");
+
+                    b.Navigation("Device");
+
+                    b.Navigation("Trip");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.TransportDocument", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.TransportOrder", "Order")
+                        .WithMany("TransportDocuments")
+                        .HasForeignKey("OrderId")
+                        .HasConstraintName("fk_td_to");
+
+                    b.HasOne("ColdChainX.Core.Entities.User", "UploadedByNavigation")
+                        .WithMany("TransportDocumentUploadedByNavigations")
+                        .HasForeignKey("UploadedBy")
+                        .IsRequired()
+                        .HasConstraintName("fk_td_uploaded");
+
+                    b.HasOne("ColdChainX.Core.Entities.User", "VerifiedByNavigation")
+                        .WithMany("TransportDocumentVerifiedByNavigations")
+                        .HasForeignKey("VerifiedBy")
+                        .HasConstraintName("fk_td_verified");
+
+                    b.Navigation("Order");
+
+                    b.Navigation("UploadedByNavigation");
+
+                    b.Navigation("VerifiedByNavigation");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.TransportOrder", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.Customer", "Customer")
+                        .WithMany("TransportOrders")
+                        .HasForeignKey("CustomerId")
+                        .HasConstraintName("fk_to_customers");
+
+                    b.HasOne("ColdChainX.Core.Entities.Location", "DestLocationNavigation")
+                        .WithMany("TransportOrderDestLocationNavigations")
+                        .HasForeignKey("DestLocation")
+                        .HasConstraintName("fk_to_dest");
+
+                    b.HasOne("ColdChainX.Core.Entities.MasterTrip", "MasterTrip")
+                        .WithMany("TransportOrders")
+                        .HasForeignKey("MasterTripId")
+                        .HasConstraintName("fk_to_mtrip");
+
+                    b.HasOne("ColdChainX.Core.Entities.Location", "PickupLocationNavigation")
+                        .WithMany("TransportOrderPickupLocationNavigations")
+                        .HasForeignKey("PickupLocation")
+                        .HasConstraintName("fk_to_pickup");
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("DestLocationNavigation");
+
+                    b.Navigation("MasterTrip");
+
+                    b.Navigation("PickupLocationNavigation");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.TripStop", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.Location", "Location")
+                        .WithMany("TripStops")
+                        .HasForeignKey("LocationId")
+                        .HasConstraintName("fk_ts_loc");
+
+                    b.HasOne("ColdChainX.Core.Entities.MasterTrip", "Trip")
+                        .WithMany("TripStops")
+                        .HasForeignKey("TripId")
+                        .HasConstraintName("fk_ts_mtrip");
+
+                    b.Navigation("Location");
+
+                    b.Navigation("Trip");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.User", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.Role", "Role")
+                        .WithMany("Users")
+                        .HasForeignKey("RoleId")
+                        .HasConstraintName("fk_users_roles");
+
+                    b.Navigation("Role");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.VehicleDocument", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.Vehicle", "Vehicle")
+                        .WithMany("VehicleDocuments")
+                        .HasForeignKey("VehicleId")
+                        .HasConstraintName("fk_vd_vehicles");
+
+                    b.Navigation("Vehicle");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.WarehouseReceipt", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.TransportOrder", "Order")
+                        .WithMany("WarehouseReceipts")
+                        .HasForeignKey("OrderId")
+                        .IsRequired()
+                        .HasConstraintName("fk_wr_to");
+
+                    b.HasOne("ColdChainX.Core.Entities.User", "Receiver")
+                        .WithMany("WarehouseReceipts")
+                        .HasForeignKey("ReceiverId")
+                        .IsRequired()
+                        .HasConstraintName("fk_wr_users");
+
+                    b.HasOne("ColdChainX.Core.Entities.Warehouse", "Warehouse")
+                        .WithMany("WarehouseReceipts")
+                        .HasForeignKey("WarehouseId")
+                        .IsRequired()
+                        .HasConstraintName("fk_wr_wh");
+
+                    b.Navigation("Order");
+
+                    b.Navigation("Receiver");
+
+                    b.Navigation("Warehouse");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.WarehouseReceiptItem", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.WarehouseReceipt", "Receipt")
+                        .WithMany("WarehouseReceiptItems")
+                        .HasForeignKey("ReceiptId")
+                        .IsRequired()
+                        .HasConstraintName("fk_wri_wr");
+
+                    b.Navigation("Receipt");
+                });
+
+            modelBuilder.Entity("RolePermission", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.Permission", null)
+                        .WithMany()
+                        .HasForeignKey("PermId")
+                        .IsRequired()
+                        .HasConstraintName("fk_rp_perms");
+
+                    b.HasOne("ColdChainX.Core.Entities.Role", null)
+                        .WithMany()
+                        .HasForeignKey("RoleId")
+                        .IsRequired()
+                        .HasConstraintName("fk_rp_roles");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.AlertLog", b =>
+                {
+                    b.Navigation("ClaimEvidences");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Claim", b =>
+                {
+                    b.Navigation("ClaimEvidences");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Customer", b =>
+                {
+                    b.Navigation("CustomerContracts");
+
+                    b.Navigation("Invoices");
+
+                    b.Navigation("Locations");
+
+                    b.Navigation("TransportOrders");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.DeliveryEpod", b =>
+                {
+                    b.Navigation("ReturnedItems");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Driver", b =>
+                {
+                    b.Navigation("DriverLicenses");
+
+                    b.Navigation("ExpenseAdvances");
+
+                    b.Navigation("MasterTrips");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.ExpenseAdvance", b =>
+                {
+                    b.Navigation("ExpenseReceipts");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Invoice", b =>
+                {
+                    b.Navigation("InvoiceLines");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.IotDevice", b =>
+                {
+                    b.Navigation("TelemetryLogs");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Location", b =>
+                {
+                    b.Navigation("GeoFences");
+
+                    b.Navigation("MasterTripDestinationLocations");
+
+                    b.Navigation("MasterTripOriginLocations");
+
+                    b.Navigation("TransportOrderDestLocationNavigations");
+
+                    b.Navigation("TransportOrderPickupLocationNavigations");
+
+                    b.Navigation("TripStops");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.MasterTrip", b =>
+                {
+                    b.Navigation("AlertLogs");
+
+                    b.Navigation("ExpenseAdvances");
+
+                    b.Navigation("IncidentReports");
+
+                    b.Navigation("Seals");
+
+                    b.Navigation("TelemetryLogs");
+
+                    b.Navigation("TransportOrders");
+
+                    b.Navigation("TripStops");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Messagetype", b =>
+                {
+                    b.Navigation("NotificationTemplates");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.NotificationTemplate", b =>
+                {
+                    b.Navigation("Notifications");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Role", b =>
+                {
+                    b.Navigation("Users");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.TransportDocument", b =>
+                {
+                    b.Navigation("ClaimEvidences");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.TransportOrder", b =>
+                {
+                    b.Navigation("Claims");
+
+                    b.Navigation("DeliveryEpods");
+
+                    b.Navigation("InvoiceLines");
+
+                    b.Navigation("Notifications");
+
+                    b.Navigation("Quotations");
+
+                    b.Navigation("TransportDocuments");
+
+                    b.Navigation("WarehouseReceipts");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.TripStop", b =>
+                {
+                    b.Navigation("Seals");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.User", b =>
+                {
+                    b.Navigation("AlertLogs");
+
+                    b.Navigation("ClaimEvidences");
+
+                    b.Navigation("ExpenseAdvances");
+
+                    b.Navigation("ExpenseReceipts");
+
+                    b.Navigation("IncidentReports");
+
+                    b.Navigation("MaintenanceTickets");
+
+                    b.Navigation("NotificationSenders");
+
+                    b.Navigation("NotificationUsers");
+
+                    b.Navigation("ReturnedItems");
+
+                    b.Navigation("TransportDocumentUploadedByNavigations");
+
+                    b.Navigation("TransportDocumentVerifiedByNavigations");
+
+                    b.Navigation("WarehouseReceipts");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Vehicle", b =>
+                {
+                    b.Navigation("IotDevices");
+
+                    b.Navigation("MaintenanceTickets");
+
+                    b.Navigation("MasterTrips");
+
+                    b.Navigation("VehicleDocuments");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Warehouse", b =>
+                {
+                    b.Navigation("WarehouseReceipts");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.WarehouseReceipt", b =>
+                {
+                    b.Navigation("WarehouseReceiptItems");
                 });
 #pragma warning restore 612, 618
         }
