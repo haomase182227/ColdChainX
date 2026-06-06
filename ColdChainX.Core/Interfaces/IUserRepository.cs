@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using ColdChainX.Core.Entities;
+using ColdChainX.Core.Enums;
 
 namespace ColdChainX.Core.Interfaces
 {
@@ -14,5 +16,14 @@ namespace ColdChainX.Core.Interfaces
         Task AddAsync(User user);
         Task UpdateAsync(User user);
         Task SaveChangesAsync();
+        Task<List<User>> GetAllAsync();
+        Task<(List<User> Items, int TotalCount)> GetPagedAsync(
+            int page,
+            int pageSize,
+            string? search,
+            string? role,
+            UserStatus? status,
+            string? sortBy,
+            string? order);
     }
 }

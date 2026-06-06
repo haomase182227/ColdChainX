@@ -46,7 +46,7 @@ namespace ColdChainX.Application.Services
             if (existingUsername != null)
                 return ApiResponse<AuthResponseDto>.Failure("Username already in use");
 
-            var role = await _userRepository.GetRoleByNameAsync(request.Role.ToString());
+            var role = await _userRepository.GetRoleByNameAsync(request.Role);
             if (role == null)
                 return ApiResponse<AuthResponseDto>.Failure($"Role '{request.Role}' was not found in database");
 

@@ -53,6 +53,8 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IJwtService, JwtService>();
+            services.AddScoped<IUserService, UserService>();
+            services.AddHttpContextAccessor();
 
             services.AddAutoMapper(typeof(MappingProfile));
 
@@ -86,6 +88,14 @@ namespace ColdChainX.API.Extensions
                     ValidAudience = jwt.Audience,
                     IssuerSigningKey = new SymmetricSecurityKey(key)
                 };
+            });
+
+            services.AddAuthorization(options =>
+            {
+                options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
+                options.AddPolicy("ManagerOnly", policy => policy.RequireRole("Manager"));
+                options.AddPolicy("DriverOnly", policy => policy.RequireRole("Driver"));
+                options.AddPolicy("CustomerOnly", policy => policy.RequireRole("Customer"));
             });
 
             return services;

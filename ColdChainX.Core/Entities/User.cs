@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace ColdChainX.Core.Entities;
@@ -17,6 +17,8 @@ public partial class User
 
     public string FullName { get; set; } = null!;
 
+    public string? PhoneNumber { get; set; }
+
     public string? Status { get; set; }
 
     public string? RefreshToken { get; set; }
@@ -25,7 +27,15 @@ public partial class User
 
     public DateTime? CreatedAt { get; set; }
 
+    public Guid? CreatedBy { get; set; }
+
     public DateTime? UpdatedAt { get; set; }
+
+    public Guid? UpdatedBy { get; set; }
+
+    public DateTime? DeletedAt { get; set; }
+
+    public Guid? DeletedBy { get; set; }
 
     public virtual ICollection<AlertLog> AlertLogs { get; set; } = new List<AlertLog>();
 
