@@ -51,7 +51,11 @@ namespace ColdChainX.API.Extensions
                     errorCodesToAdd: null)));
 
             services.AddScoped<IUserRepository, UserRepository>();
+            services.AddScoped<IVehicleRepository, VehicleRepository>();
+            services.AddScoped<IDriverRepository, DriverRepository>();
             services.AddScoped<IAuthService, AuthService>();
+            services.AddScoped<IVehicleService, VehicleService>();
+            services.AddScoped<IDriverService, DriverService>();
             services.AddScoped<IJwtService, JwtService>();
 
             services.AddAutoMapper(typeof(MappingProfile));
