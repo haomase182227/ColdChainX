@@ -1,4 +1,4 @@
-// Role enum removed; use string role name that maps to `Role` entity in DB
+using UserRole = ColdChainX.Core.Enums.Role;
 
 namespace ColdChainX.Application.DTOs
 {
@@ -8,7 +8,6 @@ namespace ColdChainX.Application.DTOs
         public string FullName { get; set; } = null!;
         public string Email { get; set; } = null!;
         public string Password { get; set; } = null!;
-        // Role name (e.g., "Admin", "Driver", "Customer").
-        public string Role { get; set; } = "Customer";
+        public UserRole Role { get; set; } = UserRole.Customer;
     }
 }

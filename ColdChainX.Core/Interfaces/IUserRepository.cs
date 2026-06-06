@@ -11,6 +11,7 @@ namespace ColdChainX.Core.Interfaces
         Task<User?> GetByRefreshTokenAsync(string refreshToken);
         Task<User?> GetByIdAsync(Guid id);
         Task<Role?> GetRoleByNameAsync(string roleName);
+        Task AddCustomerAsync(Customer customer);
         Task AddAsync(User user);
         Task UpdateAsync(User user);
         Task SaveChangesAsync();

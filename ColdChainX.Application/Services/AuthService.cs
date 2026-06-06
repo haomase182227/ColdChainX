@@ -7,6 +7,7 @@ using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
 using ColdChainX.Core.Interfaces;
 using ColdChainX.Shared.Responses;
+using UserRole = ColdChainX.Core.Enums.Role;
 
 namespace ColdChainX.Application.Services
 {
@@ -71,10 +72,28 @@ namespace ColdChainX.Application.Services
             user.RefreshToken = refreshToken;
             user.RefreshTokenExpiryTime = DbNow().AddDays(7);
 
+            Customer? customer = null;
+            if (request.Role == UserRole.Customer)
+            {
+                customer = new Customer
+                {
+                    CustomerId = Guid.NewGuid(),
+                    CompanyName = string.Empty,
+                    TaxCode = GenerateTemporaryTaxCode(user.UserId),
+                    Email = email,
+                    PaymentTerm = 30,
+                    Status = ActiveStatus,
+                    CreatedAt = DbNow()
+                };
+
+                await _userRepository.AddCustomerAsync(customer);
+            }
+
             await _userRepository.AddAsync(user);
             await _userRepository.SaveChangesAsync();
 
             var dto = _mapper.Map<AuthResponseDto>(user);
+            dto.CustomerId = customer?.CustomerId;
             dto.AccessToken = accessToken;
             dto.RefreshToken = refreshToken;
             dto.AccessTokenExpiresAt = accessExpiresAt;
@@ -200,5 +219,8 @@ namespace ColdChainX.Application.Services
 
         private static DateTime DbNow()
             => DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+
+        private static string GenerateTemporaryTaxCode(Guid userId)
+            => $"TEMP{userId:N}"[..20];
     }
 }

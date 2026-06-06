@@ -21,6 +21,11 @@ namespace ColdChainX.Infrastructure.Repositories
             await _db.Users.AddAsync(user);
         }
 
+        public async Task AddCustomerAsync(Customer customer)
+        {
+            await _db.Customers.AddAsync(customer);
+        }
+
         public async Task<User?> GetByEmailAsync(string email)
         {
             var normalizedEmail = email.ToLower();
