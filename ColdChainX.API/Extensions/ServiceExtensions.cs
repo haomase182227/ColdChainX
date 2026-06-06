@@ -58,6 +58,7 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IFileService, FileService>();
             services.AddScoped<IOrderService, OrderService>();
             services.AddScoped<IQuotationService, QuotationService>();
+            services.AddScoped<INotificationService, NotificationService>();
             services.AddSignalR();
 
             services.AddAutoMapper(typeof(MappingProfile));

@@ -1,4 +1,4 @@
-using ColdChainX.Core.Enums;
+using UserRole = ColdChainX.Core.Enums.Role;
 
 namespace ColdChainX.Application.DTOs
 {
@@ -8,6 +8,6 @@ namespace ColdChainX.Application.DTOs
         public string FullName { get; set; } = null!;
         public string Email { get; set; } = null!;
         public string Password { get; set; } = null!;
-        public Role Role { get; set; } = Role.Staff;
+        public UserRole Role { get; set; } = UserRole.Customer;
     }
 }

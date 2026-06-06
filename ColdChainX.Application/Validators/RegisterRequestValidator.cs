@@ -1,7 +1,7 @@
 using FluentValidation;
 using ColdChainX.Application.DTOs;
-using ColdChainX.Core.Enums;
 using System;
+using UserRole = ColdChainX.Core.Enums.Role;
 
 namespace ColdChainX.Application.Validators
 {
@@ -28,8 +28,8 @@ namespace ColdChainX.Application.Validators
 
             RuleFor(x => x.Role)
                 .IsInEnum().WithMessage("Invalid role value")
-                .Must(role => Enum.IsDefined(typeof(Role), role))
-                .WithMessage($"Role must be one of: {string.Join(", ", Enum.GetNames(typeof(Role)))}");
+                .Must(role => Enum.IsDefined(typeof(UserRole), role))
+                .WithMessage($"Role must be one of: {string.Join(", ", Enum.GetNames(typeof(UserRole)))}");
         }
     }
 }
