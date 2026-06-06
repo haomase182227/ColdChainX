@@ -58,8 +58,10 @@ namespace ColdChainX.API.Extensions
 
             services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
 
-            services.AddControllers()
-                .AddFluentValidation(fv => fv.RegisterValidatorsFromAssemblyContaining<Application.Validators.RegisterRequestValidator>());
+            services.AddValidatorsFromAssemblyContaining<Application.Validators.RegisterRequestValidator>();
+            services.AddFluentValidationAutoValidation();
+            services.AddFluentValidationClientsideAdapters();
+            services.AddControllers();
 
             // Removed duplicate validator registration line
 

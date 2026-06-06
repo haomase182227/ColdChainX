@@ -59,7 +59,7 @@ namespace ColdChainX.API.Controllers
         }
 
         /// <summary>
-        /// Cập nhật thông tin cá nhân của user đang đăng nhập (fullName, phoneNumber, password)
+        /// Update profile for the current user.
         /// </summary>
         [Authorize]
         [HttpPut("profile")]
@@ -77,9 +77,9 @@ namespace ColdChainX.API.Controllers
         }
 
         /// <summary>
-        /// Soft delete user theo id (chỉ Admin). Đặt Status = Inactive, xóa session.
+        /// Soft delete a user by id.
         /// </summary>
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,ADMIN")]
         [HttpDelete("{id:guid}")]
         public async Task<IActionResult> SoftDeleteUser(Guid id)
         {

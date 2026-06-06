@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Identity;
 using ColdChainX.Application.DTOs;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
-using ColdChainX.Core.Enums;
 using ColdChainX.Core.Interfaces;
 using ColdChainX.Shared.Responses;
 
@@ -13,6 +12,9 @@ namespace ColdChainX.Application.Services
 {
     public class AuthService : IAuthService
     {
+        private const string ActiveStatus = "ACTIVE";
+        private const string InactiveStatus = "INACTIVE";
+
         private readonly IUserRepository _userRepository;
         private readonly IJwtService _jwtService;
         private readonly IPasswordHasher<User> _passwordHasher;
@@ -28,19 +30,36 @@ namespace ColdChainX.Application.Services
 
         public async Task<ApiResponse<AuthResponseDto>> RegisterAsync(RegisterRequest request)
         {
-            var existing = await _userRepository.GetByEmailAsync(request.Email.ToLowerInvariant());
+            var email = request.Email.Trim().ToLowerInvariant();
+            var username = string.IsNullOrWhiteSpace(request.Username)
+                ? email
+                : request.Username.Trim().ToLowerInvariant();
+
+            if (username.Length > 50)
+                return ApiResponse<AuthResponseDto>.Failure("Username must not exceed 50 characters");
+
+            var existing = await _userRepository.GetByEmailAsync(email);
             if (existing != null)
                 return ApiResponse<AuthResponseDto>.Failure("Email already in use");
 
+            var existingUsername = await _userRepository.GetByUsernameAsync(username);
+            if (existingUsername != null)
+                return ApiResponse<AuthResponseDto>.Failure("Username already in use");
+
+            var role = await _userRepository.GetRoleByNameAsync(request.Role.ToString());
+            if (role == null)
+                return ApiResponse<AuthResponseDto>.Failure($"Role '{request.Role}' was not found in database");
+
             var user = new User
             {
-                Id = Guid.NewGuid(),
-                FullName = request.FullName,
-                Email = request.Email.ToLowerInvariant(),
-                PhoneNumber = request.PhoneNumber,
-                Role = request.Role,
-                Status = UserStatus.Active,
-                CreatedAt = DateTime.UtcNow
+                UserId = Guid.NewGuid(),
+                Username = username,
+                FullName = request.FullName.Trim(),
+                Email = email,
+                RoleId = role.RoleId,
+                Role = role,
+                Status = ActiveStatus,
+                CreatedAt = DbNow()
             };
 
             user.PasswordHash = _passwordHasher.HashPassword(user, request.Password);
@@ -50,7 +69,7 @@ namespace ColdChainX.Application.Services
             var refreshToken = _jwtService.GenerateRefreshToken();
 
             user.RefreshToken = refreshToken;
-            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+            user.RefreshTokenExpiryTime = DbNow().AddDays(7);
 
             await _userRepository.AddAsync(user);
             await _userRepository.SaveChangesAsync();
@@ -65,11 +84,11 @@ namespace ColdChainX.Application.Services
 
         public async Task<ApiResponse<AuthResponseDto>> LoginAsync(LoginRequest request)
         {
-            var user = await _userRepository.GetByEmailAsync(request.Email.ToLowerInvariant());
+            var user = await _userRepository.GetByEmailAsync(request.Email.Trim().ToLowerInvariant());
             if (user == null)
                 return ApiResponse<AuthResponseDto>.Failure("Invalid credentials");
 
-            if (user.Status == UserStatus.Inactive)
+            if (IsInactive(user))
                 return ApiResponse<AuthResponseDto>.Failure("Account has been deactivated");
 
             var verify = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.Password);
@@ -81,7 +100,7 @@ namespace ColdChainX.Application.Services
             var refreshToken = _jwtService.GenerateRefreshToken();
 
             user.RefreshToken = refreshToken;
-            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+            user.RefreshTokenExpiryTime = DbNow().AddDays(7);
 
             await _userRepository.UpdateAsync(user);
             await _userRepository.SaveChangesAsync();
@@ -99,7 +118,7 @@ namespace ColdChainX.Application.Services
             var user = await _userRepository.GetByRefreshTokenAsync(refreshToken);
             if (user == null) return ApiResponse<AuthResponseDto>.Failure("Invalid refresh token");
 
-            if (!user.RefreshTokenExpiryTime.HasValue || user.RefreshTokenExpiryTime.Value < DateTime.UtcNow)
+            if (!user.RefreshTokenExpiryTime.HasValue || user.RefreshTokenExpiryTime.Value < DbNow())
                 return ApiResponse<AuthResponseDto>.Failure("Refresh token expired");
 
             var accessExpiresAt = DateTime.UtcNow.AddMinutes(60);
@@ -107,7 +126,7 @@ namespace ColdChainX.Application.Services
             var newRefreshToken = _jwtService.GenerateRefreshToken();
 
             user.RefreshToken = newRefreshToken;
-            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+            user.RefreshTokenExpiryTime = DbNow().AddDays(7);
 
             await _userRepository.UpdateAsync(user);
             await _userRepository.SaveChangesAsync();
@@ -139,19 +158,16 @@ namespace ColdChainX.Application.Services
             var user = await _userRepository.GetByIdAsync(userId);
             if (user == null) return ApiResponse<UserProfileDto>.Failure("User not found");
 
-            if (user.Status == UserStatus.Inactive)
+            if (IsInactive(user))
                 return ApiResponse<UserProfileDto>.Failure("Account has been deactivated");
 
             if (!string.IsNullOrWhiteSpace(request.FullName))
                 user.FullName = request.FullName.Trim();
 
-            if (request.PhoneNumber != null)
-                user.PhoneNumber = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
-
             if (!string.IsNullOrWhiteSpace(request.NewPassword))
                 user.PasswordHash = _passwordHasher.HashPassword(user, request.NewPassword);
 
-            user.UpdatedAt = DateTime.UtcNow;
+            user.UpdatedAt = DbNow();
 
             await _userRepository.UpdateAsync(user);
             await _userRepository.SaveChangesAsync();
@@ -165,18 +181,24 @@ namespace ColdChainX.Application.Services
             var user = await _userRepository.GetByIdAsync(targetUserId);
             if (user == null) return ApiResponse<bool>.Failure("User not found");
 
-            if (user.Status == UserStatus.Inactive)
+            if (IsInactive(user))
                 return ApiResponse<bool>.Failure("User is already deactivated");
 
-            user.Status = UserStatus.Inactive;
+            user.Status = InactiveStatus;
             user.RefreshToken = null;
             user.RefreshTokenExpiryTime = null;
-            user.UpdatedAt = DateTime.UtcNow;
+            user.UpdatedAt = DbNow();
 
             await _userRepository.UpdateAsync(user);
             await _userRepository.SaveChangesAsync();
 
             return ApiResponse<bool>.SuccessResponse(true, "User deactivated successfully");
         }
+
+        private static bool IsInactive(User user)
+            => string.Equals(user.Status, InactiveStatus, StringComparison.OrdinalIgnoreCase);
+
+        private static DateTime DbNow()
+            => DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
     }
 }
