@@ -5,6 +5,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi.Models;
 using ColdChainX.API.Extensions;
 using ColdChainX.API.Middleware;
+using ColdChainX.Infrastructure.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
@@ -62,6 +63,7 @@ app.UseSwaggerUI(c =>
 
 app.UseRouting();
 app.UseCors("CorsPolicy");
+app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -76,5 +78,6 @@ app.MapGet("/", () => Results.Ok(new
 })).WithName("HealthCheck");
 
 app.MapControllers();
+app.MapHub<NotificationHub>("/hubs/notifications");
 
 app.Run();
