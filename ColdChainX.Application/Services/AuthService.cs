@@ -7,7 +7,6 @@ using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
 using ColdChainX.Core.Interfaces;
 using ColdChainX.Shared.Responses;
-using UserRole = ColdChainX.Core.Enums.Role;
 
 namespace ColdChainX.Application.Services
 {
@@ -47,7 +46,7 @@ namespace ColdChainX.Application.Services
             if (existingUsername != null)
                 return ApiResponse<AuthResponseDto>.Failure("Username already in use");
 
-            var role = await _userRepository.GetRoleByNameAsync(request.Role.ToString());
+            var role = await _userRepository.GetRoleByNameAsync(request.Role);
             if (role == null)
                 return ApiResponse<AuthResponseDto>.Failure($"Role '{request.Role}' was not found in database");
 
@@ -73,7 +72,7 @@ namespace ColdChainX.Application.Services
             user.RefreshTokenExpiryTime = DbNow().AddDays(7);
 
             Customer? customer = null;
-            if (request.Role == UserRole.Customer)
+            if (string.Equals(request.Role, "Customer", StringComparison.OrdinalIgnoreCase))
             {
                 customer = new Customer
                 {

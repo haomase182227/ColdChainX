@@ -1,5 +1,3 @@
-using UserRole = ColdChainX.Core.Enums.Role;
-
 namespace ColdChainX.Application.DTOs
 {
     public class RegisterRequest
@@ -8,6 +6,7 @@ namespace ColdChainX.Application.DTOs
         public string FullName { get; set; } = null!;
         public string Email { get; set; } = null!;
         public string Password { get; set; } = null!;
-        public UserRole Role { get; set; } = UserRole.Customer;
+        // Role name from the `Role` entity (e.g. "Customer", "Admin")
+        public string Role { get; set; } = "Customer";
     }
 }
