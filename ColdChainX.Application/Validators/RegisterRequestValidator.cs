@@ -1,6 +1,5 @@
 using FluentValidation;
 using ColdChainX.Application.DTOs;
-using ColdChainX.Core.Enums;
 using System;
 
 namespace ColdChainX.Application.Validators
@@ -27,9 +26,8 @@ namespace ColdChainX.Application.Validators
                 .MinimumLength(8).WithMessage("Password must be at least 8 characters");
 
             RuleFor(x => x.Role)
-                .IsInEnum().WithMessage("Invalid role value")
-                .Must(role => Enum.IsDefined(typeof(Role), role))
-                .WithMessage($"Role must be one of: {string.Join(", ", Enum.GetNames(typeof(Role)))}");
+                .NotEmpty().WithMessage("Role is required")
+                .MaximumLength(100).WithMessage("Role must not exceed 100 characters");
         }
     }
 }
