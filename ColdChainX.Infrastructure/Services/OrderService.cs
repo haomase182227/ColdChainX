@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Globalization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using ColdChainX.Application.DTOs.Orders;
@@ -80,9 +79,6 @@ namespace ColdChainX.Infrastructure.Services
             if (request.DocumentImage == null || request.DocumentImage.Length == 0)
                 return ApiResponse<CreateOrderResponse>.Failure("DocumentImage is required");
 
-            if (request.DocumentImage.Length > 10 * 1024 * 1024)
-                return ApiResponse<CreateOrderResponse>.Failure("DocumentImage must be smaller than 10MB");
-
             var strategy = _db.Database.CreateExecutionStrategy();
 
             return await strategy.ExecuteAsync(async () =>
@@ -116,7 +112,7 @@ namespace ColdChainX.Infrastructure.Services
                     CustomerId = request.CustomerId,
                     ItemName = request.ItemName.Trim(),
                     Category = request.Category.Trim(),
-                    TempCondition = request.TempCondition.ToString("0.##", CultureInfo.InvariantCulture),
+                    TempCondition = request.TempCondition.Trim(),
                     ExpectedWeightKg = request.ExpectedWeightKg,
                     ActualWeightKg = request.ExpectedWeightKg,
                     ExpectedCbm = expectedCbm,
@@ -128,7 +124,7 @@ namespace ColdChainX.Infrastructure.Services
                 _db.TransportOrders.Add(order);
 
                 var documentUrl = await _fileService.UploadFileAsync(request.DocumentImage);
-                var uploadedBy = await ResolveCustomerUserIdAsync(request.CustomerId);
+                var uploadedBy = request.CustomerUserId ?? await ResolveCustomerUserIdAsync(request.CustomerId);
                 if (!uploadedBy.HasValue)
                     return ApiResponse<CreateOrderResponse>.Failure("Customer user was not found for document upload");
 
@@ -234,9 +230,9 @@ namespace ColdChainX.Infrastructure.Services
                     return ApiResponse<ReviewOrderResponse>.Failure("Order destination location was not found");
 
                 var baseFreight = Math.Max(order.ExpectedWeightKg * KgUnitPrice, order.ExpectedCbm * CbmUnitPrice);
-                var distanceKm = await _locationService.GetDistanceKmAsync(
-                    GoongLocationService.HubLat,
-                    GoongLocationService.HubLon,
+                var distanceKm = _locationService.CalculateDistance(
+                    MockLocationService.HubLat,
+                    MockLocationService.HubLon,
                     order.DestLocationNavigation.Latitude,
                     order.DestLocationNavigation.Longitude);
                 var lastMileSurcharge = distanceKm > LastMileFreeKm

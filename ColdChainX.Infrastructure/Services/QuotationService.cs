@@ -40,19 +40,15 @@ namespace ColdChainX.Infrastructure.Services
                 if (quotation.Order == null)
                     return ApiResponse<AcceptQuotationResponse>.Failure("Quotation order was not found");
 
-                if (quotation.Order.CustomerId != request.CustomerId)
-                    return ApiResponse<AcceptQuotationResponse>.Failure("Customer_ID does not match quotation order");
-
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
                 quotation.Status = "ACCEPTED";
                 quotation.Order.Status = "CONTRACT_PENDING";
 
                 var salesUserId = await ResolveSalesUserIdAsync();
-                var customerUserId = await ResolveCustomerUserIdAsync(request.CustomerId);
                 await AddNotificationAsync(
                     salesUserId,
-                    customerUserId,
+                    request.CustomerUserId,
                     "NOTI_QUOTATION_ACCEPTED",
                     quotation.Order.OrderId,
                     new { Tracking_Code = quotation.Order.TrackingCode });
@@ -86,22 +82,6 @@ namespace ColdChainX.Infrastructure.Services
                             && (u.Role.RoleName.ToLower() == "sales"
                                 || u.Role.RoleName.ToLower() == "admin"
                                 || u.Role.RoleName.ToLower() == "manager"))
-                .Select(u => (Guid?)u.UserId)
-                .FirstOrDefaultAsync();
-        }
-
-        private async Task<Guid?> ResolveCustomerUserIdAsync(Guid customerId)
-        {
-            var customerEmail = await _db.Customers
-                .Where(c => c.CustomerId == customerId)
-                .Select(c => c.Email)
-                .FirstOrDefaultAsync();
-
-            if (string.IsNullOrWhiteSpace(customerEmail))
-                return null;
-
-            return await _db.Users
-                .Where(u => u.Email != null && u.Email.ToLower() == customerEmail.ToLower())
                 .Select(u => (Guid?)u.UserId)
                 .FirstOrDefaultAsync();
         }

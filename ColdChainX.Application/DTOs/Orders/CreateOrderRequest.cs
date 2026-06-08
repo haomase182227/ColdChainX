@@ -12,7 +12,7 @@ namespace ColdChainX.Application.DTOs.Orders
         public string Category { get; set; } = null!;
 
         [FromForm(Name = "Temp_Condition")]
-        public decimal TempCondition { get; set; }
+        public string TempCondition { get; set; } = null!;
 
         [FromForm(Name = "Expected_Weight_KG")]
         public decimal ExpectedWeightKg { get; set; }
@@ -34,6 +34,9 @@ namespace ColdChainX.Application.DTOs.Orders
 
         [FromForm(Name = "Customer_ID")]
         public Guid CustomerId { get; set; }
+
+        [FromForm(Name = "Customer_User_ID")]
+        public Guid? CustomerUserId { get; set; }
 
         [FromForm(Name = "DocumentImage")]
         public IFormFile DocumentImage { get; set; } = null!;

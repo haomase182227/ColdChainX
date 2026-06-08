@@ -6,8 +6,6 @@ namespace ColdChainX.Infrastructure.Services
 {
     public class FileService : IFileService
     {
-        private const long MaxFileSizeBytes = 10 * 1024 * 1024;
-
         private readonly IWebHostEnvironment _environment;
 
         public FileService(IWebHostEnvironment environment)
@@ -19,9 +17,6 @@ namespace ColdChainX.Infrastructure.Services
         {
             if (file.Length == 0)
                 throw new InvalidOperationException("Uploaded file is empty");
-
-            if (file.Length > MaxFileSizeBytes)
-                throw new InvalidOperationException("Uploaded file must be smaller than 10MB");
 
             var uploadsPath = Path.Combine(_environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot"), "uploads");
             Directory.CreateDirectory(uploadsPath);
