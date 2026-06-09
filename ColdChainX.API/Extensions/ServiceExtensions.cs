@@ -4,6 +4,7 @@ using FluentValidation;
 using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,6 +28,9 @@ namespace ColdChainX.API.Extensions
         {
             services.Configure<JwtSettings>(configuration.GetSection("JwtSettings"));
 
+            // Required for IHttpContextAccessor used in SimplePdfService to build absolute PDF URLs
+            services.AddHttpContextAccessor();
+
             // CORS
             var allowedOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
                 ?? Array.Empty<string>();
@@ -41,8 +45,22 @@ namespace ColdChainX.API.Extensions
                 });
             });
 
-            var connectionString = configuration.GetConnectionString("LocalConnection")
-                ?? throw new InvalidOperationException("ConnectionStrings:LocalConnection was not found.");
+            var pgHost = Environment.GetEnvironmentVariable("PGHOST");
+            var pgUser = Environment.GetEnvironmentVariable("PGUSER");
+            var pgPort = Environment.GetEnvironmentVariable("PGPORT") ?? "5432";
+            var pgDatabase = Environment.GetEnvironmentVariable("PGDATABASE");
+            var pgPassword = Environment.GetEnvironmentVariable("PGPASSWORD");
+
+            string connectionString;
+            if (!string.IsNullOrEmpty(pgHost) && !string.IsNullOrEmpty(pgUser) && !string.IsNullOrEmpty(pgPassword))
+            {
+                connectionString = $"Host={pgHost};Port={pgPort};Database={pgDatabase ?? "postgres"};Username={pgUser};Password={pgPassword};Include Error Detail=true";
+            }
+            else
+            {
+                connectionString = configuration.GetConnectionString("LocalConnection")
+                    ?? throw new InvalidOperationException("ConnectionStrings:LocalConnection was not found.");
+            }
 
             services.AddDbContext<ApplicationDbContext>(options =>
                 options.UseNpgsql(connectionString, b => b.EnableRetryOnFailure(
@@ -51,10 +69,26 @@ namespace ColdChainX.API.Extensions
                     errorCodesToAdd: null)));
 
             services.AddScoped<IUserRepository, UserRepository>();
+            services.AddScoped<IVehicleRepository, VehicleRepository>();
+            services.AddScoped<IDriverRepository, DriverRepository>();
             services.AddScoped<IAuthService, AuthService>();
+            services.AddScoped<IVehicleService, VehicleService>();
+            services.AddScoped<IDriverService, DriverService>();
             services.AddScoped<IJwtService, JwtService>();
             services.AddScoped<IUserService, UserService>();
-            services.AddHttpContextAccessor();
+            services.AddScoped<ICustomerService, CustomerService>();
+            services.AddHttpClient<ILocationService, GoongLocationService>(client =>
+            {
+                client.BaseAddress = new Uri("https://rsapi.goong.io/");
+                client.Timeout = TimeSpan.FromSeconds(20);
+            });
+            services.AddScoped<IFileService, FileService>();
+            services.AddScoped<IOrderService, OrderService>();
+            services.AddScoped<IQuotationService, QuotationService>();
+            services.AddScoped<IPdfService, SimplePdfService>();
+            services.AddScoped<IContractService, ContractService>();
+            services.AddScoped<INotificationService, NotificationService>();
+            services.AddSignalR();
 
             services.AddAutoMapper(typeof(MappingProfile));
 
@@ -87,6 +121,23 @@ namespace ColdChainX.API.Extensions
                     ValidIssuer = jwt.Issuer,
                     ValidAudience = jwt.Audience,
                     IssuerSigningKey = new SymmetricSecurityKey(key)
+                };
+
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        var accessToken = context.Request.Query["access_token"];
+                        var path = context.HttpContext.Request.Path;
+
+                        if (!string.IsNullOrEmpty(accessToken)
+                            && path.StartsWithSegments(new PathString("/hubs/notifications")))
+                        {
+                            context.Token = accessToken;
+                        }
+
+                        return Task.CompletedTask;
+                    }
                 };
             });
 

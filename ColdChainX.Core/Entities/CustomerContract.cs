@@ -9,9 +9,11 @@ public partial class CustomerContract
 
     public Guid? CustomerId { get; set; }
 
+    public Guid? OrderId { get; set; }
+
     public string ContractNumber { get; set; } = null!;
 
-    public DateOnly SignedDate { get; set; }
+    public DateOnly? SignedDate { get; set; }
 
     public DateOnly ExpiredDate { get; set; }
 
@@ -22,4 +24,6 @@ public partial class CustomerContract
     public DateTime? CreatedAt { get; set; }
 
     public virtual Customer? Customer { get; set; }
+
+    public virtual TransportOrder? Order { get; set; }
 }

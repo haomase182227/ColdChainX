@@ -17,6 +17,7 @@ namespace ColdChainX.Infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
+                .HasDefaultSchema("public")
                 .HasAnnotation("ProductVersion", "8.0.8")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
@@ -24,10 +25,11 @@ namespace ColdChainX.Infrastructure.Migrations
 
             modelBuilder.Entity("ColdChainX.Core.Entities.AlertLog", b =>
                 {
-                    b.Property<string>("AlertId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
-                        .HasColumnName("alert_id");
+                    b.Property<Guid>("AlertId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("alert_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<string>("AlertType")
                         .IsRequired()
@@ -59,9 +61,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("resolved_at");
 
-                    b.Property<string>("ResolvedBy")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("ResolvedBy")
+                        .HasColumnType("uuid")
                         .HasColumnName("resolved_by");
 
                     b.Property<string>("Status")
@@ -71,9 +72,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("status")
                         .HasDefaultValueSql("'NEW'::character varying");
 
-                    b.Property<string>("TripId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("TripId")
+                        .HasColumnType("uuid")
                         .HasColumnName("trip_id");
 
                     b.Property<decimal?>("Value")
@@ -88,15 +88,16 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.HasIndex("TripId");
 
-                    b.ToTable("alert_logs", (string)null);
+                    b.ToTable("alert_logs", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.Claim", b =>
                 {
-                    b.Property<string>("ClaimId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
-                        .HasColumnName("claim_id");
+                    b.Property<Guid>("ClaimId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("claim_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<string>("ClaimCode")
                         .IsRequired()
@@ -126,9 +127,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("fault_owner");
 
-                    b.Property<string>("OrderId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("OrderId")
+                        .HasColumnType("uuid")
                         .HasColumnName("order_id");
 
                     b.Property<string>("ResolutionNote")
@@ -154,24 +154,23 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.HasIndex(new[] { "ClaimCode" }, "claims_claim_code_key")
                         .IsUnique();
 
-                    b.ToTable("claims", (string)null);
+                    b.ToTable("claims", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.ClaimEvidence", b =>
                 {
-                    b.Property<string>("EvidenceId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
-                        .HasColumnName("evidence_id");
+                    b.Property<Guid>("EvidenceId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("evidence_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
-                    b.Property<string>("AlertId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("AlertId")
+                        .HasColumnType("uuid")
                         .HasColumnName("alert_id");
 
-                    b.Property<string>("ClaimId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("ClaimId")
+                        .HasColumnType("uuid")
                         .HasColumnName("claim_id");
 
                     b.Property<DateTime?>("CreatedAt")
@@ -180,9 +179,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("DocId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("DocId")
+                        .HasColumnType("uuid")
                         .HasColumnName("doc_id");
 
                     b.Property<string>("EvidenceType")
@@ -196,10 +194,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("image_url");
 
-                    b.Property<string>("UploadedBy")
-                        .IsRequired()
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid>("UploadedBy")
+                        .HasColumnType("uuid")
                         .HasColumnName("uploaded_by");
 
                     b.HasKey("EvidenceId")
@@ -213,15 +209,16 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.HasIndex("UploadedBy");
 
-                    b.ToTable("claim_evidences", (string)null);
+                    b.ToTable("claim_evidences", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.Customer", b =>
                 {
-                    b.Property<string>("CustomerId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
-                        .HasColumnName("customer_id");
+                    b.Property<Guid>("CustomerId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("customer_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<string>("Address")
                         .HasMaxLength(200)
@@ -270,15 +267,16 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.HasIndex(new[] { "TaxCode" }, "customers_tax_code_key")
                         .IsUnique();
 
-                    b.ToTable("customers", (string)null);
+                    b.ToTable("customers", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.CustomerContract", b =>
                 {
-                    b.Property<string>("ContractId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
-                        .HasColumnName("contract_id");
+                    b.Property<Guid>("ContractId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("contract_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<string>("ContractNumber")
                         .IsRequired()
@@ -292,9 +290,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("CustomerId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uuid")
                         .HasColumnName("customer_id");
 
                     b.Property<DateOnly>("ExpiredDate")
@@ -326,15 +323,16 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.HasIndex(new[] { "ContractNumber" }, "customer_contracts_contract_number_key")
                         .IsUnique();
 
-                    b.ToTable("customer_contracts", (string)null);
+                    b.ToTable("customer_contracts", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.DeliveryEpod", b =>
                 {
-                    b.Property<string>("EpodId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
-                        .HasColumnName("epod_id");
+                    b.Property<Guid>("EpodId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("epod_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<DateTime>("CheckinTime")
                         .HasColumnType("timestamp without time zone")
@@ -356,9 +354,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("note");
 
-                    b.Property<string>("OrderId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("OrderId")
+                        .HasColumnType("uuid")
                         .HasColumnName("order_id");
 
                     b.Property<string>("PdfUrl")
@@ -407,15 +404,16 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.HasIndex("OrderId");
 
-                    b.ToTable("delivery_epods", (string)null);
+                    b.ToTable("delivery_epods", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.Driver", b =>
                 {
-                    b.Property<string>("DriverId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
-                        .HasColumnName("driver_id");
+                    b.Property<Guid>("DriverId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("driver_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -427,6 +425,10 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("date")
                         .HasColumnName("date_of_birth");
 
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
                     b.Property<string>("Status")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(20)
@@ -437,15 +439,16 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.HasKey("DriverId")
                         .HasName("drivers_pkey");
 
-                    b.ToTable("drivers", (string)null);
+                    b.ToTable("drivers", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.DriverLicense", b =>
                 {
-                    b.Property<string>("LicenseId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
-                        .HasColumnName("license_id");
+                    b.Property<Guid>("LicenseId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("license_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -459,9 +462,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("document_url");
 
-                    b.Property<string>("DriverId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("DriverId")
+                        .HasColumnType("uuid")
                         .HasColumnName("driver_id");
 
                     b.Property<DateOnly>("ExpiryDate")
@@ -499,15 +501,16 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.HasIndex(new[] { "LicenseNumber" }, "driver_licenses_license_number_key")
                         .IsUnique();
 
-                    b.ToTable("driver_licenses", (string)null);
+                    b.ToTable("driver_licenses", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.ExpenseAdvance", b =>
                 {
-                    b.Property<string>("AdvanceId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
-                        .HasColumnName("advance_id");
+                    b.Property<Guid>("AdvanceId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("advance_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<string>("AdvanceCode")
                         .IsRequired()
@@ -526,10 +529,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("numeric(15,2)")
                         .HasColumnName("amount");
 
-                    b.Property<string>("ApprovedBy")
-                        .IsRequired()
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid>("ApprovedBy")
+                        .HasColumnType("uuid")
                         .HasColumnName("approved_by");
 
                     b.Property<string>("ClearanceStatus")
@@ -546,10 +547,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("cleared_amount")
                         .HasDefaultValueSql("0.00");
 
-                    b.Property<string>("DriverId")
-                        .IsRequired()
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid>("DriverId")
+                        .HasColumnType("uuid")
                         .HasColumnName("driver_id");
 
                     b.Property<string>("Note")
@@ -577,10 +576,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("status")
                         .HasDefaultValueSql("'PENDING'::character varying");
 
-                    b.Property<string>("TripId")
-                        .IsRequired()
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid>("TripId")
+                        .HasColumnType("uuid")
                         .HasColumnName("trip_id");
 
                     b.HasKey("AdvanceId")
@@ -595,20 +592,19 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.HasIndex(new[] { "AdvanceCode" }, "expense_advances_advance_code_key")
                         .IsUnique();
 
-                    b.ToTable("expense_advances", (string)null);
+                    b.ToTable("expense_advances", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.ExpenseReceipt", b =>
                 {
-                    b.Property<string>("ReceiptId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
-                        .HasColumnName("receipt_id");
+                    b.Property<Guid>("ReceiptId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("receipt_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
-                    b.Property<string>("AdvanceId")
-                        .IsRequired()
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid>("AdvanceId")
+                        .HasColumnType("uuid")
                         .HasColumnName("advance_id");
 
                     b.Property<decimal>("Amount")
@@ -659,9 +655,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("verified_at");
 
-                    b.Property<string>("VerifiedBy")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("VerifiedBy")
+                        .HasColumnType("uuid")
                         .HasColumnName("verified_by");
 
                     b.HasKey("ReceiptId")
@@ -671,17 +666,16 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.HasIndex("VerifiedBy");
 
-                    b.ToTable("expense_receipts", (string)null);
+                    b.ToTable("expense_receipts", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.GeoFence", b =>
                 {
-                    b.Property<int>("FenceId")
+                    b.Property<Guid>("FenceId")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("fence_id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("FenceId"));
+                        .HasColumnType("uuid")
+                        .HasColumnName("fence_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -689,8 +683,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<int?>("LocationId")
-                        .HasColumnType("integer")
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uuid")
                         .HasColumnName("location_id");
 
                     b.Property<string>("Status")
@@ -705,15 +699,16 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.HasIndex("LocationId");
 
-                    b.ToTable("geo_fences", (string)null);
+                    b.ToTable("geo_fences", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.IncidentReport", b =>
                 {
-                    b.Property<string>("IncidentId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
-                        .HasColumnName("incident_id");
+                    b.Property<Guid>("IncidentId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("incident_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<decimal?>("CurrentLatitude")
                         .HasPrecision(10, 7)
@@ -742,10 +737,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("reported_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("ReportedBy")
-                        .IsRequired()
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid>("ReportedBy")
+                        .HasColumnType("uuid")
                         .HasColumnName("reported_by");
 
                     b.Property<DateTime?>("ResolvedAt")
@@ -765,9 +758,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("status")
                         .HasDefaultValueSql("'REPORTED'::character varying");
 
-                    b.Property<string>("TripId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("TripId")
+                        .HasColumnType("uuid")
                         .HasColumnName("trip_id");
 
                     b.HasKey("IncidentId")
@@ -777,15 +769,16 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.HasIndex("TripId");
 
-                    b.ToTable("incident_reports", (string)null);
+                    b.ToTable("incident_reports", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.Invoice", b =>
                 {
-                    b.Property<string>("InvoiceId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
-                        .HasColumnName("invoice_id");
+                    b.Property<Guid>("InvoiceId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("invoice_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -793,10 +786,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("CustomerId")
-                        .IsRequired()
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid")
                         .HasColumnName("customer_id");
 
                     b.Property<decimal?>("DeductionAmount")
@@ -874,15 +865,16 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.HasIndex(new[] { "InvoiceCode" }, "invoices_invoice_code_key")
                         .IsUnique();
 
-                    b.ToTable("invoices", (string)null);
+                    b.ToTable("invoices", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.InvoiceLine", b =>
                 {
-                    b.Property<string>("LineId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
-                        .HasColumnName("line_id");
+                    b.Property<Guid>("LineId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("line_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<decimal>("Amount")
                         .HasPrecision(15, 2)
@@ -901,16 +893,12 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("description");
 
-                    b.Property<string>("InvoiceId")
-                        .IsRequired()
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uuid")
                         .HasColumnName("invoice_id");
 
-                    b.Property<string>("OrderId")
-                        .IsRequired()
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid")
                         .HasColumnName("order_id");
 
                     b.Property<decimal?>("Quantity")
@@ -939,15 +927,16 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.HasIndex("OrderId");
 
-                    b.ToTable("invoice_lines", (string)null);
+                    b.ToTable("invoice_lines", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.IotDevice", b =>
                 {
-                    b.Property<string>("DeviceId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
-                        .HasColumnName("device_id");
+                    b.Property<Guid>("DeviceId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("device_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<int?>("BatteryLevel")
                         .HasColumnType("integer")
@@ -970,9 +959,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("status")
                         .HasDefaultValueSql("'ACTIVE'::character varying");
 
-                    b.Property<string>("VehicleId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("VehicleId")
+                        .HasColumnType("uuid")
                         .HasColumnName("vehicle_id");
 
                     b.HasKey("DeviceId")
@@ -980,17 +968,16 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("iot_devices", (string)null);
+                    b.ToTable("iot_devices", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.Location", b =>
                 {
-                    b.Property<int>("LocationId")
+                    b.Property<Guid>("LocationId")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("location_id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("LocationId"));
+                        .HasColumnType("uuid")
+                        .HasColumnName("location_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<string>("Address")
                         .IsRequired()
@@ -1003,21 +990,14 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("CustomerId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uuid")
                         .HasColumnName("customer_id");
 
                     b.Property<decimal>("Latitude")
                         .HasPrecision(10, 7)
                         .HasColumnType("numeric(10,7)")
                         .HasColumnName("latitude");
-
-                    b.Property<string>("LocationName")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)")
-                        .HasColumnName("location_name");
 
                     b.Property<decimal>("Longitude")
                         .HasPrecision(10, 7)
@@ -1036,15 +1016,16 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.HasIndex("CustomerId");
 
-                    b.ToTable("locations", (string)null);
+                    b.ToTable("locations", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.MaintenanceTicket", b =>
                 {
-                    b.Property<string>("TicketId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
-                        .HasColumnName("ticket_id");
+                    b.Property<Guid>("TicketId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("ticket_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<DateOnly?>("CompletionDate")
                         .HasColumnType("date")
@@ -1063,10 +1044,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("CreatedBy")
-                        .IsRequired()
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<string>("Description")
@@ -1103,9 +1082,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("ticket_code");
 
-                    b.Property<string>("VehicleId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("VehicleId")
+                        .HasColumnType("uuid")
                         .HasColumnName("vehicle_id");
 
                     b.HasKey("TicketId")
@@ -1118,15 +1096,16 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.HasIndex(new[] { "TicketCode" }, "maintenance_tickets_ticket_code_key")
                         .IsUnique();
 
-                    b.ToTable("maintenance_tickets", (string)null);
+                    b.ToTable("maintenance_tickets", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.MasterTrip", b =>
                 {
-                    b.Property<string>("TripId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
-                        .HasColumnName("trip_id");
+                    b.Property<Guid>("TripId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("trip_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("timestamp without time zone")
@@ -1138,17 +1117,16 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<int>("DestinationLocationId")
-                        .HasColumnType("integer")
+                    b.Property<Guid>("DestinationLocationId")
+                        .HasColumnType("uuid")
                         .HasColumnName("destination_location_id");
 
-                    b.Property<string>("DriverId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("DriverId")
+                        .HasColumnType("uuid")
                         .HasColumnName("driver_id");
 
-                    b.Property<int>("OriginLocationId")
-                        .HasColumnType("integer")
+                    b.Property<Guid>("OriginLocationId")
+                        .HasColumnType("uuid")
                         .HasColumnName("origin_location_id");
 
                     b.Property<DateTime>("PlannedEndTime")
@@ -1180,9 +1158,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("numeric(8,2)")
                         .HasColumnName("total_distance_km");
 
-                    b.Property<string>("VehicleId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("VehicleId")
+                        .HasColumnType("uuid")
                         .HasColumnName("vehicle_id");
 
                     b.HasKey("TripId")
@@ -1196,17 +1173,16 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("master_trips", (string)null);
+                    b.ToTable("master_trips", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.Messagetype", b =>
                 {
-                    b.Property<int>("TypeId")
+                    b.Property<Guid>("TypeId")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("type_id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("TypeId"));
+                        .HasColumnType("uuid")
+                        .HasColumnName("type_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<string>("Description")
                         .HasMaxLength(255)
@@ -1222,15 +1198,16 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.HasKey("TypeId")
                         .HasName("messagetype_pkey");
 
-                    b.ToTable("messagetype", (string)null);
+                    b.ToTable("messagetype", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.Notification", b =>
                 {
-                    b.Property<string>("NotiId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
-                        .HasColumnName("noti_id");
+                    b.Property<Guid>("NotiId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("noti_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -1244,9 +1221,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasDefaultValue(false)
                         .HasColumnName("is_read");
 
-                    b.Property<string>("OrderId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("OrderId")
+                        .HasColumnType("uuid")
                         .HasColumnName("order_id");
 
                     b.Property<string>("Params")
@@ -1254,9 +1230,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("json")
                         .HasColumnName("params");
 
-                    b.Property<string>("SenderId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("SenderId")
+                        .HasColumnType("uuid")
                         .HasColumnName("sender_id");
 
                     b.Property<string>("TemplateId")
@@ -1265,10 +1240,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("template_id");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
                         .HasColumnName("user_id");
 
                     b.HasKey("NotiId")
@@ -1282,7 +1255,7 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("notifications", (string)null);
+                    b.ToTable("notifications", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.NotificationTemplate", b =>
@@ -1316,8 +1289,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("title_template");
 
-                    b.Property<int>("TypeId")
-                        .HasColumnType("integer")
+                    b.Property<Guid>("TypeId")
+                        .HasColumnType("uuid")
                         .HasColumnName("type_id");
 
                     b.HasKey("TemplateId")
@@ -1325,17 +1298,16 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.HasIndex("TypeId");
 
-                    b.ToTable("notification_templates", (string)null);
+                    b.ToTable("notification_templates", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.Permission", b =>
                 {
-                    b.Property<int>("PermId")
+                    b.Property<Guid>("PermId")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("perm_id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("PermId"));
+                        .HasColumnType("uuid")
+                        .HasColumnName("perm_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<string>("Module")
                         .IsRequired()
@@ -1355,17 +1327,16 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.HasIndex(new[] { "PermCode" }, "permissions_perm_code_key")
                         .IsUnique();
 
-                    b.ToTable("permissions", (string)null);
+                    b.ToTable("permissions", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.PricingMatrix", b =>
                 {
-                    b.Property<int>("PriceId")
+                    b.Property<Guid>("PriceId")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("price_id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("PriceId"));
+                        .HasColumnType("uuid")
+                        .HasColumnName("price_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<string>("DestCity")
                         .IsRequired()
@@ -1397,15 +1368,16 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.HasKey("PriceId")
                         .HasName("pricing_matrix_pkey");
 
-                    b.ToTable("pricing_matrix", (string)null);
+                    b.ToTable("pricing_matrix", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.Quotation", b =>
                 {
-                    b.Property<string>("QuoteId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
-                        .HasColumnName("quote_id");
+                    b.Property<Guid>("QuoteId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("quote_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<decimal>("BaseFreight")
                         .HasPrecision(15, 2)
@@ -1430,9 +1402,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("last_mile_surcharge")
                         .HasDefaultValueSql("0");
 
-                    b.Property<string>("OrderId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("OrderId")
+                        .HasColumnType("uuid")
                         .HasColumnName("order_id");
 
                     b.Property<string>("Status")
@@ -1458,19 +1429,19 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.HasIndex("OrderId");
 
-                    b.ToTable("quotations", (string)null);
+                    b.ToTable("quotations", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.ReturnedItem", b =>
                 {
-                    b.Property<string>("ReturnId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
-                        .HasColumnName("return_id");
+                    b.Property<Guid>("ReturnId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("return_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
-                    b.Property<string>("EpodId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("EpodId")
+                        .HasColumnType("uuid")
                         .HasColumnName("epod_id");
 
                     b.Property<string>("ItemCode")
@@ -1488,9 +1459,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("processed_at");
 
-                    b.Property<string>("ProcessedBy")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("ProcessedBy")
+                        .HasColumnType("uuid")
                         .HasColumnName("processed_by");
 
                     b.Property<string>("ProcessingStatus")
@@ -1534,17 +1504,23 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.HasIndex("ProcessedBy");
 
-                    b.ToTable("returned_items", (string)null);
+                    b.ToTable("returned_items", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.Role", b =>
                 {
-                    b.Property<int>("RoleId")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
-                        .HasColumnName("role_id");
+                        .HasColumnName("id");
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("RoleId"));
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<string>("Description")
                         .HasMaxLength(255)
@@ -1557,23 +1533,22 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("role_name");
 
-                    b.HasKey("RoleId")
+                    b.HasKey("Id")
                         .HasName("roles_pkey");
 
                     b.HasIndex(new[] { "RoleName" }, "roles_role_name_key")
                         .IsUnique();
 
-                    b.ToTable("roles", (string)null);
+                    b.ToTable("roles", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.Seal", b =>
                 {
-                    b.Property<int>("SealId")
+                    b.Property<Guid>("SealId")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("seal_id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("SealId"));
+                        .HasColumnType("uuid")
+                        .HasColumnName("seal_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<DateTime?>("AppliedAt")
                         .ValueGeneratedOnAdd()
@@ -1618,14 +1593,12 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("status")
                         .HasDefaultValueSql("'APPLIED'::character varying");
 
-                    b.Property<string>("StopId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("StopId")
+                        .HasColumnType("uuid")
                         .HasColumnName("stop_id");
 
-                    b.Property<string>("TripId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("TripId")
+                        .HasColumnType("uuid")
                         .HasColumnName("trip_id");
 
                     b.HasKey("SealId")
@@ -1635,17 +1608,16 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.HasIndex("TripId");
 
-                    b.ToTable("seals", (string)null);
+                    b.ToTable("seals", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.TelemetryLog", b =>
                 {
-                    b.Property<long>("LogId")
+                    b.Property<Guid>("LogId")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("log_id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("LogId"));
+                        .HasColumnType("uuid")
+                        .HasColumnName("log_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -1653,9 +1625,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("DeviceId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("DeviceId")
+                        .HasColumnType("uuid")
                         .HasColumnName("device_id");
 
                     b.Property<decimal>("Latitude")
@@ -1677,9 +1648,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("timestamp");
 
-                    b.Property<string>("TripId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("TripId")
+                        .HasColumnType("uuid")
                         .HasColumnName("trip_id");
 
                     b.HasKey("LogId")
@@ -1689,15 +1659,16 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.HasIndex("TripId");
 
-                    b.ToTable("telemetry_logs", (string)null);
+                    b.ToTable("telemetry_logs", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.TransportDocument", b =>
                 {
-                    b.Property<string>("DocId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
-                        .HasColumnName("doc_id");
+                    b.Property<Guid>("DocId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("doc_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -1717,9 +1688,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("image_url");
 
-                    b.Property<string>("OrderId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("OrderId")
+                        .HasColumnType("uuid")
                         .HasColumnName("order_id");
 
                     b.Property<string>("RejectReason")
@@ -1734,19 +1704,16 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("status")
                         .HasDefaultValueSql("'PENDING'::character varying");
 
-                    b.Property<string>("UploadedBy")
-                        .IsRequired()
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid>("UploadedBy")
+                        .HasColumnType("uuid")
                         .HasColumnName("uploaded_by");
 
                     b.Property<DateTime?>("VerifiedAt")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("verified_at");
 
-                    b.Property<string>("VerifiedBy")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("VerifiedBy")
+                        .HasColumnType("uuid")
                         .HasColumnName("verified_by");
 
                     b.HasKey("DocId")
@@ -1758,15 +1725,16 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.HasIndex("VerifiedBy");
 
-                    b.ToTable("transport_documents", (string)null);
+                    b.ToTable("transport_documents", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.TransportOrder", b =>
                 {
-                    b.Property<string>("OrderId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
-                        .HasColumnName("order_id");
+                    b.Property<Guid>("OrderId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<decimal?>("ActualCbm")
                         .HasPrecision(8, 2)
@@ -1795,13 +1763,12 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("CustomerId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uuid")
                         .HasColumnName("customer_id");
 
-                    b.Property<int?>("DestLocation")
-                        .HasColumnType("integer")
+                    b.Property<Guid?>("DestLocation")
+                        .HasColumnType("uuid")
                         .HasColumnName("dest_location");
 
                     b.Property<decimal>("ExpectedCbm")
@@ -1820,13 +1787,12 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("character varying(150)")
                         .HasColumnName("item_name");
 
-                    b.Property<string>("MasterTripId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("MasterTripId")
+                        .HasColumnType("uuid")
                         .HasColumnName("master_trip_id");
 
-                    b.Property<int?>("PickupLocation")
-                        .HasColumnType("integer")
+                    b.Property<Guid?>("PickupLocation")
+                        .HasColumnType("uuid")
                         .HasColumnName("pickup_location");
 
                     b.Property<string>("Status")
@@ -1861,15 +1827,16 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.HasIndex(new[] { "TrackingCode" }, "transport_order_tracking_code_key")
                         .IsUnique();
 
-                    b.ToTable("transport_order", (string)null);
+                    b.ToTable("transport_order", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.TripStop", b =>
                 {
-                    b.Property<string>("StopId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
-                        .HasColumnName("stop_id");
+                    b.Property<Guid>("StopId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("stop_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<DateTime?>("ActualArrivalTime")
                         .HasColumnType("timestamp without time zone")
@@ -1885,8 +1852,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<int?>("LocationId")
-                        .HasColumnType("integer")
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uuid")
                         .HasColumnName("location_id");
 
                     b.Property<string>("Note")
@@ -1918,9 +1885,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("character varying(30)")
                         .HasColumnName("stop_type");
 
-                    b.Property<string>("TripId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("TripId")
+                        .HasColumnType("uuid")
                         .HasColumnName("trip_id");
 
                     b.HasKey("StopId")
@@ -1930,15 +1896,16 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.HasIndex("TripId");
 
-                    b.ToTable("trip_stops", (string)null);
+                    b.ToTable("trip_stops", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.User", b =>
                 {
-                    b.Property<string>("UserId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
-                        .HasColumnName("user_id");
+                    b.Property<Guid>("UserId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -1947,8 +1914,9 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<string>("Email")
-                        .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("email");
 
                     b.Property<string>("FullName")
                         .IsRequired()
@@ -1962,14 +1930,19 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("password_hash");
 
-                    b.Property<string>("PhoneNumber")
-                        .HasColumnType("text");
+                    b.Property<string>("Phone")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("phone");
 
                     b.Property<string>("RefreshToken")
-                        .HasColumnType("text");
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("refresh_token");
 
                     b.Property<DateTime?>("RefreshTokenExpiryTime")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("refresh_token_expiry_time");
 
                     b.Property<int?>("RoleId")
                         .HasColumnType("integer")
@@ -1983,7 +1956,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasDefaultValueSql("'ACTIVE'::character varying");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("updated_at");
 
                     b.Property<string>("Username")
                         .IsRequired()
@@ -1999,15 +1973,16 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.HasIndex(new[] { "Username" }, "users_username_key")
                         .IsUnique();
 
-                    b.ToTable("users", (string)null);
+                    b.ToTable("users", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.Vehicle", b =>
                 {
-                    b.Property<string>("VehicleId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
-                        .HasColumnName("vehicle_id");
+                    b.Property<Guid>("VehicleId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("vehicle_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<string>("Brand")
                         .HasMaxLength(50)
@@ -2090,15 +2065,16 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.HasIndex(new[] { "TruckPlate" }, "vehicles_truck_plate_key")
                         .IsUnique();
 
-                    b.ToTable("vehicles", (string)null);
+                    b.ToTable("vehicles", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.VehicleDocument", b =>
                 {
-                    b.Property<string>("DocId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
-                        .HasColumnName("doc_id");
+                    b.Property<Guid>("DocId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("doc_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -2138,9 +2114,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("status")
                         .HasDefaultValueSql("'ACTIVE'::character varying");
 
-                    b.Property<string>("VehicleId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid?>("VehicleId")
+                        .HasColumnType("uuid")
                         .HasColumnName("vehicle_id");
 
                     b.HasKey("DocId")
@@ -2148,17 +2123,16 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.HasIndex("VehicleId");
 
-                    b.ToTable("vehicle_documents", (string)null);
+                    b.ToTable("vehicle_documents", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.Warehouse", b =>
                 {
-                    b.Property<int>("WarehouseId")
+                    b.Property<Guid>("WarehouseId")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("warehouse_id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("WarehouseId"));
+                        .HasColumnType("uuid")
+                        .HasColumnName("warehouse_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<string>("Address")
                         .HasMaxLength(100)
@@ -2197,15 +2171,16 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.HasKey("WarehouseId")
                         .HasName("warehouses_pkey");
 
-                    b.ToTable("warehouses", (string)null);
+                    b.ToTable("warehouses", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.WarehouseReceipt", b =>
                 {
-                    b.Property<string>("ReceiptId")
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
-                        .HasColumnName("receipt_id");
+                    b.Property<Guid>("ReceiptId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("receipt_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -2223,10 +2198,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("note");
 
-                    b.Property<string>("OrderId")
-                        .IsRequired()
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid")
                         .HasColumnName("order_id");
 
                     b.Property<string>("PdfUrl")
@@ -2251,10 +2224,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("receipt_type");
 
-                    b.Property<string>("ReceiverId")
-                        .IsRequired()
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid>("ReceiverId")
+                        .HasColumnType("uuid")
                         .HasColumnName("receiver_id");
 
                     b.Property<decimal?>("RecordedTemperature")
@@ -2281,8 +2252,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("total_expected_qty")
                         .HasDefaultValueSql("0");
 
-                    b.Property<int>("WarehouseId")
-                        .HasColumnType("integer")
+                    b.Property<Guid>("WarehouseId")
+                        .HasColumnType("uuid")
                         .HasColumnName("warehouse_id");
 
                     b.HasKey("ReceiptId")
@@ -2297,17 +2268,16 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.HasIndex(new[] { "ReceiptCode" }, "warehouse_receipts_receipt_code_key")
                         .IsUnique();
 
-                    b.ToTable("warehouse_receipts", (string)null);
+                    b.ToTable("warehouse_receipts", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.WarehouseReceiptItem", b =>
                 {
-                    b.Property<long>("ItemId")
+                    b.Property<Guid>("ItemId")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("item_id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("ItemId"));
+                        .HasColumnType("uuid")
+                        .HasColumnName("item_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<decimal>("ActualQty")
                         .HasPrecision(10, 2)
@@ -2341,10 +2311,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("note");
 
-                    b.Property<string>("ReceiptId")
-                        .IsRequired()
-                        .HasMaxLength(36)
-                        .HasColumnType("character varying(36)")
+                    b.Property<Guid>("ReceiptId")
+                        .HasColumnType("uuid")
                         .HasColumnName("receipt_id");
 
                     b.Property<string>("Unit")
@@ -2358,7 +2326,7 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.HasIndex("ReceiptId");
 
-                    b.ToTable("warehouse_receipt_items", (string)null);
+                    b.ToTable("warehouse_receipt_items", "public");
                 });
 
             modelBuilder.Entity("RolePermission", b =>
@@ -2367,8 +2335,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("role_id");
 
-                    b.Property<int>("PermId")
-                        .HasColumnType("integer")
+                    b.Property<Guid>("PermId")
+                        .HasColumnType("uuid")
                         .HasColumnName("perm_id");
 
                     b.HasKey("RoleId", "PermId")
@@ -2376,7 +2344,7 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.HasIndex("PermId");
 
-                    b.ToTable("role_permissions", (string)null);
+                    b.ToTable("role_permissions", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.AlertLog", b =>

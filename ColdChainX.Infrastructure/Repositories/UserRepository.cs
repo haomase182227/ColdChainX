@@ -23,6 +23,11 @@ namespace ColdChainX.Infrastructure.Repositories
             await _db.Users.AddAsync(user);
         }
 
+        public async Task AddCustomerAsync(Customer customer)
+        {
+            await _db.Customers.AddAsync(customer);
+        }
+
         public async Task<User?> GetByEmailAsync(string email)
         {
             var normalizedEmail = email.ToLower();
@@ -57,6 +62,40 @@ namespace ColdChainX.Infrastructure.Repositories
 
             return await _db.Roles
                 .FirstOrDefaultAsync(r => r.RoleName.ToLower() == normalizedRoleName);
+        }
+
+        public async Task<Guid?> GetCustomerIdByEmailAsync(string email)
+        {
+            var normalizedEmail = email.ToLower();
+
+            return await _db.Customers
+                .Where(c => c.Email != null && c.Email.ToLower() == normalizedEmail)
+                .Select(c => (Guid?)c.CustomerId)
+                .FirstOrDefaultAsync();
+        }
+
+        public async Task<Guid?> GetDriverIdByUserIdAsync(Guid userId)
+        {
+            return await _db.Drivers
+                .Where(d => d.UserId == userId)
+                .Select(d => (Guid?)d.DriverId)
+                .FirstOrDefaultAsync();
+        }
+
+        public async Task<Role?> GetRoleByIdAsync(int roleId)
+        {
+            return await _db.Roles
+            .FirstOrDefaultAsync(r => r.Id == roleId);
+        }
+
+        public async Task<List<Role>> GetAllRolesAsync()
+        {
+            return await _db.Roles.ToListAsync();
+        }
+
+        public async Task AddRoleAsync(Role role)
+        {
+            await _db.Roles.AddAsync(role);
         }
 
         public async Task UpdateAsync(User user)

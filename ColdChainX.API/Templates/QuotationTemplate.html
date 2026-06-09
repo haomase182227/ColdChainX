@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: 'Times New Roman', Times, serif; font-size: 13pt; line-height: 1.5; padding: 20px 40px; color: #000; }
+        .header-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        .header-table td { border: none; vertical-align: top; }
+        .price-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .price-table th, .price-table td { border: 1px solid #000; padding: 8px; text-align: left; }
+        .price-table th { background-color: #f2f2f2; text-align: center; }
+        .center { text-align: center; }
+        .bold { font-weight: bold; }
+        .italic { font-style: italic; }
+        .title { text-align: center; font-size: 16pt; font-weight: bold; margin: 20px 0 5px 0; }
+    </style>
+</head>
+<body>
+    <table class="header-table">
+        <tr>
+            <td style="width: 25%; text-align: center;">
+                <img src="/images/logo.png" alt="Logo" style="height: 100px;" />
+            </td>
+            <td style="width: 75%; padding-left: 20px;">
+                <div style="font-size: 14pt; color: #4A86E8;" class="bold">COLD CHAIN LOGISTICS COMPANY LIMITED</div>
+                <div>Địa chỉ: Khu Công Nghệ Cao, Quận 9, Tp. HCM, Vietnam</div>
+                <div>Tel : 1900 xxxx (or 09xx xxx xxx)</div>
+                <div>Contact person: Mr. Admin</div>
+                <div>Email: kinhdoanh@coldchain.vn</div>
+            </td>
+        </tr>
+    </table>
+
+    <div class="title">BẢNG BÁO GIÁ DỊCH VỤ GIAO NHẬN VẬN CHUYỂN</div>
+    <div class="center italic" style="margin-bottom: 20px;">Ngày : {{Quote_Date}}</div>
+
+    <div><span class="bold">Kính gởi:</span> QUÝ CÔNG TY {{Customer_CompanyName}}</div>
+    <div><span class="bold">Nơi gởi:</span> COLD CHAIN LOGISTICS</div>
+
+    <p>Công ty COLD CHAIN LOGISTICS chân thành cảm ơn sự quan tâm của quý công ty, chúng tôi xin hân hạnh gửi đến quý công ty bảng báo giá dịch vụ như sau:</p>
+
+    <div class="bold">I/ NỘI DUNG YÊU CẦU:</div>
+    <ul style="margin-top: 5px;">
+        <li>Mã đơn hàng: {{Tracking_Code}} - Mặt hàng: {{Item_Name}}</li>
+        <li>Số lượng: {{Quantity}} - Cách đóng gói: {{Packing_Type}}</li>
+        <li>Nơi nhận: {{Pickup_Address}}</li>
+        <li>Nơi giao: {{Dest_Address}}</li>
+        <li>Kích thước/Trọng lượng: {{Actual_Weight_KG}} KG / {{Actual_CBM}} CBM</li>
+    </ul>
+
+    <div class="bold">II/ CHI PHÍ DỊCH VỤ:</div>
+    <table class="price-table">
+        <tr>
+            <th style="width: 10%;">STT</th>
+            <th style="width: 60%;">PHÍ DỊCH VỤ GIAO NHẬN</th>
+            <th style="width: 30%;">PHÍ DỊCH VỤ (VNĐ)</th>
+        </tr>
+        <tr>
+            <td class="center">1</td>
+            <td>Phí vận chuyển</td>
+            <td class="center">{{Final_Amount}}</td>
+        </tr>
+    </table>
+
+    <div class="bold" style="margin-top: 20px;">III/ GHI CHÚ & CHƯA BAO GỒM:</div>
+    <div style="margin-left: 10px;">
+        <p style="margin: 5px 0;">- Giá trên chưa gồm thuế VAT 10%.</p>
+        <p style="margin: 5px 0;">- Hàng hóa chấp nhận gửi là hàng đông lạnh cần bảo quản nhiệt độ – 5 đến -18 độ C, như:</p>
+        <ul style="margin-top: 0;">
+            <li>Thịt, cá, thủy hải sản đông lạnh</li>
+            <li>Kem, Nước ép</li>
+            <li>Trái cây cấp đông : Bơ, sầu riêng, mít lột, xoài xắt lát</li>
+            <li>Các thực phẩm, dược phẩm, nguyên phụ liệu cấp đông khác…</li>
+        </ul>
+        <p style="margin: 5px 0;">- Báo giá có hiệu lực trong vòng 15 ngày.</p>
+    </div>
+
+    <p class="italic" style="margin-top: 20px;">Rất mong bảng báo giá này làm hài lòng quý công ty và COLD CHAIN LOGISTICS có cơ hội cung cấp dịch vụ.<br/>Xin cảm ơn và kính chào.</p>
+</body>
+</html>

@@ -5,8 +5,13 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi.Models;
 using ColdChainX.API.Extensions;
 using ColdChainX.API.Middleware;
+using ColdChainX.API.Swagger;
+using ColdChainX.Infrastructure.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
+DotEnvLoader.Load(Path.Combine(builder.Environment.ContentRootPath, ".env"));
+DotEnvLoader.Load(Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", ".env")));
+
 var configuration = builder.Configuration;
 
 builder.Services.AddProjectServices(configuration);
@@ -15,6 +20,12 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "ColdChainX API", Version = "v1" });
+    c.SchemaFilter<CreateOrderRequestSchemaFilter>();
+    c.OperationFilter<CreateOrderFormOperationFilter>();
+    c.OperationFilter<RegisterOperationFilter>();
+    c.OperationFilter<CreateCustomerOperationFilter>();
+    c.OperationFilter<CreateDriverOperationFilter>();
+    c.OperationFilter<RemoveAuthFromCreateAccountsFilter>();
 
     var securityScheme = new OpenApiSecurityScheme
     {
@@ -50,6 +61,8 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
+await app.Services.ApplyAuthSchemaCompatibilityPatchAsync(app.Logger);
+
 app.UseMiddleware<ExceptionMiddleware>();
 
 // Enable Swagger in all environments for testing
@@ -62,6 +75,7 @@ app.UseSwaggerUI(c =>
 
 app.UseRouting();
 app.UseCors("CorsPolicy");
+app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -76,5 +90,6 @@ app.MapGet("/", () => Results.Ok(new
 })).WithName("HealthCheck");
 
 app.MapControllers();
+app.MapHub<NotificationHub>("/hubs/notifications");
 
 app.Run();
