@@ -69,6 +69,7 @@ namespace ColdChainX.API.Extensions
                     errorCodesToAdd: null)));
 
             services.AddScoped<IUserRepository, UserRepository>();
+            services.AddScoped<IWarehouseReceiptRepository, WarehouseReceiptRepository>();
             services.AddScoped<IVehicleRepository, VehicleRepository>();
             services.AddScoped<IDriverRepository, DriverRepository>();
             services.AddScoped<IAuthService, AuthService>();
@@ -88,6 +89,7 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IPdfService, SimplePdfService>();
             services.AddScoped<IContractService, ContractService>();
             services.AddScoped<INotificationService, NotificationService>();
+            services.AddScoped<IWarehouseReceiptService, WarehouseReceiptService>();
             services.AddSignalR();
 
             services.AddAutoMapper(typeof(MappingProfile));

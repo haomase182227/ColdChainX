@@ -1643,6 +1643,30 @@ public partial class ApplicationDbContext : DbContext
                 .HasMaxLength(20)
                 .HasColumnName("unit");
 
+            entity.Property(e => e.ActualWeightKg)
+                .HasPrecision(10, 2)
+                .HasColumnName("actual_weight_kg");
+
+            entity.Property(e => e.LengthCm)
+                .HasPrecision(10, 2)
+                .HasColumnName("length_cm");
+
+            entity.Property(e => e.WidthCm)
+                .HasPrecision(10, 2)
+                .HasColumnName("width_cm");
+
+            entity.Property(e => e.HeightCm)
+                .HasPrecision(10, 2)
+                .HasColumnName("height_cm");
+
+            entity.Property(e => e.Barcode)
+                .HasMaxLength(100)
+                .HasColumnName("barcode");
+
+            entity.Property(e => e.QrCode)
+                .HasMaxLength(255)
+                .HasColumnName("qr_code");
+
             entity.HasOne(d => d.Receipt).WithMany(p => p.WarehouseReceiptItems)
                 .HasForeignKey(d => d.ReceiptId)
                 .OnDelete(DeleteBehavior.ClientSetNull)

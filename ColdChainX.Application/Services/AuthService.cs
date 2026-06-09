@@ -83,7 +83,7 @@ namespace ColdChainX.Application.Services
             var refreshToken = _jwtService.GenerateRefreshToken();
 
             user.RefreshToken = refreshToken;
-            user.RefreshTokenExpiryTime = DbNow().AddDays(7);
+            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
 
             await _userRepository.AddAsync(user);
             await _userRepository.SaveChangesAsync();
@@ -114,7 +114,7 @@ namespace ColdChainX.Application.Services
             var refreshToken = _jwtService.GenerateRefreshToken();
 
             user.RefreshToken = refreshToken;
-            user.RefreshTokenExpiryTime = DbNow().AddDays(7);
+            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
 
             await _userRepository.UpdateAsync(user);
             await _userRepository.SaveChangesAsync();
@@ -140,7 +140,7 @@ namespace ColdChainX.Application.Services
             var newRefreshToken = _jwtService.GenerateRefreshToken();
 
             user.RefreshToken = newRefreshToken;
-            user.RefreshTokenExpiryTime = DbNow().AddDays(7);
+            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
 
             await _userRepository.UpdateAsync(user);
             await _userRepository.SaveChangesAsync();
@@ -181,7 +181,7 @@ namespace ColdChainX.Application.Services
             if (!string.IsNullOrWhiteSpace(request.NewPassword))
                 user.PasswordHash = _passwordHasher.HashPassword(user, request.NewPassword);
 
-            user.UpdatedAt = DbNow();
+            user.UpdatedAt = DateTime.UtcNow;
 
             await _userRepository.UpdateAsync(user);
             await _userRepository.SaveChangesAsync();
@@ -201,7 +201,7 @@ namespace ColdChainX.Application.Services
             user.Status = InactiveStatus;
             user.RefreshToken = null;
             user.RefreshTokenExpiryTime = null;
-            user.UpdatedAt = DbNow();
+            user.UpdatedAt = DateTime.UtcNow;
 
             await _userRepository.UpdateAsync(user);
             await _userRepository.SaveChangesAsync();
@@ -261,7 +261,7 @@ namespace ColdChainX.Application.Services
             var refreshToken = _jwtService.GenerateRefreshToken();
 
             user.RefreshToken = refreshToken;
-            user.RefreshTokenExpiryTime = DbNow().AddDays(7);
+            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
 
             // Create Customer entity with provided information
             var customer = new Customer
@@ -332,7 +332,7 @@ namespace ColdChainX.Application.Services
             var refreshToken = _jwtService.GenerateRefreshToken();
 
             user.RefreshToken = refreshToken;
-            user.RefreshTokenExpiryTime = DbNow().AddDays(7);
+            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
 
             // Create Driver entity with provided information
             var driver = new Driver
