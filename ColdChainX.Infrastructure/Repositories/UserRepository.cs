@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using ColdChainX.Core.Entities;
@@ -59,7 +61,6 @@ namespace ColdChainX.Infrastructure.Repositories
                 .FirstOrDefaultAsync(r => r.RoleName.ToLower() == normalizedRoleName);
         }
 
-<<<<<<< HEAD
         public async Task<Guid?> GetCustomerIdByEmailAsync(string email)
         {
             var normalizedEmail = email.ToLower();
@@ -76,7 +77,8 @@ namespace ColdChainX.Infrastructure.Repositories
                 .Where(d => d.UserId == userId)
                 .Select(d => (Guid?)d.DriverId)
                 .FirstOrDefaultAsync();
-=======
+        }
+
         public async Task<Role?> GetRoleByIdAsync(int roleId)
         {
             return await _db.Roles
@@ -91,7 +93,6 @@ namespace ColdChainX.Infrastructure.Repositories
         public async Task AddRoleAsync(Role role)
         {
             await _db.Roles.AddAsync(role);
->>>>>>> HaoMA-BE
         }
 
         public async Task UpdateAsync(User user)

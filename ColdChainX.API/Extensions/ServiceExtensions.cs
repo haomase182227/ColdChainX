@@ -45,8 +45,22 @@ namespace ColdChainX.API.Extensions
                 });
             });
 
-            var connectionString = configuration.GetConnectionString("LocalConnection")
-                ?? throw new InvalidOperationException("ConnectionStrings:LocalConnection was not found.");
+            var pgHost = Environment.GetEnvironmentVariable("PGHOST");
+            var pgUser = Environment.GetEnvironmentVariable("PGUSER");
+            var pgPort = Environment.GetEnvironmentVariable("PGPORT") ?? "5432";
+            var pgDatabase = Environment.GetEnvironmentVariable("PGDATABASE");
+            var pgPassword = Environment.GetEnvironmentVariable("PGPASSWORD");
+
+            string connectionString;
+            if (!string.IsNullOrEmpty(pgHost) && !string.IsNullOrEmpty(pgUser) && !string.IsNullOrEmpty(pgPassword))
+            {
+                connectionString = $"Host={pgHost};Port={pgPort};Database={pgDatabase ?? "postgres"};Username={pgUser};Password={pgPassword};Include Error Detail=true";
+            }
+            else
+            {
+                connectionString = configuration.GetConnectionString("LocalConnection")
+                    ?? throw new InvalidOperationException("ConnectionStrings:LocalConnection was not found.");
+            }
 
             services.AddDbContext<ApplicationDbContext>(options =>
                 options.UseNpgsql(connectionString, b => b.EnableRetryOnFailure(

@@ -78,6 +78,8 @@ namespace ColdChainX.Application.Services
 
             user.PasswordHash = _passwordHasher.HashPassword(user, request.Password);
 
+            var accessExpiresAt = DateTime.UtcNow.AddMinutes(60);
+            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt);
             var refreshToken = _jwtService.GenerateRefreshToken();
 
             user.RefreshToken = refreshToken;
@@ -86,16 +88,7 @@ namespace ColdChainX.Application.Services
             await _userRepository.AddAsync(user);
             await _userRepository.SaveChangesAsync();
 
-            var accessExpiresAt = DateTime.UtcNow.AddMinutes(60);
-            var driverId = await ResolveDriverIdAsync(user);
-            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt, customer?.CustomerId, driverId);
-
             var dto = _mapper.Map<AuthResponseDto>(user);
-<<<<<<< HEAD
-            dto.CustomerId = customer?.CustomerId;
-            dto.DriverId = driverId;
-=======
->>>>>>> HaoMA-BE
             dto.AccessToken = accessToken;
             dto.RefreshToken = refreshToken;
             dto.AccessTokenExpiresAt = accessExpiresAt;
@@ -117,9 +110,7 @@ namespace ColdChainX.Application.Services
                 return ApiResponse<AuthResponseDto>.Failure("Invalid credentials");
 
             var accessExpiresAt = DateTime.UtcNow.AddMinutes(60);
-            var customerId = await ResolveCustomerIdAsync(user);
-            var driverId = await ResolveDriverIdAsync(user);
-            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt, customerId, driverId);
+            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt);
             var refreshToken = _jwtService.GenerateRefreshToken();
 
             user.RefreshToken = refreshToken;
@@ -129,8 +120,6 @@ namespace ColdChainX.Application.Services
             await _userRepository.SaveChangesAsync();
 
             var dto = _mapper.Map<AuthResponseDto>(user);
-            dto.CustomerId = customerId;
-            dto.DriverId = driverId;
             dto.AccessToken = accessToken;
             dto.RefreshToken = refreshToken;
             dto.AccessTokenExpiresAt = accessExpiresAt;
@@ -147,9 +136,7 @@ namespace ColdChainX.Application.Services
                 return ApiResponse<AuthResponseDto>.Failure("Refresh token expired");
 
             var accessExpiresAt = DateTime.UtcNow.AddMinutes(60);
-            var customerId = await ResolveCustomerIdAsync(user);
-            var driverId = await ResolveDriverIdAsync(user);
-            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt, customerId, driverId);
+            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt);
             var newRefreshToken = _jwtService.GenerateRefreshToken();
 
             user.RefreshToken = newRefreshToken;
@@ -159,8 +146,6 @@ namespace ColdChainX.Application.Services
             await _userRepository.SaveChangesAsync();
 
             var dto = _mapper.Map<AuthResponseDto>(user);
-            dto.CustomerId = customerId;
-            dto.DriverId = driverId;
             dto.AccessToken = accessToken;
             dto.RefreshToken = newRefreshToken;
             dto.AccessTokenExpiresAt = accessExpiresAt;
@@ -226,25 +211,6 @@ namespace ColdChainX.Application.Services
 
         private static bool IsInactive(User user)
             => string.Equals(user.Status, InactiveStatus, StringComparison.OrdinalIgnoreCase);
-
-        private async Task<Guid?> ResolveCustomerIdAsync(User user)
-        {
-            if (!string.Equals(user.Role?.RoleName, "Customer", StringComparison.OrdinalIgnoreCase))
-                return null;
-
-            if (string.IsNullOrWhiteSpace(user.Email))
-                return null;
-
-            return await _userRepository.GetCustomerIdByEmailAsync(user.Email);
-        }
-
-        private async Task<Guid?> ResolveDriverIdAsync(User user)
-        {
-            if (!string.Equals(user.Role?.RoleName, "Driver", StringComparison.OrdinalIgnoreCase))
-                return null;
-
-            return await _userRepository.GetDriverIdByUserIdAsync(user.UserId);
-        }
 
         private static DateTime DbNow()
             => DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
