@@ -59,6 +59,7 @@ namespace ColdChainX.Infrastructure.Repositories
                 .FirstOrDefaultAsync(r => r.RoleName.ToLower() == normalizedRoleName);
         }
 
+<<<<<<< HEAD
         public async Task<Guid?> GetCustomerIdByEmailAsync(string email)
         {
             var normalizedEmail = email.ToLower();
@@ -75,6 +76,22 @@ namespace ColdChainX.Infrastructure.Repositories
                 .Where(d => d.UserId == userId)
                 .Select(d => (Guid?)d.DriverId)
                 .FirstOrDefaultAsync();
+=======
+        public async Task<Role?> GetRoleByIdAsync(int roleId)
+        {
+            return await _db.Roles
+            .FirstOrDefaultAsync(r => r.Id == roleId);
+        }
+
+        public async Task<List<Role>> GetAllRolesAsync()
+        {
+            return await _db.Roles.ToListAsync();
+        }
+
+        public async Task AddRoleAsync(Role role)
+        {
+            await _db.Roles.AddAsync(role);
+>>>>>>> HaoMA-BE
         }
 
         public async Task UpdateAsync(User user)

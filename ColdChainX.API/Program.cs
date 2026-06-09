@@ -22,6 +22,10 @@ builder.Services.AddSwaggerGen(c =>
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "ColdChainX API", Version = "v1" });
     c.SchemaFilter<CreateOrderRequestSchemaFilter>();
     c.OperationFilter<CreateOrderFormOperationFilter>();
+    c.OperationFilter<RegisterOperationFilter>();
+    c.OperationFilter<CreateCustomerOperationFilter>();
+    c.OperationFilter<CreateDriverOperationFilter>();
+    c.OperationFilter<RemoveAuthFromCreateAccountsFilter>();
 
     var securityScheme = new OpenApiSecurityScheme
     {
@@ -56,6 +60,8 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 var app = builder.Build();
+
+await app.Services.ApplyAuthSchemaCompatibilityPatchAsync(app.Logger);
 
 app.UseMiddleware<ExceptionMiddleware>();
 
