@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: 'Times New Roman', Times, serif; font-size: 13pt; line-height: 1.5; margin: 0 auto; max-width: 800px; padding: 20px 40px; color: #000; }
+        .info-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; margin-left: 20px; }
+        .info-table td { border: none; padding: 3px 0; vertical-align: top; }
+        .col-label { width: 130px; }
+        .title { text-align: center; font-size: 16pt; font-weight: bold; margin: 30px 0 15px 0; }
+        .italic-text { font-style: italic; }
+        .bold { font-weight: bold; }
+        .justify { text-align: justify; }
+        .section-title { font-weight: bold; margin-top: 15px; margin-bottom: 5px; }
+        .section-content { margin-left: 20px; text-align: justify; }
+    </style>
+</head>
+<body>
+    <table style="width: 100%; border-collapse: collapse;">
+        <tr>
+            <td style="width: 40%; text-align: center; vertical-align: top;"><img src="/images/logo.png" alt="Logo" style="height: 55px;" /></td>
+            <td style="width: 60%; text-align: center; vertical-align: top;">
+                <div style="font-weight: bold; font-size: 13pt;">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
+                <div style="font-style: italic; font-size: 13pt;">Độc Lập - Tự Do - Hạnh Phúc</div><div>***********</div>
+            </td>
+        </tr>
+        <tr>
+            <td style="text-align: center; vertical-align: bottom; padding-top: 20px;">HĐ Số: {{Contract_Number}}/ProShip</td>
+            <td style="text-align: center; vertical-align: bottom; padding-top: 20px; font-style: italic;">TP. Hồ Chí Minh, Ngày {{Day}} tháng {{Month}} năm {{Year}}</td>
+        </tr>
+    </table>
+
+    <div class="title">HỢP ĐỒNG VẬN CHUYỂN HÀNG HÓA</div>
+    <div class="italic-text justify" style="margin-bottom: 20px;">Căn cứ Bộ luật dân sự... Căn cứ khả năng đáp ứng yêu cầu của Proship;</div>
+
+    <div style="margin-bottom: 10px;"><span class="bold">Bên A: <span style="text-transform: uppercase;">{{Customer_CompanyName}}</span></span></div>
+    <table class="info-table">
+        <tr><td class="col-label">Địa chỉ:</td><td colspan="3">{{Customer_Address}}</td></tr>
+        <tr><td class="col-label">MST:</td><td colspan="3">{{Customer_TaxCode}}</td></tr>
+        <tr><td class="col-label">Điện thoại:</td><td>{{Customer_Phone}}</td><td>Email:</td><td>{{Customer_Email}}</td></tr>
+    </table>
+
+    <div style="margin-bottom: 10px; margin-top: 15px;"><span class="bold">Bên B: CÔNG TY CỔ PHẦN PROSHIP</span></div>
+    <table class="info-table">
+        <tr><td class="col-label">Địa chỉ:</td><td colspan="3">602/45D Điện Biên Phủ, P. 22, Quận Bình Thạnh, Tp. HCM</td></tr>
+        <tr><td class="col-label">Điện thoại:</td><td colspan="3">19001247</td></tr>
+        <tr><td class="col-label">Số Tài Khoản:</td><td>0071000982081</td><td>Ngân hàng:</td><td>Vietcombank</td></tr>
+    </table>
+
+    <div class="section-title">ĐIỀU 1: THÔNG TIN HÀNG HÓA VẬN CHUYỂN</div>
+    <div class="section-content">
+        <p>Tên hàng: {{Item_Name}}. Phân loại: {{Category}}.</p>
+        <p>Trọng lượng thực tế: {{Actual_Weight_KG}} KG và {{Actual_CBM}} CBM.</p>
+    </div>
+
+    <div class="section-title">ĐIỀU 3: GIÁ CƯỚC VẬN CHUYỂN</div>
+    <div class="section-content">
+        <p>Tổng giá trị vận chuyển cho đơn hàng: <strong>{{Final_Amount}} VNĐ</strong> (Đã bao gồm VAT và phụ phí).</p>
+    </div>
+
+    <table style="width: 100%; margin-top: 40px; text-align: center;">
+        <tr>
+            <td style="width: 50%; vertical-align: top;"><span class="bold">ĐẠI DIỆN BÊN A</span></td>
+            <td style="width: 50%; vertical-align: top;"><span class="bold">ĐẠI DIỆN BÊN B</span><br/><br/><br/><br/>NGUYỄN DUY TOÀN</td>
+        </tr>
+    </table>
+</body>
+</html>

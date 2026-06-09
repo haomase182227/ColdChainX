@@ -58,6 +58,7 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IVehicleService, VehicleService>();
             services.AddScoped<IDriverService, DriverService>();
             services.AddScoped<IJwtService, JwtService>();
+            services.AddScoped<ICustomerService, CustomerService>();
             services.AddHttpClient<ILocationService, GoongLocationService>(client =>
             {
                 client.BaseAddress = new Uri("https://rsapi.goong.io/");
@@ -66,6 +67,8 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IFileService, FileService>();
             services.AddScoped<IOrderService, OrderService>();
             services.AddScoped<IQuotationService, QuotationService>();
+            services.AddScoped<IPdfService, SimplePdfService>();
+            services.AddScoped<IContractService, ContractService>();
             services.AddScoped<INotificationService, NotificationService>();
             services.AddSignalR();
 

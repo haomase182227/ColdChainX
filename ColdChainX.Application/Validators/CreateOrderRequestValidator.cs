@@ -16,6 +16,9 @@ namespace ColdChainX.Application.Validators
 
         public static readonly string[] AllowedPackagingTypes =
         [
+            "Pallet",
+            "Thùng",
+            "Bao",
             "Plastic Box",
             "Foam Box",
             "Carton Box"
@@ -40,6 +43,9 @@ namespace ColdChainX.Application.Validators
 
             RuleFor(x => x.ExpectedWeightKg)
                 .GreaterThan(0).WithMessage("Expected_Weight_KG must be greater than 0");
+
+            RuleFor(x => x.Quantity)
+                .GreaterThan(0).WithMessage("Quantity must be greater than 0");
 
             RuleFor(x => x.PackagingType)
                 .NotEmpty().WithMessage("Packaging_Type is required")

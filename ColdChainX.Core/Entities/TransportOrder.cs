@@ -15,6 +15,10 @@ public partial class TransportOrder
 
     public string Category { get; set; } = null!;
 
+    public int Quantity { get; set; }
+
+    public string PackingType { get; set; } = null!;
+
     public string TempCondition { get; set; } = null!;
 
     public decimal ExpectedWeightKg { get; set; }
@@ -40,6 +44,8 @@ public partial class TransportOrder
     public virtual ICollection<Claim> Claims { get; set; } = new List<Claim>();
 
     public virtual Customer? Customer { get; set; }
+
+    public virtual ICollection<CustomerContract> CustomerContracts { get; set; } = new List<CustomerContract>();
 
     public virtual ICollection<DeliveryEpod> DeliveryEpods { get; set; } = new List<DeliveryEpod>();
 
