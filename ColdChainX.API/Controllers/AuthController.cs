@@ -27,6 +27,28 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
+        // Admin endpoint: create a customer user and customer record with role assigned
+        [Authorize(Roles = "Admin,ADMIN")]
+        [HttpPost("create-customer")]
+        public async Task<IActionResult> CreateCustomer([FromBody] RegisterRequest request)
+        {
+            request.Role = "Customer";
+            var result = await _authService.RegisterAsync(request);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        // Admin endpoint: create a driver user and driver record with role assigned
+        [Authorize(Roles = "Admin,ADMIN")]
+        [HttpPost("create-driver")]
+        public async Task<IActionResult> CreateDriver([FromBody] RegisterRequest request)
+        {
+            request.Role = "Driver";
+            var result = await _authService.RegisterAsync(request);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {

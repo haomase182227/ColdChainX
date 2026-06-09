@@ -28,6 +28,15 @@ namespace ColdChainX.Application.Validators
             RuleFor(x => x.Role)
                 .NotEmpty().WithMessage("Role is required")
                 .MaximumLength(100).WithMessage("Role must not exceed 100 characters");
+
+            RuleFor(x => x.CompanyName)
+                .MaximumLength(200).WithMessage("Company name must not exceed 200 characters")
+                .When(x => !string.IsNullOrWhiteSpace(x.CompanyName));
+
+            // DateOfBirth is optional; if provided it must be a reasonable past date
+            RuleFor(x => x.DateOfBirth)
+                .Must(d => d == null || d.Value <= DateOnly.FromDateTime(DateTime.UtcNow))
+                .WithMessage("Date of birth must be in the past");
         }
     }
 }

@@ -19,13 +19,15 @@ namespace ColdChainX.Application.Services
         private readonly IJwtService _jwtService;
         private readonly IPasswordHasher<User> _passwordHasher;
         private readonly IMapper _mapper;
+        private readonly IDriverRepository _driverRepository;
 
-        public AuthService(IUserRepository userRepository, IJwtService jwtService, IPasswordHasher<User> passwordHasher, IMapper mapper)
+        public AuthService(IUserRepository userRepository, IJwtService jwtService, IPasswordHasher<User> passwordHasher, IMapper mapper, IDriverRepository driverRepository)
         {
             _userRepository = userRepository;
             _jwtService = jwtService;
             _passwordHasher = passwordHasher;
             _mapper = mapper;
+            _driverRepository = driverRepository;
         }
 
         public async Task<ApiResponse<AuthResponseDto>> RegisterAsync(RegisterRequest request)
@@ -46,9 +48,34 @@ namespace ColdChainX.Application.Services
             if (existingUsername != null)
                 return ApiResponse<AuthResponseDto>.Failure("Username already in use");
 
-            var role = await _userRepository.GetRoleByNameAsync(request.Role);
+            var desiredRoleName = string.IsNullOrWhiteSpace(request.Role) ? "Customer" : request.Role;
+
+            var role = await _userRepository.GetRoleByNameAsync(desiredRoleName);
             if (role == null)
-                return ApiResponse<AuthResponseDto>.Failure($"Role '{request.Role}' was not found in database");
+            {
+                var defaultRoles = new[] { "Admin", "Customer", "Driver", "Manager" };
+
+                foreach (var rname in defaultRoles)
+                {
+                    var existingRole = await _userRepository.GetRoleByNameAsync(rname);
+                    if (existingRole == null)
+                    {
+                        var newRole = new Role
+                        {
+                            RoleId = Guid.NewGuid(),
+                            RoleName = rname,
+                        };
+
+                        await _userRepository.AddRoleAsync(newRole);
+                    }
+                }
+
+                await _userRepository.SaveChangesAsync();
+
+                role = await _userRepository.GetRoleByNameAsync(desiredRoleName);
+                if (role == null)
+                    return ApiResponse<AuthResponseDto>.Failure($"Role '{desiredRoleName}' was not found and could not be created");
+            }
 
             var user = new User
             {
@@ -72,12 +99,12 @@ namespace ColdChainX.Application.Services
             user.RefreshTokenExpiryTime = DbNow().AddDays(7);
 
             Customer? customer = null;
-            if (string.Equals(request.Role, "Customer", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(role.RoleName, "Customer", StringComparison.OrdinalIgnoreCase))
             {
                 customer = new Customer
                 {
                     CustomerId = Guid.NewGuid(),
-                    CompanyName = string.Empty,
+                    CompanyName = string.IsNullOrWhiteSpace(request.CompanyName) ? string.Empty : request.CompanyName.Trim(),
                     TaxCode = GenerateTemporaryTaxCode(user.UserId),
                     Email = email,
                     PaymentTerm = 30,
@@ -86,6 +113,21 @@ namespace ColdChainX.Application.Services
                 };
 
                 await _userRepository.AddCustomerAsync(customer);
+            }
+
+            // If registering as Driver, create Driver entity as well
+            Driver? driver = null;
+            if (string.Equals(role.RoleName, "Driver", StringComparison.OrdinalIgnoreCase))
+            {
+                driver = new Driver
+                {
+                    DriverId = Guid.NewGuid(),
+                    DateOfBirth = request.DateOfBirth ?? DateOnly.FromDateTime(DateTime.UtcNow),
+                    Status = ActiveStatus,
+                    CreatedAt = DbNow()
+                };
+
+                await _driverRepository.AddAsync(driver);
             }
 
             await _userRepository.AddAsync(user);

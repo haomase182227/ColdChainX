@@ -8,5 +8,9 @@ namespace ColdChainX.Application.DTOs
         public string Password { get; set; } = null!;
         // Role name from the `Role` entity (e.g. "Customer", "Admin")
         public string Role { get; set; } = "Customer";
+
+        // Optional fields for specific roles
+        public string? CompanyName { get; set; }
+        public DateOnly? DateOfBirth { get; set; }
     }
 }
