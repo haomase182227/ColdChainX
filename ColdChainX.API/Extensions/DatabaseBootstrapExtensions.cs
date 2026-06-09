@@ -121,7 +121,9 @@ FROM (
         ('Admin', 'System administrator'),
         ('Manager', 'Operations manager'),
         ('Customer', 'Customer account'),
-        ('Driver', 'Driver account')
+        ('Driver', 'Driver account'),
+        ('Dispatcher', 'Container dispatcher'),
+        ('Sale', 'Take care customer')
 ) AS v(role_name, description)
 WHERE NOT EXISTS (
     SELECT 1

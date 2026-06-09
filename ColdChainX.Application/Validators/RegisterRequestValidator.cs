@@ -5,7 +5,7 @@ namespace ColdChainX.Application.Validators
 {
     public class RegisterRequestValidator : AbstractValidator<RegisterRequest>
     {
-        private static readonly string[] AllowedRoles = { "Admin", "Manager" };
+        private static readonly string[] AllowedRoles = { "Admin", "Manager", "Dispatcher", "Sale" };
 
         public RegisterRequestValidator()
         {
@@ -33,7 +33,7 @@ namespace ColdChainX.Application.Validators
             RuleFor(x => x.Role)
                 .NotEmpty().WithMessage("Role is required")
                 .Must(role => AllowedRoles.Contains(role, StringComparer.OrdinalIgnoreCase))
-                .WithMessage("Only Admin or Manager roles are allowed");
+                .WithMessage("Only Admin, Manager, Dispatcher, or Sale roles are allowed");
         }
     }
 }

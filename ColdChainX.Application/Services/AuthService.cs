@@ -32,11 +32,13 @@ namespace ColdChainX.Application.Services
 
         public async Task<ApiResponse<AuthResponseDto>> RegisterAsync(RegisterRequest request)
         {
-            // Validate role - only Admin or Manager allowed
+            // Validate role - Admin, Manager, Dispatcher, or Sale allowed
             if (!string.Equals(request.Role, "Admin", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(request.Role, "Manager", StringComparison.OrdinalIgnoreCase))
+                !string.Equals(request.Role, "Manager", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(request.Role, "Dispatcher", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(request.Role, "Sale", StringComparison.OrdinalIgnoreCase))
             {
-                return ApiResponse<AuthResponseDto>.Failure("Only Admin or Manager roles can be created through this endpoint");
+                return ApiResponse<AuthResponseDto>.Failure("Only Admin, Manager, Dispatcher, or Sale roles can be created through this endpoint");
             }
 
             var email = request.Email.Trim().ToLowerInvariant();
