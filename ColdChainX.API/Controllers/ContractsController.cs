@@ -1,5 +1,7 @@
+using System.Security.Claims;
 using ColdChainX.Application.DTOs.Contracts;
 using ColdChainX.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ColdChainX.API.Controllers
@@ -25,17 +27,27 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("generate")]
+        [Authorize(Roles = "Sales,Admin,Manager")]
         public async Task<IActionResult> GenerateContract([FromBody] GenerateContractRequest request)
         {
-            var result = await _contractService.GenerateContractAsync(request);
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var salesUserId))
+                return Unauthorized("UserId claim is missing from token");
+
+            var result = await _contractService.GenerateContractAsync(request, salesUserId);
             if (!result.Success) return BadRequest(result);
             return Ok(result);
         }
 
         [HttpPost("{contractId:guid}/approve")]
+        [Authorize(Roles = "Customer")]
         public async Task<IActionResult> ApproveContract(Guid contractId)
         {
-            var result = await _contractService.ApproveContractAsync(contractId);
+            var customerIdClaim = User.FindFirst("CustomerId")?.Value;
+            if (!Guid.TryParse(customerIdClaim, out var customerId))
+                return Unauthorized("CustomerId claim is missing from token");
+
+            var result = await _contractService.ApproveContractAsync(contractId, customerId);
             if (!result.Success) return BadRequest(result);
             return Ok(result);
         }

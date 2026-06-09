@@ -15,9 +15,13 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet("users/{userId:guid}")]
-        public async Task<IActionResult> GetUserNotifications(Guid userId, [FromQuery] bool unreadOnly = false)
+        public async Task<IActionResult> GetUserNotifications(
+            Guid userId,
+            [FromQuery] bool unreadOnly = false,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10)
         {
-            var result = await _notificationService.GetUserNotificationsAsync(userId, unreadOnly);
+            var result = await _notificationService.GetUserNotificationsAsync(userId, unreadOnly, pageNumber, pageSize);
             return Ok(result);
         }
 

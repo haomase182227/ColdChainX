@@ -1,3 +1,4 @@
+using ColdChainX.Application.DTOs.Common;
 using ColdChainX.Application.DTOs.Customers;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
@@ -16,17 +17,23 @@ namespace ColdChainX.Infrastructure.Services
             _db = db;
         }
 
-        public async Task<ApiResponse<IReadOnlyCollection<CustomerResponse>>> GetCustomersAsync()
+        public async Task<ApiResponse<PagedResult<CustomerResponse>>> GetCustomersAsync(int pageNumber, int pageSize)
         {
-            var data = await _db.Customers
+            var query = _db.Customers
                 .AsNoTracking()
                 .Include(c => c.TransportOrders)
                 .Include(c => c.CustomerContracts)
-                .OrderByDescending(c => c.CreatedAt)
+                .OrderByDescending(c => c.CreatedAt);
+            var totalRecords = await query.CountAsync();
+            var data = await query
+                .Skip(NormalizeSkip(pageNumber, pageSize))
+                .Take(NormalizePageSize(pageSize))
                 .Select(c => ToCustomerResponse(c))
                 .ToListAsync();
 
-            return ApiResponse<IReadOnlyCollection<CustomerResponse>>.SuccessResponse(data, "Customers retrieved successfully");
+            return ApiResponse<PagedResult<CustomerResponse>>.SuccessResponse(
+                PagedResult<CustomerResponse>.Create(data, totalRecords, pageNumber, NormalizePageSize(pageSize)),
+                "Customers retrieved successfully");
         }
 
         public async Task<ApiResponse<CustomerResponse>> GetCustomerByIdAsync(Guid customerId)
@@ -58,6 +65,15 @@ namespace ColdChainX.Infrastructure.Services
                 OrderCount = customer.TransportOrders.Count,
                 ContractCount = customer.CustomerContracts.Count
             };
+        }
+
+        private static int NormalizePageSize(int pageSize)
+            => Math.Clamp(pageSize <= 0 ? 10 : pageSize, 1, 100);
+
+        private static int NormalizeSkip(int pageNumber, int pageSize)
+        {
+            var safePageNumber = pageNumber <= 0 ? 1 : pageNumber;
+            return (safePageNumber - 1) * NormalizePageSize(pageSize);
         }
     }
 }

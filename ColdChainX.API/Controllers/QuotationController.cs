@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ColdChainX.Application.DTOs.Quotations;
 using ColdChainX.Application.Interfaces;
@@ -16,9 +18,9 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetQuotations()
+        public async Task<IActionResult> GetQuotations([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
-            var result = await _quotationService.GetQuotationsAsync();
+            var result = await _quotationService.GetQuotationsAsync(pageNumber, pageSize);
             return Ok(result);
         }
 
@@ -31,17 +33,25 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet("/api/orders/{orderId:guid}/quotations")]
-        public async Task<IActionResult> GetQuotationsByOrder(Guid orderId)
+        public async Task<IActionResult> GetQuotationsByOrder(
+            Guid orderId,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10)
         {
-            var result = await _quotationService.GetQuotationsByOrderAsync(orderId);
+            var result = await _quotationService.GetQuotationsByOrderAsync(orderId, pageNumber, pageSize);
             if (!result.Success) return NotFound(result);
             return Ok(result);
         }
 
         [HttpPost]
+        [Authorize(Roles = "Sales,Admin,Manager")]
         public async Task<IActionResult> CreateQuotation([FromBody] CreateQuotationRequest request)
         {
-            var result = await _quotationService.CreateQuotationAsync(request);
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var salesUserId))
+                return Unauthorized("UserId claim is missing from token");
+
+            var result = await _quotationService.CreateQuotationAsync(request, salesUserId);
             if (!result.Success) return BadRequest(result);
             return Ok(result);
         }

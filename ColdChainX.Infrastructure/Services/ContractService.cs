@@ -47,13 +47,10 @@ namespace ColdChainX.Infrastructure.Services
             return ApiResponse<string>.SuccessResponse(RenderTemplate(template, data, contractNumber), "Contract preview generated");
         }
 
-        public async Task<ApiResponse<GenerateContractResponse>> GenerateContractAsync(GenerateContractRequest request)
+        public async Task<ApiResponse<GenerateContractResponse>> GenerateContractAsync(GenerateContractRequest request, Guid salesUserId)
         {
             if (request.OrderId == Guid.Empty)
                 return ApiResponse<GenerateContractResponse>.Failure("orderId is required");
-
-            if (string.IsNullOrWhiteSpace(request.EditedHtmlContent))
-                return ApiResponse<GenerateContractResponse>.Failure("editedHtmlContent is required");
 
             var strategy = _db.Database.CreateExecutionStrategy();
             return await strategy.ExecuteAsync(async () =>
@@ -70,7 +67,13 @@ namespace ColdChainX.Infrastructure.Services
                     return ApiResponse<GenerateContractResponse>.Failure("Order already has a pending signature contract");
 
                 var contractNumber = await GenerateUniqueContractNumberAsync();
-                var fileUrl = await _pdfService.SaveContractPdfAsync(request.EditedHtmlContent, contractNumber);
+
+                // Nếu không có HTML hoặc là giá trị placeholder mặc định, tự render từ template
+                var htmlContent = IsValidHtml(request.EditedHtmlContent)
+                    ? request.EditedHtmlContent!
+                    : RenderTemplate(await LoadTemplateAsync(), data, contractNumber);
+
+                var fileUrl = await _pdfService.SaveContractPdfAsync(htmlContent, contractNumber);
                 var contract = new CustomerContract
                 {
                     ContractId = Guid.NewGuid(),
@@ -89,7 +92,7 @@ namespace ColdChainX.Infrastructure.Services
                 var customerUserId = await ResolveCustomerUserIdAsync(data.Order.CustomerId);
                 await AddNotificationAsync(
                     customerUserId,
-                    request.SalesUserId,
+                    salesUserId,
                     "NOTI_CONTRACT_PENDING_SIGNATURE",
                     data.Order.OrderId,
                     new
@@ -122,7 +125,7 @@ namespace ColdChainX.Infrastructure.Services
             });
         }
 
-        public async Task<ApiResponse<ApproveContractResponse>> ApproveContractAsync(Guid contractId)
+        public async Task<ApiResponse<ApproveContractResponse>> ApproveContractAsync(Guid contractId, Guid customerId)
         {
             var strategy = _db.Database.CreateExecutionStrategy();
             return await strategy.ExecuteAsync(async () =>
@@ -137,6 +140,9 @@ namespace ColdChainX.Infrastructure.Services
 
                 if (!string.Equals(contract.Status, PendingSignature, StringComparison.OrdinalIgnoreCase))
                     return ApiResponse<ApproveContractResponse>.Failure("Contract is not pending signature");
+
+                if (contract.CustomerId != customerId)
+                    return ApiResponse<ApproveContractResponse>.Failure("CustomerId does not match contract");
 
                 if (contract.Order == null)
                     return ApiResponse<ApproveContractResponse>.Failure("Contract order was not found");
@@ -217,6 +223,8 @@ namespace ColdChainX.Infrastructure.Services
             var order = await _db.TransportOrders
                 .Include(o => o.Customer)
                 .Include(o => o.Quotations)
+                .Include(o => o.PickupLocationNavigation)
+                .Include(o => o.DestLocationNavigation)
                 .FirstOrDefaultAsync(o => o.OrderId == orderId);
 
             if (order?.Customer == null)
@@ -251,16 +259,27 @@ namespace ColdChainX.Infrastructure.Services
                 ["Day"] = now.Day.ToString("00", CultureInfo.InvariantCulture),
                 ["Month"] = now.Month.ToString("00", CultureInfo.InvariantCulture),
                 ["Year"] = now.Year.ToString(CultureInfo.InvariantCulture),
+                // Bên A - Thông tin khách hàng
                 ["Customer_CompanyName"] = data.Customer.CompanyName,
                 ["Customer_Address"] = data.Customer.Address ?? string.Empty,
                 ["Customer_TaxCode"] = data.Customer.TaxCode,
+                ["Customer_RepName"] = string.Empty,   // Không có trong DB — Sales điền khi edit preview
+                ["Customer_RepTitle"] = string.Empty,  // Không có trong DB — Sales điền khi edit preview
                 ["Customer_Phone"] = string.Empty,
                 ["Customer_Email"] = data.Customer.Email ?? string.Empty,
+                ["Customer_BankAcc"] = string.Empty,   // Không có trong DB — Sales điền khi edit preview
+                // Thông tin hàng hóa
                 ["Item_Name"] = data.Order.ItemName,
                 ["Category"] = data.Order.Category,
                 ["Actual_Weight_KG"] = data.Order.ActualWeightKg.ToString("0.##", CultureInfo.InvariantCulture),
                 ["Actual_CBM"] = (data.Order.ActualCbm ?? data.Order.ExpectedCbm).ToString("0.####", CultureInfo.InvariantCulture),
-                ["Final_Amount"] = data.Quotation.FinalAmount.ToString("N0", CultureInfo.InvariantCulture)
+                ["Temp_Condition"] = data.Order.TempCondition,
+                // Địa điểm
+                ["Origin_Address"] = data.Order.PickupLocationNavigation?.Address ?? "Kho Proship - 602/45D Điện Biên Phủ, P.22, Bình Thạnh, Tp. HCM",
+                ["Dest_Address"] = data.Order.DestLocationNavigation?.Address ?? string.Empty,
+                // Tài chính
+                ["Final_Amount"] = data.Quotation.FinalAmount.ToString("N0", CultureInfo.InvariantCulture),
+                ["Payment_Term"] = data.Customer.PaymentTerm?.ToString(CultureInfo.InvariantCulture) ?? "30",
             };
 
             foreach (var replacement in replacements)
@@ -424,6 +443,12 @@ namespace ColdChainX.Infrastructure.Services
                 Status = Active
             });
         }
+
+        /// <summary>
+        /// Kiểm tra chuỗi có phải HTML thật không (phân biệt với Swagger default "string").
+        /// </summary>
+        private static bool IsValidHtml(string? value)
+            => !string.IsNullOrWhiteSpace(value) && value.TrimStart().StartsWith('<');
 
         private static DateTime DbNow()
             => DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);

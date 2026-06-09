@@ -4,19 +4,22 @@
     <meta charset="UTF-8">
     <style>
         body { font-family: 'Times New Roman', Times, serif; font-size: 13pt; line-height: 1.5; margin: 0 auto; max-width: 800px; padding: 20px 40px; color: #000; }
+        .header-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        .header-table td { border: none; vertical-align: top; }
         .info-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; margin-left: 20px; }
         .info-table td { border: none; padding: 3px 0; vertical-align: top; }
-        .col-label { width: 130px; }
+        .col-label { width: 140px; font-weight: bold; }
         .title { text-align: center; font-size: 16pt; font-weight: bold; margin: 30px 0 15px 0; }
         .italic-text { font-style: italic; }
         .bold { font-weight: bold; }
         .justify { text-align: justify; }
-        .section-title { font-weight: bold; margin-top: 15px; margin-bottom: 5px; }
+        .section-title { font-weight: bold; margin-top: 20px; margin-bottom: 5px; }
         .section-content { margin-left: 20px; text-align: justify; }
+        .section-content p { margin: 5px 0; }
     </style>
 </head>
 <body>
-    <table style="width: 100%; border-collapse: collapse;">
+    <table class="header-table">
         <tr>
             <td style="width: 40%; text-align: center; vertical-align: top;"><img src="/images/logo.png" alt="Logo" style="height: 55px;" /></td>
             <td style="width: 60%; text-align: center; vertical-align: top;">
@@ -31,37 +34,82 @@
     </table>
 
     <div class="title">HỢP ĐỒNG VẬN CHUYỂN HÀNG HÓA</div>
-    <div class="italic-text justify" style="margin-bottom: 20px;">Căn cứ Bộ luật dân sự... Căn cứ khả năng đáp ứng yêu cầu của Proship;</div>
+    <div class="italic-text justify" style="margin-bottom: 20px;">
+        <p style="margin: 0;">Căn cứ Bộ luật dân sự số 91/2015/QH13 ngày 24/11/2015;</p>
+        <p style="margin: 0;">Căn cứ Luật GTVT số 06/2017/QH14 có hiệu lực thi hành từ ngày 01/07/2018;</p>
+        <p style="margin: 0;">Căn cứ Thông tư số 22/2018/TT-BGTVT có hiệu lực thi hành từ ngày 01/07/2018 "Quy định về vận tải hàng hóa trên đường sắt quốc gia và đường sắt chuyên dùng có nối ray với đường sắt quốc gia"; Căn cứ vào yêu cầu của bên thuê vận chuyển, khả năng đáp ứng yêu cầu của Proship;</p>
+    </div>
 
     <div style="margin-bottom: 10px;"><span class="bold">Bên A: <span style="text-transform: uppercase;">{{Customer_CompanyName}}</span></span></div>
     <table class="info-table">
         <tr><td class="col-label">Địa chỉ:</td><td colspan="3">{{Customer_Address}}</td></tr>
         <tr><td class="col-label">MST:</td><td colspan="3">{{Customer_TaxCode}}</td></tr>
-        <tr><td class="col-label">Điện thoại:</td><td>{{Customer_Phone}}</td><td>Email:</td><td>{{Customer_Email}}</td></tr>
+        <tr>
+            <td class="col-label">Người đại diện:</td><td style="width: 40%;">{{Customer_RepName}}</td>
+            <td class="col-label" style="width: 80px;">Chức vụ:</td><td>{{Customer_RepTitle}}</td>
+        </tr>
+        <tr><td class="col-label">Điện thoại:</td><td>{{Customer_Phone}}</td><td class="col-label">Email:</td><td>{{Customer_Email}}</td></tr>
+        <tr><td class="col-label">Số Tài Khoản:</td><td colspan="3">{{Customer_BankAcc}}</td></tr>
     </table>
 
     <div style="margin-bottom: 10px; margin-top: 15px;"><span class="bold">Bên B: CÔNG TY CỔ PHẦN PROSHIP</span></div>
     <table class="info-table">
         <tr><td class="col-label">Địa chỉ:</td><td colspan="3">602/45D Điện Biên Phủ, P. 22, Quận Bình Thạnh, Tp. HCM</td></tr>
+        <tr><td class="col-label">MST:</td><td colspan="3">0313214289</td></tr>
+        <tr>
+            <td class="col-label">Người đại diện:</td><td style="width: 40%;"><span class="bold">Ông Nguyễn Duy Toàn</span></td>
+            <td class="col-label" style="width: 80px;">Chức vụ:</td><td><span class="bold">Giám Đốc</span></td>
+        </tr>
         <tr><td class="col-label">Điện thoại:</td><td colspan="3">19001247</td></tr>
-        <tr><td class="col-label">Số Tài Khoản:</td><td>0071000982081</td><td>Ngân hàng:</td><td>Vietcombank</td></tr>
+        <tr><td class="col-label">Email:</td><td colspan="3">kinhdoanh@proship.vn</td></tr>
+        <tr><td class="col-label">Số Tài Khoản:</td><td>0071000982081</td><td class="col-label">Ngân hàng:</td><td>Vietcombank - CN HCM</td></tr>
     </table>
+
+    <p class="bold" style="margin-top: 20px;">Hai bên thống nhất ký kết hợp đồng với các điều khoản sau đây:</p>
 
     <div class="section-title">ĐIỀU 1: THÔNG TIN HÀNG HÓA VẬN CHUYỂN</div>
     <div class="section-content">
-        <p>Tên hàng: {{Item_Name}}. Phân loại: {{Category}}.</p>
-        <p>Trọng lượng thực tế: {{Actual_Weight_KG}} KG và {{Actual_CBM}} CBM.</p>
+        <p class="bold">1. Thông tin hàng hoá</p>
+        <p>Hàng hóa được phép vận chuyển theo quy định của pháp luật hiện hành, hàng hóa phải đầy đủ hóa đơn chứng từ như: hóa đơn GTGT, Phiếu xuất kho, Phiếu luân chuyển nội bộ.... Hàng hóa phải có kích thước hợp lý chất xếp vừa trong các xe tải, xe container 40 feet, 45 feet hay phương tiện chuyên dụng bên B cung cấp, đảm bảo an toàn trong quá trình vận chuyển.</p>
+        <p class="bold">2. Trọng lượng hàng</p>
+        <p>Đối với đường bộ: Không vượt quá tải trọng cho phép trên giấy đăng kiểm của từng loại phương tiện cụ thể theo luật Giao thông đường bộ. Việc xác định trọng lượng hàng thực tế xếp trên xe được tính theo số lượng kiện nhân với trọng lượng từng kiện hoặc qua cân thực tế.</p>
+        <p><strong>Cụ thể lô hàng:</strong> Tên hàng: {{Item_Name}}. Phân loại: {{Category}}. Trọng lượng thực tế: {{Actual_Weight_KG}} KG và {{Actual_CBM}} CBM.</p>
+        <p class="bold">3. Phương thức bảo quản:</p>
+        <p>Hàng hóa cần bảo quản mát hay lạnh, cấp đông âm độ cần phải bảo quản trong xe tải lạnh, Container Lạnh, phải quy định rõ nhiệt độ, độ ẩm bảo quản cụ thể xác nhận giữa 2 bên. <strong>Yêu cầu bảo quản ở nhiệt độ: {{Temp_Condition}}.</strong></p>
+    </div>
+
+    <div class="section-title">ĐIỀU 2: ĐỊA ĐIỂM NHẬN HÀNG VÀ GIAO HÀNG</div>
+    <div class="section-content">
+        <p>1. Địa điểm giao nhận: Từ {{Origin_Address}} đến {{Dest_Address}}.</p>
+        <p>Các địa chỉ giao nhận phải đảm bảo cho phép các phương tiện ra vào, không cấm tải, cấm đường, cấm giờ...</p>
     </div>
 
     <div class="section-title">ĐIỀU 3: GIÁ CƯỚC VẬN CHUYỂN</div>
     <div class="section-content">
-        <p>Tổng giá trị vận chuyển cho đơn hàng: <strong>{{Final_Amount}} VNĐ</strong> (Đã bao gồm VAT và phụ phí).</p>
+        <p>1. Tổng giá trị vận chuyển cho đơn hàng: <strong>{{Final_Amount}} VNĐ</strong> (Đã bao gồm VAT và phụ phí).</p>
+        <p>2. Phụ lục Hợp đồng quy định chi tiết về giá cước và các phụ phí khác (nếu có).</p>
+    </div>
+
+    <div class="section-title">ĐIỀU 4: THỜI GIAN GIAO NHẬN HÀNG</div>
+    <div class="section-content">
+        <p>1. Thời gian vận chuyển đường bộ 2-3 ngày, không tính ngày nhận hàng, ngày chủ nhật và ngày lễ.</p>
+        <p>2. Thời gian tổ chức xếp dỡ cho mỗi container hàng tối đa 04 giờ đồng hồ.</p>
+    </div>
+
+    <div class="section-title">ĐIỀU 5: ĐẶT CỌC VÀ THANH TOÁN</div>
+    <div class="section-content">
+        <p>Bên A thanh toán cho Bên B khi Bên B giao hàng cho Bên A và bên B xuất bảng kê tài chính và giấy đề nghị thanh toán cho bên A. Thời hạn thanh toán chậm nhất là {{Payment_Term}} ngày. Trường hợp bên A chậm thanh toán sau thời hạn này bên A sẽ phải chịu phạt phí trả chậm 5%/Tổng dư nợ còn lại/ngày.</p>
+    </div>
+
+    <div class="section-title">ĐIỀU 6 - ĐIỀU 11: CÁC ĐIỀU KHOẢN CHUNG</div>
+    <div class="section-content">
+        <p>Hai bên cam kết thực hiện đúng phương tiện vận tải, Giấy tờ hợp lệ, Bảo hiểm hàng hóa, và đầy đủ Quyền &amp; Nghĩa vụ của các Bên (Bên A có trách nhiệm cung cấp giấy tờ cần thiết liên quan đến hàng vận chuyển như: Hóa đơn GTGT, Phiếu xuất kho, Phiếu luân chuyển nội bộ). Mọi tranh chấp không thỏa thuận được sẽ do Tòa án phán quyết. Hợp đồng có hiệu lực kể từ ngày ký và lập thành 04 bản có giá trị như nhau.</p>
     </div>
 
     <table style="width: 100%; margin-top: 40px; text-align: center;">
         <tr>
             <td style="width: 50%; vertical-align: top;"><span class="bold">ĐẠI DIỆN BÊN A</span></td>
-            <td style="width: 50%; vertical-align: top;"><span class="bold">ĐẠI DIỆN BÊN B</span><br/><br/><br/><br/>NGUYỄN DUY TOÀN</td>
+            <td style="width: 50%; vertical-align: top;"><span class="bold">ĐẠI DIỆN BÊN B<br>GIÁM ĐỐC</span><br/><br/><br/><br/>NGUYỄN DUY TOÀN</td>
         </tr>
     </table>
 </body>

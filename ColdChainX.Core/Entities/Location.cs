@@ -9,8 +9,6 @@ public partial class Location
 
     public Guid? CustomerId { get; set; }
 
-    public string LocationName { get; set; } = null!;
-
     public string Address { get; set; } = null!;
 
     public decimal Latitude { get; set; }

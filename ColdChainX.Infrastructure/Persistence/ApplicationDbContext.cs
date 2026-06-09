@@ -356,6 +356,7 @@ public partial class ApplicationDbContext : DbContext
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
             entity.Property(e => e.DateOfBirth).HasColumnName("date_of_birth");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
             entity.Property(e => e.Status)
                 .HasMaxLength(20)
                 .HasDefaultValueSql("'AVAILABLE'::character varying")
@@ -728,9 +729,6 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.Latitude)
                 .HasPrecision(10, 7)
                 .HasColumnName("latitude");
-            entity.Property(e => e.LocationName)
-                .HasMaxLength(150)
-                .HasColumnName("location_name");
             entity.Property(e => e.Longitude)
                 .HasPrecision(10, 7)
                 .HasColumnName("longitude");

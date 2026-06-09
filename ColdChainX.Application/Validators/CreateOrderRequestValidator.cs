@@ -65,9 +65,6 @@ namespace ColdChainX.Application.Validators
                 .NotEmpty().WithMessage("Dest_Address_Text is required")
                 .MaximumLength(500).WithMessage("Dest_Address_Text must not exceed 500 characters");
 
-            RuleFor(x => x.CustomerId)
-                .NotEmpty().WithMessage("Customer_ID is required");
-
             RuleFor(x => x.DocumentImage)
                 .NotNull().WithMessage("DocumentImage is required")
                 .Must(file => file != null && file.Length > 0)

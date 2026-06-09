@@ -427,6 +427,10 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("date")
                         .HasColumnName("date_of_birth");
 
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
                     b.Property<string>("Status")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(20)
@@ -1012,12 +1016,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasPrecision(10, 7)
                         .HasColumnType("numeric(10,7)")
                         .HasColumnName("latitude");
-
-                    b.Property<string>("LocationName")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)")
-                        .HasColumnName("location_name");
 
                     b.Property<decimal>("Longitude")
                         .HasPrecision(10, 7)

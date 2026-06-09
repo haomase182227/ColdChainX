@@ -28,6 +28,9 @@ namespace ColdChainX.API.Extensions
         {
             services.Configure<JwtSettings>(configuration.GetSection("JwtSettings"));
 
+            // Required for IHttpContextAccessor used in SimplePdfService to build absolute PDF URLs
+            services.AddHttpContextAccessor();
+
             // CORS
             var allowedOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
                 ?? Array.Empty<string>();

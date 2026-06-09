@@ -4,6 +4,7 @@ using System.Globalization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using ColdChainX.Application.DTOs.Common;
 using ColdChainX.Application.DTOs.Quotations;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
@@ -42,14 +43,19 @@ namespace ColdChainX.Infrastructure.Services
             _hubContext = hubContext;
         }
 
-        public async Task<ApiResponse<IReadOnlyCollection<QuotationResponse>>> GetQuotationsAsync()
+        public async Task<ApiResponse<PagedResult<QuotationResponse>>> GetQuotationsAsync(int pageNumber, int pageSize)
         {
-            var data = await BuildQuotationQuery()
-                .OrderByDescending(q => q.CreatedAt)
+            var query = BuildQuotationQuery().OrderByDescending(q => q.CreatedAt);
+            var totalRecords = await query.CountAsync();
+            var data = await query
+                .Skip(NormalizeSkip(pageNumber, pageSize))
+                .Take(NormalizePageSize(pageSize))
                 .Select(q => ToQuotationResponse(q))
                 .ToListAsync();
 
-            return ApiResponse<IReadOnlyCollection<QuotationResponse>>.SuccessResponse(data, "Quotations retrieved successfully");
+            return ApiResponse<PagedResult<QuotationResponse>>.SuccessResponse(
+                PagedResult<QuotationResponse>.Create(data, totalRecords, pageNumber, NormalizePageSize(pageSize)),
+                "Quotations retrieved successfully");
         }
 
         public async Task<ApiResponse<QuotationResponse>> GetQuotationByIdAsync(Guid quoteId)
@@ -63,22 +69,28 @@ namespace ColdChainX.Infrastructure.Services
             return ApiResponse<QuotationResponse>.SuccessResponse(ToQuotationResponse(quotation), "Quotation retrieved successfully");
         }
 
-        public async Task<ApiResponse<IReadOnlyCollection<QuotationResponse>>> GetQuotationsByOrderAsync(Guid orderId)
+        public async Task<ApiResponse<PagedResult<QuotationResponse>>> GetQuotationsByOrderAsync(Guid orderId, int pageNumber, int pageSize)
         {
             var orderExists = await _db.TransportOrders.AnyAsync(o => o.OrderId == orderId);
             if (!orderExists)
-                return ApiResponse<IReadOnlyCollection<QuotationResponse>>.Failure("Order not found");
+                return ApiResponse<PagedResult<QuotationResponse>>.Failure("Order not found");
 
-            var data = await BuildQuotationQuery()
+            var query = BuildQuotationQuery()
                 .Where(q => q.OrderId == orderId)
-                .OrderByDescending(q => q.CreatedAt)
+                .OrderByDescending(q => q.CreatedAt);
+            var totalRecords = await query.CountAsync();
+            var data = await query
+                .Skip(NormalizeSkip(pageNumber, pageSize))
+                .Take(NormalizePageSize(pageSize))
                 .Select(q => ToQuotationResponse(q))
                 .ToListAsync();
 
-            return ApiResponse<IReadOnlyCollection<QuotationResponse>>.SuccessResponse(data, "Order quotations retrieved successfully");
+            return ApiResponse<PagedResult<QuotationResponse>>.SuccessResponse(
+                PagedResult<QuotationResponse>.Create(data, totalRecords, pageNumber, NormalizePageSize(pageSize)),
+                "Order quotations retrieved successfully");
         }
 
-        public async Task<ApiResponse<QuotationResponse>> CreateQuotationAsync(CreateQuotationRequest request)
+        public async Task<ApiResponse<QuotationResponse>> CreateQuotationAsync(CreateQuotationRequest request, Guid salesUserId)
         {
             if (request.OrderId == Guid.Empty)
                 return ApiResponse<QuotationResponse>.Failure("OrderId is required");
@@ -150,7 +162,7 @@ namespace ColdChainX.Infrastructure.Services
                 var customerUserId = await ResolveCustomerUserIdAsync(order.CustomerId.Value);
                 await AddNotificationAsync(
                     customerUserId,
-                    request.SalesUserId,
+                    salesUserId,
                     "NOTI_QUOTATION_SENT",
                     order.OrderId,
                     new { Tracking_Code = order.TrackingCode, Final_Amount = finalAmount.ToString("0") });
@@ -259,7 +271,7 @@ namespace ColdChainX.Infrastructure.Services
 
         private async Task<RoutePricing?> ResolvePricingAsync(TransportOrder order)
         {
-            var destinationAddress = order.DestLocationNavigation?.Address ?? order.DestLocationNavigation?.LocationName ?? string.Empty;
+            var destinationAddress = order.DestLocationNavigation?.Address ?? string.Empty;
             var destinationCity = ExtractDestinationCity(destinationAddress);
 
             var allRoutePrices = await _db.PricingMatrices
@@ -402,6 +414,15 @@ namespace ColdChainX.Infrastructure.Services
         private static DateTime DbNow()
         {
             return DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+        }
+
+        private static int NormalizePageSize(int pageSize)
+            => Math.Clamp(pageSize <= 0 ? 10 : pageSize, 1, 100);
+
+        private static int NormalizeSkip(int pageNumber, int pageSize)
+        {
+            var safePageNumber = pageNumber <= 0 ? 1 : pageNumber;
+            return (safePageNumber - 1) * NormalizePageSize(pageSize);
         }
 
         private sealed record RoutePricing(decimal PriceKg, decimal PriceCbm);

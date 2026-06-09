@@ -35,9 +35,6 @@ namespace ColdChainX.Application.DTOs.Orders
         [FromForm(Name = "Dest_Address_Text")]
         public string DestAddressText { get; set; } = null!;
 
-        [FromForm(Name = "Customer_ID")]
-        public Guid CustomerId { get; set; }
-
         [FromForm(Name = "DocumentImage")]
         public IFormFile DocumentImage { get; set; } = null!;
     }

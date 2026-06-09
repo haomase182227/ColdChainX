@@ -8,9 +8,6 @@ namespace ColdChainX.Application.DTOs.Contracts
         public Guid OrderId { get; set; }
 
         [JsonPropertyName("editedHtmlContent")]
-        public string EditedHtmlContent { get; set; } = null!;
-
-        [JsonPropertyName("salesUserId")]
-        public Guid? SalesUserId { get; set; }
+        public string? EditedHtmlContent { get; set; }
     }
 }

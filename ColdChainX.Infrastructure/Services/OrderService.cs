@@ -4,6 +4,7 @@ using System.Globalization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Hosting;
+using ColdChainX.Application.DTOs.Common;
 using ColdChainX.Application.DTOs.Orders;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
@@ -47,14 +48,19 @@ namespace ColdChainX.Infrastructure.Services
             _hubContext = hubContext;
         }
 
-        public async Task<ApiResponse<IReadOnlyCollection<OrderResponse>>> GetOrdersAsync()
+        public async Task<ApiResponse<PagedResult<OrderResponse>>> GetOrdersAsync(int pageNumber, int pageSize)
         {
-            var orders = await BuildOrderQuery()
-                .OrderByDescending(o => o.CreatedAt)
+            var query = BuildOrderQuery().OrderByDescending(o => o.CreatedAt);
+            var totalRecords = await query.CountAsync();
+            var orders = await query
+                .Skip(NormalizeSkip(pageNumber, pageSize))
+                .Take(NormalizePageSize(pageSize))
                 .Select(o => ToOrderResponse(o))
                 .ToListAsync();
 
-            return ApiResponse<IReadOnlyCollection<OrderResponse>>.SuccessResponse(orders, "Orders retrieved successfully");
+            return ApiResponse<PagedResult<OrderResponse>>.SuccessResponse(
+                PagedResult<OrderResponse>.Create(orders, totalRecords, pageNumber, NormalizePageSize(pageSize)),
+                "Orders retrieved successfully");
         }
 
         public async Task<ApiResponse<OrderResponse>> GetOrderByIdAsync(Guid orderId)
@@ -68,22 +74,28 @@ namespace ColdChainX.Infrastructure.Services
             return ApiResponse<OrderResponse>.SuccessResponse(ToOrderResponse(order), "Order retrieved successfully");
         }
 
-        public async Task<ApiResponse<IReadOnlyCollection<OrderResponse>>> GetOrdersByCustomerAsync(Guid customerId)
+        public async Task<ApiResponse<PagedResult<OrderResponse>>> GetOrdersByCustomerAsync(Guid customerId, int pageNumber, int pageSize)
         {
             var customerExists = await _db.Customers.AnyAsync(c => c.CustomerId == customerId);
             if (!customerExists)
-                return ApiResponse<IReadOnlyCollection<OrderResponse>>.Failure("Customer not found");
+                return ApiResponse<PagedResult<OrderResponse>>.Failure("Customer not found");
 
-            var orders = await BuildOrderQuery()
+            var query = BuildOrderQuery()
                 .Where(o => o.CustomerId == customerId)
-                .OrderByDescending(o => o.CreatedAt)
+                .OrderByDescending(o => o.CreatedAt);
+            var totalRecords = await query.CountAsync();
+            var orders = await query
+                .Skip(NormalizeSkip(pageNumber, pageSize))
+                .Take(NormalizePageSize(pageSize))
                 .Select(o => ToOrderResponse(o))
                 .ToListAsync();
 
-            return ApiResponse<IReadOnlyCollection<OrderResponse>>.SuccessResponse(orders, "Customer orders retrieved successfully");
+            return ApiResponse<PagedResult<OrderResponse>>.SuccessResponse(
+                PagedResult<OrderResponse>.Create(orders, totalRecords, pageNumber, NormalizePageSize(pageSize)),
+                "Customer orders retrieved successfully");
         }
 
-        public async Task<ApiResponse<CreateOrderResponse>> CreateOrderAsync(CreateOrderRequest request)
+        public async Task<ApiResponse<CreateOrderResponse>> CreateOrderAsync(CreateOrderRequest request, Guid customerId)
         {
             if (request.DocumentImage == null || request.DocumentImage.Length == 0)
                 return ApiResponse<CreateOrderResponse>.Failure("DocumentImage is required");
@@ -95,7 +107,7 @@ namespace ColdChainX.Infrastructure.Services
 
             return await strategy.ExecuteAsync(async () =>
             {
-                var customerExists = await _db.Customers.AnyAsync(c => c.CustomerId == request.CustomerId);
+                var customerExists = await _db.Customers.AnyAsync(c => c.CustomerId == customerId);
                 if (!customerExists)
                     return ApiResponse<CreateOrderResponse>.Failure("Customer not found");
 
@@ -107,8 +119,7 @@ namespace ColdChainX.Infrastructure.Services
                 var location = new Location
                 {
                     LocationId = Guid.NewGuid(),
-                    CustomerId = request.CustomerId,
-                    LocationName = request.DestAddressText.Trim(),
+                    CustomerId = customerId,
                     Address = request.DestAddressText.Trim(),
                     Latitude = coordinates.Latitude,
                     Longitude = coordinates.Longitude,
@@ -121,7 +132,7 @@ namespace ColdChainX.Infrastructure.Services
                 {
                     OrderId = Guid.NewGuid(),
                     TrackingCode = GenerateRequestCode(),
-                    CustomerId = request.CustomerId,
+                    CustomerId = customerId,
                     ItemName = request.ItemName.Trim(),
                     Category = request.Category.Trim(),
                     Quantity = request.Quantity,
@@ -138,7 +149,7 @@ namespace ColdChainX.Infrastructure.Services
                 _db.TransportOrders.Add(order);
 
                 var documentUrl = await _fileService.UploadFileAsync(request.DocumentImage);
-                var uploadedBy = await ResolveCustomerUserIdAsync(request.CustomerId);
+                var uploadedBy = await ResolveCustomerUserIdAsync(customerId);
                 if (!uploadedBy.HasValue)
                     return ApiResponse<CreateOrderResponse>.Failure("Customer user was not found for document upload");
 
@@ -184,7 +195,7 @@ namespace ColdChainX.Infrastructure.Services
             });
         }
 
-        public async Task<ApiResponse<ReviewOrderResponse>> ReviewOrderAsync(Guid orderId, ReviewOrderRequest request)
+        public async Task<ApiResponse<ReviewOrderResponse>> ReviewOrderAsync(Guid orderId, ReviewOrderRequest request, Guid salesUserId)
         {
             var strategy = _db.Database.CreateExecutionStrategy();
 
@@ -214,7 +225,7 @@ namespace ColdChainX.Infrastructure.Services
                     var customerUserId = await ResolveCustomerUserIdAsync(order.CustomerId);
                     await AddNotificationAsync(
                         customerUserId,
-                        request.SalesUserId,
+                        salesUserId,
                         "NOTI_ORDER_REJECTED",
                         order.OrderId,
                         new { Tracking_Code = order.TrackingCode, Reject_Reason = request.RejectReason });
@@ -261,7 +272,8 @@ namespace ColdChainX.Infrastructure.Services
                 var lastMileSurcharge = distanceKm > LastMileFreeKm
                     ? Math.Round((distanceKm - LastMileFreeKm) * LastMileUnitPrice, 0)
                     : 0m;
-                var subtotal = baseFreight + lastMileSurcharge + request.VasAmount;
+                var vasAmount = 0m;
+                var subtotal = baseFreight + lastMileSurcharge + vasAmount;
                 var vatAmount = Math.Round(subtotal * VatRate, 0);
                 var finalAmount = subtotal + vatAmount;
 
@@ -271,7 +283,7 @@ namespace ColdChainX.Infrastructure.Services
                     OrderId = order.OrderId,
                     BaseFreight = baseFreight,
                     LastMileSurcharge = lastMileSurcharge,
-                    VasAmount = request.VasAmount,
+                    VasAmount = vasAmount,
                     VatAmount = vatAmount,
                     FinalAmount = finalAmount,
                     FileUrl = null,
@@ -285,7 +297,7 @@ namespace ColdChainX.Infrastructure.Services
                 var quoteCustomerUserId = await ResolveCustomerUserIdAsync(order.CustomerId);
                 await AddNotificationAsync(
                     quoteCustomerUserId,
-                    request.SalesUserId,
+                    salesUserId,
                     "NOTI_QUOTATION_SENT",
                     order.OrderId,
                     new { Tracking_Code = order.TrackingCode, Final_Amount = finalAmount.ToString("0") });
@@ -309,7 +321,7 @@ namespace ColdChainX.Infrastructure.Services
                     QuoteId = quotation.QuoteId,
                     BaseFreight = baseFreight,
                     LastMileSurcharge = lastMileSurcharge,
-                    VasAmount = request.VasAmount,
+                    VasAmount = vasAmount,
                     VatAmount = vatAmount,
                     FinalAmount = finalAmount
                 }, "Quotation generated");
@@ -349,7 +361,7 @@ namespace ColdChainX.Infrastructure.Services
 
         private async Task<RoutePricing?> ResolvePricingAsync(TransportOrder order)
         {
-            var destinationAddress = order.DestLocationNavigation?.Address ?? order.DestLocationNavigation?.LocationName ?? string.Empty;
+            var destinationAddress = order.DestLocationNavigation?.Address ?? string.Empty;
             var destinationCity = ExtractDestinationCity(destinationAddress);
 
             var allRoutePrices = await _db.PricingMatrices
@@ -467,6 +479,15 @@ namespace ColdChainX.Infrastructure.Services
         private static string GenerateRequestCode()
             => $"REQ-{DateTime.UtcNow:yyyyMMddHHmmss}-{Random.Shared.Next(1000, 9999)}";
 
+        private static int NormalizePageSize(int pageSize)
+            => Math.Clamp(pageSize <= 0 ? 10 : pageSize, 1, 100);
+
+        private static int NormalizeSkip(int pageNumber, int pageSize)
+        {
+            var safePageNumber = pageNumber <= 0 ? 1 : pageNumber;
+            return (safePageNumber - 1) * NormalizePageSize(pageSize);
+        }
+
         private IQueryable<TransportOrder> BuildOrderQuery()
         {
             return _db.TransportOrders
@@ -502,7 +523,6 @@ namespace ColdChainX.Infrastructure.Services
                     : new OrderLocationResponse
                     {
                         LocationId = order.DestLocationNavigation.LocationId,
-                        LocationName = order.DestLocationNavigation.LocationName,
                         Address = order.DestLocationNavigation.Address,
                         Latitude = order.DestLocationNavigation.Latitude,
                         Longitude = order.DestLocationNavigation.Longitude

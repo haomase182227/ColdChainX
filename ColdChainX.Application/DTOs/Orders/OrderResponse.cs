@@ -26,7 +26,6 @@ namespace ColdChainX.Application.DTOs.Orders
     public class OrderLocationResponse
     {
         public Guid LocationId { get; set; }
-        public string LocationName { get; set; } = null!;
         public string Address { get; set; } = null!;
         public decimal Latitude { get; set; }
         public decimal Longitude { get; set; }

@@ -15,9 +15,12 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetOrdersByCustomer(Guid customerId)
+        public async Task<IActionResult> GetOrdersByCustomer(
+            Guid customerId,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10)
         {
-            var result = await _orderService.GetOrdersByCustomerAsync(customerId);
+            var result = await _orderService.GetOrdersByCustomerAsync(customerId, pageNumber, pageSize);
             return Ok(result);
         }
     }

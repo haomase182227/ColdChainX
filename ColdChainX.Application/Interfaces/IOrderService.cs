@@ -1,14 +1,15 @@
 using ColdChainX.Application.DTOs.Orders;
+using ColdChainX.Application.DTOs.Common;
 using ColdChainX.Shared.Responses;
 
 namespace ColdChainX.Application.Interfaces
 {
     public interface IOrderService
     {
-        Task<ApiResponse<IReadOnlyCollection<OrderResponse>>> GetOrdersAsync();
+        Task<ApiResponse<PagedResult<OrderResponse>>> GetOrdersAsync(int pageNumber, int pageSize);
         Task<ApiResponse<OrderResponse>> GetOrderByIdAsync(Guid orderId);
-        Task<ApiResponse<IReadOnlyCollection<OrderResponse>>> GetOrdersByCustomerAsync(Guid customerId);
-        Task<ApiResponse<CreateOrderResponse>> CreateOrderAsync(CreateOrderRequest request);
-        Task<ApiResponse<ReviewOrderResponse>> ReviewOrderAsync(Guid orderId, ReviewOrderRequest request);
+        Task<ApiResponse<PagedResult<OrderResponse>>> GetOrdersByCustomerAsync(Guid customerId, int pageNumber, int pageSize);
+        Task<ApiResponse<CreateOrderResponse>> CreateOrderAsync(CreateOrderRequest request, Guid customerId);
+        Task<ApiResponse<ReviewOrderResponse>> ReviewOrderAsync(Guid orderId, ReviewOrderRequest request, Guid salesUserId);
     }
 }
