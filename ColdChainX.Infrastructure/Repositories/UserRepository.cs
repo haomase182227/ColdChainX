@@ -59,6 +59,17 @@ namespace ColdChainX.Infrastructure.Repositories
                 .FirstOrDefaultAsync(r => r.RoleName.ToLower() == normalizedRoleName);
         }
 
+        public async Task<Role?> GetRoleByIdAsync(int roleId)
+        {
+            return await _db.Roles
+            .FirstOrDefaultAsync(r => r.Id == roleId);
+        }
+
+        public async Task<List<Role>> GetAllRolesAsync()
+        {
+            return await _db.Roles.ToListAsync();
+        }
+
         public async Task AddRoleAsync(Role role)
         {
             await _db.Roles.AddAsync(role);
