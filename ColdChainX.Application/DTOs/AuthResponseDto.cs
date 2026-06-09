@@ -6,6 +6,7 @@ namespace ColdChainX.Application.DTOs
     {
         public Guid UserId { get; set; }
         public Guid? CustomerId { get; set; }
+        public Guid? DriverId { get; set; }
         public string Username { get; set; } = null!;
         public string FullName { get; set; } = null!;
         public string? Email { get; set; }

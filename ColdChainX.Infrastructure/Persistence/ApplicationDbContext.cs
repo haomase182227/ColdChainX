@@ -274,6 +274,7 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.FileUrl)
                 .HasMaxLength(255)
                 .HasColumnName("file_url");
+            entity.Property(e => e.OrderId).HasColumnName("order_id");
             entity.Property(e => e.SignedDate).HasColumnName("signed_date");
             entity.Property(e => e.Status)
                 .HasMaxLength(20)
@@ -283,6 +284,10 @@ public partial class ApplicationDbContext : DbContext
             entity.HasOne(d => d.Customer).WithMany(p => p.CustomerContracts)
                 .HasForeignKey(d => d.CustomerId)
                 .HasConstraintName("fk_cc_customers");
+
+            entity.HasOne(d => d.Order).WithMany(p => p.CustomerContracts)
+                .HasForeignKey(d => d.OrderId)
+                .HasConstraintName("fk_cc_orders");
         });
 
         modelBuilder.Entity<DeliveryEpod>(entity =>
@@ -351,6 +356,7 @@ public partial class ApplicationDbContext : DbContext
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
             entity.Property(e => e.DateOfBirth).HasColumnName("date_of_birth");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
             entity.Property(e => e.Status)
                 .HasMaxLength(20)
                 .HasDefaultValueSql("'AVAILABLE'::character varying")
@@ -723,9 +729,6 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.Latitude)
                 .HasPrecision(10, 7)
                 .HasColumnName("latitude");
-            entity.Property(e => e.LocationName)
-                .HasMaxLength(150)
-                .HasColumnName("location_name");
             entity.Property(e => e.Longitude)
                 .HasPrecision(10, 7)
                 .HasColumnName("longitude");
@@ -998,6 +1001,9 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.FinalAmount)
                 .HasPrecision(15, 2)
                 .HasColumnName("final_amount");
+            entity.Property(e => e.FileUrl)
+                .HasMaxLength(255)
+                .HasColumnName("file_url");
             entity.Property(e => e.LastMileSurcharge)
                 .HasPrecision(15, 2)
                 .HasDefaultValueSql("0")
@@ -1275,6 +1281,13 @@ public partial class ApplicationDbContext : DbContext
                 .HasColumnName("item_name");
             entity.Property(e => e.MasterTripId).HasColumnName("master_trip_id");
             entity.Property(e => e.PickupLocation).HasColumnName("pickup_location");
+            entity.Property(e => e.PackingType)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("'Thùng'::character varying")
+                .HasColumnName("packing_type");
+            entity.Property(e => e.Quantity)
+                .HasDefaultValue(1)
+                .HasColumnName("quantity");
             entity.Property(e => e.Status)
                 .HasMaxLength(30)
                 .HasColumnName("status");

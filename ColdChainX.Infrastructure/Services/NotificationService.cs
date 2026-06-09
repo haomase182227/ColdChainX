@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using ColdChainX.Application.DTOs.Common;
 using ColdChainX.Application.DTOs.Notifications;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
@@ -17,7 +18,7 @@ namespace ColdChainX.Infrastructure.Services
             _db = db;
         }
 
-        public async Task<ApiResponse<IReadOnlyCollection<NotificationResponse>>> GetUserNotificationsAsync(Guid userId, bool unreadOnly)
+        public async Task<ApiResponse<PagedResult<NotificationResponse>>> GetUserNotificationsAsync(Guid userId, bool unreadOnly, int pageNumber, int pageSize)
         {
             var query = _db.Notifications
                 .AsNoTracking()
@@ -27,12 +28,17 @@ namespace ColdChainX.Infrastructure.Services
             if (unreadOnly)
                 query = query.Where(n => n.IsRead != true);
 
+            var totalRecords = await query.CountAsync();
             var notifications = await query
                 .OrderByDescending(n => n.CreatedAt)
+                .Skip(NormalizeSkip(pageNumber, pageSize))
+                .Take(NormalizePageSize(pageSize))
                 .Select(n => ToResponse(n))
                 .ToListAsync();
 
-            return ApiResponse<IReadOnlyCollection<NotificationResponse>>.SuccessResponse(notifications, "Notifications retrieved successfully");
+            return ApiResponse<PagedResult<NotificationResponse>>.SuccessResponse(
+                PagedResult<NotificationResponse>.Create(notifications, totalRecords, pageNumber, NormalizePageSize(pageSize)),
+                "Notifications retrieved successfully");
         }
 
         public async Task<ApiResponse<NotificationResponse>> GetNotificationByIdAsync(Guid notificationId)
@@ -112,6 +118,15 @@ namespace ColdChainX.Infrastructure.Services
             {
                 return template;
             }
+        }
+
+        private static int NormalizePageSize(int pageSize)
+            => Math.Clamp(pageSize <= 0 ? 10 : pageSize, 1, 100);
+
+        private static int NormalizeSkip(int pageNumber, int pageSize)
+        {
+            var safePageNumber = pageNumber <= 0 ? 1 : pageNumber;
+            return (safePageNumber - 1) * NormalizePageSize(pageSize);
         }
     }
 }

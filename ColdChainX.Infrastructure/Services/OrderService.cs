@@ -1,7 +1,10 @@
 using System.Text.Json;
+using System.Text;
 using System.Globalization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Hosting;
+using ColdChainX.Application.DTOs.Common;
 using ColdChainX.Application.DTOs.Orders;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
@@ -16,8 +19,8 @@ namespace ColdChainX.Infrastructure.Services
         private const string PendingReview = "PENDING_REVIEW";
         private const string Rejected = "REJECTED";
         private const string Quoting = "QUOTING";
-        private const decimal KgUnitPrice = 9500m;
-        private const decimal CbmUnitPrice = 2800000m;
+        private const string DefaultOriginCity = "Ho Chi Minh";
+        private const decimal MinCharge = 300000m;
         private const decimal LastMileFreeKm = 10m;
         private const decimal LastMileUnitPrice = 15000m;
         private const decimal VatRate = 0.08m;
@@ -25,28 +28,39 @@ namespace ColdChainX.Infrastructure.Services
         private readonly ApplicationDbContext _db;
         private readonly ILocationService _locationService;
         private readonly IFileService _fileService;
+        private readonly IPdfService _pdfService;
+        private readonly IWebHostEnvironment _environment;
         private readonly IHubContext<NotificationHub> _hubContext;
 
         public OrderService(
             ApplicationDbContext db,
             ILocationService locationService,
             IFileService fileService,
+            IPdfService pdfService,
+            IWebHostEnvironment environment,
             IHubContext<NotificationHub> hubContext)
         {
             _db = db;
             _locationService = locationService;
             _fileService = fileService;
+            _pdfService = pdfService;
+            _environment = environment;
             _hubContext = hubContext;
         }
 
-        public async Task<ApiResponse<IReadOnlyCollection<OrderResponse>>> GetOrdersAsync()
+        public async Task<ApiResponse<PagedResult<OrderResponse>>> GetOrdersAsync(int pageNumber, int pageSize)
         {
-            var orders = await BuildOrderQuery()
-                .OrderByDescending(o => o.CreatedAt)
+            var query = BuildOrderQuery().OrderByDescending(o => o.CreatedAt);
+            var totalRecords = await query.CountAsync();
+            var orders = await query
+                .Skip(NormalizeSkip(pageNumber, pageSize))
+                .Take(NormalizePageSize(pageSize))
                 .Select(o => ToOrderResponse(o))
                 .ToListAsync();
 
-            return ApiResponse<IReadOnlyCollection<OrderResponse>>.SuccessResponse(orders, "Orders retrieved successfully");
+            return ApiResponse<PagedResult<OrderResponse>>.SuccessResponse(
+                PagedResult<OrderResponse>.Create(orders, totalRecords, pageNumber, NormalizePageSize(pageSize)),
+                "Orders retrieved successfully");
         }
 
         public async Task<ApiResponse<OrderResponse>> GetOrderByIdAsync(Guid orderId)
@@ -60,22 +74,28 @@ namespace ColdChainX.Infrastructure.Services
             return ApiResponse<OrderResponse>.SuccessResponse(ToOrderResponse(order), "Order retrieved successfully");
         }
 
-        public async Task<ApiResponse<IReadOnlyCollection<OrderResponse>>> GetOrdersByCustomerAsync(Guid customerId)
+        public async Task<ApiResponse<PagedResult<OrderResponse>>> GetOrdersByCustomerAsync(Guid customerId, int pageNumber, int pageSize)
         {
             var customerExists = await _db.Customers.AnyAsync(c => c.CustomerId == customerId);
             if (!customerExists)
-                return ApiResponse<IReadOnlyCollection<OrderResponse>>.Failure("Customer not found");
+                return ApiResponse<PagedResult<OrderResponse>>.Failure("Customer not found");
 
-            var orders = await BuildOrderQuery()
+            var query = BuildOrderQuery()
                 .Where(o => o.CustomerId == customerId)
-                .OrderByDescending(o => o.CreatedAt)
+                .OrderByDescending(o => o.CreatedAt);
+            var totalRecords = await query.CountAsync();
+            var orders = await query
+                .Skip(NormalizeSkip(pageNumber, pageSize))
+                .Take(NormalizePageSize(pageSize))
                 .Select(o => ToOrderResponse(o))
                 .ToListAsync();
 
-            return ApiResponse<IReadOnlyCollection<OrderResponse>>.SuccessResponse(orders, "Customer orders retrieved successfully");
+            return ApiResponse<PagedResult<OrderResponse>>.SuccessResponse(
+                PagedResult<OrderResponse>.Create(orders, totalRecords, pageNumber, NormalizePageSize(pageSize)),
+                "Customer orders retrieved successfully");
         }
 
-        public async Task<ApiResponse<CreateOrderResponse>> CreateOrderAsync(CreateOrderRequest request)
+        public async Task<ApiResponse<CreateOrderResponse>> CreateOrderAsync(CreateOrderRequest request, Guid customerId)
         {
             if (request.DocumentImage == null || request.DocumentImage.Length == 0)
                 return ApiResponse<CreateOrderResponse>.Failure("DocumentImage is required");
@@ -87,20 +107,19 @@ namespace ColdChainX.Infrastructure.Services
 
             return await strategy.ExecuteAsync(async () =>
             {
-                var customerExists = await _db.Customers.AnyAsync(c => c.CustomerId == request.CustomerId);
+                var customerExists = await _db.Customers.AnyAsync(c => c.CustomerId == customerId);
                 if (!customerExists)
                     return ApiResponse<CreateOrderResponse>.Failure("Customer not found");
 
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
-                var expectedCbm = Math.Round(request.LengthCm * request.WidthCm * request.HeightCm / 1000000m, 4);
+                var expectedCbm = Math.Round(request.LengthCm * request.WidthCm * request.HeightCm * request.Quantity / 1000000m, 4);
                 var coordinates = await _locationService.GetCoordinatesAsync(request.DestAddressText);
 
                 var location = new Location
                 {
                     LocationId = Guid.NewGuid(),
-                    CustomerId = request.CustomerId,
-                    LocationName = request.DestAddressText.Trim(),
+                    CustomerId = customerId,
                     Address = request.DestAddressText.Trim(),
                     Latitude = coordinates.Latitude,
                     Longitude = coordinates.Longitude,
@@ -112,10 +131,12 @@ namespace ColdChainX.Infrastructure.Services
                 var order = new TransportOrder
                 {
                     OrderId = Guid.NewGuid(),
-                    TrackingCode = GenerateTrackingCode(),
-                    CustomerId = request.CustomerId,
+                    TrackingCode = GenerateRequestCode(),
+                    CustomerId = customerId,
                     ItemName = request.ItemName.Trim(),
                     Category = request.Category.Trim(),
+                    Quantity = request.Quantity,
+                    PackingType = request.PackagingType.Trim(),
                     TempCondition = request.TempCondition.ToString("0.##", CultureInfo.InvariantCulture),
                     ExpectedWeightKg = request.ExpectedWeightKg,
                     ActualWeightKg = request.ExpectedWeightKg,
@@ -128,7 +149,7 @@ namespace ColdChainX.Infrastructure.Services
                 _db.TransportOrders.Add(order);
 
                 var documentUrl = await _fileService.UploadFileAsync(request.DocumentImage);
-                var uploadedBy = await ResolveCustomerUserIdAsync(request.CustomerId);
+                var uploadedBy = await ResolveCustomerUserIdAsync(customerId);
                 if (!uploadedBy.HasValue)
                     return ApiResponse<CreateOrderResponse>.Failure("Customer user was not found for document upload");
 
@@ -174,7 +195,7 @@ namespace ColdChainX.Infrastructure.Services
             });
         }
 
-        public async Task<ApiResponse<ReviewOrderResponse>> ReviewOrderAsync(Guid orderId, ReviewOrderRequest request)
+        public async Task<ApiResponse<ReviewOrderResponse>> ReviewOrderAsync(Guid orderId, ReviewOrderRequest request, Guid salesUserId)
         {
             var strategy = _db.Database.CreateExecutionStrategy();
 
@@ -204,7 +225,7 @@ namespace ColdChainX.Infrastructure.Services
                     var customerUserId = await ResolveCustomerUserIdAsync(order.CustomerId);
                     await AddNotificationAsync(
                         customerUserId,
-                        request.SalesUserId,
+                        salesUserId,
                         "NOTI_ORDER_REJECTED",
                         order.OrderId,
                         new { Tracking_Code = order.TrackingCode, Reject_Reason = request.RejectReason });
@@ -233,7 +254,16 @@ namespace ColdChainX.Infrastructure.Services
                 if (order.DestLocationNavigation == null)
                     return ApiResponse<ReviewOrderResponse>.Failure("Order destination location was not found");
 
-                var baseFreight = Math.Max(order.ExpectedWeightKg * KgUnitPrice, order.ExpectedCbm * CbmUnitPrice);
+                var pricing = await ResolvePricingAsync(order);
+                if (pricing == null)
+                    return ApiResponse<ReviewOrderResponse>.Failure("Pricing matrix is missing KG or CBM price for this route");
+
+                var chargeableWeightKg = order.ActualWeightKg;
+                var chargeableCbm = order.ExpectedCbm;
+                var baseFreight = Math.Max(chargeableWeightKg * pricing.PriceKg, chargeableCbm * pricing.PriceCbm);
+                if (baseFreight < MinCharge)
+                    baseFreight = MinCharge;
+
                 var distanceKm = await _locationService.GetDistanceKmAsync(
                     GoongLocationService.HubLat,
                     GoongLocationService.HubLon,
@@ -242,7 +272,8 @@ namespace ColdChainX.Infrastructure.Services
                 var lastMileSurcharge = distanceKm > LastMileFreeKm
                     ? Math.Round((distanceKm - LastMileFreeKm) * LastMileUnitPrice, 0)
                     : 0m;
-                var subtotal = baseFreight + lastMileSurcharge + request.VasAmount;
+                var vasAmount = 0m;
+                var subtotal = baseFreight + lastMileSurcharge + vasAmount;
                 var vatAmount = Math.Round(subtotal * VatRate, 0);
                 var finalAmount = subtotal + vatAmount;
 
@@ -252,19 +283,21 @@ namespace ColdChainX.Infrastructure.Services
                     OrderId = order.OrderId,
                     BaseFreight = baseFreight,
                     LastMileSurcharge = lastMileSurcharge,
-                    VasAmount = request.VasAmount,
+                    VasAmount = vasAmount,
                     VatAmount = vatAmount,
                     FinalAmount = finalAmount,
+                    FileUrl = null,
                     Status = "SENT",
                     CreatedAt = DbNow()
                 };
+                quotation.FileUrl = await GenerateQuotationPdfAsync(order, quotation);
                 _db.Quotations.Add(quotation);
                 order.Status = Quoting;
 
                 var quoteCustomerUserId = await ResolveCustomerUserIdAsync(order.CustomerId);
                 await AddNotificationAsync(
                     quoteCustomerUserId,
-                    request.SalesUserId,
+                    salesUserId,
                     "NOTI_QUOTATION_SENT",
                     order.OrderId,
                     new { Tracking_Code = order.TrackingCode, Final_Amount = finalAmount.ToString("0") });
@@ -288,7 +321,7 @@ namespace ColdChainX.Infrastructure.Services
                     QuoteId = quotation.QuoteId,
                     BaseFreight = baseFreight,
                     LastMileSurcharge = lastMileSurcharge,
-                    VasAmount = request.VasAmount,
+                    VasAmount = vasAmount,
                     VatAmount = vatAmount,
                     FinalAmount = finalAmount
                 }, "Quotation generated");
@@ -326,6 +359,98 @@ namespace ColdChainX.Infrastructure.Services
                 .FirstOrDefaultAsync();
         }
 
+        private async Task<RoutePricing?> ResolvePricingAsync(TransportOrder order)
+        {
+            var destinationAddress = order.DestLocationNavigation?.Address ?? string.Empty;
+            var destinationCity = ExtractDestinationCity(destinationAddress);
+
+            var allRoutePrices = await _db.PricingMatrices
+                .AsNoTracking()
+                .Where(p => p.PricingUnit == "KG" || p.PricingUnit == "CBM")
+                .ToListAsync();
+
+            var originKey = NormalizeRouteKey(DefaultOriginCity);
+            var destinationKey = NormalizeRouteKey(destinationCity);
+            var prices = allRoutePrices
+                .Where(p => NormalizeRouteKey(p.OriginCity) == originKey
+                            && NormalizeRouteKey(p.DestCity) == destinationKey)
+                .OrderByDescending(p => p.EffectiveDate)
+                .ToList();
+
+            var priceKg = prices.FirstOrDefault(p => p.PricingUnit == "KG")?.UnitPrice;
+            var priceCbm = prices.FirstOrDefault(p => p.PricingUnit == "CBM")?.UnitPrice;
+
+            if (!priceKg.HasValue || !priceCbm.HasValue)
+                return null;
+
+            return new RoutePricing(priceKg.Value, priceCbm.Value, destinationCity);
+        }
+
+        private async Task<string> GenerateQuotationPdfAsync(TransportOrder order, Quotation quotation)
+        {
+            var templatePath = Path.Combine(_environment.ContentRootPath, "Templates", "QuotationTemplate.html");
+            if (!File.Exists(templatePath))
+                throw new InvalidOperationException("QuotationTemplate.html was not found");
+
+            var html = await File.ReadAllTextAsync(templatePath);
+            var replacements = new Dictionary<string, string?>
+            {
+                ["Quote_Date"] = DateTime.UtcNow.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+                ["Customer_CompanyName"] = order.Customer?.CompanyName ?? string.Empty,
+                ["Tracking_Code"] = order.TrackingCode,
+                ["Item_Name"] = order.ItemName,
+                ["Quantity"] = order.Quantity.ToString(CultureInfo.InvariantCulture),
+                ["Packing_Type"] = order.PackingType,
+                ["Pickup_Address"] = DefaultOriginCity,
+                ["Dest_Address"] = order.DestLocationNavigation?.Address ?? string.Empty,
+                ["Actual_Weight_KG"] = order.ActualWeightKg.ToString("0.##", CultureInfo.InvariantCulture),
+                ["Actual_CBM"] = order.ExpectedCbm.ToString("0.####", CultureInfo.InvariantCulture),
+                ["Final_Amount"] = quotation.FinalAmount.ToString("N0", CultureInfo.InvariantCulture)
+            };
+
+            foreach (var replacement in replacements)
+                html = html.Replace($"{{{{{replacement.Key}}}}}", replacement.Value ?? string.Empty);
+
+            return await _pdfService.SaveQuotationPdfAsync(html, $"QUO-{quotation.QuoteId:N}");
+        }
+
+        private static string ExtractDestinationCity(string address)
+        {
+            var normalized = RemoveDiacritics(address).ToLowerInvariant();
+
+            if (normalized.Contains("ha noi")) return "Ha Noi";
+            if (normalized.Contains("da nang")) return "Da Nang";
+            if (normalized.Contains("can tho")) return "Can Tho";
+            if (normalized.Contains("kien giang")) return "Kien Giang";
+            if (normalized.Contains("dong nai")) return "Dong Nai";
+            if (normalized.Contains("binh duong")) return "Binh Duong";
+            if (normalized.Contains("ho chi minh") || normalized.Contains("hcm") || normalized.Contains("tp.hcm") || normalized.Contains("sai gon")) return "Ho Chi Minh";
+
+            return "Ho Chi Minh";
+        }
+
+        private static string NormalizeRouteKey(string? value)
+        {
+            return RemoveDiacritics(value ?? string.Empty)
+                .ToLowerInvariant()
+                .Replace(" ", string.Empty)
+                .Replace(".", string.Empty)
+                .Replace("-", string.Empty);
+        }
+
+        private static string RemoveDiacritics(string text)
+        {
+            var normalized = text.Normalize(NormalizationForm.FormD);
+            var builder = new StringBuilder();
+            foreach (var ch in normalized)
+            {
+                if (CharUnicodeInfo.GetUnicodeCategory(ch) != UnicodeCategory.NonSpacingMark)
+                    builder.Append(ch);
+            }
+
+            return builder.ToString().Normalize(NormalizationForm.FormC);
+        }
+
         private async Task AddNotificationAsync(Guid? userId, Guid? senderId, string templateId, Guid orderId, object parameters)
         {
             if (!userId.HasValue)
@@ -351,8 +476,17 @@ namespace ColdChainX.Infrastructure.Services
         private static DateTime DbNow()
             => DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
 
-        private static string GenerateTrackingCode()
-            => $"ORD-{DateTime.UtcNow:yyyyMMddHHmmss}-{Random.Shared.Next(1000, 9999)}";
+        private static string GenerateRequestCode()
+            => $"REQ-{DateTime.UtcNow:yyyyMMddHHmmss}-{Random.Shared.Next(1000, 9999)}";
+
+        private static int NormalizePageSize(int pageSize)
+            => Math.Clamp(pageSize <= 0 ? 10 : pageSize, 1, 100);
+
+        private static int NormalizeSkip(int pageNumber, int pageSize)
+        {
+            var safePageNumber = pageNumber <= 0 ? 1 : pageNumber;
+            return (safePageNumber - 1) * NormalizePageSize(pageSize);
+        }
 
         private IQueryable<TransportOrder> BuildOrderQuery()
         {
@@ -374,6 +508,8 @@ namespace ColdChainX.Infrastructure.Services
                 CustomerName = order.Customer?.CompanyName,
                 ItemName = order.ItemName,
                 Category = order.Category,
+                Quantity = order.Quantity,
+                PackingType = order.PackingType,
                 TempCondition = order.TempCondition,
                 ExpectedWeightKg = order.ExpectedWeightKg,
                 ActualWeightKg = order.ActualWeightKg,
@@ -387,7 +523,6 @@ namespace ColdChainX.Infrastructure.Services
                     : new OrderLocationResponse
                     {
                         LocationId = order.DestLocationNavigation.LocationId,
-                        LocationName = order.DestLocationNavigation.LocationName,
                         Address = order.DestLocationNavigation.Address,
                         Latitude = order.DestLocationNavigation.Latitude,
                         Longitude = order.DestLocationNavigation.Longitude
@@ -413,11 +548,14 @@ namespace ColdChainX.Infrastructure.Services
                         VasAmount = q.VasAmount,
                         VatAmount = q.VatAmount,
                         FinalAmount = q.FinalAmount,
+                        FileUrl = q.FileUrl,
                         Status = q.Status,
                         CreatedAt = q.CreatedAt
                     })
                     .ToList()
             };
         }
+
+        private sealed record RoutePricing(decimal PriceKg, decimal PriceCbm, string DestinationCity);
     }
 }

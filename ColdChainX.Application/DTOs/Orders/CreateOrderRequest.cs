@@ -17,6 +17,9 @@ namespace ColdChainX.Application.DTOs.Orders
         [FromForm(Name = "Expected_Weight_KG")]
         public decimal ExpectedWeightKg { get; set; }
 
+        [FromForm(Name = "Quantity")]
+        public int Quantity { get; set; } = 1;
+
         [FromForm(Name = "Packaging_Type")]
         public string PackagingType { get; set; } = null!;
 
@@ -31,9 +34,6 @@ namespace ColdChainX.Application.DTOs.Orders
 
         [FromForm(Name = "Dest_Address_Text")]
         public string DestAddressText { get; set; } = null!;
-
-        [FromForm(Name = "Customer_ID")]
-        public Guid CustomerId { get; set; }
 
         [FromForm(Name = "DocumentImage")]
         public IFormFile DocumentImage { get; set; } = null!;

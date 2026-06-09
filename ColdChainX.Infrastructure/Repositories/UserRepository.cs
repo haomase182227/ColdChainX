@@ -59,6 +59,24 @@ namespace ColdChainX.Infrastructure.Repositories
                 .FirstOrDefaultAsync(r => r.RoleName.ToLower() == normalizedRoleName);
         }
 
+        public async Task<Guid?> GetCustomerIdByEmailAsync(string email)
+        {
+            var normalizedEmail = email.ToLower();
+
+            return await _db.Customers
+                .Where(c => c.Email != null && c.Email.ToLower() == normalizedEmail)
+                .Select(c => (Guid?)c.CustomerId)
+                .FirstOrDefaultAsync();
+        }
+
+        public async Task<Guid?> GetDriverIdByUserIdAsync(Guid userId)
+        {
+            return await _db.Drivers
+                .Where(d => d.UserId == userId)
+                .Select(d => (Guid?)d.DriverId)
+                .FirstOrDefaultAsync();
+        }
+
         public async Task UpdateAsync(User user)
         {
             _db.Users.Update(user);

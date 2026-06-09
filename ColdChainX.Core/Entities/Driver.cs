@@ -7,6 +7,8 @@ public partial class Driver
 {
     public Guid DriverId { get; set; }
 
+    public Guid? UserId { get; set; }
+
     public DateOnly DateOfBirth { get; set; }
 
     public string? Status { get; set; }

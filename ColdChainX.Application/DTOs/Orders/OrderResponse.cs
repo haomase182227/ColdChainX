@@ -8,6 +8,8 @@ namespace ColdChainX.Application.DTOs.Orders
         public string? CustomerName { get; set; }
         public string ItemName { get; set; } = null!;
         public string Category { get; set; } = null!;
+        public int Quantity { get; set; }
+        public string PackingType { get; set; } = null!;
         public string TempCondition { get; set; } = null!;
         public decimal ExpectedWeightKg { get; set; }
         public decimal ActualWeightKg { get; set; }
@@ -24,7 +26,6 @@ namespace ColdChainX.Application.DTOs.Orders
     public class OrderLocationResponse
     {
         public Guid LocationId { get; set; }
-        public string LocationName { get; set; } = null!;
         public string Address { get; set; } = null!;
         public decimal Latitude { get; set; }
         public decimal Longitude { get; set; }
@@ -47,6 +48,7 @@ namespace ColdChainX.Application.DTOs.Orders
         public decimal? VasAmount { get; set; }
         public decimal VatAmount { get; set; }
         public decimal FinalAmount { get; set; }
+        public string? FileUrl { get; set; }
         public string Status { get; set; } = null!;
         public DateTime? CreatedAt { get; set; }
     }

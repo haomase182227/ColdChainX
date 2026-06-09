@@ -19,6 +19,8 @@ public partial class Quotation
 
     public decimal FinalAmount { get; set; }
 
+    public string? FileUrl { get; set; }
+
     public string Status { get; set; } = null!;
 
     public DateTime? CreatedAt { get; set; }

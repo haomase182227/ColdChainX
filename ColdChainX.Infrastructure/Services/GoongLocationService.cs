@@ -73,11 +73,11 @@ namespace ColdChainX.Infrastructure.Services
 
         private static string GetApiKey()
         {
-            var apiKey = Environment.GetEnvironmentVariable("GOONG_API_KEY");
+            var apiKey = Environment.GetEnvironmentVariable("key");
             if (string.IsNullOrWhiteSpace(apiKey))
-                throw new InvalidOperationException("GOONG_API_KEY environment variable is missing");
+                throw new InvalidOperationException("Goong API key is missing. Set key in .env");
 
-            return apiKey;
+            return apiKey.Trim();
         }
 
         private static string FormatCoordinate(decimal lat, decimal lon)

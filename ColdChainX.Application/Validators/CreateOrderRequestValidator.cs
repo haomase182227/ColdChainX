@@ -16,6 +16,9 @@ namespace ColdChainX.Application.Validators
 
         public static readonly string[] AllowedPackagingTypes =
         [
+            "Pallet",
+            "Thùng",
+            "Bao",
             "Plastic Box",
             "Foam Box",
             "Carton Box"
@@ -41,6 +44,9 @@ namespace ColdChainX.Application.Validators
             RuleFor(x => x.ExpectedWeightKg)
                 .GreaterThan(0).WithMessage("Expected_Weight_KG must be greater than 0");
 
+            RuleFor(x => x.Quantity)
+                .GreaterThan(0).WithMessage("Quantity must be greater than 0");
+
             RuleFor(x => x.PackagingType)
                 .NotEmpty().WithMessage("Packaging_Type is required")
                 .Must(value => AllowedPackagingTypes.Contains(value))
@@ -58,9 +64,6 @@ namespace ColdChainX.Application.Validators
             RuleFor(x => x.DestAddressText)
                 .NotEmpty().WithMessage("Dest_Address_Text is required")
                 .MaximumLength(500).WithMessage("Dest_Address_Text must not exceed 500 characters");
-
-            RuleFor(x => x.CustomerId)
-                .NotEmpty().WithMessage("Customer_ID is required");
 
             RuleFor(x => x.DocumentImage)
                 .NotNull().WithMessage("DocumentImage is required")
