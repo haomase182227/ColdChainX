@@ -14,7 +14,7 @@ namespace ColdChainX.Core.Interfaces
         Task<Role?> GetRoleByNameAsync(string roleName);
         Task<Guid?> GetCustomerIdByEmailAsync(string email);
         Task<Guid?> GetDriverIdByUserIdAsync(Guid userId);
-        Task<Role?> GetRoleByIdAsync(int roleId);
+        Task<Role?> GetRoleByIdAsync(Guid roleId);
         Task<List<Role>> GetAllRolesAsync();
         Task AddRoleAsync(Role role);
         Task AddCustomerAsync(Customer customer);
