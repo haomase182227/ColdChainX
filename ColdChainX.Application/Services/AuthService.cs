@@ -108,7 +108,8 @@ namespace ColdChainX.Application.Services
                 return ApiResponse<AuthResponseDto>.Failure("Invalid credentials");
 
             var accessExpiresAt = DateTime.UtcNow.AddMinutes(60);
-            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt);
+            var customerId = await ResolveCustomerIdForTokenAsync(user);
+            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt, customerId);
             var refreshToken = _jwtService.GenerateRefreshToken();
 
             user.RefreshToken = refreshToken;
@@ -118,6 +119,7 @@ namespace ColdChainX.Application.Services
             await _userRepository.SaveChangesAsync();
 
             var dto = _mapper.Map<AuthResponseDto>(user);
+            dto.CustomerId = customerId;
             dto.AccessToken = accessToken;
             dto.RefreshToken = refreshToken;
             dto.AccessTokenExpiresAt = accessExpiresAt;
@@ -134,7 +136,8 @@ namespace ColdChainX.Application.Services
                 return ApiResponse<AuthResponseDto>.Failure("Refresh token expired");
 
             var accessExpiresAt = DateTime.UtcNow.AddMinutes(60);
-            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt);
+            var customerId = await ResolveCustomerIdForTokenAsync(user);
+            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt, customerId);
             var newRefreshToken = _jwtService.GenerateRefreshToken();
 
             user.RefreshToken = newRefreshToken;
@@ -144,6 +147,7 @@ namespace ColdChainX.Application.Services
             await _userRepository.SaveChangesAsync();
 
             var dto = _mapper.Map<AuthResponseDto>(user);
+            dto.CustomerId = customerId;
             dto.AccessToken = accessToken;
             dto.RefreshToken = newRefreshToken;
             dto.AccessTokenExpiresAt = accessExpiresAt;
@@ -253,13 +257,6 @@ namespace ColdChainX.Application.Services
 
             user.PasswordHash = _passwordHasher.HashPassword(user, request.Password);
 
-            var accessExpiresAt = DateTime.UtcNow.AddMinutes(60);
-            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt);
-            var refreshToken = _jwtService.GenerateRefreshToken();
-
-            user.RefreshToken = refreshToken;
-            user.RefreshTokenExpiryTime = DbNow().AddDays(7);
-
             // Create Customer entity with provided information
             var customer = new Customer
             {
@@ -272,6 +269,13 @@ namespace ColdChainX.Application.Services
                 Status = ActiveStatus,
                 CreatedAt = DbNow()
             };
+
+            var accessExpiresAt = DateTime.UtcNow.AddMinutes(60);
+            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt, customer.CustomerId);
+            var refreshToken = _jwtService.GenerateRefreshToken();
+
+            user.RefreshToken = refreshToken;
+            user.RefreshTokenExpiryTime = DbNow().AddDays(7);
 
             await _userRepository.AddCustomerAsync(customer);
             await _userRepository.AddAsync(user);
@@ -373,6 +377,21 @@ namespace ColdChainX.Application.Services
             dto.AccessTokenExpiresAt = accessExpiresAt;
 
             return ApiResponse<AuthResponseDto>.SuccessResponse(dto, "Driver account created successfully");
+        }
+
+        private async Task<Guid?> ResolveCustomerIdForTokenAsync(User user)
+        {
+            if (!string.Equals(user.Role?.RoleName, "Customer", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            if (string.IsNullOrWhiteSpace(user.Email))
+            {
+                return null;
+            }
+
+            return await _userRepository.GetCustomerIdByEmailAsync(user.Email);
         }
 
         public async Task<ApiResponse<List<RoleDto>>> GetAllRolesAsync()
