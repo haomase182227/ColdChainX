@@ -32,13 +32,12 @@ namespace ColdChainX.Application.Services
 
         public async Task<ApiResponse<AuthResponseDto>> RegisterAsync(RegisterRequest request)
         {
-            // Validate role - Admin, Manager, Dispatcher, or Sale allowed
+            // Validate role - chỉ Admin, Dispatcher, Sales được tạo qua endpoint này
             if (!string.Equals(request.Role, "Admin", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(request.Role, "Manager", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(request.Role, "Dispatcher", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(request.Role, "Sale", StringComparison.OrdinalIgnoreCase))
+                !string.Equals(request.Role, "Sales", StringComparison.OrdinalIgnoreCase))
             {
-                return ApiResponse<AuthResponseDto>.Failure("Only Admin, Manager, Dispatcher, or Sale roles can be created through this endpoint");
+                return ApiResponse<AuthResponseDto>.Failure("Only Admin, Dispatcher, or Sales roles can be created through this endpoint");
             }
 
             var email = request.Email.Trim().ToLowerInvariant();
@@ -69,8 +68,7 @@ namespace ColdChainX.Application.Services
                 Username = username,
                 FullName = request.FullName.Trim(),
                 Email = email,
-                Phone = request.Phone?.Trim(),
-                RoleId = role.Id,
+                RoleId = role.RoleId,
                 Role = role,
                 Status = ActiveStatus,
                 CreatedAt = DbNow()
@@ -247,8 +245,7 @@ namespace ColdChainX.Application.Services
                 Username = username,
                 FullName = request.FullName.Trim(),
                 Email = email,
-                Phone = request.Phone?.Trim(),
-                RoleId = role.Id,
+                RoleId = role.RoleId,
                 Role = role,
                 Status = ActiveStatus,
                 CreatedAt = DbNow()
@@ -307,7 +304,7 @@ namespace ColdChainX.Application.Services
             if (existingUsername != null)
                 return ApiResponse<AuthResponseDto>.Failure("Username already in use");
 
-            // Get Driver role (ID should be 3 in the database)
+            // Get Driver role
             var role = await _userRepository.GetRoleByNameAsync("Driver");
             if (role == null)
                 return ApiResponse<AuthResponseDto>.Failure("Driver role not found in the system");
@@ -318,8 +315,7 @@ namespace ColdChainX.Application.Services
                 Username = username,
                 FullName = request.FullName.Trim(),
                 Email = email,
-                Phone = request.Phone?.Trim(),
-                RoleId = role.Id,
+                RoleId = role.RoleId,
                 Role = role,
                 Status = ActiveStatus,
                 CreatedAt = DbNow()
@@ -334,10 +330,11 @@ namespace ColdChainX.Application.Services
             user.RefreshToken = refreshToken;
             user.RefreshTokenExpiryTime = DbNow().AddDays(7);
 
-            // Create Driver entity with provided information
+            // Create Driver entity with provided information and link to User account
             var driver = new Driver
             {
                 DriverId = Guid.NewGuid(),
+                UserId = user.UserId,
                 DateOfBirth = request.DateOfBirth,
                 Status = ActiveStatus,
                 CreatedAt = DbNow()
@@ -383,7 +380,7 @@ namespace ColdChainX.Application.Services
             var roles = await _userRepository.GetAllRolesAsync();
             var roleDtos = roles.Select(r => new RoleDto
             {
-                Id = r.Id,
+                Id = r.RoleId,
                 RoleName = r.RoleName,
                 Description = r.Description
             }).ToList();

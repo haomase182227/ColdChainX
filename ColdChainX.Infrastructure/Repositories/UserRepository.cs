@@ -79,10 +79,10 @@ namespace ColdChainX.Infrastructure.Repositories
                 .FirstOrDefaultAsync();
         }
 
-        public async Task<Role?> GetRoleByIdAsync(int roleId)
+        public async Task<Role?> GetRoleByIdAsync(Guid roleId)
         {
             return await _db.Roles
-            .FirstOrDefaultAsync(r => r.Id == roleId);
+            .FirstOrDefaultAsync(r => r.RoleId == roleId);
         }
 
         public async Task<List<Role>> GetAllRolesAsync()

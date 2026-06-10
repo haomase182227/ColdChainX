@@ -33,18 +33,16 @@ namespace ColdChainX.API.Swagger
                                 ["fullName"] = new OpenApiSchema { Type = "string", Description = "Full name (required)" },
                                 ["email"] = new OpenApiSchema { Type = "string", Format = "email", Description = "Email address (required)" },
                                 ["password"] = new OpenApiSchema { Type = "string", Format = "password", Description = "Password (required, min 6 characters)" },
-                                ["phone"] = new OpenApiSchema { Type = "string", Description = "Phone number (optional)" },
                                 ["role"] = new OpenApiSchema 
                                 { 
                                     Type = "string", 
-                                    Description = "Role (required, only Admin, Manager, Dispatcher, or Sale allowed)", 
-                                    Default = new OpenApiString("Manager"),
+                                    Description = "Role (required, only Admin, Dispatcher, or Sales allowed)", 
+                                    Default = new OpenApiString("Dispatcher"),
                                     Enum = new List<IOpenApiAny>
                                     {
                                         new OpenApiString("Admin"),
-                                        new OpenApiString("Manager"),
                                         new OpenApiString("Dispatcher"),
-                                        new OpenApiString("Sale")
+                                        new OpenApiString("Sales")
                                     }
                                 }
                             },
