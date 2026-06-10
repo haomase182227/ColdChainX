@@ -19,17 +19,28 @@ namespace ColdChainX.Application.Services
         private readonly IJwtService _jwtService;
         private readonly IPasswordHasher<User> _passwordHasher;
         private readonly IMapper _mapper;
+        private readonly IDriverRepository _driverRepository;
 
-        public AuthService(IUserRepository userRepository, IJwtService jwtService, IPasswordHasher<User> passwordHasher, IMapper mapper)
+        public AuthService(IUserRepository userRepository, IJwtService jwtService, IPasswordHasher<User> passwordHasher, IMapper mapper, IDriverRepository driverRepository)
         {
             _userRepository = userRepository;
             _jwtService = jwtService;
             _passwordHasher = passwordHasher;
             _mapper = mapper;
+            _driverRepository = driverRepository;
         }
 
         public async Task<ApiResponse<AuthResponseDto>> RegisterAsync(RegisterRequest request)
         {
+            // Validate role - Admin, Manager, Dispatcher, or Sale allowed
+            if (!string.Equals(request.Role, "Admin", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(request.Role, "Manager", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(request.Role, "Dispatcher", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(request.Role, "Sale", StringComparison.OrdinalIgnoreCase))
+            {
+                return ApiResponse<AuthResponseDto>.Failure("Only Admin, Manager, Dispatcher, or Sale roles can be created through this endpoint");
+            }
+
             var email = request.Email.Trim().ToLowerInvariant();
             var username = string.IsNullOrWhiteSpace(request.Username)
                 ? email
@@ -48,7 +59,9 @@ namespace ColdChainX.Application.Services
 
             var role = await _userRepository.GetRoleByNameAsync(request.Role);
             if (role == null)
-                return ApiResponse<AuthResponseDto>.Failure($"Role '{request.Role}' was not found in database");
+            {
+                return ApiResponse<AuthResponseDto>.Failure($"Role '{request.Role}' not found in the system");
+            }
 
             var user = new User
             {
@@ -56,7 +69,8 @@ namespace ColdChainX.Application.Services
                 Username = username,
                 FullName = request.FullName.Trim(),
                 Email = email,
-                RoleId = role.RoleId,
+                Phone = request.Phone?.Trim(),
+                RoleId = role.Id,
                 Role = role,
                 Status = ActiveStatus,
                 CreatedAt = DbNow()
@@ -64,43 +78,22 @@ namespace ColdChainX.Application.Services
 
             user.PasswordHash = _passwordHasher.HashPassword(user, request.Password);
 
+            var accessExpiresAt = DateTime.UtcNow.AddMinutes(60);
+            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt);
             var refreshToken = _jwtService.GenerateRefreshToken();
 
             user.RefreshToken = refreshToken;
             user.RefreshTokenExpiryTime = DbNow().AddDays(7);
 
-            Customer? customer = null;
-            if (string.Equals(request.Role, "Customer", StringComparison.OrdinalIgnoreCase))
-            {
-                customer = new Customer
-                {
-                    CustomerId = Guid.NewGuid(),
-                    CompanyName = string.Empty,
-                    TaxCode = GenerateTemporaryTaxCode(user.UserId),
-                    Email = email,
-                    PaymentTerm = 30,
-                    Status = ActiveStatus,
-                    CreatedAt = DbNow()
-                };
-
-                await _userRepository.AddCustomerAsync(customer);
-            }
-
             await _userRepository.AddAsync(user);
             await _userRepository.SaveChangesAsync();
 
-            var accessExpiresAt = DateTime.UtcNow.AddMinutes(60);
-            var driverId = await ResolveDriverIdAsync(user);
-            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt, customer?.CustomerId, driverId);
-
             var dto = _mapper.Map<AuthResponseDto>(user);
-            dto.CustomerId = customer?.CustomerId;
-            dto.DriverId = driverId;
             dto.AccessToken = accessToken;
             dto.RefreshToken = refreshToken;
             dto.AccessTokenExpiresAt = accessExpiresAt;
 
-            return ApiResponse<AuthResponseDto>.SuccessResponse(dto, "Registration successful");
+            return ApiResponse<AuthResponseDto>.SuccessResponse(dto, $"{request.Role} account created successfully");
         }
 
         public async Task<ApiResponse<AuthResponseDto>> LoginAsync(LoginRequest request)
@@ -117,9 +110,7 @@ namespace ColdChainX.Application.Services
                 return ApiResponse<AuthResponseDto>.Failure("Invalid credentials");
 
             var accessExpiresAt = DateTime.UtcNow.AddMinutes(60);
-            var customerId = await ResolveCustomerIdAsync(user);
-            var driverId = await ResolveDriverIdAsync(user);
-            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt, customerId, driverId);
+            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt);
             var refreshToken = _jwtService.GenerateRefreshToken();
 
             user.RefreshToken = refreshToken;
@@ -129,8 +120,6 @@ namespace ColdChainX.Application.Services
             await _userRepository.SaveChangesAsync();
 
             var dto = _mapper.Map<AuthResponseDto>(user);
-            dto.CustomerId = customerId;
-            dto.DriverId = driverId;
             dto.AccessToken = accessToken;
             dto.RefreshToken = refreshToken;
             dto.AccessTokenExpiresAt = accessExpiresAt;
@@ -147,9 +136,7 @@ namespace ColdChainX.Application.Services
                 return ApiResponse<AuthResponseDto>.Failure("Refresh token expired");
 
             var accessExpiresAt = DateTime.UtcNow.AddMinutes(60);
-            var customerId = await ResolveCustomerIdAsync(user);
-            var driverId = await ResolveDriverIdAsync(user);
-            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt, customerId, driverId);
+            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt);
             var newRefreshToken = _jwtService.GenerateRefreshToken();
 
             user.RefreshToken = newRefreshToken;
@@ -159,8 +146,6 @@ namespace ColdChainX.Application.Services
             await _userRepository.SaveChangesAsync();
 
             var dto = _mapper.Map<AuthResponseDto>(user);
-            dto.CustomerId = customerId;
-            dto.DriverId = driverId;
             dto.AccessToken = accessToken;
             dto.RefreshToken = newRefreshToken;
             dto.AccessTokenExpiresAt = accessExpiresAt;
@@ -227,29 +212,183 @@ namespace ColdChainX.Application.Services
         private static bool IsInactive(User user)
             => string.Equals(user.Status, InactiveStatus, StringComparison.OrdinalIgnoreCase);
 
-        private async Task<Guid?> ResolveCustomerIdAsync(User user)
-        {
-            if (!string.Equals(user.Role?.RoleName, "Customer", StringComparison.OrdinalIgnoreCase))
-                return null;
-
-            if (string.IsNullOrWhiteSpace(user.Email))
-                return null;
-
-            return await _userRepository.GetCustomerIdByEmailAsync(user.Email);
-        }
-
-        private async Task<Guid?> ResolveDriverIdAsync(User user)
-        {
-            if (!string.Equals(user.Role?.RoleName, "Driver", StringComparison.OrdinalIgnoreCase))
-                return null;
-
-            return await _userRepository.GetDriverIdByUserIdAsync(user.UserId);
-        }
-
         private static DateTime DbNow()
             => DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
 
         private static string GenerateTemporaryTaxCode(Guid userId)
             => $"TEMP{userId:N}"[..20];
+
+        public async Task<ApiResponse<AuthResponseDto>> CreateCustomerAsync(CreateCustomerRequest request)
+        {
+            var email = request.Email.Trim().ToLowerInvariant();
+            var username = string.IsNullOrWhiteSpace(request.Username)
+                ? email
+                : request.Username.Trim().ToLowerInvariant();
+
+            if (username.Length > 50)
+                return ApiResponse<AuthResponseDto>.Failure("Username must not exceed 50 characters");
+
+            var existing = await _userRepository.GetByEmailAsync(email);
+            if (existing != null)
+                return ApiResponse<AuthResponseDto>.Failure("Email already in use");
+
+            var existingUsername = await _userRepository.GetByUsernameAsync(username);
+            if (existingUsername != null)
+                return ApiResponse<AuthResponseDto>.Failure("Username already in use");
+
+            // Get Customer role (ID should be 2 in the database)
+            var role = await _userRepository.GetRoleByNameAsync("Customer");
+            if (role == null)
+                return ApiResponse<AuthResponseDto>.Failure("Customer role not found in the system");
+
+            var user = new User
+            {
+                UserId = Guid.NewGuid(),
+                Username = username,
+                FullName = request.FullName.Trim(),
+                Email = email,
+                Phone = request.Phone?.Trim(),
+                RoleId = role.Id,
+                Role = role,
+                Status = ActiveStatus,
+                CreatedAt = DbNow()
+            };
+
+            user.PasswordHash = _passwordHasher.HashPassword(user, request.Password);
+
+            var accessExpiresAt = DateTime.UtcNow.AddMinutes(60);
+            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt);
+            var refreshToken = _jwtService.GenerateRefreshToken();
+
+            user.RefreshToken = refreshToken;
+            user.RefreshTokenExpiryTime = DbNow().AddDays(7);
+
+            // Create Customer entity with provided information
+            var customer = new Customer
+            {
+                CustomerId = Guid.NewGuid(),
+                CompanyName = request.CompanyName.Trim(),
+                TaxCode = request.TaxCode.Trim(),
+                Address = request.Address?.Trim(),
+                Email = email,
+                PaymentTerm = request.PaymentTerm ?? 30,
+                Status = ActiveStatus,
+                CreatedAt = DbNow()
+            };
+
+            await _userRepository.AddCustomerAsync(customer);
+            await _userRepository.AddAsync(user);
+            await _userRepository.SaveChangesAsync();
+
+            var dto = _mapper.Map<AuthResponseDto>(user);
+            dto.CustomerId = customer.CustomerId;
+            dto.AccessToken = accessToken;
+            dto.RefreshToken = refreshToken;
+            dto.AccessTokenExpiresAt = accessExpiresAt;
+
+            return ApiResponse<AuthResponseDto>.SuccessResponse(dto, "Customer account created successfully");
+        }
+
+        public async Task<ApiResponse<AuthResponseDto>> CreateDriverAsync(CreateDriverRequest request)
+        {
+            var email = request.Email.Trim().ToLowerInvariant();
+            var username = string.IsNullOrWhiteSpace(request.Username)
+                ? email
+                : request.Username.Trim().ToLowerInvariant();
+
+            if (username.Length > 50)
+                return ApiResponse<AuthResponseDto>.Failure("Username must not exceed 50 characters");
+
+            var existing = await _userRepository.GetByEmailAsync(email);
+            if (existing != null)
+                return ApiResponse<AuthResponseDto>.Failure("Email already in use");
+
+            var existingUsername = await _userRepository.GetByUsernameAsync(username);
+            if (existingUsername != null)
+                return ApiResponse<AuthResponseDto>.Failure("Username already in use");
+
+            // Get Driver role (ID should be 3 in the database)
+            var role = await _userRepository.GetRoleByNameAsync("Driver");
+            if (role == null)
+                return ApiResponse<AuthResponseDto>.Failure("Driver role not found in the system");
+
+            var user = new User
+            {
+                UserId = Guid.NewGuid(),
+                Username = username,
+                FullName = request.FullName.Trim(),
+                Email = email,
+                Phone = request.Phone?.Trim(),
+                RoleId = role.Id,
+                Role = role,
+                Status = ActiveStatus,
+                CreatedAt = DbNow()
+            };
+
+            user.PasswordHash = _passwordHasher.HashPassword(user, request.Password);
+
+            var accessExpiresAt = DateTime.UtcNow.AddMinutes(60);
+            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt);
+            var refreshToken = _jwtService.GenerateRefreshToken();
+
+            user.RefreshToken = refreshToken;
+            user.RefreshTokenExpiryTime = DbNow().AddDays(7);
+
+            // Create Driver entity with provided information
+            var driver = new Driver
+            {
+                DriverId = Guid.NewGuid(),
+                DateOfBirth = request.DateOfBirth,
+                Status = ActiveStatus,
+                CreatedAt = DbNow()
+            };
+
+            await _driverRepository.AddAsync(driver);
+
+            // Create Driver License if provided
+            if (!string.IsNullOrWhiteSpace(request.LicenseNumber) &&
+                !string.IsNullOrWhiteSpace(request.LicenseClass) &&
+                request.IssueDate.HasValue &&
+                request.ExpiryDate.HasValue)
+            {
+                var license = new DriverLicense
+                {
+                    LicenseId = Guid.NewGuid(),
+                    DriverId = driver.DriverId,
+                    LicenseNumber = request.LicenseNumber.Trim(),
+                    LicenseClass = request.LicenseClass.Trim(),
+                    IssueDate = request.IssueDate.Value,
+                    ExpiryDate = request.ExpiryDate.Value,
+                    DocumentUrl = request.DocumentUrl ?? string.Empty,
+                    Status = ActiveStatus,
+                    CreatedAt = DbNow()
+                };
+
+                await _driverRepository.AddLicenseAsync(license);
+            }
+
+            await _userRepository.AddAsync(user);
+            await _userRepository.SaveChangesAsync();
+
+            var dto = _mapper.Map<AuthResponseDto>(user);
+            dto.AccessToken = accessToken;
+            dto.RefreshToken = refreshToken;
+            dto.AccessTokenExpiresAt = accessExpiresAt;
+
+            return ApiResponse<AuthResponseDto>.SuccessResponse(dto, "Driver account created successfully");
+        }
+
+        public async Task<ApiResponse<List<RoleDto>>> GetAllRolesAsync()
+        {
+            var roles = await _userRepository.GetAllRolesAsync();
+            var roleDtos = roles.Select(r => new RoleDto
+            {
+                Id = r.Id,
+                RoleName = r.RoleName,
+                Description = r.Description
+            }).ToList();
+
+            return ApiResponse<List<RoleDto>>.SuccessResponse(roleDtos, "Roles retrieved successfully");
+        }
     }
 }

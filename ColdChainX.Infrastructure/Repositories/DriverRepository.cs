@@ -35,6 +35,11 @@ namespace ColdChainX.Infrastructure.Repositories
             await _db.Drivers.AddAsync(driver);
         }
 
+        public async Task AddLicenseAsync(DriverLicense license)
+        {
+            await _db.DriverLicenses.AddAsync(license);
+        }
+
         public async Task UpdateAsync(Driver driver)
         {
             _db.Drivers.Update(driver);

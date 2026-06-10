@@ -5,7 +5,7 @@ namespace ColdChainX.Application.Interfaces
 {
     public interface IJwtService
     {
-        string GenerateAccessToken(User user, DateTime expiresAt, Guid? customerId = null, Guid? driverId = null);
+        string GenerateAccessToken(User user, DateTime expiresAt);
         string GenerateRefreshToken();
     }
 }

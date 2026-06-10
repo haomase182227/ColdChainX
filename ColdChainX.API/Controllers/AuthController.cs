@@ -20,9 +20,41 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] RegisterRequest request)
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> Register([FromForm] RegisterRequest request)
         {
             var result = await _authService.RegisterAsync(request);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        // Get all available roles for registration
+        [HttpGet("roles")]
+        public async Task<IActionResult> GetRoles()
+        {
+            var result = await _authService.GetAllRolesAsync();
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        // Admin endpoint: create a customer user and customer record with role assigned
+        [Authorize(Roles = "Admin,ADMIN")]
+        [HttpPost("create-customer")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> CreateCustomer([FromForm] CreateCustomerRequest request)
+        {
+            var result = await _authService.CreateCustomerAsync(request);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        // Admin endpoint: create a driver user and driver record with role assigned
+        [Authorize(Roles = "Admin,ADMIN")]
+        [HttpPost("create-driver")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> CreateDriver([FromForm] CreateDriverRequest request)
+        {
+            var result = await _authService.CreateDriverAsync(request);
             if (!result.Success) return BadRequest(result);
             return Ok(result);
         }

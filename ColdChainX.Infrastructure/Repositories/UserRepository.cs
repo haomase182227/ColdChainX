@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using ColdChainX.Core.Entities;
@@ -75,6 +77,22 @@ namespace ColdChainX.Infrastructure.Repositories
                 .Where(d => d.UserId == userId)
                 .Select(d => (Guid?)d.DriverId)
                 .FirstOrDefaultAsync();
+        }
+
+        public async Task<Role?> GetRoleByIdAsync(int roleId)
+        {
+            return await _db.Roles
+            .FirstOrDefaultAsync(r => r.Id == roleId);
+        }
+
+        public async Task<List<Role>> GetAllRolesAsync()
+        {
+            return await _db.Roles.ToListAsync();
+        }
+
+        public async Task AddRoleAsync(Role role)
+        {
+            await _db.Roles.AddAsync(role);
         }
 
         public async Task UpdateAsync(User user)
