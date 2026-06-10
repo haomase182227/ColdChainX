@@ -6,6 +6,7 @@ using Microsoft.OpenApi.Models;
 using ColdChainX.API.Extensions;
 using ColdChainX.API.Middleware;
 using ColdChainX.API.Models;
+using ColdChainX.API.Services;
 using ColdChainX.API.Swagger;
 using ColdChainX.API.Workers;
 using ColdChainX.Infrastructure.Hubs;
@@ -23,7 +24,9 @@ builder.Services.AddSingleton(Channel.CreateUnbounded<TelemetryData>(new Unbound
     SingleReader = false,
     SingleWriter = false
 }));
+builder.Services.AddSingleton<RedisService>();
 builder.Services.AddHostedService<TelemetryMqttWorker>();
+builder.Services.AddHostedService<TelemetryProcessorWorker>();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
