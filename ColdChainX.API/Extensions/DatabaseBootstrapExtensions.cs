@@ -134,6 +134,61 @@ WHERE NOT EXISTS (
                 logger.LogInformation("Seeding roles (if missing)...");
                 await db.Database.ExecuteSqlRawAsync(sqlSeed);
                 logger.LogInformation("Roles seeding executed.");
+
+                var sqlEnsureTransportOrder = @"DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = 'transport_orders'
+    ) THEN
+        CREATE TABLE public.transport_orders (
+            order_id uuid NOT NULL DEFAULT gen_random_uuid(),
+            tracking_code character varying(50) NOT NULL,
+            customer_id uuid NULL,
+            item_name character varying(150) NOT NULL,
+            category character varying(50) NOT NULL,
+            temp_condition character varying(20) NOT NULL,
+            expected_weight_kg numeric(10,2) NOT NULL,
+            actual_weight_kg numeric(10,2) NOT NULL,
+            expected_cbm numeric(8,2) NOT NULL,
+            actual_cbm numeric(8,2) NULL,
+            pickup_location uuid NULL,
+            dest_location uuid NULL,
+            cargo_value numeric(15,2) NOT NULL,
+            status character varying(30) NOT NULL,
+            master_trip_id uuid NULL,
+            quantity integer NOT NULL DEFAULT 1,
+            packing_type character varying(50) NOT NULL DEFAULT 'Thung',
+            created_at timestamp without time zone NULL DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT transport_orders_pkey PRIMARY KEY (order_id)
+        );
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'transport_orders' AND column_name = 'quantity'
+    ) THEN
+        ALTER TABLE public.transport_orders ADD COLUMN quantity integer NOT NULL DEFAULT 1;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'transport_orders' AND column_name = 'packing_type'
+    ) THEN
+        ALTER TABLE public.transport_orders ADD COLUMN packing_type character varying(50) NOT NULL DEFAULT 'Thung';
+    END IF;
+
+    CREATE INDEX IF NOT EXISTS ""IX_transport_orders_customer_id""
+        ON public.transport_orders(customer_id);
+
+    CREATE UNIQUE INDEX IF NOT EXISTS transport_orders_tracking_code_key
+        ON public.transport_orders(tracking_code);
+END $$;";
+
+                logger.LogInformation("Ensuring transport_orders table exists...");
+                await db.Database.ExecuteSqlRawAsync(sqlEnsureTransportOrder);
+                logger.LogInformation("transport_orders table ensured.");
             }
             catch (Exception ex)
             {
