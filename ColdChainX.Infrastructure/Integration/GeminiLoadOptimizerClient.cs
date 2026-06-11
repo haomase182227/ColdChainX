@@ -23,8 +23,6 @@ public class GeminiLoadOptimizerClient
             throw new InvalidOperationException("Gemini API Key is not configured.");
         }
 
-        var endpoint = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key={_apiKey}";
-
         // Construct a prompt based on vehicle dimensions (simulated from MaxCbm) and orders
         // Note: For actual 3D layout, we mock dimensions L x W x H if they are not present.
         var vehicleLength = 3.0m;
@@ -60,6 +58,15 @@ Please provide the loading instructions in JSON format indicating if they all fi
   ]
 }";
 
+        var modelsToTry = new[] 
+        { 
+            "gemini-3.1-pro-preview", 
+            "gemini-3-pro-preview", 
+            "gemini-2.5-pro", 
+            "gemini-2.5-flash",
+            "gemini-1.5-pro"
+        };
+
         var requestBody = new
         {
             contents = new[]
@@ -68,10 +75,39 @@ Please provide the loading instructions in JSON format indicating if they all fi
             }
         };
 
-        var response = await _httpClient.PostAsJsonAsync(endpoint, requestBody);
-        response.EnsureSuccessStatusCode();
+        HttpResponseMessage response = null;
+        string responseContent = null;
+        bool success = false;
+        var errors = new List<string>();
 
-        var responseContent = await response.Content.ReadAsStringAsync();
+        foreach (var model in modelsToTry)
+        {
+            var endpoint = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={_apiKey}";
+            try
+            {
+                response = await _httpClient.PostAsJsonAsync(endpoint, requestBody);
+                if (response.IsSuccessStatusCode)
+                {
+                    responseContent = await response.Content.ReadAsStringAsync();
+                    success = true;
+                    break;
+                }
+                else
+                {
+                    var err = await response.Content.ReadAsStringAsync();
+                    errors.Add($"Model {model} failed with {(int)response.StatusCode}: {err}");
+                }
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"Model {model} threw exception: {ex.Message}");
+            }
+        }
+
+        if (!success || string.IsNullOrEmpty(responseContent))
+        {
+            throw new Exception($"All Gemini models failed. Errors:\n{string.Join("\n", errors)}");
+        }
         
         // Extract the JSON text from the response
         try

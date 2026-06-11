@@ -79,6 +79,52 @@ public class DispatchController : ControllerBase
             return BadRequest(new { Error = ex.Message });
         }
     }
+
+    [AllowAnonymous]
+    [HttpGet("test-gemini")]
+    public async Task<IActionResult> TestGemini([FromServices] ColdChainX.Infrastructure.Integration.GeminiLoadOptimizerClient geminiClient)
+    {
+        try
+        {
+            var mockVehicle = new ColdChainX.Core.Entities.Vehicle
+            {
+                VehicleId = Guid.NewGuid(),
+                MaxCbm = 10.26m,
+                MaxWeight = 5000m
+            };
+
+            var mockOrders = new List<ColdChainX.Core.Entities.TransportOrder>
+            {
+                new ColdChainX.Core.Entities.TransportOrder
+                {
+                    OrderId = Guid.NewGuid(),
+                    ItemName = "Frozen Fish",
+                    Quantity = 50,
+                    ExpectedCbm = 2.5m,
+                    ExpectedWeightKg = 1000m,
+                    DestLocation = Guid.NewGuid()
+                },
+                new ColdChainX.Core.Entities.TransportOrder
+                {
+                    OrderId = Guid.NewGuid(),
+                    ItemName = "Ice Cream",
+                    Quantity = 100,
+                    ExpectedCbm = 1.0m,
+                    ExpectedWeightKg = 500m,
+                    DestLocation = Guid.NewGuid()
+                }
+            };
+
+            var routeSequence = new List<Guid> { mockOrders[1].DestLocation!.Value, mockOrders[0].DestLocation!.Value };
+
+            var plan = await geminiClient.OptimizeLoadPlanAsync(mockVehicle, mockOrders, routeSequence);
+            return Ok(new { Message = "Gemini API Test Success", Plan = plan });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { Error = ex.Message });
+        }
+    }
 }
 
 public class PlanLoadRequest
