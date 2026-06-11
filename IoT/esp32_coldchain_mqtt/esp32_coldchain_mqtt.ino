@@ -4,13 +4,14 @@
 #include <DallasTemperature.h>
 #include <ArduinoJson.h>
 #include <time.h>
+#include <TinyGPSPlus.h>
+#include <HardwareSerial.h>
 
 // ===== Wi-Fi =====
 const char* WIFI_SSID = "test";
 const char* WIFI_PASSWORD = "12345678";
 
 // ===== MQTT Broker =====
-// const char* MQTT_HOST = "10.220.168.115";
 const char* MQTT_HOST = "coldchainx-mqtt-demo.hycub5daehamhke8.southeastasia.azurecontainer.io";
 const uint16_t MQTT_PORT = 1883;
 const char* MQTT_USERNAME = "esp32user";
@@ -22,6 +23,11 @@ const uint8_t DS18B20_PIN = 4; // D4 / GPIO4
 const uint32_t PUBLISH_INTERVAL_MS = 15000;
 const uint8_t MQTT_PUBLISH_QOS = 1;
 
+// ===== GPS NEO-6M =====
+const uint8_t RXPin = 26; // Rút dây cắm sang chân D26
+const uint8_t TXPin = 27; // Rút dây cắm sang chân D27
+const uint32_t GPSBaud = 9600;
+
 // Door sensor simulation.
 // Change this manually or replace with a real GPIO input later.
 bool doorOpen = false;
@@ -31,9 +37,13 @@ PubSubClient mqttClient(wifiClient);
 OneWire oneWire(DS18B20_PIN);
 DallasTemperature sensors(&oneWire);
 
+TinyGPSPlus gps;
+HardwareSerial gpsSerial(1); // Sử dụng cổng Hardware UART1 của ESP32
+
 uint32_t lastPublishMs = 0;
 uint16_t nextPacketId = 1;
 
+// Khai báo nguyên mẫu hàm
 void connectWifi();
 void connectMqtt();
 void publishTelemetry();
@@ -49,6 +59,10 @@ void setup() {
   Serial.begin(115200);
   delay(500);
 
+  // Khởi động cổng giao tiếp với GPS
+  gpsSerial.begin(GPSBaud, SERIAL_8N1, RXPin, TXPin);
+  Serial.println("GPS Serial started at baud 9600");
+
   sensors.begin();
 
   connectWifi();
@@ -62,6 +76,11 @@ void setup() {
 }
 
 void loop() {
+  // Liên tục đọc dữ liệu thô từ GPS và nạp vào thư viện TinyGPSPlus
+  while (gpsSerial.available() > 0) {
+    gps.encode(gpsSerial.read());
+  }
+
   if (WiFi.status() != WL_CONNECTED) {
     connectWifi();
   }
@@ -135,13 +154,37 @@ void publishTelemetry() {
     return;
   }
 
-  StaticJsonDocument<256> doc;
+  // --- BẮT ĐẦU PHẦN ĐỌC DỮ LIỆU GPS ---
+  float latitude = 0.0;
+  float longitude = 0.0;
+  bool isGpsValid = false;
+
+  if (gps.location.isValid() && gps.location.isUpdated()) {
+    latitude = gps.location.lat();
+    longitude = gps.location.lng();
+    isGpsValid = true;
+  }
+  // --- KẾT THÚC PHẦN ĐỌC DỮ LIỆU GPS ---
+
+  // Khởi tạo JSON (tăng size lên 512 để chứa thêm tọa độ)
+  StaticJsonDocument<512> doc;
   doc["DeviceId"] = DEVICE_ID;
   doc["TempC"] = roundf(tempC * 10.0f) / 10.0f;
   doc["DoorOpen"] = doorOpen;
+  
+  // Gắn toạ độ vào JSON nếu có sóng
+  if (isGpsValid) {
+      doc["Latitude"] = latitude;
+      doc["Longitude"] = longitude;
+  } else {
+      // Nếu chưa có sóng GPS, gửi Null
+      doc["Latitude"] = nullptr; 
+      doc["Longitude"] = nullptr;
+  }
+  
   doc["Timestamp"] = getIsoTimestamp();
 
-  char payload[256];
+  char payload[512];
   size_t length = serializeJson(doc, payload, sizeof(payload));
 
   char topic[96];
