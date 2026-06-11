@@ -1251,11 +1251,11 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<TransportOrder>(entity =>
         {
-            entity.HasKey(e => e.OrderId).HasName("transport_order_pkey");
+            entity.HasKey(e => e.OrderId).HasName("transport_orders_pkey");
 
-            entity.ToTable("transport_order");
+            entity.ToTable("transport_orders");
 
-            entity.HasIndex(e => e.TrackingCode, "transport_order_tracking_code_key").IsUnique();
+            entity.HasIndex(e => e.TrackingCode, "transport_orders_tracking_code_key").IsUnique();
 
             entity.Property(e => e.OrderId)
                 .HasDefaultValueSql("gen_random_uuid()")
