@@ -1078,25 +1078,21 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<Role>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("roles_pkey");
+            entity.HasKey(e => e.RoleId).HasName("roles_pkey");
 
             entity.ToTable("roles");
 
             entity.HasIndex(e => e.RoleName, "roles_role_name_key").IsUnique();
 
-            entity.Property(e => e.Id)
-                .ValueGeneratedOnAdd()
-                .HasColumnName("id");
+            entity.Property(e => e.RoleId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("role_id");
             entity.Property(e => e.Description)
                 .HasMaxLength(255)
                 .HasColumnName("description");
             entity.Property(e => e.RoleName)
                 .HasMaxLength(50)
                 .HasColumnName("role_name");
-            entity.Property(e => e.CreatedAt)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP")
-                .HasColumnType("timestamp without time zone")
-                .HasColumnName("created_at");
 
             entity.HasMany(d => d.Perms).WithMany(p => p.Roles)
                 .UsingEntity<Dictionary<string, object>>(
@@ -1113,7 +1109,7 @@ public partial class ApplicationDbContext : DbContext
                     {
                         j.HasKey("RoleId", "PermId").HasName("role_permissions_pkey");
                         j.ToTable("role_permissions");
-                        j.IndexerProperty<int>("RoleId").HasColumnName("role_id");
+                        j.IndexerProperty<Guid>("RoleId").HasColumnName("role_id");
                         j.IndexerProperty<Guid>("PermId").HasColumnName("perm_id");
                     });
         });
@@ -1250,11 +1246,11 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<TransportOrder>(entity =>
         {
-            entity.HasKey(e => e.OrderId).HasName("transport_order_pkey");
+            entity.HasKey(e => e.OrderId).HasName("transport_orders_pkey");
 
-            entity.ToTable("transport_order");
+            entity.ToTable("transport_orders");
 
-            entity.HasIndex(e => e.TrackingCode, "transport_order_tracking_code_key").IsUnique();
+            entity.HasIndex(e => e.TrackingCode, "transport_orders_tracking_code_key").IsUnique();
 
             entity.Property(e => e.OrderId)
                 .HasDefaultValueSql("gen_random_uuid()")
@@ -1390,9 +1386,6 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.FullName)
                 .HasMaxLength(100)
                 .HasColumnName("full_name");
-            entity.Property(e => e.Phone)
-                .HasMaxLength(20)
-                .HasColumnName("phone");
             entity.Property(e => e.PasswordHash)
                 .HasMaxLength(255)
                 .HasColumnName("password_hash");
@@ -1403,7 +1396,8 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.RefreshTokenExpiryTime)
                 .HasColumnType("timestamp with time zone")
                 .HasColumnName("refresh_token_expiry_time");
-            entity.Property(e => e.RoleId).HasColumnName("role_id");
+            entity.Property(e => e.RoleId)
+                .HasColumnName("role_id");
             entity.Property(e => e.Status)
                 .HasMaxLength(20)
                 .HasDefaultValueSql("'ACTIVE'::character varying")

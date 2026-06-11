@@ -5,8 +5,12 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi.Models;
 using ColdChainX.API.Extensions;
 using ColdChainX.API.Middleware;
+using ColdChainX.API.Models;
+using ColdChainX.API.Services;
 using ColdChainX.API.Swagger;
+using ColdChainX.API.Workers;
 using ColdChainX.Infrastructure.Hubs;
+using System.Threading.Channels;
 
 var builder = WebApplication.CreateBuilder(args);
 DotEnvLoader.Load(Path.Combine(builder.Environment.ContentRootPath, ".env"));
@@ -15,6 +19,14 @@ DotEnvLoader.Load(Path.GetFullPath(Path.Combine(builder.Environment.ContentRootP
 var configuration = builder.Configuration;
 
 builder.Services.AddProjectServices(configuration);
+builder.Services.AddSingleton(Channel.CreateUnbounded<TelemetryData>(new UnboundedChannelOptions
+{
+    SingleReader = false,
+    SingleWriter = false
+}));
+builder.Services.AddSingleton<RedisService>();
+builder.Services.AddHostedService<TelemetryMqttWorker>();
+builder.Services.AddHostedService<TelemetryProcessorWorker>();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>

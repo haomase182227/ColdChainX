@@ -32,13 +32,12 @@ namespace ColdChainX.Application.Services
 
         public async Task<ApiResponse<AuthResponseDto>> RegisterAsync(RegisterRequest request)
         {
-            // Validate role - Admin, Manager, Dispatcher, or Sale allowed
+            // Validate role - chỉ Admin, Dispatcher, Sales được tạo qua endpoint này
             if (!string.Equals(request.Role, "Admin", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(request.Role, "Manager", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(request.Role, "Dispatcher", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(request.Role, "Sale", StringComparison.OrdinalIgnoreCase))
+                !string.Equals(request.Role, "Sales", StringComparison.OrdinalIgnoreCase))
             {
-                return ApiResponse<AuthResponseDto>.Failure("Only Admin, Manager, Dispatcher, or Sale roles can be created through this endpoint");
+                return ApiResponse<AuthResponseDto>.Failure("Only Admin, Dispatcher, or Sales roles can be created through this endpoint");
             }
 
             var email = request.Email.Trim().ToLowerInvariant();
@@ -69,8 +68,7 @@ namespace ColdChainX.Application.Services
                 Username = username,
                 FullName = request.FullName.Trim(),
                 Email = email,
-                Phone = request.Phone?.Trim(),
-                RoleId = role.Id,
+                RoleId = role.RoleId,
                 Role = role,
                 Status = ActiveStatus,
                 CreatedAt = DbNow()
@@ -110,7 +108,8 @@ namespace ColdChainX.Application.Services
                 return ApiResponse<AuthResponseDto>.Failure("Invalid credentials");
 
             var accessExpiresAt = DateTime.UtcNow.AddMinutes(60);
-            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt);
+            var customerId = await ResolveCustomerIdForTokenAsync(user);
+            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt, customerId);
             var refreshToken = _jwtService.GenerateRefreshToken();
 
             user.RefreshToken = refreshToken;
@@ -120,6 +119,7 @@ namespace ColdChainX.Application.Services
             await _userRepository.SaveChangesAsync();
 
             var dto = _mapper.Map<AuthResponseDto>(user);
+            dto.CustomerId = customerId;
             dto.AccessToken = accessToken;
             dto.RefreshToken = refreshToken;
             dto.AccessTokenExpiresAt = accessExpiresAt;
@@ -136,7 +136,8 @@ namespace ColdChainX.Application.Services
                 return ApiResponse<AuthResponseDto>.Failure("Refresh token expired");
 
             var accessExpiresAt = DateTime.UtcNow.AddMinutes(60);
-            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt);
+            var customerId = await ResolveCustomerIdForTokenAsync(user);
+            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt, customerId);
             var newRefreshToken = _jwtService.GenerateRefreshToken();
 
             user.RefreshToken = newRefreshToken;
@@ -146,6 +147,7 @@ namespace ColdChainX.Application.Services
             await _userRepository.SaveChangesAsync();
 
             var dto = _mapper.Map<AuthResponseDto>(user);
+            dto.CustomerId = customerId;
             dto.AccessToken = accessToken;
             dto.RefreshToken = newRefreshToken;
             dto.AccessTokenExpiresAt = accessExpiresAt;
@@ -247,8 +249,7 @@ namespace ColdChainX.Application.Services
                 Username = username,
                 FullName = request.FullName.Trim(),
                 Email = email,
-                Phone = request.Phone?.Trim(),
-                RoleId = role.Id,
+                RoleId = role.RoleId,
                 Role = role,
                 Status = ActiveStatus,
                 CreatedAt = DbNow()
@@ -256,12 +257,6 @@ namespace ColdChainX.Application.Services
 
             user.PasswordHash = _passwordHasher.HashPassword(user, request.Password);
 
-            var accessExpiresAt = DateTime.UtcNow.AddMinutes(60);
-            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt);
-            var refreshToken = _jwtService.GenerateRefreshToken();
-
-            user.RefreshToken = refreshToken;
-            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
 
             // Create Customer entity with provided information
             var customer = new Customer
@@ -275,6 +270,13 @@ namespace ColdChainX.Application.Services
                 Status = ActiveStatus,
                 CreatedAt = DbNow()
             };
+
+            var accessExpiresAt = DateTime.UtcNow.AddMinutes(60);
+            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt, customer.CustomerId);
+            var refreshToken = _jwtService.GenerateRefreshToken();
+
+            user.RefreshToken = refreshToken;
+            user.RefreshTokenExpiryTime = DbNow().AddDays(7);
 
             await _userRepository.AddCustomerAsync(customer);
             await _userRepository.AddAsync(user);
@@ -307,7 +309,7 @@ namespace ColdChainX.Application.Services
             if (existingUsername != null)
                 return ApiResponse<AuthResponseDto>.Failure("Username already in use");
 
-            // Get Driver role (ID should be 3 in the database)
+            // Get Driver role
             var role = await _userRepository.GetRoleByNameAsync("Driver");
             if (role == null)
                 return ApiResponse<AuthResponseDto>.Failure("Driver role not found in the system");
@@ -318,8 +320,7 @@ namespace ColdChainX.Application.Services
                 Username = username,
                 FullName = request.FullName.Trim(),
                 Email = email,
-                Phone = request.Phone?.Trim(),
-                RoleId = role.Id,
+                RoleId = role.RoleId,
                 Role = role,
                 Status = ActiveStatus,
                 CreatedAt = DbNow()
@@ -334,10 +335,11 @@ namespace ColdChainX.Application.Services
             user.RefreshToken = refreshToken;
             user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
 
-            // Create Driver entity with provided information
+            // Create Driver entity with provided information and link to User account
             var driver = new Driver
             {
                 DriverId = Guid.NewGuid(),
+                UserId = user.UserId,
                 DateOfBirth = request.DateOfBirth,
                 Status = ActiveStatus,
                 CreatedAt = DbNow()
@@ -378,12 +380,27 @@ namespace ColdChainX.Application.Services
             return ApiResponse<AuthResponseDto>.SuccessResponse(dto, "Driver account created successfully");
         }
 
+        private async Task<Guid?> ResolveCustomerIdForTokenAsync(User user)
+        {
+            if (!string.Equals(user.Role?.RoleName, "Customer", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            if (string.IsNullOrWhiteSpace(user.Email))
+            {
+                return null;
+            }
+
+            return await _userRepository.GetCustomerIdByEmailAsync(user.Email);
+        }
+
         public async Task<ApiResponse<List<RoleDto>>> GetAllRolesAsync()
         {
             var roles = await _userRepository.GetAllRolesAsync();
             var roleDtos = roles.Select(r => new RoleDto
             {
-                Id = r.Id,
+                Id = r.RoleId,
                 RoleName = r.RoleName,
                 Description = r.Description
             }).ToList();
