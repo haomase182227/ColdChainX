@@ -87,6 +87,11 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IPdfService, SimplePdfService>();
             services.AddScoped<IContractService, ContractService>();
             services.AddScoped<INotificationService, NotificationService>();
+            
+            // Dispatch and Load Planning
+            services.AddHttpClient<ColdChainX.Infrastructure.Integration.GeminiLoadOptimizerClient>();
+            services.AddScoped<IDispatchService, DispatchService>();
+
             services.AddSignalR();
 
             services.AddAutoMapper(typeof(MappingProfile));
