@@ -38,4 +38,6 @@ public partial class Warehouse
     public Guid? DeletedBy { get; set; }
 
     public virtual ICollection<WarehouseReceipt> WarehouseReceipts { get; set; } = new List<WarehouseReceipt>();
+
+    public virtual ICollection<WarehouseZone> WarehouseZones { get; set; } = new List<WarehouseZone>();
 }
