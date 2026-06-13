@@ -210,7 +210,10 @@ namespace ColdChainX.Infrastructure.Services
                     Barcode = barcode,
                     QrCode = qrCode,
                     ConditionStatus = string.IsNullOrWhiteSpace(item.ConditionStatus) ? "GOOD" : item.ConditionStatus.Trim(),
-                    Note = item.Note?.Trim()
+                    Note = item.Note?.Trim(),
+                    BatchNumber = item.BatchNumber?.Trim(),
+                    ManufacturedDate = item.ManufacturedDate,
+                    ExpiryDate = item.ExpiryDate
                 };
 
                 await _receiptRepository.AddItemAsync(receiptItem);
@@ -228,125 +231,285 @@ namespace ColdChainX.Infrastructure.Services
 
         public async Task<ApiResponse<WarehouseReceiptResponse>> CompleteInboundAsync(Guid orderId)
         {
-            var receipt = await _db.WarehouseReceipts
-                .Include(r => r.WarehouseReceiptItems)
-                .FirstOrDefaultAsync(r => r.OrderId == orderId);
-
-            if (receipt == null)
-                return ApiResponse<WarehouseReceiptResponse>.Failure("Warehouse receipt not found");
-
-            if (receipt.ReferenceDocNo == "COMPLETED")
-                return ApiResponse<WarehouseReceiptResponse>.Failure("Inbound is already completed");
-
-            if (!receipt.WarehouseReceiptItems.Any())
-                return ApiResponse<WarehouseReceiptResponse>.Failure("Measurements are missing. Please complete Step 2 first.");
-
-            var order = await _db.TransportOrders
-                .Include(o => o.Customer)
-                .Include(o => o.DestLocationNavigation)
-                .FirstOrDefaultAsync(o => o.OrderId == orderId);
-            if (order == null)
-                return ApiResponse<WarehouseReceiptResponse>.Failure("Order not found");
-
-            var warehouse = await _db.Warehouses.FindAsync(receipt.WarehouseId);
-            var warehouseName = warehouse?.WarehouseName ?? "Unknown Warehouse";
-
-            var clerk = await _db.Users.FindAsync(receipt.ReceiverId);
-            var clerkName = clerk?.FullName ?? "Unknown Clerk";
-
-            // Calculate actual total weight and volume (CBM) from measurements
-            decimal totalActualWeight = 0;
-            decimal totalActualCbm = 0;
-            foreach (var item in receipt.WarehouseReceiptItems)
+            using var transaction = await _db.Database.BeginTransactionAsync();
+            try
             {
-                totalActualWeight += (item.ActualWeightKg ?? 0) * item.ActualQty;
-                var cbm = ((item.LengthCm ?? 0) * (item.WidthCm ?? 0) * (item.HeightCm ?? 0) * item.ActualQty) / 1000000m;
-                totalActualCbm += cbm;
-            }
+                var receipt = await _db.WarehouseReceipts
+                    .Include(r => r.WarehouseReceiptItems)
+                    .FirstOrDefaultAsync(r => r.OrderId == orderId);
 
-            // Update order dimensions
-            order.ActualWeightKg = totalActualWeight;
-            order.ActualCbm = totalActualCbm;
-            order.Status = InWarehouseStatus;
+                if (receipt == null)
+                    return ApiResponse<WarehouseReceiptResponse>.Failure("Warehouse receipt not found");
 
-            // Recalculate freight and generate adjustment invoice if necessary
-            var originalQuotation = await _db.Quotations
-                .Where(q => q.OrderId == orderId)
-                .OrderByDescending(q => q.CreatedAt)
-                .FirstOrDefaultAsync();
+                if (receipt.ReferenceDocNo == "COMPLETED")
+                    return ApiResponse<WarehouseReceiptResponse>.Failure("Inbound is already completed");
 
-            if (originalQuotation != null && order.DestLocationNavigation != null)
-            {
-                var pricing = await ResolvePricingAsync(order);
-                if (pricing != null)
+                if (!receipt.WarehouseReceiptItems.Any())
+                    return ApiResponse<WarehouseReceiptResponse>.Failure("Measurements are missing. Please complete Step 2 first.");
+
+                var order = await _db.TransportOrders
+                    .Include(o => o.Customer)
+                    .Include(o => o.DestLocationNavigation)
+                    .FirstOrDefaultAsync(o => o.OrderId == orderId);
+                if (order == null)
+                    return ApiResponse<WarehouseReceiptResponse>.Failure("Order not found");
+
+                var warehouse = await _db.Warehouses.FindAsync(receipt.WarehouseId);
+                var warehouseName = warehouse?.WarehouseName ?? "Unknown Warehouse";
+
+                var clerk = await _db.Users.FindAsync(receipt.ReceiverId);
+                var clerkName = clerk?.FullName ?? "Unknown Clerk";
+
+                // Calculate actual total weight and volume (CBM) from measurements
+                decimal totalActualWeight = 0;
+                decimal totalActualCbm = 0;
+                foreach (var item in receipt.WarehouseReceiptItems)
                 {
-                    var baseFreight = Math.Max(totalActualWeight * pricing.PriceKg, totalActualCbm * pricing.PriceCbm);
-                    if (baseFreight < MinCharge)
-                        baseFreight = MinCharge;
+                    totalActualWeight += (item.ActualWeightKg ?? 0) * item.ActualQty;
+                    var cbm = ((item.LengthCm ?? 0) * (item.WidthCm ?? 0) * (item.HeightCm ?? 0) * item.ActualQty) / 1000000m;
+                    totalActualCbm += cbm;
+                }
 
-                    var distanceKm = await _locationService.GetDistanceKmAsync(
-                        GoongLocationService.HubLat,
-                        GoongLocationService.HubLon,
-                        order.DestLocationNavigation.Latitude,
-                        order.DestLocationNavigation.Longitude);
-                    var lastMileSurcharge = distanceKm > LastMileFreeKm
-                        ? Math.Round((distanceKm - LastMileFreeKm) * LastMileUnitPrice, 0)
-                        : 0m;
-                    var vasAmount = originalQuotation.VasAmount.GetValueOrDefault();
-                    var subtotal = baseFreight + lastMileSurcharge + vasAmount;
-                    var vatAmount = Math.Round(subtotal * VatRate, 0);
-                    var finalAmount = subtotal + vatAmount;
+                // Update order dimensions
+                order.ActualWeightKg = totalActualWeight;
+                order.ActualCbm = totalActualCbm;
+                order.Status = InWarehouseStatus;
 
-                    // If final cost differs, create an adjustment invoice
-                    if (finalAmount != originalQuotation.FinalAmount)
+                // Recalculate freight and generate adjustment invoice if necessary
+                var originalQuotation = await _db.Quotations
+                    .Where(q => q.OrderId == orderId)
+                    .OrderByDescending(q => q.CreatedAt)
+                    .FirstOrDefaultAsync();
+
+                if (originalQuotation != null && order.DestLocationNavigation != null)
+                {
+                    var pricing = await ResolvePricingAsync(order);
+                    if (pricing != null)
                     {
-                        var diffSubTotal = subtotal - (originalQuotation.BaseFreight + originalQuotation.LastMileSurcharge.GetValueOrDefault() + originalQuotation.VasAmount.GetValueOrDefault());
-                        var diffVat = vatAmount - originalQuotation.VatAmount;
-                        var diffGrandTotal = finalAmount - originalQuotation.FinalAmount;
+                        var baseFreight = Math.Max(totalActualWeight * pricing.PriceKg, totalActualCbm * pricing.PriceCbm);
+                        if (baseFreight < MinCharge)
+                            baseFreight = MinCharge;
 
-                        var adjustmentInvoice = new Invoice
+                        var distanceKm = await _locationService.GetDistanceKmAsync(
+                            GoongLocationService.HubLat,
+                            GoongLocationService.HubLon,
+                            order.DestLocationNavigation.Latitude,
+                            order.DestLocationNavigation.Longitude);
+                        var lastMileSurcharge = distanceKm > LastMileFreeKm
+                            ? Math.Round((distanceKm - LastMileFreeKm) * LastMileUnitPrice, 0)
+                            : 0m;
+                        var vasAmount = originalQuotation.VasAmount.GetValueOrDefault();
+                        var subtotal = baseFreight + lastMileSurcharge + vasAmount;
+                        var vatAmount = Math.Round(subtotal * VatRate, 0);
+                        var finalAmount = subtotal + vatAmount;
+
+                        // If final cost differs, create an adjustment invoice
+                        if (finalAmount != originalQuotation.FinalAmount)
                         {
-                            InvoiceId = Guid.NewGuid(),
-                            InvoiceCode = $"INV-ADJ-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}",
-                            CustomerId = order.CustomerId.GetValueOrDefault(),
-                            SubTotal = diffSubTotal,
-                            TaxRate = VatRate,
-                            TaxAmount = diffVat,
-                            GrandTotal = diffGrandTotal,
-                            PaidAmount = 0,
-                            IssuedDate = DateOnly.FromDateTime(DateTime.UtcNow),
-                            DueDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(15)),
-                            Status = "UNPAID",
-                            CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
-                        };
+                            var diffSubTotal = subtotal - (originalQuotation.BaseFreight + originalQuotation.LastMileSurcharge.GetValueOrDefault() + originalQuotation.VasAmount.GetValueOrDefault());
+                            var diffVat = vatAmount - originalQuotation.VatAmount;
+                            var diffGrandTotal = finalAmount - originalQuotation.FinalAmount;
 
-                        var adjustmentLine = new InvoiceLine
-                        {
-                            LineId = Guid.NewGuid(),
-                            InvoiceId = adjustmentInvoice.InvoiceId,
-                            OrderId = orderId,
-                            ChargeType = "INBOUND_MEASUREMENT_ADJUSTMENT",
-                            Description = $"Adjustment based on actual measured weight/volume at Hub: {totalActualWeight}kg / {totalActualCbm}cbm vs expected",
-                            Quantity = 1,
-                            UnitPrice = diffGrandTotal,
-                            Amount = diffGrandTotal,
-                            TaxRate = VatRate
-                        };
+                            var adjustmentInvoice = new Invoice
+                            {
+                                InvoiceId = Guid.NewGuid(),
+                                InvoiceCode = $"INV-ADJ-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}",
+                                CustomerId = order.CustomerId.GetValueOrDefault(),
+                                SubTotal = diffSubTotal,
+                                TaxRate = VatRate,
+                                TaxAmount = diffVat,
+                                GrandTotal = diffGrandTotal,
+                                PaidAmount = 0,
+                                IssuedDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                                DueDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(15)),
+                                Status = "UNPAID",
+                                CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
+                            };
 
-                        _db.Invoices.Add(adjustmentInvoice);
-                        _db.InvoiceLines.Add(adjustmentLine);
+                            var adjustmentLine = new InvoiceLine
+                            {
+                                LineId = Guid.NewGuid(),
+                                InvoiceId = adjustmentInvoice.InvoiceId,
+                                OrderId = orderId,
+                                ChargeType = "INBOUND_MEASUREMENT_ADJUSTMENT",
+                                Description = $"Adjustment based on actual measured weight/volume at Hub: {totalActualWeight}kg / {totalActualCbm}cbm vs expected",
+                                Quantity = 1,
+                                UnitPrice = diffGrandTotal,
+                                Amount = diffGrandTotal,
+                                TaxRate = VatRate
+                            };
+
+                            _db.Invoices.Add(adjustmentInvoice);
+                            _db.InvoiceLines.Add(adjustmentLine);
+                        }
                     }
                 }
+
+                // Resolve or create RECEIVING Zone in target warehouse
+                var receivingZone = await _db.WarehouseZones
+                    .FirstOrDefaultAsync(z => z.WarehouseId == receipt.WarehouseId && z.ZoneCode == "RECEIVING");
+                if (receivingZone == null)
+                {
+                    receivingZone = new WarehouseZone
+                    {
+                        ZoneId = Guid.NewGuid(),
+                        WarehouseId = receipt.WarehouseId,
+                        ZoneCode = "RECEIVING",
+                        ZoneName = "Receiving Stage Zone",
+                        ZoneType = "RECEIVING",
+                        StorageType = "FLOOR",
+                        MaxCapacityPallets = 1000,
+                        CurrentPallets = 0,
+                        Status = "ACTIVE",
+                        CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
+                    };
+                    _db.WarehouseZones.Add(receivingZone);
+                    await _db.SaveChangesAsync();
+                }
+
+                // Resolve or create RCV-STAGE-01 Location in RECEIVING Zone
+                var receivingLocation = await _db.WarehouseLocations
+                    .FirstOrDefaultAsync(l => l.ZoneId == receivingZone.ZoneId && l.LocationCode == "RCV-STAGE-01");
+                if (receivingLocation == null)
+                {
+                    receivingLocation = new WarehouseLocation
+                    {
+                        LocationId = Guid.NewGuid(),
+                        ZoneId = receivingZone.ZoneId,
+                        LocationCode = "RCV-STAGE-01",
+                        MaxCapacityPallets = 1000,
+                        CurrentPallets = 0,
+                        Status = "ACTIVE",
+                        Description = "Default Inbound Receiving Stage Location",
+                        CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
+                    };
+                    _db.WarehouseLocations.Add(receivingLocation);
+                    await _db.SaveChangesAsync();
+                }
+
+                // Initialize stock and movements for each item
+                foreach (var item in receipt.WarehouseReceiptItems)
+                {
+                    var itemCode = string.IsNullOrWhiteSpace(item.ItemCode) ? "UNKNOWN-ITEM" : item.ItemCode.Trim();
+                    var batchNo = string.IsNullOrWhiteSpace(item.BatchNumber) ? "NO-BATCH" : item.BatchNumber.Trim();
+                    var expiryDate = item.ExpiryDate ?? DateOnly.FromDateTime(DateTime.UtcNow.AddYears(100)); // Default fallback if missing
+                    var mfgDate = item.ManufacturedDate;
+
+                    // Find or create InventoryBatch
+                    var batch = await _db.InventoryBatches
+                        .FirstOrDefaultAsync(b => b.ItemCode == itemCode && b.BatchNumber == batchNo);
+                    if (batch == null)
+                    {
+                        batch = new InventoryBatch
+                        {
+                            BatchId = Guid.NewGuid(),
+                            ItemCode = itemCode,
+                            BatchNumber = batchNo,
+                            ManufacturedDate = mfgDate,
+                            ExpiryDate = expiryDate,
+                            Status = "ACTIVE",
+                            CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
+                        };
+                        _db.InventoryBatches.Add(batch);
+                        await _db.SaveChangesAsync();
+                    }
+
+                    // Find or create InventoryStock under default receiving location
+                    var stock = await _db.InventoryStocks
+                        .FirstOrDefaultAsync(s => s.LocationId == receivingLocation.LocationId && s.ItemCode == itemCode && s.BatchId == batch.BatchId);
+
+                    decimal? requiredTempMin = null;
+                    decimal? requiredTempMax = null;
+
+                    if (!string.IsNullOrWhiteSpace(order.TempCondition))
+                    {
+                        var normalizedCond = order.TempCondition.Trim();
+                        var parts = normalizedCond.Split(new[] { '-', 't', 'o', '~' }, StringSplitOptions.RemoveEmptyEntries);
+                        if (parts.Length == 2 && 
+                            decimal.TryParse(parts[0].Trim(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal minVal) &&
+                            decimal.TryParse(parts[1].Trim(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal maxVal))
+                        {
+                            requiredTempMin = minVal;
+                            requiredTempMax = maxVal;
+                        }
+                        else if (decimal.TryParse(normalizedCond, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal singleTemp))
+                        {
+                            if (singleTemp < 0)
+                            {
+                                requiredTempMax = singleTemp;
+                                requiredTempMin = -30m;
+                            }
+                            else
+                            {
+                                requiredTempMin = singleTemp;
+                                requiredTempMax = singleTemp;
+                            }
+                        }
+                    }
+
+                    if (stock == null)
+                    {
+                        stock = new InventoryStock
+                        {
+                            StockId = Guid.NewGuid(),
+                            LocationId = receivingLocation.LocationId,
+                            ItemCode = itemCode,
+                            ItemName = item.ItemName.Trim(),
+                            Unit = item.Unit.Trim(),
+                            BatchId = batch.BatchId,
+                            QuantityOnHand = item.ActualQty,
+                            QuantityAllocated = 0,
+                            InboundDate = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
+                            Status = "AVAILABLE",
+                            CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
+                            PalletCount = 1,
+                            RequiredTempMin = requiredTempMin,
+                            RequiredTempMax = requiredTempMax
+                        };
+                        _db.InventoryStocks.Add(stock);
+                    }
+                    else
+                    {
+                        stock.QuantityOnHand += item.ActualQty;
+                        stock.PalletCount += 1;
+                        stock.RequiredTempMin = requiredTempMin;
+                        stock.RequiredTempMax = requiredTempMax;
+                        stock.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+                    }
+                    await _db.SaveChangesAsync();
+
+                    // Log Inbound InventoryMovement
+                    var movement = new InventoryMovement
+                    {
+                        MovementId = Guid.NewGuid(),
+                        StockId = stock.StockId,
+                        ItemCode = itemCode,
+                        BatchId = batch.BatchId,
+                        MovementType = "INBOUND",
+                        Quantity = item.ActualQty,
+                        ToLocationId = receivingLocation.LocationId,
+                        ReferenceDocumentId = receipt.ReceiptId,
+                        CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
+                        CreatedBy = receipt.ReceiverId
+                    };
+                    _db.InventoryMovements.Add(movement);
+                }
+
+                // Generate HTML and PDF Receipt
+                receipt.PdfUrl = await GenerateReceiptPdfAsync(order, receipt, warehouseName, clerkName);
+                receipt.ReferenceDocNo = "COMPLETED";
+
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                var response = MapToResponse(receipt, order.TrackingCode, warehouseName, null);
+                return ApiResponse<WarehouseReceiptResponse>.SuccessResponse(response, "Inbound completed and e-Warehouse Receipt PDF generated successfully");
             }
-
-            // Generate HTML and PDF Receipt
-            receipt.PdfUrl = await GenerateReceiptPdfAsync(order, receipt, warehouseName, clerkName);
-            receipt.ReferenceDocNo = "COMPLETED";
-
-            await _db.SaveChangesAsync();
-
-            var response = MapToResponse(receipt, order.TrackingCode, warehouseName, null);
-            return ApiResponse<WarehouseReceiptResponse>.SuccessResponse(response, "Inbound completed and e-Warehouse Receipt PDF generated successfully");
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return ApiResponse<WarehouseReceiptResponse>.Failure($"Failed to complete inbound: {ex.Message}");
+            }
         }
 
         private async Task<string> GenerateReceiptPdfAsync(
@@ -370,6 +533,8 @@ namespace ColdChainX.Infrastructure.Services
                     <td>{no}</td>
                     <td>{item.ItemName}</td>
                     <td>{item.ItemCode ?? "-"}</td>
+                    <td>{item.BatchNumber ?? "-"}</td>
+                    <td>{item.ExpiryDate?.ToString("dd/MM/yyyy") ?? "-"}</td>
                     <td>{item.Unit}</td>
                     <td>{item.ExpectedQty:0.##}</td>
                     <td>{item.ActualQty:0.##}</td>
@@ -530,7 +695,10 @@ namespace ColdChainX.Infrastructure.Services
                     Barcode = i.Barcode,
                     QrCode = i.QrCode,
                     ConditionStatus = i.ConditionStatus,
-                    Note = i.Note
+                    Note = i.Note,
+                    BatchNumber = i.BatchNumber,
+                    ManufacturedDate = i.ManufacturedDate,
+                    ExpiryDate = i.ExpiryDate
                 }).ToList() ?? new List<WarehouseReceiptItemDto>()
             };
         }

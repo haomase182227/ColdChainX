@@ -19,5 +19,8 @@ namespace ColdChainX.Application.DTOs.WarehouseReceipt
         public decimal WeightKg { get; set; }
         public string? ConditionStatus { get; set; }
         public string? Note { get; set; }
+        public string? BatchNumber { get; set; }
+        public DateOnly? ManufacturedDate { get; set; }
+        public DateOnly? ExpiryDate { get; set; }
     }
 }

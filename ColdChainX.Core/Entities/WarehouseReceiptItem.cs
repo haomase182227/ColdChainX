@@ -35,5 +35,11 @@ public partial class WarehouseReceiptItem
 
     public string? QrCode { get; set; }
 
+    public string? BatchNumber { get; set; }
+
+    public DateOnly? ManufacturedDate { get; set; }
+
+    public DateOnly? ExpiryDate { get; set; }
+
     public virtual WarehouseReceipt Receipt { get; set; } = null!;
 }

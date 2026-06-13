@@ -3,6 +3,7 @@ using System;
 using ColdChainX.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ColdChainX.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260613135730_AddInventoryAdjustmentsTable")]
+    partial class AddInventoryAdjustmentsTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -841,53 +844,6 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.HasIndex("StockId");
 
                     b.ToTable("inventory_adjustments", "public");
-                });
-
-            modelBuilder.Entity("ColdChainX.Core.Entities.InventoryAllocation", b =>
-                {
-                    b.Property<Guid>("AllocationId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("allocation_id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<decimal>("AllocatedQuantity")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("allocated_quantity");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<Guid>("ReferenceDocumentId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("reference_document_id");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("status")
-                        .HasDefaultValueSql("'ALLOCATED'::character varying");
-
-                    b.Property<Guid>("StockId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("stock_id");
-
-                    b.HasKey("AllocationId")
-                        .HasName("inventory_allocations_pkey");
-
-                    b.HasIndex("StockId");
-
-                    b.ToTable("inventory_allocations", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.InventoryBatch", b =>
@@ -3195,18 +3151,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasConstraintName("fk_adj_stock");
 
                     b.Navigation("Movement");
-
-                    b.Navigation("Stock");
-                });
-
-            modelBuilder.Entity("ColdChainX.Core.Entities.InventoryAllocation", b =>
-                {
-                    b.HasOne("ColdChainX.Core.Entities.InventoryStock", "Stock")
-                        .WithMany()
-                        .HasForeignKey("StockId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_allocation_stock");
 
                     b.Navigation("Stock");
                 });

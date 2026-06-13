@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using ColdChainX.Core.Entities;
+using ColdChainX.Core.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace ColdChainX.Infrastructure.Persistence;
@@ -89,6 +90,20 @@ public partial class ApplicationDbContext : DbContext
     public virtual DbSet<WarehouseZone> WarehouseZones { get; set; }
 
     public virtual DbSet<WarehouseLocation> WarehouseLocations { get; set; }
+
+    public virtual DbSet<InventoryBatch> InventoryBatches { get; set; }
+
+    public virtual DbSet<InventoryStock> InventoryStocks { get; set; }
+
+    public virtual DbSet<InventoryMovement> InventoryMovements { get; set; }
+
+    public virtual DbSet<InventoryAdjustment> InventoryAdjustments { get; set; }
+
+    public virtual DbSet<InventoryAllocation> InventoryAllocations { get; set; }
+
+    public virtual DbSet<OutboundOrder> OutboundOrders { get; set; }
+
+    public virtual DbSet<OutboundOrderItem> OutboundOrderItems { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -1699,6 +1714,16 @@ public partial class ApplicationDbContext : DbContext
                 .HasMaxLength(255)
                 .HasColumnName("qr_code");
 
+            entity.Property(e => e.BatchNumber)
+                .HasMaxLength(50)
+                .HasColumnName("batch_number");
+
+            entity.Property(e => e.ManufacturedDate)
+                .HasColumnName("manufactured_date");
+
+            entity.Property(e => e.ExpiryDate)
+                .HasColumnName("expiry_date");
+
             entity.HasOne(d => d.Receipt).WithMany(p => p.WarehouseReceiptItems)
                 .HasForeignKey(d => d.ReceiptId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
@@ -1856,6 +1881,312 @@ public partial class ApplicationDbContext : DbContext
                 .HasConstraintName("fk_warehouse_locations_zones");
 
             entity.HasQueryFilter(e => e.DeletedAt == null);
+        });
+
+        modelBuilder.Entity<InventoryBatch>(entity =>
+        {
+            entity.HasKey(e => e.BatchId).HasName("inventory_batches_pkey");
+            entity.ToTable("inventory_batches");
+            entity.HasIndex(e => new { e.ItemCode, e.BatchNumber }, "uq_item_batch").IsUnique();
+
+            entity.Property(e => e.BatchId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("batch_id");
+            entity.Property(e => e.ItemCode)
+                .HasMaxLength(50)
+                .HasColumnName("item_code");
+            entity.Property(e => e.BatchNumber)
+                .HasMaxLength(50)
+                .HasColumnName("batch_number");
+            entity.Property(e => e.ManufacturedDate)
+                .HasColumnName("manufactured_date");
+            entity.Property(e => e.ExpiryDate)
+                .HasColumnName("expiry_date");
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'ACTIVE'::character varying")
+                .HasColumnName("status");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
+        });
+
+        modelBuilder.Entity<InventoryStock>(entity =>
+        {
+            entity.HasKey(e => e.StockId).HasName("inventory_stocks_pkey");
+            entity.ToTable("inventory_stocks");
+            entity.HasIndex(e => new { e.LocationId, e.ItemCode, e.BatchId }, "uq_location_item_batch").IsUnique();
+
+            entity.Property(e => e.StockId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("stock_id");
+            entity.Property(e => e.LocationId).HasColumnName("location_id");
+            entity.Property(e => e.ItemCode)
+                .HasMaxLength(50)
+                .HasColumnName("item_code");
+            entity.Property(e => e.ItemName)
+                .HasMaxLength(255)
+                .HasColumnName("item_name");
+            entity.Property(e => e.Unit)
+                .HasMaxLength(20)
+                .HasColumnName("unit");
+            entity.Property(e => e.BatchId).HasColumnName("batch_id");
+            entity.Property(e => e.QuantityOnHand)
+                .HasPrecision(10, 2)
+                .HasDefaultValueSql("0.00")
+                .HasColumnName("quantity_on_hand");
+            entity.Property(e => e.QuantityAllocated)
+                .HasPrecision(10, 2)
+                .HasDefaultValueSql("0.00")
+                .HasColumnName("quantity_allocated");
+            entity.Property(e => e.InboundDate)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("inbound_date");
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'AVAILABLE'::character varying")
+                .HasColumnName("status");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
+            entity.Property(e => e.UpdatedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("updated_at");
+            entity.Property(e => e.UpdatedBy).HasColumnName("updated_by");
+            entity.Property(e => e.PalletCount)
+                .HasDefaultValue(1)
+                .HasColumnName("pallet_count");
+            entity.Property(e => e.RequiredTempMin)
+                .HasPrecision(5, 2)
+                .HasColumnName("required_temp_min");
+            entity.Property(e => e.RequiredTempMax)
+                .HasPrecision(5, 2)
+                .HasColumnName("required_temp_max");
+
+            entity.HasOne(d => d.Location).WithMany()
+                .HasForeignKey(d => d.LocationId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_stock_location");
+
+            entity.HasOne(d => d.Batch).WithMany(p => p.InventoryStocks)
+                .HasForeignKey(d => d.BatchId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_stock_batch");
+        });
+
+        modelBuilder.Entity<InventoryMovement>(entity =>
+        {
+            entity.HasKey(e => e.MovementId).HasName("inventory_movements_pkey");
+            entity.ToTable("inventory_movements");
+
+            entity.Property(e => e.MovementId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("movement_id");
+            entity.Property(e => e.StockId).HasColumnName("stock_id");
+            entity.Property(e => e.ItemCode)
+                .HasMaxLength(50)
+                .HasColumnName("item_code");
+            entity.Property(e => e.BatchId).HasColumnName("batch_id");
+            entity.Property(e => e.MovementType)
+                .HasMaxLength(30)
+                .HasColumnName("movement_type");
+            entity.Property(e => e.Quantity)
+                .HasPrecision(10, 2)
+                .HasColumnName("quantity");
+            entity.Property(e => e.FromLocationId).HasColumnName("from_location_id");
+            entity.Property(e => e.ToLocationId).HasColumnName("to_location_id");
+            entity.Property(e => e.ReferenceDocumentId).HasColumnName("reference_document_id");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
+
+            entity.HasOne(d => d.Batch).WithMany()
+                .HasForeignKey(d => d.BatchId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_movement_batch");
+
+            entity.HasOne(d => d.FromLocation).WithMany()
+                .HasForeignKey(d => d.FromLocationId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_movement_from_loc");
+
+            entity.HasOne(d => d.ToLocation).WithMany()
+                .HasForeignKey(d => d.ToLocationId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_movement_to_loc");
+        });
+
+        modelBuilder.Entity<InventoryAdjustment>(entity =>
+        {
+            entity.HasKey(e => e.AdjustmentId).HasName("inventory_adjustments_pkey");
+            entity.ToTable("inventory_adjustments");
+
+            entity.Property(e => e.AdjustmentId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("adjustment_id");
+            entity.Property(e => e.StockId).HasColumnName("stock_id");
+            
+            entity.Property(e => e.AdjustmentType)
+                .HasConversion<string>()
+                .HasMaxLength(30)
+                .HasColumnName("adjustment_type");
+
+            entity.Property(e => e.QuantityBefore)
+                .HasPrecision(10, 2)
+                .HasColumnName("quantity_before");
+            entity.Property(e => e.QuantityChanged)
+                .HasPrecision(10, 2)
+                .HasColumnName("quantity_changed");
+            entity.Property(e => e.QuantityAfter)
+                .HasPrecision(10, 2)
+                .HasColumnName("quantity_after");
+
+            entity.Property(e => e.ReasonNotes)
+                .HasMaxLength(255)
+                .HasColumnName("reason_notes");
+
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+
+            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
+            entity.Property(e => e.MovementId).HasColumnName("movement_id");
+
+            entity.HasOne(d => d.Stock).WithMany()
+                .HasForeignKey(d => d.StockId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_adj_stock");
+
+            entity.HasOne(d => d.Movement).WithMany()
+                .HasForeignKey(d => d.MovementId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_adj_movement");
+        });
+
+        modelBuilder.Entity<InventoryAllocation>(entity =>
+        {
+            entity.HasKey(e => e.AllocationId).HasName("inventory_allocations_pkey");
+            entity.ToTable("inventory_allocations");
+
+            entity.Property(e => e.AllocationId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("allocation_id");
+            entity.Property(e => e.ReferenceDocumentId).HasColumnName("reference_document_id");
+            entity.Property(e => e.StockId).HasColumnName("stock_id");
+
+            entity.Property(e => e.AllocatedQuantity)
+                .HasPrecision(10, 2)
+                .HasColumnName("allocated_quantity");
+
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'ALLOCATED'::character varying")
+                .HasColumnName("status");
+
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+
+            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
+
+            entity.HasOne(d => d.Stock).WithMany()
+                .HasForeignKey(d => d.StockId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_allocation_stock");
+        });
+
+        modelBuilder.Entity<OutboundOrder>(entity =>
+        {
+            entity.HasKey(e => e.OutboundOrderId).HasName("outbound_orders_pkey");
+            entity.ToTable("outbound_orders");
+
+            entity.HasIndex(e => e.OrderCode, "uq_outbound_order_code").IsUnique();
+
+            entity.Property(e => e.OutboundOrderId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("outbound_order_id");
+            entity.Property(e => e.OrderCode)
+                .HasMaxLength(50)
+                .HasColumnName("order_code");
+            entity.Property(e => e.CustomerId).HasColumnName("customer_id");
+            entity.Property(e => e.ReceiverName)
+                .HasMaxLength(100)
+                .HasColumnName("receiver_name");
+            entity.Property(e => e.ReceiverPhone)
+                .HasMaxLength(20)
+                .HasColumnName("receiver_phone");
+            entity.Property(e => e.DestinationAddress)
+                .HasMaxLength(255)
+                .HasColumnName("destination_address");
+
+            entity.Property(e => e.Status)
+                .HasConversion<string>()
+                .HasMaxLength(30)
+                .HasDefaultValue(OutboundOrderStatus.DRAFT)
+                .HasColumnName("status");
+
+            entity.Property(e => e.AssignedPickerId).HasColumnName("assigned_picker_id");
+            entity.Property(e => e.AllocatedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("allocated_at");
+
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
+
+            entity.Property(e => e.UpdatedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("updated_at");
+            entity.Property(e => e.UpdatedBy).HasColumnName("updated_by");
+
+            entity.HasOne(d => d.Customer).WithMany()
+                .HasForeignKey(d => d.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_outbound_customer");
+
+            entity.HasOne(d => d.AssignedPicker).WithMany()
+                .HasForeignKey(d => d.AssignedPickerId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_outbound_picker");
+        });
+
+        modelBuilder.Entity<OutboundOrderItem>(entity =>
+        {
+            entity.HasKey(e => e.OutboundOrderItemId).HasName("outbound_order_items_pkey");
+            entity.ToTable("outbound_order_items");
+
+            entity.Property(e => e.OutboundOrderItemId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("outbound_order_item_id");
+            entity.Property(e => e.OutboundOrderId).HasColumnName("outbound_order_id");
+            entity.Property(e => e.ItemCode)
+                .HasMaxLength(50)
+                .HasColumnName("item_code");
+            entity.Property(e => e.ItemName)
+                .HasMaxLength(255)
+                .HasColumnName("item_name");
+            entity.Property(e => e.Unit)
+                .HasMaxLength(20)
+                .HasColumnName("unit");
+            entity.Property(e => e.Quantity)
+                .HasPrecision(10, 2)
+                .HasColumnName("quantity");
+
+            entity.HasOne(d => d.OutboundOrder).WithMany(p => p.OutboundOrderItems)
+                .HasForeignKey(d => d.OutboundOrderId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_item_outbound_order");
         });
 
         OnModelCreatingPartial(modelBuilder);

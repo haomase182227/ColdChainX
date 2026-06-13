@@ -3,6 +3,7 @@ using System;
 using ColdChainX.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ColdChainX.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260613134856_AddPutawayTrackingFields")]
+    partial class AddPutawayTrackingFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -778,116 +781,6 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.HasIndex("TripId");
 
                     b.ToTable("incident_reports", "public");
-                });
-
-            modelBuilder.Entity("ColdChainX.Core.Entities.InventoryAdjustment", b =>
-                {
-                    b.Property<Guid>("AdjustmentId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("adjustment_id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<string>("AdjustmentType")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("adjustment_type");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<Guid>("MovementId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("movement_id");
-
-                    b.Property<decimal>("QuantityAfter")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("quantity_after");
-
-                    b.Property<decimal>("QuantityBefore")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("quantity_before");
-
-                    b.Property<decimal>("QuantityChanged")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("quantity_changed");
-
-                    b.Property<string>("ReasonNotes")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("reason_notes");
-
-                    b.Property<Guid>("StockId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("stock_id");
-
-                    b.HasKey("AdjustmentId")
-                        .HasName("inventory_adjustments_pkey");
-
-                    b.HasIndex("MovementId");
-
-                    b.HasIndex("StockId");
-
-                    b.ToTable("inventory_adjustments", "public");
-                });
-
-            modelBuilder.Entity("ColdChainX.Core.Entities.InventoryAllocation", b =>
-                {
-                    b.Property<Guid>("AllocationId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("allocation_id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<decimal>("AllocatedQuantity")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("allocated_quantity");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<Guid>("ReferenceDocumentId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("reference_document_id");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("status")
-                        .HasDefaultValueSql("'ALLOCATED'::character varying");
-
-                    b.Property<Guid>("StockId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("stock_id");
-
-                    b.HasKey("AllocationId")
-                        .HasName("inventory_allocations_pkey");
-
-                    b.HasIndex("StockId");
-
-                    b.ToTable("inventory_allocations", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.InventoryBatch", b =>
@@ -3176,39 +3069,6 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.Navigation("ReportedByNavigation");
 
                     b.Navigation("Trip");
-                });
-
-            modelBuilder.Entity("ColdChainX.Core.Entities.InventoryAdjustment", b =>
-                {
-                    b.HasOne("ColdChainX.Core.Entities.InventoryMovement", "Movement")
-                        .WithMany()
-                        .HasForeignKey("MovementId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_adj_movement");
-
-                    b.HasOne("ColdChainX.Core.Entities.InventoryStock", "Stock")
-                        .WithMany()
-                        .HasForeignKey("StockId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_adj_stock");
-
-                    b.Navigation("Movement");
-
-                    b.Navigation("Stock");
-                });
-
-            modelBuilder.Entity("ColdChainX.Core.Entities.InventoryAllocation", b =>
-                {
-                    b.HasOne("ColdChainX.Core.Entities.InventoryStock", "Stock")
-                        .WithMany()
-                        .HasForeignKey("StockId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_allocation_stock");
-
-                    b.Navigation("Stock");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.InventoryMovement", b =>
