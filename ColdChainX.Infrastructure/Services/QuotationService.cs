@@ -235,6 +235,7 @@ namespace ColdChainX.Infrastructure.Services
                     QuoteId = quotation.QuoteId,
                     OrderId = quotation.Order.OrderId,
                     TrackingCode = quotation.Order.TrackingCode,
+                    FileUrl = quotation.FileUrl,
                     QuoteStatus = quotation.Status,
                     OrderStatus = quotation.Order.Status
                 }, "Quotation accepted");
