@@ -18,9 +18,22 @@ namespace ColdChainX.Application.DTOs.Orders
         public decimal CargoValue { get; set; }
         public string Status { get; set; } = null!;
         public DateTime? CreatedAt { get; set; }
+        public OrderRouteResponse? Route { get; set; }
         public OrderLocationResponse? Destination { get; set; }
         public IReadOnlyCollection<OrderDocumentResponse> Documents { get; set; } = Array.Empty<OrderDocumentResponse>();
         public IReadOnlyCollection<OrderQuotationResponse> Quotations { get; set; } = Array.Empty<OrderQuotationResponse>();
+    }
+
+    public class OrderRouteResponse
+    {
+        public Guid RouteId { get; set; }
+        public string RouteCode { get; set; } = null!;
+        public string OriginCity { get; set; } = null!;
+        public string DestCity { get; set; } = null!;
+        public DateTime Etd { get; set; }
+        public int TransitTimeHours { get; set; }
+        public DateTime Eta { get; set; }
+        public DateTime CutOffTime { get; set; }
     }
 
     public class OrderLocationResponse

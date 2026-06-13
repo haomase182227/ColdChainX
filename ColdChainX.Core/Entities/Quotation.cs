@@ -19,6 +19,14 @@ public partial class Quotation
 
     public decimal FinalAmount { get; set; }
 
+    public decimal? SystemBaseFreight { get; set; }
+
+    public decimal? ManualAdjustment { get; set; }
+
+    public string? OverrideReason { get; set; }
+
+    public string PricingSource { get; set; } = null!;
+
     public string? FileUrl { get; set; }
 
     public string Status { get; set; } = null!;

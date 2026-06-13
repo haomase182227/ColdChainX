@@ -39,6 +39,8 @@ public partial class TransportOrder
 
     public Guid? MasterTripId { get; set; }
 
+    public Guid? RouteId { get; set; }
+
     public DateTime? CreatedAt { get; set; }
 
     public virtual ICollection<Claim> Claims { get; set; } = new List<Claim>();
@@ -54,6 +56,10 @@ public partial class TransportOrder
     public virtual ICollection<InvoiceLine> InvoiceLines { get; set; } = new List<InvoiceLine>();
 
     public virtual MasterTrip? MasterTrip { get; set; }
+
+    public virtual RouteMaster? Route { get; set; }
+
+    public virtual ICollection<InboundAsn> InboundAsns { get; set; } = new List<InboundAsn>();
 
     public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();
 

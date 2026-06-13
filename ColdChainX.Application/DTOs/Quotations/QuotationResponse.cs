@@ -12,6 +12,10 @@ namespace ColdChainX.Application.DTOs.Quotations
         public decimal? VasAmount { get; set; }
         public decimal VatAmount { get; set; }
         public decimal FinalAmount { get; set; }
+        public decimal? SystemBaseFreight { get; set; }
+        public decimal? ManualAdjustment { get; set; }
+        public string? OverrideReason { get; set; }
+        public string PricingSource { get; set; } = null!;
         public string? FileUrl { get; set; }
         public string Status { get; set; } = null!;
         public DateTime? CreatedAt { get; set; }

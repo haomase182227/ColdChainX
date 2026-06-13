@@ -222,6 +222,7 @@ namespace ColdChainX.Infrastructure.Services
         {
             var order = await _db.TransportOrders
                 .Include(o => o.Customer)
+                .Include(o => o.Route)
                 .Include(o => o.Quotations)
                 .Include(o => o.PickupLocationNavigation)
                 .Include(o => o.DestLocationNavigation)
@@ -277,6 +278,12 @@ namespace ColdChainX.Infrastructure.Services
                 // Địa điểm
                 ["Origin_Address"] = data.Order.PickupLocationNavigation?.Address ?? "Kho Proship - 602/45D Điện Biên Phủ, P.22, Bình Thạnh, Tp. HCM",
                 ["Dest_Address"] = data.Order.DestLocationNavigation?.Address ?? string.Empty,
+                ["Route_Code"] = data.Order.Route?.RouteCode ?? string.Empty,
+                ["Route_Origin"] = data.Order.Route?.OriginCity ?? string.Empty,
+                ["Route_Dest"] = data.Order.Route?.DestCity ?? string.Empty,
+                ["ETD"] = data.Order.Route?.Etd.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture) ?? string.Empty,
+                ["ETA"] = data.Order.Route?.Etd.AddHours(data.Order.Route.TransitTimeHours).ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture) ?? string.Empty,
+                ["Cut_Off_Time"] = data.Order.Route?.CutOffTime.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture) ?? string.Empty,
                 // Tài chính
                 ["Final_Amount"] = data.Quotation.FinalAmount.ToString("N0", CultureInfo.InvariantCulture),
                 ["Payment_Term"] = data.Customer.PaymentTerm?.ToString(CultureInfo.InvariantCulture) ?? "30",

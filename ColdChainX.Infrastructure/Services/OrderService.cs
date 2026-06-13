@@ -111,6 +111,12 @@ namespace ColdChainX.Infrastructure.Services
                 if (!customerExists)
                     return ApiResponse<CreateOrderResponse>.Failure("Customer not found");
 
+                var route = await _db.RouteMasters
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(r => r.RouteId == request.RouteId && r.Status == "ACTIVE");
+                if (route == null)
+                    return ApiResponse<CreateOrderResponse>.Failure("Route_ID is invalid or inactive");
+
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
                 var expectedCbm = Math.Round(request.LengthCm * request.WidthCm * request.HeightCm * request.Quantity / 1000000m, 4);
@@ -142,6 +148,7 @@ namespace ColdChainX.Infrastructure.Services
                     ActualWeightKg = request.ExpectedWeightKg,
                     ExpectedCbm = expectedCbm,
                     DestLocation = location.LocationId,
+                    RouteId = route.RouteId,
                     CargoValue = 0,
                     Status = PendingReview,
                     CreatedAt = DbNow()
@@ -202,9 +209,10 @@ namespace ColdChainX.Infrastructure.Services
             return await strategy.ExecuteAsync(async () =>
             {
                 var order = await _db.TransportOrders
-                    .Include(o => o.Customer)
-                    .Include(o => o.DestLocationNavigation)
-                    .FirstOrDefaultAsync(o => o.OrderId == orderId);
+                .Include(o => o.Customer)
+                .Include(o => o.Route)
+                .Include(o => o.DestLocationNavigation)
+                .FirstOrDefaultAsync(o => o.OrderId == orderId);
 
                 if (order == null)
                     return ApiResponse<ReviewOrderResponse>.Failure("Order not found");
@@ -258,11 +266,7 @@ namespace ColdChainX.Infrastructure.Services
                 if (pricing == null)
                     return ApiResponse<ReviewOrderResponse>.Failure("Pricing matrix is missing KG or CBM price for this route");
 
-                var chargeableWeightKg = order.ActualWeightKg;
-                var chargeableCbm = order.ExpectedCbm;
-                var baseFreight = Math.Max(chargeableWeightKg * pricing.PriceKg, chargeableCbm * pricing.PriceCbm);
-                if (baseFreight < MinCharge)
-                    baseFreight = MinCharge;
+                var baseFreight = pricing.BaseFreight;
 
                 var distanceKm = await _locationService.GetDistanceKmAsync(
                     GoongLocationService.HubLat,
@@ -286,6 +290,10 @@ namespace ColdChainX.Infrastructure.Services
                     VasAmount = vasAmount,
                     VatAmount = vatAmount,
                     FinalAmount = finalAmount,
+                    SystemBaseFreight = pricing.BaseFreight,
+                    ManualAdjustment = 0m,
+                    OverrideReason = null,
+                    PricingSource = "AUTO",
                     FileUrl = null,
                     Status = "SENT",
                     CreatedAt = DbNow()
@@ -361,15 +369,28 @@ namespace ColdChainX.Infrastructure.Services
 
         private async Task<RoutePricing?> ResolvePricingAsync(TransportOrder order)
         {
-            var destinationAddress = order.DestLocationNavigation?.Address ?? string.Empty;
-            var destinationCity = ExtractDestinationCity(destinationAddress);
+            var route = order.Route;
+            if (route == null && order.RouteId.HasValue)
+            {
+                route = await _db.RouteMasters
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(r => r.RouteId == order.RouteId.Value);
+            }
+
+            if (route == null)
+                return null;
+
+            var originCity = route.OriginCity;
+            var destinationCity = route.DestCity;
+            var chargeableWeightKg = order.ActualWeightKg;
+            var chargeableCbm = order.ExpectedCbm;
 
             var allRoutePrices = await _db.PricingMatrices
                 .AsNoTracking()
                 .Where(p => p.PricingUnit == "KG" || p.PricingUnit == "CBM")
                 .ToListAsync();
 
-            var originKey = NormalizeRouteKey(DefaultOriginCity);
+            var originKey = NormalizeRouteKey(originCity);
             var destinationKey = NormalizeRouteKey(destinationCity);
             var prices = allRoutePrices
                 .Where(p => NormalizeRouteKey(p.OriginCity) == originKey
@@ -377,13 +398,46 @@ namespace ColdChainX.Infrastructure.Services
                 .OrderByDescending(p => p.EffectiveDate)
                 .ToList();
 
-            var priceKg = prices.FirstOrDefault(p => p.PricingUnit == "KG")?.UnitPrice;
-            var priceCbm = prices.FirstOrDefault(p => p.PricingUnit == "CBM")?.UnitPrice;
+            var kgTier = FindPricingTier(prices, "KG", chargeableWeightKg);
+            var cbmTier = FindPricingTier(prices, "CBM", chargeableCbm);
+            var priceKg = kgTier?.UnitPrice;
+            var priceCbm = cbmTier?.UnitPrice;
 
             if (!priceKg.HasValue || !priceCbm.HasValue)
                 return null;
 
-            return new RoutePricing(priceKg.Value, priceCbm.Value, destinationCity);
+            var minCharge = new[] { kgTier?.MinCharge, cbmTier?.MinCharge, MinCharge }
+                .Where(v => v.HasValue)
+                .Select(v => v!.Value)
+                .DefaultIfEmpty(MinCharge)
+                .Max();
+
+            var freightByKg = chargeableWeightKg * priceKg.Value;
+            var freightByCbm = chargeableCbm * priceCbm.Value;
+            var baseFreight = Math.Max(freightByKg, freightByCbm);
+            if (baseFreight < minCharge)
+                baseFreight = minCharge;
+
+            return new RoutePricing(
+                BaseFreight: baseFreight,
+                PriceKg: priceKg.Value,
+                PriceCbm: priceCbm.Value,
+                FreightByKg: freightByKg,
+                FreightByCbm: freightByCbm,
+                MinCharge: minCharge,
+                OriginCity: originCity,
+                DestinationCity: destinationCity);
+        }
+
+        private static PricingMatrix? FindPricingTier(IEnumerable<PricingMatrix> prices, string pricingUnit, decimal value)
+        {
+            return prices
+                .Where(p => string.Equals(p.PricingUnit, pricingUnit, StringComparison.OrdinalIgnoreCase)
+                            && (!p.MinValue.HasValue || value >= p.MinValue.Value)
+                            && (!p.MaxValue.HasValue || value <= p.MaxValue.Value))
+                .OrderByDescending(p => p.EffectiveDate)
+                .ThenByDescending(p => p.MinValue ?? 0)
+                .FirstOrDefault();
         }
 
         private async Task<string> GenerateQuotationPdfAsync(TransportOrder order, Quotation quotation)
@@ -401,10 +455,14 @@ namespace ColdChainX.Infrastructure.Services
                 ["Item_Name"] = order.ItemName,
                 ["Quantity"] = order.Quantity.ToString(CultureInfo.InvariantCulture),
                 ["Packing_Type"] = order.PackingType,
-                ["Pickup_Address"] = DefaultOriginCity,
+                ["Pickup_Address"] = order.Route?.OriginCity ?? DefaultOriginCity,
                 ["Dest_Address"] = order.DestLocationNavigation?.Address ?? string.Empty,
                 ["Actual_Weight_KG"] = order.ActualWeightKg.ToString("0.##", CultureInfo.InvariantCulture),
                 ["Actual_CBM"] = order.ExpectedCbm.ToString("0.####", CultureInfo.InvariantCulture),
+                ["Route_Code"] = order.Route?.RouteCode,
+                ["ETD"] = order.Route?.Etd.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture),
+                ["ETA"] = order.Route?.Etd.AddHours(order.Route.TransitTimeHours).ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture),
+                ["Cut_Off_Time"] = order.Route?.CutOffTime.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture),
                 ["Final_Amount"] = quotation.FinalAmount.ToString("N0", CultureInfo.InvariantCulture)
             };
 
@@ -493,6 +551,7 @@ namespace ColdChainX.Infrastructure.Services
             return _db.TransportOrders
                 .AsNoTracking()
                 .Include(o => o.Customer)
+                .Include(o => o.Route)
                 .Include(o => o.DestLocationNavigation)
                 .Include(o => o.TransportDocuments)
                 .Include(o => o.Quotations);
@@ -518,6 +577,19 @@ namespace ColdChainX.Infrastructure.Services
                 CargoValue = order.CargoValue,
                 Status = order.Status,
                 CreatedAt = order.CreatedAt,
+                Route = order.Route == null
+                    ? null
+                    : new OrderRouteResponse
+                    {
+                        RouteId = order.Route.RouteId,
+                        RouteCode = order.Route.RouteCode,
+                        OriginCity = order.Route.OriginCity,
+                        DestCity = order.Route.DestCity,
+                        Etd = order.Route.Etd,
+                        TransitTimeHours = order.Route.TransitTimeHours,
+                        Eta = order.Route.Etd.AddHours(order.Route.TransitTimeHours),
+                        CutOffTime = order.Route.CutOffTime
+                    },
                 Destination = order.DestLocationNavigation == null
                     ? null
                     : new OrderLocationResponse
@@ -556,6 +628,14 @@ namespace ColdChainX.Infrastructure.Services
             };
         }
 
-        private sealed record RoutePricing(decimal PriceKg, decimal PriceCbm, string DestinationCity);
+        private sealed record RoutePricing(
+            decimal BaseFreight,
+            decimal PriceKg,
+            decimal PriceCbm,
+            decimal FreightByKg,
+            decimal FreightByCbm,
+            decimal MinCharge,
+            string OriginCity,
+            string DestinationCity);
     }
 }

@@ -42,6 +42,8 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<IotDevice> IotDevices { get; set; }
 
+    public virtual DbSet<InboundAsn> InboundAsns { get; set; }
+
     public virtual DbSet<Location> Locations { get; set; }
 
     public virtual DbSet<MaintenanceTicket> MaintenanceTickets { get; set; }
@@ -63,6 +65,8 @@ public partial class ApplicationDbContext : DbContext
     public virtual DbSet<ReturnedItem> ReturnedItems { get; set; }
 
     public virtual DbSet<Role> Roles { get; set; }
+
+    public virtual DbSet<RouteMaster> RouteMasters { get; set; }
 
     public virtual DbSet<Seal> Seals { get; set; }
 
@@ -714,6 +718,42 @@ public partial class ApplicationDbContext : DbContext
                 .HasConstraintName("fk_iot_vehicles");
         });
 
+        modelBuilder.Entity<InboundAsn>(entity =>
+        {
+            entity.HasKey(e => e.AsnId).HasName("inbound_asn_pkey");
+
+            entity.ToTable("inbound_asn");
+
+            entity.HasIndex(e => e.AsnCode, "inbound_asn_asn_code_key").IsUnique();
+
+            entity.Property(e => e.AsnId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("asn_id");
+            entity.Property(e => e.AsnCode)
+                .HasMaxLength(50)
+                .HasColumnName("asn_code");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+            entity.Property(e => e.OrderId).HasColumnName("order_id");
+            entity.Property(e => e.QrCodeValue)
+                .HasMaxLength(500)
+                .HasColumnName("qr_code_value");
+            entity.Property(e => e.RequestedDropoffTime)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("requested_dropoff_time");
+            entity.Property(e => e.Status)
+                .HasMaxLength(30)
+                .HasDefaultValueSql("'SCHEDULED'::character varying")
+                .HasColumnName("status");
+
+            entity.HasOne(d => d.Order).WithMany(p => p.InboundAsns)
+                .HasForeignKey(d => d.OrderId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_asn_order");
+        });
+
         modelBuilder.Entity<Location>(entity =>
         {
             entity.HasKey(e => e.LocationId).HasName("locations_pkey");
@@ -974,6 +1014,15 @@ public partial class ApplicationDbContext : DbContext
                 .HasMaxLength(50)
                 .HasColumnName("dest_city");
             entity.Property(e => e.EffectiveDate).HasColumnName("effective_date");
+            entity.Property(e => e.MaxValue)
+                .HasPrecision(12, 4)
+                .HasColumnName("max_value");
+            entity.Property(e => e.MinCharge)
+                .HasPrecision(15, 2)
+                .HasColumnName("min_charge");
+            entity.Property(e => e.MinValue)
+                .HasPrecision(12, 4)
+                .HasColumnName("min_value");
             entity.Property(e => e.OriginCity)
                 .HasMaxLength(50)
                 .HasColumnName("origin_city");
@@ -1011,10 +1060,24 @@ public partial class ApplicationDbContext : DbContext
                 .HasPrecision(15, 2)
                 .HasDefaultValueSql("0")
                 .HasColumnName("last_mile_surcharge");
+            entity.Property(e => e.ManualAdjustment)
+                .HasPrecision(15, 2)
+                .HasDefaultValueSql("0")
+                .HasColumnName("manual_adjustment");
             entity.Property(e => e.OrderId).HasColumnName("order_id");
+            entity.Property(e => e.OverrideReason)
+                .HasMaxLength(500)
+                .HasColumnName("override_reason");
+            entity.Property(e => e.PricingSource)
+                .HasMaxLength(30)
+                .HasDefaultValueSql("'AUTO'::character varying")
+                .HasColumnName("pricing_source");
             entity.Property(e => e.Status)
                 .HasMaxLength(20)
                 .HasColumnName("status");
+            entity.Property(e => e.SystemBaseFreight)
+                .HasPrecision(15, 2)
+                .HasColumnName("system_base_freight");
             entity.Property(e => e.VasAmount)
                 .HasPrecision(15, 2)
                 .HasDefaultValueSql("0")
@@ -1074,6 +1137,43 @@ public partial class ApplicationDbContext : DbContext
             entity.HasOne(d => d.ProcessedByNavigation).WithMany(p => p.ReturnedItems)
                 .HasForeignKey(d => d.ProcessedBy)
                 .HasConstraintName("fk_ri_users");
+        });
+
+        modelBuilder.Entity<RouteMaster>(entity =>
+        {
+            entity.HasKey(e => e.RouteId).HasName("route_master_pkey");
+
+            entity.ToTable("route_master");
+
+            entity.HasIndex(e => e.RouteCode, "route_master_route_code_key").IsUnique();
+
+            entity.Property(e => e.RouteId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("route_id");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+            entity.Property(e => e.CutOffTime)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("cut_off_time");
+            entity.Property(e => e.DestCity)
+                .HasMaxLength(50)
+                .HasColumnName("dest_city");
+            entity.Property(e => e.Etd)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("etd");
+            entity.Property(e => e.OriginCity)
+                .HasMaxLength(50)
+                .HasColumnName("origin_city");
+            entity.Property(e => e.RouteCode)
+                .HasMaxLength(50)
+                .HasColumnName("route_code");
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'ACTIVE'::character varying")
+                .HasColumnName("status");
+            entity.Property(e => e.TransitTimeHours).HasColumnName("transit_time_hours");
         });
 
         modelBuilder.Entity<Role>(entity =>
@@ -1291,6 +1391,7 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.Quantity)
                 .HasDefaultValue(1)
                 .HasColumnName("quantity");
+            entity.Property(e => e.RouteId).HasColumnName("route_id");
             entity.Property(e => e.Status)
                 .HasMaxLength(30)
                 .HasColumnName("status");
@@ -1316,6 +1417,10 @@ public partial class ApplicationDbContext : DbContext
             entity.HasOne(d => d.PickupLocationNavigation).WithMany(p => p.TransportOrderPickupLocationNavigations)
                 .HasForeignKey(d => d.PickupLocation)
                 .HasConstraintName("fk_to_pickup");
+
+            entity.HasOne(d => d.Route).WithMany(p => p.TransportOrders)
+                .HasForeignKey(d => d.RouteId)
+                .HasConstraintName("fk_to_route");
         });
 
         modelBuilder.Entity<TripStop>(entity =>
