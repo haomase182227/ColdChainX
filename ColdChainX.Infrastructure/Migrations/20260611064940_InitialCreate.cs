@@ -1,6 +1,5 @@
 ﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
-using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
@@ -40,6 +39,7 @@ namespace ColdChainX.Infrastructure.Migrations
                 columns: table => new
                 {
                     driver_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    user_id = table.Column<Guid>(type: "uuid", nullable: true),
                     date_of_birth = table.Column<DateOnly>(type: "date", nullable: false),
                     status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true, defaultValueSql: "'AVAILABLE'::character varying"),
                     created_at = table.Column<DateTime>(type: "timestamp without time zone", nullable: true, defaultValueSql: "CURRENT_TIMESTAMP")
@@ -99,15 +99,13 @@ namespace ColdChainX.Infrastructure.Migrations
                 schema: "public",
                 columns: table => new
                 {
-                    id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    role_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
                     role_name = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
-                    description = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
-                    created_at = table.Column<DateTime>(type: "timestamp without time zone", nullable: true, defaultValueSql: "CURRENT_TIMESTAMP")
+                    description = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("roles_pkey", x => x.id);
+                    table.PrimaryKey("roles_pkey", x => x.role_id);
                 });
 
             migrationBuilder.CreateTable(
@@ -154,31 +152,6 @@ namespace ColdChainX.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "customer_contracts",
-                schema: "public",
-                columns: table => new
-                {
-                    contract_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
-                    customer_id = table.Column<Guid>(type: "uuid", nullable: true),
-                    contract_number = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
-                    signed_date = table.Column<DateOnly>(type: "date", nullable: false),
-                    expired_date = table.Column<DateOnly>(type: "date", nullable: false),
-                    file_url = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
-                    status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true, defaultValueSql: "'ACTIVE'::character varying"),
-                    created_at = table.Column<DateTime>(type: "timestamp without time zone", nullable: true, defaultValueSql: "CURRENT_TIMESTAMP")
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("customer_contracts_pkey", x => x.contract_id);
-                    table.ForeignKey(
-                        name: "fk_cc_customers",
-                        column: x => x.customer_id,
-                        principalSchema: "public",
-                        principalTable: "customers",
-                        principalColumn: "customer_id");
-                });
-
-            migrationBuilder.CreateTable(
                 name: "invoices",
                 schema: "public",
                 columns: table => new
@@ -217,7 +190,6 @@ namespace ColdChainX.Infrastructure.Migrations
                 {
                     location_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
                     customer_id = table.Column<Guid>(type: "uuid", nullable: true),
-                    location_name = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
                     address = table.Column<string>(type: "text", nullable: false),
                     latitude = table.Column<decimal>(type: "numeric(10,7)", precision: 10, scale: 7, nullable: false),
                     longitude = table.Column<decimal>(type: "numeric(10,7)", precision: 10, scale: 7, nullable: false),
@@ -289,7 +261,7 @@ namespace ColdChainX.Infrastructure.Migrations
                 schema: "public",
                 columns: table => new
                 {
-                    role_id = table.Column<int>(type: "integer", nullable: false),
+                    role_id = table.Column<Guid>(type: "uuid", nullable: false),
                     perm_id = table.Column<Guid>(type: "uuid", nullable: false)
                 },
                 constraints: table =>
@@ -306,7 +278,7 @@ namespace ColdChainX.Infrastructure.Migrations
                         column: x => x.role_id,
                         principalSchema: "public",
                         principalTable: "roles",
-                        principalColumn: "id");
+                        principalColumn: "role_id");
                 });
 
             migrationBuilder.CreateTable(
@@ -314,18 +286,22 @@ namespace ColdChainX.Infrastructure.Migrations
                 schema: "public",
                 columns: table => new
                 {
-                    user_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    user_id = table.Column<Guid>(type: "uuid", maxLength: 36, nullable: false),
                     username = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
                     password_hash = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
                     email = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
-                    role_id = table.Column<int>(type: "integer", nullable: true),
+                    role_id = table.Column<Guid>(type: "uuid", nullable: true),
                     full_name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
                     phone = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
                     status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true, defaultValueSql: "'ACTIVE'::character varying"),
-                    refresh_token = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
-                    refresh_token_expiry_time = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
+                    refresh_token = table.Column<string>(type: "text", nullable: true),
+                    refresh_token_expiry_time = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     created_at = table.Column<DateTime>(type: "timestamp without time zone", nullable: true, defaultValueSql: "CURRENT_TIMESTAMP"),
-                    updated_at = table.Column<DateTime>(type: "timestamp without time zone", nullable: true)
+                    created_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    updated_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    deleted_at = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
+                    deleted_by = table.Column<Guid>(type: "uuid", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -335,7 +311,7 @@ namespace ColdChainX.Infrastructure.Migrations
                         column: x => x.role_id,
                         principalSchema: "public",
                         principalTable: "roles",
-                        principalColumn: "id");
+                        principalColumn: "role_id");
                 });
 
             migrationBuilder.CreateTable(
@@ -633,7 +609,7 @@ namespace ColdChainX.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "transport_order",
+                name: "transport_orders",
                 schema: "public",
                 columns: table => new
                 {
@@ -642,6 +618,8 @@ namespace ColdChainX.Infrastructure.Migrations
                     customer_id = table.Column<Guid>(type: "uuid", nullable: true),
                     item_name = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
                     category = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    quantity = table.Column<int>(type: "integer", nullable: false, defaultValue: 1),
+                    packing_type = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false, defaultValueSql: "'Thùng'::character varying"),
                     temp_condition = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
                     expected_weight_kg = table.Column<decimal>(type: "numeric(10,2)", precision: 10, scale: 2, nullable: false),
                     actual_weight_kg = table.Column<decimal>(type: "numeric(10,2)", precision: 10, scale: 2, nullable: false),
@@ -656,7 +634,7 @@ namespace ColdChainX.Infrastructure.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("transport_order_pkey", x => x.order_id);
+                    table.PrimaryKey("transport_orders_pkey", x => x.order_id);
                     table.ForeignKey(
                         name: "fk_to_customers",
                         column: x => x.customer_id,
@@ -776,7 +754,39 @@ namespace ColdChainX.Infrastructure.Migrations
                         name: "fk_claims_to",
                         column: x => x.order_id,
                         principalSchema: "public",
-                        principalTable: "transport_order",
+                        principalTable: "transport_orders",
+                        principalColumn: "order_id");
+                });
+
+            migrationBuilder.CreateTable(
+                name: "customer_contracts",
+                schema: "public",
+                columns: table => new
+                {
+                    contract_id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    customer_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    order_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    contract_number = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    signed_date = table.Column<DateOnly>(type: "date", nullable: true),
+                    expired_date = table.Column<DateOnly>(type: "date", nullable: false),
+                    file_url = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
+                    status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true, defaultValueSql: "'ACTIVE'::character varying"),
+                    created_at = table.Column<DateTime>(type: "timestamp without time zone", nullable: true, defaultValueSql: "CURRENT_TIMESTAMP")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("customer_contracts_pkey", x => x.contract_id);
+                    table.ForeignKey(
+                        name: "fk_cc_customers",
+                        column: x => x.customer_id,
+                        principalSchema: "public",
+                        principalTable: "customers",
+                        principalColumn: "customer_id");
+                    table.ForeignKey(
+                        name: "fk_cc_orders",
+                        column: x => x.order_id,
+                        principalSchema: "public",
+                        principalTable: "transport_orders",
                         principalColumn: "order_id");
                 });
 
@@ -807,7 +817,7 @@ namespace ColdChainX.Infrastructure.Migrations
                         name: "fk_epod_to",
                         column: x => x.order_id,
                         principalSchema: "public",
-                        principalTable: "transport_order",
+                        principalTable: "transport_orders",
                         principalColumn: "order_id");
                 });
 
@@ -839,7 +849,7 @@ namespace ColdChainX.Infrastructure.Migrations
                         name: "fk_il_to",
                         column: x => x.order_id,
                         principalSchema: "public",
-                        principalTable: "transport_order",
+                        principalTable: "transport_orders",
                         principalColumn: "order_id");
                 });
 
@@ -864,7 +874,7 @@ namespace ColdChainX.Infrastructure.Migrations
                         name: "fk_noti_order",
                         column: x => x.order_id,
                         principalSchema: "public",
-                        principalTable: "transport_order",
+                        principalTable: "transport_orders",
                         principalColumn: "order_id");
                     table.ForeignKey(
                         name: "fk_noti_sender",
@@ -898,6 +908,7 @@ namespace ColdChainX.Infrastructure.Migrations
                     vas_amount = table.Column<decimal>(type: "numeric(15,2)", precision: 15, scale: 2, nullable: true, defaultValueSql: "0"),
                     vat_amount = table.Column<decimal>(type: "numeric(15,2)", precision: 15, scale: 2, nullable: false),
                     final_amount = table.Column<decimal>(type: "numeric(15,2)", precision: 15, scale: 2, nullable: false),
+                    file_url = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
                     status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
                     created_at = table.Column<DateTime>(type: "timestamp without time zone", nullable: true, defaultValueSql: "CURRENT_TIMESTAMP")
                 },
@@ -908,7 +919,7 @@ namespace ColdChainX.Infrastructure.Migrations
                         name: "fk_quote_to",
                         column: x => x.order_id,
                         principalSchema: "public",
-                        principalTable: "transport_order",
+                        principalTable: "transport_orders",
                         principalColumn: "order_id");
                 });
 
@@ -935,7 +946,7 @@ namespace ColdChainX.Infrastructure.Migrations
                         name: "fk_td_to",
                         column: x => x.order_id,
                         principalSchema: "public",
-                        principalTable: "transport_order",
+                        principalTable: "transport_orders",
                         principalColumn: "order_id");
                     table.ForeignKey(
                         name: "fk_td_uploaded",
@@ -979,7 +990,7 @@ namespace ColdChainX.Infrastructure.Migrations
                         name: "fk_wr_to",
                         column: x => x.order_id,
                         principalSchema: "public",
-                        principalTable: "transport_order",
+                        principalTable: "transport_orders",
                         principalColumn: "order_id");
                     table.ForeignKey(
                         name: "fk_wr_users",
@@ -1120,7 +1131,13 @@ namespace ColdChainX.Infrastructure.Migrations
                     expected_qty = table.Column<decimal>(type: "numeric(10,2)", precision: 10, scale: 2, nullable: false),
                     actual_qty = table.Column<decimal>(type: "numeric(10,2)", precision: 10, scale: 2, nullable: false),
                     condition_status = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true, defaultValueSql: "'GOOD'::character varying"),
-                    note = table.Column<string>(type: "text", nullable: true)
+                    note = table.Column<string>(type: "text", nullable: true),
+                    actual_weight_kg = table.Column<decimal>(type: "numeric(10,2)", precision: 10, scale: 2, nullable: true),
+                    length_cm = table.Column<decimal>(type: "numeric(10,2)", precision: 10, scale: 2, nullable: true),
+                    width_cm = table.Column<decimal>(type: "numeric(10,2)", precision: 10, scale: 2, nullable: true),
+                    height_cm = table.Column<decimal>(type: "numeric(10,2)", precision: 10, scale: 2, nullable: true),
+                    barcode = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    qr_code = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1194,6 +1211,12 @@ namespace ColdChainX.Infrastructure.Migrations
                 schema: "public",
                 table: "customer_contracts",
                 column: "customer_id");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_customer_contracts_order_id",
+                schema: "public",
+                table: "customer_contracts",
+                column: "order_id");
 
             migrationBuilder.CreateIndex(
                 name: "customers_tax_code_key",
@@ -1467,33 +1490,33 @@ namespace ColdChainX.Infrastructure.Migrations
                 column: "verified_by");
 
             migrationBuilder.CreateIndex(
-                name: "IX_transport_order_customer_id",
+                name: "IX_transport_orders_customer_id",
                 schema: "public",
-                table: "transport_order",
+                table: "transport_orders",
                 column: "customer_id");
 
             migrationBuilder.CreateIndex(
-                name: "IX_transport_order_dest_location",
+                name: "IX_transport_orders_dest_location",
                 schema: "public",
-                table: "transport_order",
+                table: "transport_orders",
                 column: "dest_location");
 
             migrationBuilder.CreateIndex(
-                name: "IX_transport_order_master_trip_id",
+                name: "IX_transport_orders_master_trip_id",
                 schema: "public",
-                table: "transport_order",
+                table: "transport_orders",
                 column: "master_trip_id");
 
             migrationBuilder.CreateIndex(
-                name: "IX_transport_order_pickup_location",
+                name: "IX_transport_orders_pickup_location",
                 schema: "public",
-                table: "transport_order",
+                table: "transport_orders",
                 column: "pickup_location");
 
             migrationBuilder.CreateIndex(
-                name: "transport_order_tracking_code_key",
+                name: "transport_orders_tracking_code_key",
                 schema: "public",
-                table: "transport_order",
+                table: "transport_orders",
                 column: "tracking_code",
                 unique: true);
 
@@ -1701,7 +1724,7 @@ namespace ColdChainX.Infrastructure.Migrations
                 schema: "public");
 
             migrationBuilder.DropTable(
-                name: "transport_order",
+                name: "transport_orders",
                 schema: "public");
 
             migrationBuilder.DropTable(

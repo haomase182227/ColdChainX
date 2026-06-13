@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  coldchainx-db:
+    image: postgres:16-alpine
+    container_name: coldchainx-db-container
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ColdChainX@2026
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  coldchainx-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: coldchainx-api-container
+    depends_on:
+      coldchainx-db:
+        condition: service_healthy
+    ports:
+      - "5244:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_HTTP_PORTS=8080
+      - PGHOST=coldchainx-db
+      - PGPORT=5432
+      - PGDATABASE=postgres
+      - PGUSER=postgres
+      - PGPASSWORD=ColdChainX@2026
+    restart: always
+
+  coldchainx-pgadmin:
+    image: dpage/pgadmin4
+    container_name: coldchainx-pgadmin-container
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@coldchainx.com
+      PGADMIN_DEFAULT_PASSWORD: Password@123
+    ports:
+      - "5050:80"
+    depends_on:
+      coldchainx-db:
+        condition: service_healthy
+    restart: always
+
+volumes:
+  pgdata:

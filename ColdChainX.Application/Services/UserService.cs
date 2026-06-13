@@ -102,7 +102,7 @@ namespace ColdChainX.Application.Services
                 Email = email,
                 FullName = request.FullName.Trim(),
                 Phone = request.PhoneNumber?.Trim(),
-                RoleId = role.Id,
+                RoleId = role.RoleId,
                 Role = role,
                 Status = request.Status == UserStatus.Active ? "ACTIVE" : "INACTIVE",
                 CreatedAt = DbNow(),
@@ -160,7 +160,7 @@ namespace ColdChainX.Application.Services
             if (role == null)
                 return ApiResponse<bool>.Failure($"Role '{request.Role}' not found");
 
-            user.RoleId = role.Id;
+            user.RoleId = role.RoleId;
             user.Role = role;
             user.UpdatedAt = DbNow();
             user.UpdatedBy = currentUserId;

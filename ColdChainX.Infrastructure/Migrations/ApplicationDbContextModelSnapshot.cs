@@ -1520,18 +1520,11 @@ namespace ColdChainX.Infrastructure.Migrations
 
             modelBuilder.Entity("ColdChainX.Core.Entities.Role", b =>
                 {
-                    b.Property<int>("Id")
+                    b.Property<Guid>("RoleId")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime?>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                        .HasColumnType("uuid")
+                        .HasColumnName("role_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<string>("Description")
                         .HasMaxLength(255)
@@ -1544,7 +1537,7 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("role_name");
 
-                    b.HasKey("Id")
+                    b.HasKey("RoleId")
                         .HasName("roles_pkey");
 
                     b.HasIndex(new[] { "RoleName" }, "roles_role_name_key")
@@ -1839,7 +1832,7 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("tracking_code");
 
                     b.HasKey("OrderId")
-                        .HasName("transport_order_pkey");
+                        .HasName("transport_orders_pkey");
 
                     b.HasIndex("CustomerId");
 
@@ -1849,10 +1842,10 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.HasIndex("PickupLocation");
 
-                    b.HasIndex(new[] { "TrackingCode" }, "transport_order_tracking_code_key")
+                    b.HasIndex(new[] { "TrackingCode" }, "transport_orders_tracking_code_key")
                         .IsUnique();
 
-                    b.ToTable("transport_order", "public");
+                    b.ToTable("transport_orders", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.TripStop", b =>
@@ -1980,8 +1973,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("refresh_token_expiry_time");
 
-                    b.Property<int?>("RoleId")
-                        .HasColumnType("integer")
+                    b.Property<Guid?>("RoleId")
+                        .HasColumnType("uuid")
                         .HasColumnName("role_id");
 
                     b.Property<string>("Status")
@@ -2401,8 +2394,8 @@ namespace ColdChainX.Infrastructure.Migrations
 
             modelBuilder.Entity("RolePermission", b =>
                 {
-                    b.Property<int>("RoleId")
-                        .HasColumnType("integer")
+                    b.Property<Guid>("RoleId")
+                        .HasColumnType("uuid")
                         .HasColumnName("role_id");
 
                     b.Property<Guid>("PermId")

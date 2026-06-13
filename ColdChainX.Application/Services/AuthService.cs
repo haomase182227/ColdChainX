@@ -276,7 +276,7 @@ namespace ColdChainX.Application.Services
             var refreshToken = _jwtService.GenerateRefreshToken();
 
             user.RefreshToken = refreshToken;
-            user.RefreshTokenExpiryTime = DbNow().AddDays(7);
+            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
 
             await _userRepository.AddCustomerAsync(customer);
             await _userRepository.AddAsync(user);
@@ -335,7 +335,11 @@ namespace ColdChainX.Application.Services
             user.RefreshToken = refreshToken;
             user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
 
-            // Create Driver entity with provided information and link to User account
+            // 1. Save user account first to satisfy foreign key constraints on the drivers table
+            await _userRepository.AddAsync(user);
+            await _userRepository.SaveChangesAsync();
+
+            // 2. Create Driver entity linked to the saved user
             var driver = new Driver
             {
                 DriverId = Guid.NewGuid(),
@@ -347,7 +351,7 @@ namespace ColdChainX.Application.Services
 
             await _driverRepository.AddAsync(driver);
 
-            // Create Driver License if provided
+            // 3. Create Driver License if provided
             if (!string.IsNullOrWhiteSpace(request.LicenseNumber) &&
                 !string.IsNullOrWhiteSpace(request.LicenseClass) &&
                 request.IssueDate.HasValue &&
@@ -369,7 +373,7 @@ namespace ColdChainX.Application.Services
                 await _driverRepository.AddLicenseAsync(license);
             }
 
-            await _userRepository.AddAsync(user);
+            // 4. Save driver and driver license records
             await _userRepository.SaveChangesAsync();
 
             var dto = _mapper.Map<AuthResponseDto>(user);

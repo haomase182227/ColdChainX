@@ -30,4 +30,9 @@
     <ProjectReference Include="..\ColdChainX.Shared\ColdChainX.Shared.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Remove="wwwroot\contracts\**;wwwroot\quotations\**;wwwroot\reports\**" />
+    <None Include="wwwroot\contracts\**;wwwroot\quotations\**;wwwroot\reports\**" />
+  </ItemGroup>
+
 </Project>
