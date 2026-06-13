@@ -1527,9 +1527,23 @@ public partial class ApplicationDbContext : DbContext
 
             entity.ToTable("warehouses");
 
+            entity.HasIndex(e => e.WarehouseCode, "warehouses_warehouse_code_key").IsUnique().HasFilter("\"deleted_at\" IS NULL");
+
             entity.Property(e => e.WarehouseId)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("warehouse_id");
+            entity.Property(e => e.WarehouseCode)
+                .HasMaxLength(20)
+                .HasColumnName("warehouse_code");
+            entity.Property(e => e.WarehouseType)
+                .HasMaxLength(20)
+                .HasColumnName("warehouse_type");
+            entity.Property(e => e.DefaultMinTemp)
+                .HasPrecision(5, 2)
+                .HasColumnName("default_min_temp");
+            entity.Property(e => e.DefaultMaxTemp)
+                .HasPrecision(5, 2)
+                .HasColumnName("default_max_temp");
             entity.Property(e => e.Address)
                 .HasMaxLength(100)
                 .HasColumnName("address");
@@ -1537,6 +1551,7 @@ public partial class ApplicationDbContext : DbContext
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
+            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
             entity.Property(e => e.CurrentPallets)
                 .HasDefaultValue(0)
                 .HasColumnName("current_pallets");
@@ -1548,6 +1563,16 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.WarehouseName)
                 .HasMaxLength(100)
                 .HasColumnName("warehouse_name");
+            entity.Property(e => e.UpdatedAt)
+                .HasColumnType("timestamp with time zone")
+                .HasColumnName("updated_at");
+            entity.Property(e => e.UpdatedBy).HasColumnName("updated_by");
+            entity.Property(e => e.DeletedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("deleted_at");
+            entity.Property(e => e.DeletedBy).HasColumnName("deleted_by");
+
+            entity.HasQueryFilter(e => e.DeletedAt == null);
         });
 
         modelBuilder.Entity<WarehouseReceipt>(entity =>

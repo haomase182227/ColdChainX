@@ -21,6 +21,7 @@ namespace ColdChainX.Infrastructure.Repositories
         public async Task<WarehouseReceipt?> GetByIdAsync(Guid receiptId)
         {
             return await _db.WarehouseReceipts
+                .IgnoreQueryFilters()
                 .Include(r => r.Warehouse)
                 .Include(r => r.Order)
                 .Include(r => r.WarehouseReceiptItems)
@@ -30,6 +31,7 @@ namespace ColdChainX.Infrastructure.Repositories
         public async Task<WarehouseReceipt?> GetByOrderIdAsync(Guid orderId)
         {
             return await _db.WarehouseReceipts
+                .IgnoreQueryFilters()
                 .Include(r => r.Warehouse)
                 .Include(r => r.Order)
                 .Include(r => r.WarehouseReceiptItems)

@@ -69,6 +69,7 @@ namespace ColdChainX.API.Extensions
                     errorCodesToAdd: null)));
 
             services.AddScoped<IUserRepository, UserRepository>();
+            services.AddScoped<IWarehouseRepository, WarehouseRepository>();
             services.AddScoped<IWarehouseReceiptRepository, WarehouseReceiptRepository>();
             services.AddScoped<IVehicleRepository, VehicleRepository>();
             services.AddScoped<IDriverRepository, DriverRepository>();
@@ -77,6 +78,7 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IDriverService, DriverService>();
             services.AddScoped<IJwtService, JwtService>();
             services.AddScoped<IUserService, UserService>();
+            services.AddScoped<IWarehouseService, WarehouseService>();
             services.AddScoped<ICustomerService, CustomerService>();
             services.AddHttpClient<ILocationService, GoongLocationService>(client =>
             {
