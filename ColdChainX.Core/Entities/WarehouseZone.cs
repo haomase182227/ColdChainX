@@ -25,5 +25,6 @@ namespace ColdChainX.Core.Entities
         public Guid? DeletedBy { get; set; }
 
         public virtual Warehouse Warehouse { get; set; } = null!;
+        public virtual ICollection<WarehouseLocation> WarehouseLocations { get; set; } = new List<WarehouseLocation>();
     }
 }

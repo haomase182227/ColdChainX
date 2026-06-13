@@ -88,6 +88,8 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<WarehouseZone> WarehouseZones { get; set; }
 
+    public virtual DbSet<WarehouseLocation> WarehouseLocations { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Set default schema to public for PostgreSQL
@@ -1777,6 +1779,81 @@ public partial class ApplicationDbContext : DbContext
                 .HasForeignKey(d => d.WarehouseId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_warehouse_zones_warehouses");
+
+            entity.HasQueryFilter(e => e.DeletedAt == null);
+        });
+
+        modelBuilder.Entity<WarehouseLocation>(entity =>
+        {
+            entity.HasKey(e => e.LocationId).HasName("warehouse_locations_pkey");
+
+            entity.ToTable("warehouse_locations");
+
+            entity.HasIndex(e => new { e.ZoneId, e.LocationCode }, "IX_warehouse_locations_zone_id_location_code")
+                .IsUnique()
+                .HasFilter("\"deleted_at\" IS NULL");
+
+            entity.Property(e => e.LocationId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("location_id");
+
+            entity.Property(e => e.ZoneId)
+                .HasColumnName("zone_id");
+
+            entity.Property(e => e.LocationCode)
+                .HasMaxLength(50)
+                .HasColumnName("location_code");
+
+            entity.Property(e => e.RackCode)
+                .HasMaxLength(20)
+                .HasColumnName("rack_code");
+
+            entity.Property(e => e.BayCode)
+                .HasMaxLength(20)
+                .HasColumnName("bay_code");
+
+            entity.Property(e => e.LevelCode)
+                .HasMaxLength(20)
+                .HasColumnName("level_code");
+
+            entity.Property(e => e.MaxCapacityPallets)
+                .HasColumnName("max_capacity_pallets");
+
+            entity.Property(e => e.CurrentPallets)
+                .HasDefaultValue(0)
+                .HasColumnName("current_pallets");
+
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'ACTIVE'::character varying")
+                .HasColumnName("status");
+
+            entity.Property(e => e.Description)
+                .HasColumnName("description");
+
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+
+            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
+
+            entity.Property(e => e.UpdatedAt)
+                .HasColumnType("timestamp with time zone")
+                .HasColumnName("updated_at");
+
+            entity.Property(e => e.UpdatedBy).HasColumnName("updated_by");
+
+            entity.Property(e => e.DeletedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("deleted_at");
+
+            entity.Property(e => e.DeletedBy).HasColumnName("deleted_by");
+
+            entity.HasOne(d => d.Zone).WithMany(p => p.WarehouseLocations)
+                .HasForeignKey(d => d.ZoneId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_warehouse_locations_zones");
 
             entity.HasQueryFilter(e => e.DeletedAt == null);
         });
