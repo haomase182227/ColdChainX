@@ -365,7 +365,7 @@ public partial class ApplicationDbContext : DbContext
                 .HasDefaultValueSql("'AVAILABLE'::character varying")
                 .HasColumnName("status");
 
-            entity.HasOne<User>()
+            entity.HasOne(d => d.User)
                 .WithMany()
                 .HasForeignKey(d => d.UserId)
                 .HasConstraintName("fk_drivers_users");
