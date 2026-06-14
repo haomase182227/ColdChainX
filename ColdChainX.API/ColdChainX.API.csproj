@@ -33,6 +33,12 @@
   <ItemGroup>
     <Content Remove="wwwroot\contracts\**;wwwroot\quotations\**;wwwroot\reports\**" />
     <None Include="wwwroot\contracts\**;wwwroot\quotations\**;wwwroot\reports\**" />
+    <None Update="Templates\ProshipContractTemplate.html">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Templates\QuotationTemplate.html">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

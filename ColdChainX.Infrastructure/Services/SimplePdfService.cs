@@ -86,7 +86,14 @@ namespace ColdChainX.Infrastructure.Services
             {
                 Headless = true,
                 ExecutablePath = executablePath,
-                Args = ["--no-sandbox", "--disable-setuid-sandbox"]
+                Args =
+                [
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                    "--no-zygote"
+                ]
             });
         }
 
