@@ -34,7 +34,8 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult<ApiResponse<VehicleDto>>> Create([FromBody] VehicleCreateRequest request)
+        [Consumes("multipart/form-data")]
+        public async Task<ActionResult<ApiResponse<VehicleDto>>> Create([FromForm] VehicleCreateRequest request)
         {
             var result = await _vehicleService.CreateAsync(request);
             if (!result.Success) return Conflict(result);
