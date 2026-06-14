@@ -6,6 +6,7 @@ public partial class InventoryMovement
 {
     public Guid MovementId { get; set; }
     public Guid? StockId { get; set; }
+    public Guid? WarehouseReceiptItemId { get; set; }
     public string ItemCode { get; set; } = null!;
     public Guid BatchId { get; set; }
     public string MovementType { get; set; } = null!; // INBOUND, OUTBOUND, PUTAWAY, RELOCATION, ADJUSTMENT
@@ -19,4 +20,5 @@ public partial class InventoryMovement
     public virtual InventoryBatch Batch { get; set; } = null!;
     public virtual WarehouseLocation? FromLocation { get; set; }
     public virtual WarehouseLocation? ToLocation { get; set; }
+    public virtual WarehouseReceiptItem? WarehouseReceiptItem { get; set; }
 }

@@ -6,6 +6,7 @@ public partial class InventoryStock
 {
     public Guid StockId { get; set; }
     public Guid LocationId { get; set; }
+    public Guid CustomerId { get; set; }
     public string ItemCode { get; set; } = null!;
     public string ItemName { get; set; } = null!;
     public string Unit { get; set; } = null!;
@@ -24,4 +25,5 @@ public partial class InventoryStock
 
     public virtual WarehouseLocation Location { get; set; } = null!;
     public virtual InventoryBatch Batch { get; set; } = null!;
+    public virtual Customer Customer { get; set; } = null!;
 }

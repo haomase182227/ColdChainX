@@ -105,10 +105,22 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<OutboundOrderItem> OutboundOrderItems { get; set; }
 
+    public virtual DbSet<WarehouseEvidenceAttachment> WarehouseEvidenceAttachments { get; set; }
+    public virtual DbSet<AttachmentAuditHistory> AttachmentAuditHistories { get; set; }
+    public virtual DbSet<ComplianceZoningRule> ComplianceZoningRules { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Set default schema to public for PostgreSQL
         modelBuilder.HasDefaultSchema("public");
+
+        // PostgreSQL Enums Configuration
+        modelBuilder.HasPostgresEnum<AttachmentFormat>();
+        modelBuilder.HasPostgresEnum<AttachmentCategory>();
+        modelBuilder.HasPostgresEnum<AttachmentSubCategory>();
+        modelBuilder.HasPostgresEnum<ProductCategory>();
+        modelBuilder.HasPostgresEnum<DocumentStatus>();
+        modelBuilder.HasPostgresEnum<RequirementLevel>();
 
         modelBuilder.Entity<AlertLog>(entity =>
         {
@@ -1715,8 +1727,17 @@ public partial class ApplicationDbContext : DbContext
                 .HasColumnName("qr_code");
 
             entity.Property(e => e.BatchNumber)
+                .IsRequired()
                 .HasMaxLength(50)
                 .HasColumnName("batch_number");
+
+            entity.Property(e => e.ProductCategory)
+                .HasColumnName("product_category");
+
+            entity.Property(e => e.CountryOfOrigin)
+                .IsRequired()
+                .HasMaxLength(100)
+                .HasColumnName("country_of_origin");
 
             entity.Property(e => e.ManufacturedDate)
                 .HasColumnName("manufactured_date");
@@ -1917,12 +1938,13 @@ public partial class ApplicationDbContext : DbContext
         {
             entity.HasKey(e => e.StockId).HasName("inventory_stocks_pkey");
             entity.ToTable("inventory_stocks");
-            entity.HasIndex(e => new { e.LocationId, e.ItemCode, e.BatchId }, "uq_location_item_batch").IsUnique();
+            entity.HasIndex(e => new { e.LocationId, e.CustomerId, e.ItemCode, e.BatchId }, "uq_location_customer_item_batch").IsUnique();
 
             entity.Property(e => e.StockId)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("stock_id");
             entity.Property(e => e.LocationId).HasColumnName("location_id");
+            entity.Property(e => e.CustomerId).HasColumnName("customer_id");
             entity.Property(e => e.ItemCode)
                 .HasMaxLength(50)
                 .HasColumnName("item_code");
@@ -1977,6 +1999,11 @@ public partial class ApplicationDbContext : DbContext
                 .HasForeignKey(d => d.BatchId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_stock_batch");
+
+            entity.HasOne(d => d.Customer).WithMany()
+                .HasForeignKey(d => d.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_stock_customer");
         });
 
         modelBuilder.Entity<InventoryMovement>(entity =>
@@ -2001,6 +2028,7 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.FromLocationId).HasColumnName("from_location_id");
             entity.Property(e => e.ToLocationId).HasColumnName("to_location_id");
             entity.Property(e => e.ReferenceDocumentId).HasColumnName("reference_document_id");
+            entity.Property(e => e.WarehouseReceiptItemId).HasColumnName("warehouse_receipt_item_id");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone")
@@ -2021,6 +2049,11 @@ public partial class ApplicationDbContext : DbContext
                 .HasForeignKey(d => d.ToLocationId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_movement_to_loc");
+
+            entity.HasOne(d => d.WarehouseReceiptItem).WithMany()
+                .HasForeignKey(d => d.WarehouseReceiptItemId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_movement_receipt_item");
         });
 
         modelBuilder.Entity<InventoryAdjustment>(entity =>
@@ -2188,6 +2221,243 @@ public partial class ApplicationDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_item_outbound_order");
         });
+
+        modelBuilder.Entity<WarehouseEvidenceAttachment>(entity =>
+        {
+            entity.HasKey(e => e.AttachmentId).HasName("warehouse_evidence_attachments_pkey");
+            entity.ToTable("warehouse_evidence_attachments");
+
+            entity.Property(e => e.AttachmentId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("attachment_id");
+
+            entity.Property(e => e.FileName)
+                .HasMaxLength(255)
+                .HasColumnName("file_name");
+
+            entity.Property(e => e.FilePath)
+                .HasMaxLength(512)
+                .HasColumnName("file_path");
+
+            entity.Property(e => e.FileUrl)
+                .HasMaxLength(1024)
+                .HasColumnName("file_url");
+
+            entity.Property(e => e.FileSize)
+                .HasColumnName("file_size");
+
+            entity.Property(e => e.ContentType)
+                .HasMaxLength(100)
+                .HasColumnName("content_type");
+
+            entity.Property(e => e.Format)
+                .HasColumnName("format");
+
+            entity.Property(e => e.Category)
+                .HasColumnName("category");
+
+            entity.Property(e => e.SubCategory)
+                .HasColumnName("sub_category");
+
+            entity.Property(e => e.Status)
+                .HasColumnName("status");
+
+            entity.Property(e => e.DocumentNumber)
+                .HasMaxLength(100)
+                .HasColumnName("document_number");
+
+            entity.Property(e => e.Issuer)
+                .HasMaxLength(150)
+                .HasColumnName("issuer");
+
+            entity.Property(e => e.IssueDate)
+                .HasColumnName("issue_date");
+
+            entity.Property(e => e.ExpiryDate)
+                .HasColumnName("expiry_date");
+
+            entity.Property(e => e.CapturedValue)
+                .HasPrecision(18, 4)
+                .HasColumnName("captured_value");
+
+            entity.Property(e => e.SealNumber)
+                .HasMaxLength(100)
+                .HasColumnName("seal_number");
+
+            entity.Property(e => e.RejectionReason)
+                .HasMaxLength(255)
+                .HasColumnName("rejection_reason");
+
+            entity.Property(e => e.VerifiedBy)
+                .HasColumnName("verified_by");
+
+            entity.Property(e => e.VerifiedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("verified_at");
+
+            entity.Property(e => e.WarehouseReceiptId)
+                .HasColumnName("warehouse_receipt_id");
+
+            entity.Property(e => e.WarehouseReceiptItemId)
+                .HasColumnName("warehouse_receipt_item_id");
+
+            entity.Property(e => e.InventoryAdjustmentId)
+                .HasColumnName("inventory_adjustment_id");
+
+            entity.Property(e => e.OutboundOrderId)
+                .HasColumnName("outbound_order_id");
+
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+
+            entity.Property(e => e.CreatedBy)
+                .HasColumnName("created_by");
+
+            // Relationships
+            entity.HasOne(d => d.WarehouseReceipt).WithMany()
+                .HasForeignKey(d => d.WarehouseReceiptId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_att_receipt");
+
+            entity.HasOne(d => d.WarehouseReceiptItem).WithMany()
+                .HasForeignKey(d => d.WarehouseReceiptItemId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_att_receipt_item");
+
+            entity.HasOne(d => d.InventoryAdjustment).WithMany()
+                .HasForeignKey(d => d.InventoryAdjustmentId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_att_adjustment");
+
+            entity.HasOne(d => d.OutboundOrder).WithMany()
+                .HasForeignKey(d => d.OutboundOrderId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_att_outbound");
+
+            // Check constraint
+            entity.ToTable(t => t.HasCheckConstraint("chk_attachment_target",
+                "(warehouse_receipt_id IS NOT NULL)::int + " +
+                "(warehouse_receipt_item_id IS NOT NULL)::int + " +
+                "(inventory_adjustment_id IS NOT NULL)::int + " +
+                "(outbound_order_id IS NOT NULL)::int = 1"));
+
+            // Indexes
+            entity.HasIndex(e => e.WarehouseReceiptId).HasDatabaseName("idx_att_receipt");
+            entity.HasIndex(e => e.WarehouseReceiptItemId).HasDatabaseName("idx_att_receipt_item");
+            entity.HasIndex(e => e.InventoryAdjustmentId).HasDatabaseName("idx_att_adjustment");
+            entity.HasIndex(e => e.OutboundOrderId).HasDatabaseName("idx_att_outbound");
+        });
+
+        modelBuilder.Entity<AttachmentAuditHistory>(entity =>
+        {
+            entity.HasKey(e => e.HistoryId).HasName("attachment_audit_history_pkey");
+            entity.ToTable("attachment_audit_history");
+
+            entity.Property(e => e.HistoryId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("history_id");
+
+            entity.Property(e => e.AttachmentId)
+                .HasColumnName("attachment_id");
+
+            entity.Property(e => e.PreviousStatus)
+                .HasColumnName("previous_status");
+
+            entity.Property(e => e.NewStatus)
+                .HasColumnName("new_status");
+
+            entity.Property(e => e.Reason)
+                .HasMaxLength(255)
+                .HasColumnName("reason");
+
+            entity.Property(e => e.ChangedBy)
+                .HasColumnName("changed_by");
+
+            entity.Property(e => e.ChangedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("changed_at");
+
+            // Relationships
+            entity.HasOne(d => d.Attachment).WithMany()
+                .HasForeignKey(d => d.AttachmentId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_history_attachment");
+
+            entity.HasIndex(e => e.AttachmentId).HasDatabaseName("idx_history_attachment");
+        });
+
+        modelBuilder.Entity<ComplianceZoningRule>(entity =>
+        {
+            entity.HasKey(e => e.RuleId).HasName("compliance_zoning_rules_pkey");
+            entity.ToTable("compliance_zoning_rules");
+
+            entity.Property(e => e.RuleId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("rule_id");
+
+            entity.Property(e => e.ProductCategory)
+                .HasColumnName("product_category");
+
+            entity.Property(e => e.SubCategory)
+                .HasColumnName("sub_category");
+
+            entity.Property(e => e.RequirementLevel)
+                .HasColumnName("requirement_level");
+
+            entity.Property(e => e.IsActive)
+                .HasDefaultValue(true)
+                .HasColumnName("is_active");
+
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+
+            entity.Property(e => e.CreatedBy)
+                .HasColumnName("created_by");
+
+            entity.Property(e => e.UpdatedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("updated_at");
+
+            entity.Property(e => e.UpdatedBy)
+                .HasColumnName("updated_by");
+
+            entity.HasIndex(e => new { e.ProductCategory, e.SubCategory }, "uq_rule_category_subcategory").IsUnique();
+        });
+
+        modelBuilder.Entity<ComplianceZoningRule>().HasData(
+            new ComplianceZoningRule { RuleId = new Guid("b001a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1"), ProductCategory = ProductCategory.FOOD, SubCategory = AttachmentSubCategory.FOOD_SAFETY_CERTIFICATE, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b001a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a2"), ProductCategory = ProductCategory.FOOD, SubCategory = AttachmentSubCategory.VEHICLE_PHOTO, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b001a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a3"), ProductCategory = ProductCategory.FOOD, SubCategory = AttachmentSubCategory.TEMPERATURE_PHOTO, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+
+            new ComplianceZoningRule { RuleId = new Guid("b002a2a2-a2a2-a2a2-a2a2-a2a2a2a2a2a1"), ProductCategory = ProductCategory.SEAFOOD, SubCategory = AttachmentSubCategory.FOOD_SAFETY_CERTIFICATE, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b002a2a2-a2a2-a2a2-a2a2-a2a2a2a2a2a2"), ProductCategory = ProductCategory.SEAFOOD, SubCategory = AttachmentSubCategory.QUARANTINE_CERTIFICATE, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b002a2a2-a2a2-a2a2-a2a2-a2a2a2a2a2a3"), ProductCategory = ProductCategory.SEAFOOD, SubCategory = AttachmentSubCategory.VEHICLE_PHOTO, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b002a2a2-a2a2-a2a2-a2a2-a2a2a2a2a2a4"), ProductCategory = ProductCategory.SEAFOOD, SubCategory = AttachmentSubCategory.TEMPERATURE_PHOTO, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+
+            new ComplianceZoningRule { RuleId = new Guid("b003a3a3-a3a3-a3a3-a3a3-a3a3a3a3a3a1"), ProductCategory = ProductCategory.AGRICULTURE, SubCategory = AttachmentSubCategory.PLANT_QUARANTINE_CERTIFICATE, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b003a3a3-a3a3-a3a3-a3a3-a3a3a3a3a3a2"), ProductCategory = ProductCategory.AGRICULTURE, SubCategory = AttachmentSubCategory.VEHICLE_PHOTO, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+
+            new ComplianceZoningRule { RuleId = new Guid("b004a4a4-a4a4-a4a4-a4a4-a4a4a4a4a4a1"), ProductCategory = ProductCategory.PHARMA, SubCategory = AttachmentSubCategory.PRODUCT_LICENSE, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b004a4a4-a4a4-a4a4-a4a4-a4a4a4a4a4a2"), ProductCategory = ProductCategory.PHARMA, SubCategory = AttachmentSubCategory.COA_CERTIFICATE, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b004a4a4-a4a4-a4a4-a4a4-a4a4a4a4a4a3"), ProductCategory = ProductCategory.PHARMA, SubCategory = AttachmentSubCategory.VEHICLE_PHOTO, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b004a4a4-a4a4-a4a4-a4a4-a4a4a4a4a4a4"), ProductCategory = ProductCategory.PHARMA, SubCategory = AttachmentSubCategory.TEMPERATURE_PHOTO, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+
+            new ComplianceZoningRule { RuleId = new Guid("b005a5a5-a5a5-a5a5-a5a5-a5a5a5a5a5a1"), ProductCategory = ProductCategory.VACCINE, SubCategory = AttachmentSubCategory.PRODUCT_LICENSE, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b005a5a5-a5a5-a5a5-a5a5-a5a5a5a5a5a2"), ProductCategory = ProductCategory.VACCINE, SubCategory = AttachmentSubCategory.BATCH_RELEASE_CERTIFICATE, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b005a5a5-a5a5-a5a5-a5a5-a5a5a5a5a5a3"), ProductCategory = ProductCategory.VACCINE, SubCategory = AttachmentSubCategory.COA_CERTIFICATE, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b005a5a5-a5a5-a5a5-a5a5-a5a5a5a5a5a4"), ProductCategory = ProductCategory.VACCINE, SubCategory = AttachmentSubCategory.VEHICLE_PHOTO, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b005a5a5-a5a5-a5a5-a5a5-a5a5a5a5a5a5"), ProductCategory = ProductCategory.VACCINE, SubCategory = AttachmentSubCategory.TEMPERATURE_PHOTO, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+
+            new ComplianceZoningRule { RuleId = new Guid("b006a6a6-a6a6-a6a6-a6a6-a6a6a6a6a6a1"), ProductCategory = ProductCategory.IMPORT_GOODS, SubCategory = AttachmentSubCategory.CUSTOMS_DECLARATION, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b006a6a6-a6a6-a6a6-a6a6-a6a6a6a6a6a2"), ProductCategory = ProductCategory.IMPORT_GOODS, SubCategory = AttachmentSubCategory.CERTIFICATE_OF_ORIGIN, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b006a6a6-a6a6-a6a6-a6a6-a6a6a6a6a6a3"), ProductCategory = ProductCategory.IMPORT_GOODS, SubCategory = AttachmentSubCategory.SEAL_PHOTO, RequirementLevel = RequirementLevel.CONDITIONAL, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b006a6a6-a6a6-a6a6-a6a6-a6a6a6a6a6a4"), ProductCategory = ProductCategory.IMPORT_GOODS, SubCategory = AttachmentSubCategory.VEHICLE_PHOTO, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty }
+        );
 
         OnModelCreatingPartial(modelBuilder);
     }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using ColdChainX.Core.Enums;
 
 namespace ColdChainX.Core.Entities;
 
@@ -12,6 +13,10 @@ public partial class WarehouseReceiptItem
     public string ItemName { get; set; } = null!;
 
     public string? ItemCode { get; set; }
+
+    public ProductCategory ProductCategory { get; set; }
+
+    public string CountryOfOrigin { get; set; } = null!;
 
     public string Unit { get; set; } = null!;
 
@@ -35,7 +40,7 @@ public partial class WarehouseReceiptItem
 
     public string? QrCode { get; set; }
 
-    public string? BatchNumber { get; set; }
+    public string BatchNumber { get; set; } = null!;
 
     public DateOnly? ManufacturedDate { get; set; }
 

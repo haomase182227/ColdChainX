@@ -75,6 +75,7 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IWarehouseReceiptRepository, WarehouseReceiptRepository>();
             services.AddScoped<IVehicleRepository, VehicleRepository>();
             services.AddScoped<IDriverRepository, DriverRepository>();
+            services.AddScoped<IWarehouseAttachmentRepository, WarehouseAttachmentRepository>();
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IVehicleService, VehicleService>();
             services.AddScoped<IDriverService, DriverService>();
