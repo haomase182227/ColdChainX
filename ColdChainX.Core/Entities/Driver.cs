@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace ColdChainX.Core.Entities;
@@ -20,4 +20,6 @@ public partial class Driver
     public virtual ICollection<ExpenseAdvance> ExpenseAdvances { get; set; } = new List<ExpenseAdvance>();
 
     public virtual ICollection<MasterTrip> MasterTrips { get; set; } = new List<MasterTrip>();
+
+    public virtual User? User { get; set; }
 }

@@ -90,9 +90,25 @@ namespace ColdChainX.Application.Services
             return new DriverDto
             {
                 DriverId = driver.DriverId,
+                UserId = driver.UserId,
+                Username = driver.User?.Username,
+                Email = driver.User?.Email,
+                FullName = driver.User?.FullName,
                 DateOfBirth = driver.DateOfBirth,
                 Status = driver.Status,
-                CreatedAt = driver.CreatedAt
+                CreatedAt = driver.CreatedAt,
+                DriverLicenses = driver.DriverLicenses?.Select(l => new DriverLicenseDto
+                {
+                    LicenseId = l.LicenseId,
+                    DriverId = l.DriverId,
+                    LicenseNumber = l.LicenseNumber,
+                    LicenseClass = l.LicenseClass,
+                    IssueDate = l.IssueDate,
+                    ExpiryDate = l.ExpiryDate,
+                    DocumentUrl = l.DocumentUrl,
+                    Status = l.Status,
+                    CreatedAt = l.CreatedAt
+                }).ToList() ?? new List<DriverLicenseDto>()
             };
         }
 
