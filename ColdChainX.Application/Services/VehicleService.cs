@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using ColdChainX.Application.DTOs;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
+using ColdChainX.Core.Enums;
 using ColdChainX.Core.Interfaces;
 using ColdChainX.Shared.Responses;
 
@@ -69,12 +70,12 @@ namespace ColdChainX.Application.Services
                 ChassisNumber = NormalizeOptional(request.ChassisNumber),
                 EngineNumber = NormalizeOptional(request.EngineNumber),
                 StandardFuelLiters = request.StandardFuelLiters,
-                VehicleType = request.VehicleType.Trim(),
+                VehicleType = request.VehicleType.ToString().ToUpperInvariant(),
                 MaxWeight = request.MaxWeight,
                 MaxCbm = request.MaxCbm,
                 MinTemp = request.MinTemp,
                 MaxTemp = request.MaxTemp,
-                Status = NormalizeStatus(request.Status, ActiveStatus),
+                Status = request.Status.ToString().ToUpperInvariant(),
                 CreatedAt = DbNow()
             };
 
