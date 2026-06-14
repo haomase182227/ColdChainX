@@ -37,8 +37,8 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
-        // Admin endpoint: create a customer user and customer record with role assigned
-        [Authorize(Roles = "Admin,ADMIN")]
+        // Public endpoint for customer self-registration
+        [AllowAnonymous]
         [HttpPost("create-customer")]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> CreateCustomer([FromForm] CreateCustomerRequest request)
