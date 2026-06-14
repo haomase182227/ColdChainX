@@ -8,7 +8,7 @@ namespace ColdChainX.Application.DTOs.Asns
         public Guid RouteId { get; set; }
         public string RouteCode { get; set; } = null!;
         public DateTime RequestedDropoffTime { get; set; }
-        public DateTime CutOffTime { get; set; }
+        public TimeSpan CutOffTime { get; set; }
         public string QrCodeValue { get; set; } = null!;
         public string Status { get; set; } = null!;
         public DateTime? CreatedAt { get; set; }

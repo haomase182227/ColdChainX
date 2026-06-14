@@ -13,15 +13,15 @@ public partial class RouteMaster
 
     public string DestCity { get; set; } = null!;
 
-    public DateTime Etd { get; set; }
+    public string TransitTime { get; set; } = null!;
 
-    public int TransitTimeHours { get; set; }
-
-    public DateTime CutOffTime { get; set; }
+    public TimeSpan CutOffTime { get; set; }
 
     public string Status { get; set; } = null!;
 
     public DateTime? CreatedAt { get; set; }
 
     public virtual ICollection<TransportOrder> TransportOrders { get; set; } = new List<TransportOrder>();
+
+    public virtual ICollection<WeightTier> WeightTiers { get; set; } = new List<WeightTier>();
 }

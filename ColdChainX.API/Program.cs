@@ -103,5 +103,6 @@ app.MapGet("/", () => Results.Ok(new
 
 app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications");
+app.MapHub<ChatHub>("/hubs/chat");
 
 app.Run();

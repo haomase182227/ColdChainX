@@ -39,6 +39,58 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
+        [HttpPut("{contractId:guid}")]
+        [Authorize(Roles = "Sales,Admin,Manager")]
+        public async Task<IActionResult> UpdateContractDraft(Guid contractId, [FromBody] UpdateContractDraftRequest request)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var salesUserId))
+                return Unauthorized("UserId claim is missing from token");
+
+            var result = await _contractService.UpdateContractDraftAsync(contractId, request, salesUserId);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        [HttpPost("{contractId:guid}/send")]
+        [Authorize(Roles = "Sales,Admin,Manager")]
+        public async Task<IActionResult> SendContract(Guid contractId)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var salesUserId))
+                return Unauthorized("UserId claim is missing from token");
+
+            var result = await _contractService.SendContractAsync(contractId, salesUserId);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        [HttpPost("{contractId:guid}/upload-signed")]
+        [Authorize(Roles = "Customer")]
+        public async Task<IActionResult> UploadSignedContract(Guid contractId, [FromForm] UploadSignedContractRequest request)
+        {
+            var customerIdClaim = User.FindFirst("CustomerId")?.Value;
+            if (!Guid.TryParse(customerIdClaim, out var customerId))
+                return Unauthorized("CustomerId claim is missing from token");
+
+            var result = await _contractService.UploadSignedContractAsync(contractId, request, customerId);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        [HttpPost("{contractId:guid}/verify")]
+        [Authorize(Roles = "Sales,Admin,Manager")]
+        public async Task<IActionResult> VerifyContract(Guid contractId)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var salesUserId))
+                return Unauthorized("UserId claim is missing from token");
+
+            var result = await _contractService.VerifyContractAsync(contractId, salesUserId);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
         [HttpPost("{contractId:guid}/approve")]
         [Authorize(Roles = "Customer")]
         public async Task<IActionResult> ApproveContract(Guid contractId)

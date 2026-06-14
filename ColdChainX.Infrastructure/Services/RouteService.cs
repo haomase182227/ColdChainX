@@ -20,11 +20,11 @@ namespace ColdChainX.Infrastructure.Services
 
         public async Task<ApiResponse<IReadOnlyCollection<RouteOptionResponse>>> GetRouteOptionsAsync(string? originCity, string? destCity)
         {
-            var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
             var routes = await _db.RouteMasters
                 .AsNoTracking()
-                .Where(r => r.Status == "ACTIVE" && r.CutOffTime >= now)
-                .OrderBy(r => r.Etd)
+                .Where(r => r.Status == "ACTIVE")
+                .OrderBy(r => r.OriginCity)
+                .ThenBy(r => r.DestCity)
                 .ToListAsync();
 
             if (!string.IsNullOrWhiteSpace(originCity))
@@ -51,9 +51,7 @@ namespace ColdChainX.Infrastructure.Services
                 RouteCode = route.RouteCode,
                 OriginCity = route.OriginCity,
                 DestCity = route.DestCity,
-                Etd = route.Etd,
-                TransitTimeHours = route.TransitTimeHours,
-                Eta = route.Etd.AddHours(route.TransitTimeHours),
+                TransitTime = route.TransitTime,
                 CutOffTime = route.CutOffTime,
                 Status = route.Status
             };
@@ -65,7 +63,10 @@ namespace ColdChainX.Infrastructure.Services
                 .ToLowerInvariant()
                 .Replace(" ", string.Empty)
                 .Replace(".", string.Empty)
-                .Replace("-", string.Empty);
+                .Replace("-", string.Empty)
+                .Replace("hochiminh", "hcm")
+                .Replace("tphcm", "hcm")
+                .Replace("saigon", "hcm");
         }
 
         private static string RemoveDiacritics(string text)

@@ -6,10 +6,8 @@ namespace ColdChainX.Application.DTOs.Routes
         public string RouteCode { get; set; } = null!;
         public string OriginCity { get; set; } = null!;
         public string DestCity { get; set; } = null!;
-        public DateTime Etd { get; set; }
-        public int TransitTimeHours { get; set; }
-        public DateTime Eta { get; set; }
-        public DateTime CutOffTime { get; set; }
+        public string TransitTime { get; set; } = null!;
+        public TimeSpan CutOffTime { get; set; }
         public string Status { get; set; } = null!;
     }
 }

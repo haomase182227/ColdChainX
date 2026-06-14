@@ -8,7 +8,6 @@ namespace ColdChainX.Application.DTOs.Orders
         public Guid? QuoteId { get; set; }
         public decimal? BaseFreight { get; set; }
         public decimal? LastMileSurcharge { get; set; }
-        public decimal? VasAmount { get; set; }
         public decimal? VatAmount { get; set; }
         public decimal? FinalAmount { get; set; }
     }

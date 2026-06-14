@@ -56,6 +56,32 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
+        [HttpPut("{quoteId:guid}")]
+        [Authorize(Roles = "Sales,Admin,Manager")]
+        public async Task<IActionResult> EditQuotation(Guid quoteId, [FromBody] EditQuotationRequest request)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var salesUserId))
+                return Unauthorized("UserId claim is missing from token");
+
+            var result = await _quotationService.EditQuotationAsync(quoteId, request, salesUserId);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        [HttpPost("{quoteId:guid}/send")]
+        [Authorize(Roles = "Sales,Admin,Manager")]
+        public async Task<IActionResult> SendQuotation(Guid quoteId)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var salesUserId))
+                return Unauthorized("UserId claim is missing from token");
+
+            var result = await _quotationService.SendQuotationAsync(quoteId, salesUserId);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
         [HttpPost("{quoteId:guid}/accept")]
         [HttpPut("{quoteId:guid}/accept")]
         public async Task<IActionResult> AcceptQuotation(Guid quoteId, [FromBody] AcceptQuotationRequest request)

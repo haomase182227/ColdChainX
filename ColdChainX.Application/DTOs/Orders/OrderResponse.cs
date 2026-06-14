@@ -30,10 +30,8 @@ namespace ColdChainX.Application.DTOs.Orders
         public string RouteCode { get; set; } = null!;
         public string OriginCity { get; set; } = null!;
         public string DestCity { get; set; } = null!;
-        public DateTime Etd { get; set; }
-        public int TransitTimeHours { get; set; }
-        public DateTime Eta { get; set; }
-        public DateTime CutOffTime { get; set; }
+        public string TransitTime { get; set; } = null!;
+        public TimeSpan CutOffTime { get; set; }
     }
 
     public class OrderLocationResponse
@@ -58,7 +56,7 @@ namespace ColdChainX.Application.DTOs.Orders
         public Guid QuoteId { get; set; }
         public decimal BaseFreight { get; set; }
         public decimal? LastMileSurcharge { get; set; }
-        public decimal? VasAmount { get; set; }
+        public decimal? VatPercentage { get; set; }
         public decimal VatAmount { get; set; }
         public decimal FinalAmount { get; set; }
         public string? FileUrl { get; set; }

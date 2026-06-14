@@ -88,6 +88,7 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IAsnService, AsnService>();
             services.AddScoped<IPdfService, SimplePdfService>();
             services.AddScoped<IContractService, ContractService>();
+            services.AddScoped<IChatService, ChatService>();
             services.AddScoped<INotificationService, NotificationService>();
             services.AddSignalR();
 
@@ -132,7 +133,8 @@ namespace ColdChainX.API.Extensions
                         var path = context.HttpContext.Request.Path;
 
                         if (!string.IsNullOrEmpty(accessToken)
-                            && path.StartsWithSegments(new PathString("/hubs/notifications")))
+                            && (path.StartsWithSegments(new PathString("/hubs/notifications"))
+                                || path.StartsWithSegments(new PathString("/hubs/chat"))))
                         {
                             context.Token = accessToken;
                         }

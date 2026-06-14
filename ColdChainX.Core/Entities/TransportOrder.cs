@@ -45,6 +45,8 @@ public partial class TransportOrder
 
     public virtual ICollection<Claim> Claims { get; set; } = new List<Claim>();
 
+    public virtual ICollection<ChatMessage> ChatMessages { get; set; } = new List<ChatMessage>();
+
     public virtual Customer? Customer { get; set; }
 
     public virtual ICollection<CustomerContract> CustomerContracts { get; set; } = new List<CustomerContract>();
