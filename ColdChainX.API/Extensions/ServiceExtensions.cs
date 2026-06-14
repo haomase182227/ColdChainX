@@ -91,6 +91,7 @@ namespace ColdChainX.API.Extensions
                 client.Timeout = TimeSpan.FromSeconds(20);
             });
             services.AddScoped<IFileService, FileService>();
+            services.AddScoped<IAttachmentManagementService, AttachmentManagementService>();
             services.AddScoped<IOrderService, OrderService>();
             services.AddScoped<IQuotationService, QuotationService>();
             services.AddScoped<IPdfService, SimplePdfService>();
