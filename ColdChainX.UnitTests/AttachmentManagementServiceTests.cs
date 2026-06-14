@@ -303,6 +303,145 @@ namespace ColdChainX.UnitTests
             Assert.NotNull(result.Data);
             Assert.True(result.Data.Passed); // Returns default Passed=true result without executing engine
         }
+
+        [Fact]
+        public async Task VerifiedToRejected_ShouldFail()
+        {
+            // Arrange
+            var userId = Guid.NewGuid();
+            var attachmentId = Guid.NewGuid();
+            var attachment = new WarehouseEvidenceAttachment
+            {
+                AttachmentId = attachmentId,
+                FileName = "doc.pdf",
+                FilePath = "/uploads/doc.pdf",
+                Status = DocumentStatus.VERIFIED, // Currently VERIFIED
+                Category = AttachmentCategory.COMPLIANCE,
+                SubCategory = AttachmentSubCategory.CUSTOMS_DECLARATION
+            };
+            await _attachmentRepo.AddAttachmentAsync(attachment);
+
+            var request = new VerifyAttachmentRequest
+            {
+                Status = DocumentStatus.REJECTED,
+                RejectionReason = "Actually invalid document."
+            };
+
+            // Act
+            var result = await _service.VerifyAttachmentAsync(attachmentId, request, userId);
+
+            // Assert
+            Assert.False(result.Success);
+            Assert.Contains("Cannot transition attachment from VERIFIED to REJECTED", result.Message);
+            
+            var current = await _attachmentRepo.GetByIdAsync(attachmentId);
+            Assert.NotNull(current);
+            Assert.Equal(DocumentStatus.VERIFIED, current.Status); // Status remains VERIFIED
+        }
+
+        [Fact]
+        public async Task RejectedToVerified_ShouldFail()
+        {
+            // Arrange
+            var userId = Guid.NewGuid();
+            var attachmentId = Guid.NewGuid();
+            var attachment = new WarehouseEvidenceAttachment
+            {
+                AttachmentId = attachmentId,
+                FileName = "doc.pdf",
+                FilePath = "/uploads/doc.pdf",
+                Status = DocumentStatus.REJECTED, // Currently REJECTED
+                Category = AttachmentCategory.COMPLIANCE,
+                SubCategory = AttachmentSubCategory.CUSTOMS_DECLARATION,
+                RejectionReason = "Illegible"
+            };
+            await _attachmentRepo.AddAttachmentAsync(attachment);
+
+            var request = new VerifyAttachmentRequest
+            {
+                Status = DocumentStatus.VERIFIED
+            };
+
+            // Act
+            var result = await _service.VerifyAttachmentAsync(attachmentId, request, userId);
+
+            // Assert
+            Assert.False(result.Success);
+            Assert.Contains("Cannot transition attachment from REJECTED to VERIFIED", result.Message);
+            
+            var current = await _attachmentRepo.GetByIdAsync(attachmentId);
+            Assert.NotNull(current);
+            Assert.Equal(DocumentStatus.REJECTED, current.Status); // Status remains REJECTED
+        }
+
+        [Fact]
+        public async Task VerifiedToPending_ShouldFail()
+        {
+            // Arrange
+            var userId = Guid.NewGuid();
+            var attachmentId = Guid.NewGuid();
+            var attachment = new WarehouseEvidenceAttachment
+            {
+                AttachmentId = attachmentId,
+                FileName = "doc.pdf",
+                FilePath = "/uploads/doc.pdf",
+                Status = DocumentStatus.VERIFIED, // Currently VERIFIED
+                Category = AttachmentCategory.COMPLIANCE,
+                SubCategory = AttachmentSubCategory.CUSTOMS_DECLARATION
+            };
+            await _attachmentRepo.AddAttachmentAsync(attachment);
+
+            var request = new VerifyAttachmentRequest
+            {
+                Status = DocumentStatus.PENDING
+            };
+
+            // Act
+            var result = await _service.VerifyAttachmentAsync(attachmentId, request, userId);
+
+            // Assert
+            Assert.False(result.Success);
+            Assert.Contains("Cannot transition attachment from VERIFIED to PENDING", result.Message);
+            
+            var current = await _attachmentRepo.GetByIdAsync(attachmentId);
+            Assert.NotNull(current);
+            Assert.Equal(DocumentStatus.VERIFIED, current.Status); // Status remains VERIFIED
+        }
+
+        [Fact]
+        public async Task RejectedToPending_ShouldFail()
+        {
+            // Arrange
+            var userId = Guid.NewGuid();
+            var attachmentId = Guid.NewGuid();
+            var attachment = new WarehouseEvidenceAttachment
+            {
+                AttachmentId = attachmentId,
+                FileName = "doc.pdf",
+                FilePath = "/uploads/doc.pdf",
+                Status = DocumentStatus.REJECTED, // Currently REJECTED
+                Category = AttachmentCategory.COMPLIANCE,
+                SubCategory = AttachmentSubCategory.CUSTOMS_DECLARATION,
+                RejectionReason = "Bad photo"
+            };
+            await _attachmentRepo.AddAttachmentAsync(attachment);
+
+            var request = new VerifyAttachmentRequest
+            {
+                Status = DocumentStatus.PENDING
+            };
+
+            // Act
+            var result = await _service.VerifyAttachmentAsync(attachmentId, request, userId);
+
+            // Assert
+            Assert.False(result.Success);
+            Assert.Contains("Cannot transition attachment from REJECTED to PENDING", result.Message);
+            
+            var current = await _attachmentRepo.GetByIdAsync(attachmentId);
+            Assert.NotNull(current);
+            Assert.Equal(DocumentStatus.REJECTED, current.Status); // Status remains REJECTED
+        }
     }
 
     #region Mock Classes

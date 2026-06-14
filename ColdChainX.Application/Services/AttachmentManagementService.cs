@@ -126,6 +126,14 @@ namespace ColdChainX.Application.Services
                 }
 
                 var oldStatus = attachment.Status;
+                if (oldStatus != request.Status)
+                {
+                    if (oldStatus == DocumentStatus.VERIFIED || oldStatus == DocumentStatus.REJECTED)
+                    {
+                        return ApiResponse<ComplianceCheckResult>.Failure($"Cannot transition attachment from {oldStatus} to {request.Status}.");
+                    }
+                }
+
                 attachment.Status = request.Status;
                 attachment.VerifiedBy = userId;
                 attachment.VerifiedAt = DateTime.UtcNow;
