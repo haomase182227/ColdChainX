@@ -103,6 +103,8 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IOutboundOrderService, OutboundOrderService>();
             services.AddScoped<IInventoryHoldRepository, InventoryHoldRepository>();
             services.AddScoped<IInventoryHoldService, InventoryHoldService>();
+            services.AddScoped<ICycleCountRepository, CycleCountRepository>();
+            services.AddScoped<ICycleCountService, CycleCountService>();
             
             // Dispatch and Load Planning
             services.AddHttpClient<ColdChainX.Infrastructure.Integration.GeminiLoadOptimizerClient>();

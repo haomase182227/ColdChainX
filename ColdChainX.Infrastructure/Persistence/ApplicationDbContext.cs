@@ -103,6 +103,9 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<InventoryHold> InventoryHolds { get; set; }
 
+    public virtual DbSet<CycleCountPlan> CycleCountPlans { get; set; }
+    public virtual DbSet<CycleCountEntry> CycleCountEntries { get; set; }
+
     public virtual DbSet<OutboundOrder> OutboundOrders { get; set; }
 
     public virtual DbSet<OutboundOrderItem> OutboundOrderItems { get; set; }
@@ -2523,6 +2526,157 @@ public partial class ApplicationDbContext : DbContext
             new ComplianceZoningRule { RuleId = new Guid("b006a6a6-a6a6-a6a6-a6a6-a6a6a6a6a6a3"), ProductCategory = ProductCategory.IMPORT_GOODS, SubCategory = AttachmentSubCategory.SEAL_PHOTO, RequirementLevel = RequirementLevel.CONDITIONAL, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
             new ComplianceZoningRule { RuleId = new Guid("b006a6a6-a6a6-a6a6-a6a6-a6a6a6a6a6a4"), ProductCategory = ProductCategory.IMPORT_GOODS, SubCategory = AttachmentSubCategory.VEHICLE_PHOTO, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty }
         );
+
+        modelBuilder.Entity<CycleCountPlan>(entity =>
+        {
+            entity.HasKey(e => e.PlanId).HasName("cycle_count_plans_pkey");
+            entity.ToTable("cycle_count_plans");
+
+            entity.Property(e => e.PlanId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("plan_id");
+
+            entity.Property(e => e.PlanCode)
+                .HasMaxLength(50)
+                .HasColumnName("plan_code");
+
+            entity.Property(e => e.Status)
+                .HasConversion<string>()
+                .HasMaxLength(30)
+                .HasColumnName("status");
+
+            entity.Property(e => e.AssignedToUserId).HasColumnName("assigned_to_user_id");
+            entity.Property(e => e.WarehouseId).HasColumnName("warehouse_id");
+            entity.Property(e => e.Notes).HasColumnName("notes");
+
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+
+            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
+
+            entity.Property(e => e.CompletedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("completed_at");
+
+            entity.Property(e => e.CompletedBy).HasColumnName("completed_by");
+
+            entity.HasOne(d => d.Warehouse).WithMany()
+                .HasForeignKey(d => d.WarehouseId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_plan_warehouse");
+
+            entity.HasOne(d => d.AssignedToUser).WithMany()
+                .HasForeignKey(d => d.AssignedToUserId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_plan_assigned_user");
+
+            entity.HasOne(d => d.Creator).WithMany()
+                .HasForeignKey(d => d.CreatedBy)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_plan_creator_user");
+
+            entity.HasOne(d => d.Completer).WithMany()
+                .HasForeignKey(d => d.CompletedBy)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_plan_completer_user");
+
+            entity.HasIndex(e => e.PlanCode).IsUnique().HasDatabaseName("uq_cycle_count_plan_code");
+        });
+
+        modelBuilder.Entity<CycleCountEntry>(entity =>
+        {
+            entity.HasKey(e => e.EntryId).HasName("cycle_count_entries_pkey");
+            entity.ToTable("cycle_count_entries");
+
+            entity.Property(e => e.EntryId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("entry_id");
+
+            entity.Property(e => e.PlanId).HasColumnName("plan_id");
+            entity.Property(e => e.LocationId).HasColumnName("location_id");
+            entity.Property(e => e.StockId).HasColumnName("stock_id");
+
+            entity.Property(e => e.ItemCode)
+                .HasMaxLength(50)
+                .HasColumnName("item_code");
+
+            entity.Property(e => e.BatchId).HasColumnName("batch_id");
+
+            entity.Property(e => e.SystemQuantity)
+                .HasPrecision(10, 2)
+                .HasColumnName("system_quantity");
+
+            entity.Property(e => e.SystemPallets).HasColumnName("system_pallets");
+
+            entity.Property(e => e.CountedQuantity)
+                .HasPrecision(10, 2)
+                .HasColumnName("counted_quantity");
+
+            entity.Property(e => e.CountedPallets).HasColumnName("counted_pallets");
+
+            entity.Property(e => e.VarianceQuantity)
+                .HasPrecision(10, 2)
+                .HasColumnName("variance_quantity");
+
+            entity.Property(e => e.VariancePallets).HasColumnName("variance_pallets");
+
+            entity.Property(e => e.Status)
+                .HasConversion<string>()
+                .HasMaxLength(30)
+                .HasColumnName("status");
+
+            entity.Property(e => e.CountedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("counted_at");
+
+            entity.Property(e => e.CountedBy).HasColumnName("counted_by");
+
+            entity.Property(e => e.ReviewedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("reviewed_at");
+
+            entity.Property(e => e.ReviewedBy).HasColumnName("reviewed_by");
+
+            entity.Property(e => e.ManagerNotes).HasColumnName("manager_notes");
+            entity.Property(e => e.AdjustmentId).HasColumnName("adjustment_id");
+
+            entity.HasOne(d => d.Plan).WithMany(p => p.Entries)
+                .HasForeignKey(d => d.PlanId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_entry_plan");
+
+            entity.HasOne(d => d.Location).WithMany()
+                .HasForeignKey(d => d.LocationId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_entry_location");
+
+            entity.HasOne(d => d.Stock).WithMany()
+                .HasForeignKey(d => d.StockId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_entry_stock");
+
+            entity.HasOne(d => d.Batch).WithMany()
+                .HasForeignKey(d => d.BatchId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_entry_batch");
+
+            entity.HasOne(d => d.Counter).WithMany()
+                .HasForeignKey(d => d.CountedBy)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_entry_counter_user");
+
+            entity.HasOne(d => d.Reviewer).WithMany()
+                .HasForeignKey(d => d.ReviewedBy)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_entry_reviewer_user");
+
+            entity.HasOne(d => d.Adjustment).WithMany()
+                .HasForeignKey(d => d.AdjustmentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_entry_adjustment");
+        });
 
         OnModelCreatingPartial(modelBuilder);
     }
