@@ -18,8 +18,8 @@ namespace ColdChainX.Application.Validators
 
             RuleFor(z => z.ZoneType)
                 .NotEmpty().WithMessage("ZoneType is required.")
-                .Must(t => t == "RECEIVING" || t == "STORAGE" || t == "PICKING" || t == "SHIPPING" || t == "QC")
-                .WithMessage("ZoneType must be one of: RECEIVING, STORAGE, PICKING, SHIPPING, QC.");
+                .Must(t => t == "RECEIVING" || t == "STORAGE" || t == "PICKING" || t == "SHIPPING" || t == "QC" || t == "QUARANTINE")
+                .WithMessage("ZoneType must be one of: RECEIVING, STORAGE, PICKING, SHIPPING, QC, QUARANTINE.");
 
             RuleFor(z => z.StorageType)
                 .NotEmpty().WithMessage("StorageType is required.")

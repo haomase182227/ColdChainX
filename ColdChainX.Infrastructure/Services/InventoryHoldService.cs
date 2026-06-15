@@ -40,7 +40,8 @@ namespace ColdChainX.Infrastructure.Services
             if (dto == null)
                 return ApiResponse<HoldResponseDto>.Failure("Request data is null.");
 
-            using var transaction = await _db.Database.BeginTransactionAsync();
+            var isOuterTransaction = _db.Database.CurrentTransaction == null;
+            using var transaction = isOuterTransaction ? await _db.Database.BeginTransactionAsync() : null;
             try
             {
                 var stock = await _db.InventoryStocks
@@ -62,6 +63,24 @@ namespace ColdChainX.Infrastructure.Services
                     if (!dto.TargetQuarantineLocationId.HasValue)
                         return ApiResponse<HoldResponseDto>.Failure("Target Quarantine Location ID is required for partial stock holds.");
 
+                    int palletsToMove = 0;
+                    if (stock.QuantityOnHand > 0 && stock.PalletCount > 0)
+                    {
+                        palletsToMove = (int)Math.Ceiling(dto.Quantity * stock.PalletCount / stock.QuantityOnHand);
+                        if (palletsToMove < 1 && dto.Quantity > 0)
+                        {
+                            palletsToMove = 1;
+                        }
+                        if (palletsToMove > stock.PalletCount)
+                        {
+                            palletsToMove = stock.PalletCount;
+                        }
+                    }
+                    else
+                    {
+                        palletsToMove = 0;
+                    }
+
                     var relocateRequest = new StockRelocationRequest
                     {
                         SourceLocationId = stock.LocationId,
@@ -69,7 +88,7 @@ namespace ColdChainX.Infrastructure.Services
                         ItemCode = stock.ItemCode,
                         BatchId = stock.BatchId,
                         Quantity = dto.Quantity,
-                        Pallets = 1
+                        Pallets = palletsToMove
                     };
 
                     var relocateResult = await _inventoryService.RelocateStockAsync(relocateRequest, userId);
@@ -111,7 +130,10 @@ namespace ColdChainX.Infrastructure.Services
 
                 await _holdRepo.AddAsync(hold);
                 await _holdRepo.SaveChangesAsync();
-                await transaction.CommitAsync();
+                if (isOuterTransaction && transaction != null)
+                {
+                    await transaction.CommitAsync();
+                }
 
                 _logger.LogInformation("Stock placed on hold. StockId: {StockId}, Qty: {Qty}, Reason: {Reason}", targetStockId, dto.Quantity, dto.ReasonCode);
 
@@ -133,7 +155,10 @@ namespace ColdChainX.Infrastructure.Services
             }
             catch (Exception ex)
             {
-                await transaction.RollbackAsync();
+                if (isOuterTransaction && transaction != null)
+                {
+                    await transaction.RollbackAsync();
+                }
                 _logger.LogError(ex, "Failed to place stock on hold. StockId: {StockId}", dto.StockId);
                 return ApiResponse<HoldResponseDto>.Failure($"Failed to create hold: {ex.Message}");
             }
@@ -144,7 +169,8 @@ namespace ColdChainX.Infrastructure.Services
             if (dto == null)
                 return ApiResponse<bool>.Failure("Request data is null.");
 
-            using var transaction = await _db.Database.BeginTransactionAsync();
+            var isOuterTransaction = _db.Database.CurrentTransaction == null;
+            using var transaction = isOuterTransaction ? await _db.Database.BeginTransactionAsync() : null;
             try
             {
                 var hold = await _holdRepo.GetByIdAsync(holdId);
@@ -173,7 +199,7 @@ namespace ColdChainX.Infrastructure.Services
                         ItemCode = stock.ItemCode,
                         BatchId = stock.BatchId,
                         Quantity = hold.HoldQuantity,
-                        Pallets = 1
+                        Pallets = stock.PalletCount
                     };
 
                     // Temporarily save back to database so relocation works (relocation checks for status = AVAILABLE)
@@ -193,14 +219,20 @@ namespace ColdChainX.Infrastructure.Services
 
                 await _holdRepo.UpdateAsync(hold);
                 await _holdRepo.SaveChangesAsync();
-                await transaction.CommitAsync();
+                if (isOuterTransaction && transaction != null)
+                {
+                    await transaction.CommitAsync();
+                }
 
                 _logger.LogInformation("Hold released successfully. HoldId: {HoldId}, StockId: {StockId}", holdId, hold.StockId);
                 return ApiResponse<bool>.SuccessResponse(true, "Hold released successfully.");
             }
             catch (Exception ex)
             {
-                await transaction.RollbackAsync();
+                if (isOuterTransaction && transaction != null)
+                {
+                    await transaction.RollbackAsync();
+                }
                 _logger.LogError(ex, "Failed to release hold {HoldId}", holdId);
                 return ApiResponse<bool>.Failure($"Failed to release hold: {ex.Message}");
             }
@@ -242,7 +274,8 @@ namespace ColdChainX.Infrastructure.Services
 
         public async Task<ApiResponse<bool>> AdjustOutHoldAsync(Guid holdId, string reasonNotes, Guid userId)
         {
-            using var transaction = await _db.Database.BeginTransactionAsync();
+            var isOuterTransaction = _db.Database.CurrentTransaction == null;
+            using var transaction = isOuterTransaction ? await _db.Database.BeginTransactionAsync() : null;
             try
             {
                 var hold = await _holdRepo.GetByIdAsync(holdId);
@@ -294,14 +327,20 @@ namespace ColdChainX.Infrastructure.Services
 
                 await _holdRepo.UpdateAsync(hold);
                 await _holdRepo.SaveChangesAsync();
-                await transaction.CommitAsync();
+                if (isOuterTransaction && transaction != null)
+                {
+                    await transaction.CommitAsync();
+                }
 
                 _logger.LogInformation("Hold stock adjusted out. HoldId: {HoldId}, Quantity: {Qty}", holdId, hold.HoldQuantity);
                 return ApiResponse<bool>.SuccessResponse(true, "Hold stock adjusted out and removed from inventory successfully.");
             }
             catch (Exception ex)
             {
-                await transaction.RollbackAsync();
+                if (isOuterTransaction && transaction != null)
+                {
+                    await transaction.RollbackAsync();
+                }
                 _logger.LogError(ex, "Failed to adjust out hold {HoldId}", holdId);
                 return ApiResponse<bool>.Failure($"Failed to adjust out hold: {ex.Message}");
             }

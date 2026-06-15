@@ -32,7 +32,8 @@ namespace ColdChainX.Infrastructure.Services
             if (request.SourceLocationId == request.DestinationLocationId)
                 return ApiResponse<bool>.Failure("Source and destination locations cannot be identical.");
 
-            using var transaction = await _db.Database.BeginTransactionAsync();
+            var isOuterTransaction = _db.Database.CurrentTransaction == null;
+            using var transaction = isOuterTransaction ? await _db.Database.BeginTransactionAsync() : null;
             try
             {
                 // 1. Fetch Source Stock with Batch to verify details
@@ -188,7 +189,10 @@ namespace ColdChainX.Infrastructure.Services
                 _db.InventoryMovements.Add(movement);
 
                 await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+                if (isOuterTransaction && transaction != null)
+                {
+                    await transaction.CommitAsync();
+                }
 
                 _logger.LogInformation("Stock relocated successfully. MovementType: {MovementType}, Quantity: {Quantity}, Item: {ItemCode}, BatchId: {BatchId}, From: {FromLocationId}, To: {ToLocationId}",
                     movementType, request.Quantity, request.ItemCode, request.BatchId, request.SourceLocationId, request.DestinationLocationId);
@@ -197,7 +201,10 @@ namespace ColdChainX.Infrastructure.Services
             }
             catch (Exception ex)
             {
-                await transaction.RollbackAsync();
+                if (isOuterTransaction && transaction != null)
+                {
+                    await transaction.RollbackAsync();
+                }
                 _logger.LogError(ex, "Failed to relocate stock for item '{ItemCode}' and batch '{BatchId}'", request.ItemCode, request.BatchId);
                 return ApiResponse<bool>.Failure($"Failed to relocate stock: {ex.Message}");
             }
@@ -208,7 +215,8 @@ namespace ColdChainX.Infrastructure.Services
             if (request == null)
                 return ApiResponse<bool>.Failure("Request is null");
 
-            using var transaction = await _db.Database.BeginTransactionAsync();
+            var isOuterTransaction = _db.Database.CurrentTransaction == null;
+            using var transaction = isOuterTransaction ? await _db.Database.BeginTransactionAsync() : null;
             try
             {
                 // 1. Fetch Existing Stock directly by StockId
@@ -329,7 +337,10 @@ namespace ColdChainX.Infrastructure.Services
                 _db.InventoryAdjustments.Add(adjustment);
 
                 await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+                if (isOuterTransaction && transaction != null)
+                {
+                    await transaction.CommitAsync();
+                }
 
                 _logger.LogInformation("Stock adjusted successfully. StockId: {StockId}, AdjustmentType: {AdjustmentType}, QtyChanged: {QtyChanged}, PalletsChanged: {PalletsChanged}",
                     stock.StockId, request.AdjustmentType, deltaQty, deltaPallets);
@@ -338,7 +349,10 @@ namespace ColdChainX.Infrastructure.Services
             }
             catch (Exception ex)
             {
-                await transaction.RollbackAsync();
+                if (isOuterTransaction && transaction != null)
+                {
+                    await transaction.RollbackAsync();
+                }
                 _logger.LogError(ex, "Failed to adjust stock. StockId: {StockId}, AdjustmentType: {AdjustmentType}", request.StockId, request.AdjustmentType);
                 return ApiResponse<bool>.Failure($"Failed to adjust stock: {ex.Message}");
             }

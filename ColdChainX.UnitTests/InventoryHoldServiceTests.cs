@@ -370,5 +370,82 @@ namespace ColdChainX.UnitTests
             Assert.Equal(-100.0m, adj.QuantityChanged);
             Assert.Equal(0.0m, adj.QuantityAfter);
         }
+
+        [Fact]
+        public async Task CreateHold_PartialQuantity_CalculatesProportionalPallets()
+        {
+            // Arrange: Seed stock with 100 qty and 4 pallets
+            var (stockId1, _, _, _, _) = await SeedStockAsync("ITEM-PALLET-CALC-1", 100.0m);
+            
+            var stock1 = await _db.InventoryStocks.FindAsync(stockId1);
+            stock1.PalletCount = 4;
+            await _db.SaveChangesAsync();
+
+            // Create Quarantine Location
+            var quarantineZone = new WarehouseZone
+            {
+                ZoneId = Guid.NewGuid(),
+                WarehouseId = Guid.NewGuid(),
+                ZoneCode = "QUAR-PALLETS",
+                ZoneName = "Quarantine Zone Pallets",
+                ZoneType = "QUARANTINE",
+                StorageType = "FLOOR",
+                MaxCapacityPallets = 100,
+                CurrentPallets = 0,
+                Status = "ACTIVE"
+            };
+            _db.WarehouseZones.Add(quarantineZone);
+
+            var quarantineLocId = Guid.NewGuid();
+            var quarantineLoc = new WarehouseLocation
+            {
+                LocationId = quarantineLocId,
+                ZoneId = quarantineZone.ZoneId,
+                LocationCode = "QL-PAL-01",
+                MaxCapacityPallets = 10,
+                CurrentPallets = 0,
+                Status = "ACTIVE"
+            };
+            _db.WarehouseLocations.Add(quarantineLoc);
+            await _db.SaveChangesAsync();
+
+            // Hold 25 qty -> should calculate (25 * 4 / 100) = 1 pallet
+            var dto1 = new CreateInventoryHoldDto
+            {
+                StockId = stockId1,
+                Quantity = 25.0m,
+                ReasonCode = "DAMAGED",
+                TargetQuarantineLocationId = quarantineLocId
+            };
+            var result1 = await _service.CreateHoldAsync(dto1, Guid.NewGuid());
+            Assert.True(result1.Success);
+
+            var qStock1 = await _db.InventoryStocks
+                .FirstOrDefaultAsync(s => s.LocationId == quarantineLocId && s.ItemCode == "ITEM-PALLET-CALC-1");
+            Assert.NotNull(qStock1);
+            Assert.Equal(1, qStock1.PalletCount);
+
+            // Arrange: Seed stock with 100 qty and 0 pallets
+            var (stockId2, _, _, _, _) = await SeedStockAsync("ITEM-PALLET-CALC-2", 100.0m);
+            
+            var stock2 = await _db.InventoryStocks.FindAsync(stockId2);
+            stock2.PalletCount = 0; // Test PalletCount = 0 edgecase
+            await _db.SaveChangesAsync();
+
+            var dto2 = new CreateInventoryHoldDto
+            {
+                StockId = stockId2,
+                Quantity = 50.0m,
+                ReasonCode = "DAMAGED",
+                TargetQuarantineLocationId = quarantineLocId
+            };
+            var result2 = await _service.CreateHoldAsync(dto2, Guid.NewGuid());
+            Assert.True(result2.Success);
+
+            var qStock2 = await _db.InventoryStocks
+                .FirstOrDefaultAsync(s => s.LocationId == quarantineLocId && s.ItemCode == "ITEM-PALLET-CALC-2");
+            Assert.NotNull(qStock2);
+            Assert.Equal(0, qStock2.PalletCount); // Proportional pallets should be 0 because source PalletCount was 0
+        }
     }
 }
