@@ -38,9 +38,11 @@ namespace ColdChainX.API.Controllers
         public async Task<IActionResult> GetList(
             [FromQuery] int pageNumber = 1,
             [FromQuery] int pageSize = 10,
-            [FromQuery] string? search = null)
+            [FromQuery] string? search = null,
+            [FromQuery] string? status = null,
+            [FromQuery] Guid? customerId = null)
         {
-            var result = await _outboundOrderService.GetListAsync(pageNumber, pageSize, search);
+            var result = await _outboundOrderService.GetListAsync(pageNumber, pageSize, search, status, customerId);
             if (!result.Success)
                 return BadRequest(result);
 

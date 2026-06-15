@@ -88,7 +88,12 @@ namespace ColdChainX.Infrastructure.Services
             }
         }
 
-        public async Task<ApiResponse<PagedResult<OutboundOrderResponse>>> GetListAsync(int pageNumber, int pageSize, string? search = null)
+        public async Task<ApiResponse<PagedResult<OutboundOrderResponse>>> GetListAsync(
+            int pageNumber, 
+            int pageSize, 
+            string? search = null, 
+            string? status = null, 
+            Guid? customerId = null)
         {
             try
             {
@@ -103,6 +108,16 @@ namespace ColdChainX.Infrastructure.Services
                     query = query.Where(o => o.OrderCode.Contains(cleanSearch) 
                                              || o.ReceiverName.Contains(cleanSearch)
                                              || o.Customer.CompanyName.Contains(cleanSearch));
+                }
+
+                if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<OutboundOrderStatus>(status, true, out var statusEnum))
+                {
+                    query = query.Where(o => o.Status == statusEnum);
+                }
+
+                if (customerId.HasValue && customerId.Value != Guid.Empty)
+                {
+                    query = query.Where(o => o.CustomerId == customerId.Value);
                 }
 
                 query = query.OrderByDescending(o => o.CreatedAt);
