@@ -399,7 +399,9 @@ namespace ColdChainX.Infrastructure.Services
             if (request == null)
                 return ApiResponse<AllocationResultResponse>.Failure("Request is null");
 
-            using var transaction = await _db.Database.BeginTransactionAsync();
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+            using var transaction = await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead);
             try
             {
                 var result = new AllocationResultResponse
@@ -415,11 +417,14 @@ namespace ColdChainX.Infrastructure.Services
                         RequestedQuantity = itemRequest.Quantity
                     };
 
-                    // Fetch stock records sorted by FEFO + FIFO tie-breaker
+                    // Fetch available stock records sorted by FEFO + FIFO tie-breaker, excluding expired batches
                     var stocks = await _db.InventoryStocks
                         .Include(s => s.Location)
                         .Include(s => s.Batch)
-                        .Where(s => s.ItemCode == itemRequest.ItemCode && s.Status == "AVAILABLE")
+                        .Where(s => s.ItemCode == itemRequest.ItemCode 
+                                    && s.Status == "AVAILABLE" 
+                                    && (s.QuantityOnHand - s.QuantityAllocated) > 0
+                                    && s.Batch.ExpiryDate > today)
                         .OrderBy(s => s.Batch.ExpiryDate)
                         .ThenBy(s => s.InboundDate)
                         .ToListAsync();
