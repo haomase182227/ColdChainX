@@ -470,6 +470,12 @@ namespace ColdChainX.UnitTests
             return Task.FromResult(list);
         }
 
+        public Task<List<WarehouseEvidenceAttachment>> GetAttachmentsByReceiptItemIdsAsync(IEnumerable<Guid> receiptItemIds)
+        {
+            var list = Attachments.Where(a => a.WarehouseReceiptItemId.HasValue && receiptItemIds.Contains(a.WarehouseReceiptItemId.Value)).ToList();
+            return Task.FromResult(list);
+        }
+
         public Task<List<WarehouseEvidenceAttachment>> GetAttachmentsByAdjustmentIdAsync(Guid adjustmentId)
         {
             var list = Attachments.Where(a => a.InventoryAdjustmentId == adjustmentId).ToList();

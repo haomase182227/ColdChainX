@@ -43,6 +43,16 @@ namespace ColdChainX.Infrastructure.Repositories
                 .ToListAsync();
         }
 
+        public async Task<List<WarehouseEvidenceAttachment>> GetAttachmentsByReceiptItemIdsAsync(IEnumerable<Guid> receiptItemIds)
+        {
+            if (receiptItemIds == null || !receiptItemIds.Any())
+                return new List<WarehouseEvidenceAttachment>();
+
+            return await _db.WarehouseEvidenceAttachments
+                .Where(a => a.WarehouseReceiptItemId.HasValue && receiptItemIds.Contains(a.WarehouseReceiptItemId.Value))
+                .ToListAsync();
+        }
+
         public async Task<List<WarehouseEvidenceAttachment>> GetAttachmentsByAdjustmentIdAsync(Guid adjustmentId)
         {
             return await _db.WarehouseEvidenceAttachments

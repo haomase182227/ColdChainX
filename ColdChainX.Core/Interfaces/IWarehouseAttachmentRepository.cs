@@ -11,6 +11,7 @@ namespace ColdChainX.Core.Interfaces
         Task<WarehouseEvidenceAttachment?> GetByIdAsync(Guid attachmentId);
         Task<List<WarehouseEvidenceAttachment>> GetAttachmentsByReceiptIdAsync(Guid receiptId);
         Task<List<WarehouseEvidenceAttachment>> GetAttachmentsByReceiptItemIdAsync(Guid receiptItemId);
+        Task<List<WarehouseEvidenceAttachment>> GetAttachmentsByReceiptItemIdsAsync(IEnumerable<Guid> receiptItemIds);
         Task<List<WarehouseEvidenceAttachment>> GetAttachmentsByAdjustmentIdAsync(Guid adjustmentId);
         Task<List<WarehouseEvidenceAttachment>> GetAttachmentsByOutboundOrderIdAsync(Guid outboundOrderId);
         Task AddAttachmentAsync(WarehouseEvidenceAttachment attachment);

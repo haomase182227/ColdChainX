@@ -92,6 +92,7 @@ namespace ColdChainX.API.Extensions
             });
             services.AddScoped<IFileService, FileService>();
             services.AddScoped<IAttachmentManagementService, AttachmentManagementService>();
+            services.AddScoped<ComplianceRulesEngine>();
             services.AddScoped<IOrderService, OrderService>();
             services.AddScoped<IQuotationService, QuotationService>();
             services.AddScoped<IPdfService, SimplePdfService>();

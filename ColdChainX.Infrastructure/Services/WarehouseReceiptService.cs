@@ -10,7 +10,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Hosting;
 using ColdChainX.Application.DTOs.WarehouseReceipt;
 using ColdChainX.Application.Interfaces;
+using ColdChainX.Application.Services;
 using ColdChainX.Core.Entities;
+using ColdChainX.Core.Enums;
 using ColdChainX.Core.Interfaces;
 using ColdChainX.Infrastructure.Persistence;
 using ColdChainX.Shared.Responses;
@@ -31,19 +33,25 @@ namespace ColdChainX.Infrastructure.Services
         private readonly ILocationService _locationService;
         private readonly IPdfService _pdfService;
         private readonly IWebHostEnvironment _environment;
+        private readonly IWarehouseAttachmentRepository _attachmentRepository;
+        private readonly ComplianceRulesEngine _complianceEngine;
 
         public WarehouseReceiptService(
             ApplicationDbContext db,
             IWarehouseReceiptRepository receiptRepository,
             ILocationService locationService,
             IPdfService pdfService,
-            IWebHostEnvironment environment)
+            IWebHostEnvironment environment,
+            IWarehouseAttachmentRepository attachmentRepository,
+            ComplianceRulesEngine complianceEngine)
         {
             _db = db;
             _receiptRepository = receiptRepository;
             _locationService = locationService;
             _pdfService = pdfService;
             _environment = environment;
+            _attachmentRepository = attachmentRepository;
+            _complianceEngine = complianceEngine;
         }
 
         public async Task<ApiResponse<WarehouseReceiptResponse>> ProcessInboundQCAsync(
@@ -247,6 +255,67 @@ namespace ColdChainX.Infrastructure.Services
                 if (!receipt.WarehouseReceiptItems.Any())
                     return ApiResponse<WarehouseReceiptResponse>.Failure("Measurements are missing. Please complete Step 2 first.");
 
+                // Load receipt-level attachments
+                var receiptAttachments = await _attachmentRepository.GetAttachmentsByReceiptIdAsync(receipt.ReceiptId);
+
+                // Collect item IDs
+                var itemIds = receipt.WarehouseReceiptItems.Select(i => i.ItemId).ToList();
+
+                // Load item attachments in a single batch
+                var itemAttachments = await _attachmentRepository.GetAttachmentsByReceiptItemIdsAsync(itemIds);
+
+                // Merge attachments uniquely
+                var allAttachments = new Dictionary<Guid, WarehouseEvidenceAttachment>();
+                foreach (var att in receiptAttachments)
+                {
+                    allAttachments[att.AttachmentId] = att;
+                }
+                foreach (var att in itemAttachments)
+                {
+                    allAttachments[att.AttachmentId] = att;
+                }
+
+                // Execute Compliance validation
+                var complianceResult = _complianceEngine.ValidateReceipt(receipt, allAttachments.Values);
+
+                if (!complianceResult.Passed)
+                {
+                    var sb = new StringBuilder();
+                    sb.AppendLine("Inbound completion blocked due to compliance validation failure.");
+
+                    if (complianceResult.MissingRequirements.Any())
+                    {
+                        sb.AppendLine();
+                        sb.AppendLine("Missing:");
+                        foreach (var req in complianceResult.MissingRequirements.Select(GetSubCategoryDisplay).Distinct())
+                        {
+                            sb.AppendLine($"* {req}");
+                        }
+                    }
+
+                    if (complianceResult.PendingRequirements.Any())
+                    {
+                        sb.AppendLine();
+                        sb.AppendLine("Pending:");
+                        foreach (var req in complianceResult.PendingRequirements.Select(GetSubCategoryDisplay).Distinct())
+                        {
+                            sb.AppendLine($"* {req}");
+                        }
+                    }
+
+                    if (complianceResult.FailedRequirements.Any())
+                    {
+                        sb.AppendLine();
+                        sb.AppendLine("Failed:");
+                        foreach (var req in complianceResult.FailedRequirements.Select(GetSubCategoryDisplay).Distinct())
+                        {
+                            sb.AppendLine($"* {req}");
+                        }
+                    }
+
+                    return ApiResponse<WarehouseReceiptResponse>.Failure(sb.ToString().TrimEnd());
+                }
+
                 var order = await _db.TransportOrders
                     .Include(o => o.Customer)
                     .Include(o => o.DestLocationNavigation)
@@ -414,9 +483,13 @@ namespace ColdChainX.Infrastructure.Services
                         await _db.SaveChangesAsync();
                     }
 
+                    var customerId = order.CustomerId.GetValueOrDefault();
                     // Find or create InventoryStock under default receiving location
                     var stock = await _db.InventoryStocks
-                        .FirstOrDefaultAsync(s => s.LocationId == receivingLocation.LocationId && s.ItemCode == itemCode && s.BatchId == batch.BatchId);
+                        .FirstOrDefaultAsync(s => s.LocationId == receivingLocation.LocationId 
+                                                  && s.CustomerId == customerId
+                                                  && s.ItemCode == itemCode 
+                                                  && s.BatchId == batch.BatchId);
 
                     decimal? requiredTempMin = null;
                     decimal? requiredTempMax = null;
@@ -453,6 +526,7 @@ namespace ColdChainX.Infrastructure.Services
                         {
                             StockId = Guid.NewGuid(),
                             LocationId = receivingLocation.LocationId,
+                            CustomerId = customerId,
                             ItemCode = itemCode,
                             ItemName = item.ItemName.Trim(),
                             Unit = item.Unit.Trim(),
@@ -651,6 +725,18 @@ namespace ColdChainX.Infrastructure.Services
             if (string.IsNullOrWhiteSpace(category)) return false;
             var cat = category.ToLowerInvariant();
             return cat.Contains("dairy") || cat.Contains("egg") || cat.Contains("chocolate") || cat.Contains("sua") || cat.Contains("trung");
+        }
+
+        private static string GetSubCategoryDisplay(string req)
+        {
+            foreach (var val in Enum.GetValues<AttachmentSubCategory>())
+            {
+                if (req.Contains($"'{val}'") || req.Contains(val.ToString()))
+                {
+                    return val.ToString();
+                }
+            }
+            return req;
         }
 
         private static WarehouseReceiptResponse MapToResponse(
