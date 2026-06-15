@@ -249,5 +249,183 @@ namespace ColdChainX.Application.Services
             // 5. Fallback/MISSING -> MissingRequirements
             result.MissingRequirements.Add("Import Goods: Missing SEAL_PHOTO.");
         }
+
+        public ComplianceCheckResult ValidateOutboundOrder(
+            OutboundOrder order, 
+            IEnumerable<WarehouseEvidenceAttachment> attachments,
+            IDictionary<string, List<ProductCategory>> itemCategories)
+        {
+            var result = new ComplianceCheckResult();
+
+            if (order == null)
+            {
+                result.FailedRequirements.Add("Order cannot be null.");
+                result.Passed = false;
+                return result;
+            }
+
+            var attachmentList = attachments?.ToList() ?? new List<WarehouseEvidenceAttachment>();
+            var items = order.OutboundOrderItems ?? new List<OutboundOrderItem>();
+
+            // Collect product categories for the order
+            var activeCategories = new HashSet<ProductCategory>();
+
+            // 1. Safeguard check: Check for ProductCategory ambiguity
+            foreach (var item in items)
+            {
+                if (!itemCategories.TryGetValue(item.ItemCode, out var categories) || !categories.Any())
+                {
+                    result.FailedRequirements.Add($"Item '{item.ItemName}' (Code: {item.ItemCode}) does not have a resolved product category.");
+                    continue;
+                }
+
+                if (categories.Count > 1)
+                {
+                    // Inconsistency detected: more than one category mapped to this ItemCode
+                    result.FailedRequirements.Add($"Ambiguous product category for item '{item.ItemName}' (Code: {item.ItemCode}). Resolved categories: {string.Join(", ", categories)}.");
+                    result.Passed = false;
+                    return result;
+                }
+
+                activeCategories.Add(categories.First());
+            }
+
+            if (result.FailedRequirements.Any())
+            {
+                result.Passed = false;
+                return result;
+            }
+
+            // Technical debt note:
+            // Future Refactor:
+            // Persist ProductCategory directly in InventoryStock and remove dependency on WarehouseReceiptItems.
+
+            // 2. General Rules:
+            // VERIFIED WAREHOUSE_ISSUE_NOTE is mandatory.
+            CheckAttachmentRequirement(
+                AttachmentSubCategory.WAREHOUSE_ISSUE_NOTE,
+                attachmentList,
+                "Outbound Order General",
+                result
+            );
+
+            // 3. Category-Specific Rules:
+            // FOOD / SEAFOOD:
+            // - VERIFIED GOODS_CONDITION_PHOTO
+            // - VERIFIED (TEMPERATURE_PHOTO OR TEMPERATURE_LOG)
+            if (activeCategories.Contains(ProductCategory.FOOD) || activeCategories.Contains(ProductCategory.SEAFOOD))
+            {
+                CheckAttachmentRequirement(
+                    AttachmentSubCategory.GOODS_CONDITION_PHOTO,
+                    attachmentList,
+                    "Outbound FOOD/SEAFOOD",
+                    result
+                );
+
+                CheckOutboundTemperatureRequirement(attachmentList, "Outbound FOOD/SEAFOOD", result);
+            }
+
+            // PHARMA / VACCINE:
+            // - VERIFIED (QC_REPORT OR BATCH_RELEASE_CERTIFICATE)
+            // - VERIFIED TEMPERATURE_LOG
+            if (activeCategories.Contains(ProductCategory.PHARMA) || activeCategories.Contains(ProductCategory.VACCINE))
+            {
+                CheckOutboundPharmaCertificateRequirement(attachmentList, "Outbound PHARMA/VACCINE", result);
+
+                CheckAttachmentRequirement(
+                    AttachmentSubCategory.TEMPERATURE_LOG,
+                    attachmentList,
+                    "Outbound PHARMA/VACCINE",
+                    result
+                );
+            }
+
+            // Final Result Evaluation
+            result.Passed = result.MissingRequirements.Count == 0 && 
+                            result.FailedRequirements.Count == 0 && 
+                            result.PendingRequirements.Count == 0;
+
+            return result;
+        }
+
+        private void CheckOutboundTemperatureRequirement(
+            List<WarehouseEvidenceAttachment> attachments, 
+            string context, 
+            ComplianceCheckResult result)
+        {
+            var tempPhotos = attachments.Where(a => a.SubCategory == AttachmentSubCategory.TEMPERATURE_PHOTO).ToList();
+            var tempLogs = attachments.Where(a => a.SubCategory == AttachmentSubCategory.TEMPERATURE_LOG).ToList();
+
+            var combined = tempPhotos.Concat(tempLogs).ToList();
+
+            if (combined.Count == 0)
+            {
+                result.MissingRequirements.Add($"{context}: Missing mandatory TEMPERATURE_PHOTO or TEMPERATURE_LOG.");
+                return;
+            }
+
+            // 1. If any is VERIFIED, requirement is satisfied
+            if (combined.Any(a => a.Status == DocumentStatus.VERIFIED))
+            {
+                return;
+            }
+
+            // 2. If any is PENDING, requirement is PENDING
+            if (combined.Any(a => a.Status == DocumentStatus.PENDING))
+            {
+                result.PendingRequirements.Add($"{context}: TEMPERATURE_PHOTO or TEMPERATURE_LOG is PENDING verification.");
+                return;
+            }
+
+            // 3. If all are REJECTED, requirement failed
+            if (combined.All(a => a.Status == DocumentStatus.REJECTED))
+            {
+                result.FailedRequirements.Add($"{context}: All uploaded TEMPERATURE_PHOTO and TEMPERATURE_LOG attachments were REJECTED.");
+                return;
+            }
+
+            // 4. Fallback
+            result.MissingRequirements.Add($"{context}: Missing mandatory TEMPERATURE_PHOTO or TEMPERATURE_LOG.");
+        }
+
+        private void CheckOutboundPharmaCertificateRequirement(
+            List<WarehouseEvidenceAttachment> attachments, 
+            string context, 
+            ComplianceCheckResult result)
+        {
+            var qcReports = attachments.Where(a => a.SubCategory == AttachmentSubCategory.QC_REPORT).ToList();
+            var batchCerts = attachments.Where(a => a.SubCategory == AttachmentSubCategory.BATCH_RELEASE_CERTIFICATE).ToList();
+
+            var combined = qcReports.Concat(batchCerts).ToList();
+
+            if (combined.Count == 0)
+            {
+                result.MissingRequirements.Add($"{context}: Missing mandatory QC_REPORT or BATCH_RELEASE_CERTIFICATE.");
+                return;
+            }
+
+            // 1. If any is VERIFIED, requirement is satisfied
+            if (combined.Any(a => a.Status == DocumentStatus.VERIFIED))
+            {
+                return;
+            }
+
+            // 2. If any is PENDING, requirement is PENDING
+            if (combined.Any(a => a.Status == DocumentStatus.PENDING))
+            {
+                result.PendingRequirements.Add($"{context}: QC_REPORT or BATCH_RELEASE_CERTIFICATE is PENDING verification.");
+                return;
+            }
+
+            // 3. If all are REJECTED, requirement failed
+            if (combined.All(a => a.Status == DocumentStatus.REJECTED))
+            {
+                result.FailedRequirements.Add($"{context}: All uploaded QC_REPORT and BATCH_RELEASE_CERTIFICATE attachments were REJECTED.");
+                return;
+            }
+
+            // 4. Fallback
+            result.MissingRequirements.Add($"{context}: Missing mandatory QC_REPORT or BATCH_RELEASE_CERTIFICATE.");
+        }
     }
 }

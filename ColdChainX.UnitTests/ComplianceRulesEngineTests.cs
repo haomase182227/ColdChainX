@@ -394,9 +394,207 @@ namespace ColdChainX.UnitTests
             // Act
             var result = _engine.ValidateReceipt(receipt, attachments);
 
-            // Assert
             Assert.True(result.Passed);
             Assert.Empty(result.MissingRequirements);
+        }
+
+        private OutboundOrder CreateBaseOutboundOrder(string itemCode, string itemName = "Test Item")
+        {
+            var orderId = Guid.NewGuid();
+            var item = new OutboundOrderItem
+            {
+                OutboundOrderItemId = Guid.NewGuid(),
+                OutboundOrderId = orderId,
+                ItemCode = itemCode,
+                ItemName = itemName,
+                Quantity = 10
+            };
+
+            return new OutboundOrder
+            {
+                OutboundOrderId = orderId,
+                OrderCode = "OUT-2026-0001",
+                OutboundOrderItems = new List<OutboundOrderItem> { item }
+            };
+        }
+
+        private WarehouseEvidenceAttachment CreateOutboundAttachment(Guid orderId, AttachmentSubCategory subCategory, DocumentStatus status)
+        {
+            return new WarehouseEvidenceAttachment
+            {
+                AttachmentId = Guid.NewGuid(),
+                OutboundOrderId = orderId,
+                SubCategory = subCategory,
+                Status = status,
+                FileName = $"{subCategory}.png",
+                FilePath = $"/uploads/{subCategory}.png",
+                ContentType = "image/png",
+                Format = AttachmentFormat.IMAGE,
+                Category = AttachmentCategory.COMPLIANCE
+            };
+        }
+
+        [Fact]
+        public void ValidateOutboundOrder_NullOrder_ReturnsFailedResult()
+        {
+            var result = _engine.ValidateOutboundOrder(null!, new List<WarehouseEvidenceAttachment>(), new Dictionary<string, List<ProductCategory>>());
+            Assert.False(result.Passed);
+            Assert.Contains(result.FailedRequirements, r => r.Contains("Order cannot be null"));
+        }
+
+        [Fact]
+        public void ValidateOutboundOrder_GeneralRule_MissingWarehouseIssueNote_Fails()
+        {
+            var order = CreateBaseOutboundOrder("ITEM01");
+            var itemCategories = new Dictionary<string, List<ProductCategory>>
+            {
+                { "ITEM01", new List<ProductCategory> { ProductCategory.FOOD } }
+            };
+            var attachments = new List<WarehouseEvidenceAttachment>
+            {
+                CreateOutboundAttachment(order.OutboundOrderId, AttachmentSubCategory.GOODS_CONDITION_PHOTO, DocumentStatus.VERIFIED),
+                CreateOutboundAttachment(order.OutboundOrderId, AttachmentSubCategory.TEMPERATURE_PHOTO, DocumentStatus.VERIFIED)
+            };
+
+            var result = _engine.ValidateOutboundOrder(order, attachments, itemCategories);
+
+            Assert.False(result.Passed);
+            Assert.Contains(result.MissingRequirements, r => r.Contains(AttachmentSubCategory.WAREHOUSE_ISSUE_NOTE.ToString()));
+        }
+
+        [Fact]
+        public void ValidateOutboundOrder_FoodCategory_MissingGoodsConditionPhoto_Fails()
+        {
+            var order = CreateBaseOutboundOrder("ITEM01");
+            var itemCategories = new Dictionary<string, List<ProductCategory>>
+            {
+                { "ITEM01", new List<ProductCategory> { ProductCategory.FOOD } }
+            };
+            var attachments = new List<WarehouseEvidenceAttachment>
+            {
+                CreateOutboundAttachment(order.OutboundOrderId, AttachmentSubCategory.WAREHOUSE_ISSUE_NOTE, DocumentStatus.VERIFIED),
+                CreateOutboundAttachment(order.OutboundOrderId, AttachmentSubCategory.TEMPERATURE_PHOTO, DocumentStatus.VERIFIED)
+            };
+
+            var result = _engine.ValidateOutboundOrder(order, attachments, itemCategories);
+
+            Assert.False(result.Passed);
+            Assert.Contains(result.MissingRequirements, r => r.Contains(AttachmentSubCategory.GOODS_CONDITION_PHOTO.ToString()));
+        }
+
+        [Fact]
+        public void ValidateOutboundOrder_FoodCategory_MissingTemperaturePhotoOrLog_Fails()
+        {
+            var order = CreateBaseOutboundOrder("ITEM01");
+            var itemCategories = new Dictionary<string, List<ProductCategory>>
+            {
+                { "ITEM01", new List<ProductCategory> { ProductCategory.FOOD } }
+            };
+            var attachments = new List<WarehouseEvidenceAttachment>
+            {
+                CreateOutboundAttachment(order.OutboundOrderId, AttachmentSubCategory.WAREHOUSE_ISSUE_NOTE, DocumentStatus.VERIFIED),
+                CreateOutboundAttachment(order.OutboundOrderId, AttachmentSubCategory.GOODS_CONDITION_PHOTO, DocumentStatus.VERIFIED)
+            };
+
+            var result = _engine.ValidateOutboundOrder(order, attachments, itemCategories);
+
+            Assert.False(result.Passed);
+            Assert.Contains(result.MissingRequirements, r => r.Contains("TEMPERATURE_PHOTO or TEMPERATURE_LOG"));
+        }
+
+        [Fact]
+        public void ValidateOutboundOrder_FoodCategory_HasVerifiedTemperaturePhoto_Passes()
+        {
+            var order = CreateBaseOutboundOrder("ITEM01");
+            var itemCategories = new Dictionary<string, List<ProductCategory>>
+            {
+                { "ITEM01", new List<ProductCategory> { ProductCategory.FOOD } }
+            };
+            var attachments = new List<WarehouseEvidenceAttachment>
+            {
+                CreateOutboundAttachment(order.OutboundOrderId, AttachmentSubCategory.WAREHOUSE_ISSUE_NOTE, DocumentStatus.VERIFIED),
+                CreateOutboundAttachment(order.OutboundOrderId, AttachmentSubCategory.GOODS_CONDITION_PHOTO, DocumentStatus.VERIFIED),
+                CreateOutboundAttachment(order.OutboundOrderId, AttachmentSubCategory.TEMPERATURE_PHOTO, DocumentStatus.VERIFIED)
+            };
+
+            var result = _engine.ValidateOutboundOrder(order, attachments, itemCategories);
+
+            Assert.True(result.Passed);
+        }
+
+        [Fact]
+        public void ValidateOutboundOrder_PharmaCategory_MissingQcOrBatchCert_Fails()
+        {
+            var order = CreateBaseOutboundOrder("ITEM02");
+            var itemCategories = new Dictionary<string, List<ProductCategory>>
+            {
+                { "ITEM02", new List<ProductCategory> { ProductCategory.PHARMA } }
+            };
+            var attachments = new List<WarehouseEvidenceAttachment>
+            {
+                CreateOutboundAttachment(order.OutboundOrderId, AttachmentSubCategory.WAREHOUSE_ISSUE_NOTE, DocumentStatus.VERIFIED),
+                CreateOutboundAttachment(order.OutboundOrderId, AttachmentSubCategory.TEMPERATURE_LOG, DocumentStatus.VERIFIED)
+            };
+
+            var result = _engine.ValidateOutboundOrder(order, attachments, itemCategories);
+
+            Assert.False(result.Passed);
+            Assert.Contains(result.MissingRequirements, r => r.Contains("QC_REPORT or BATCH_RELEASE_CERTIFICATE"));
+        }
+
+        [Fact]
+        public void ValidateOutboundOrder_PharmaCategory_MissingTemperatureLog_Fails()
+        {
+            var order = CreateBaseOutboundOrder("ITEM02");
+            var itemCategories = new Dictionary<string, List<ProductCategory>>
+            {
+                { "ITEM02", new List<ProductCategory> { ProductCategory.PHARMA } }
+            };
+            var attachments = new List<WarehouseEvidenceAttachment>
+            {
+                CreateOutboundAttachment(order.OutboundOrderId, AttachmentSubCategory.WAREHOUSE_ISSUE_NOTE, DocumentStatus.VERIFIED),
+                CreateOutboundAttachment(order.OutboundOrderId, AttachmentSubCategory.QC_REPORT, DocumentStatus.VERIFIED)
+            };
+
+            var result = _engine.ValidateOutboundOrder(order, attachments, itemCategories);
+
+            Assert.False(result.Passed);
+            Assert.Contains(result.MissingRequirements, r => r.Contains(AttachmentSubCategory.TEMPERATURE_LOG.ToString()));
+        }
+
+        [Fact]
+        public void ValidateOutboundOrder_AmbiguitySafeguard_ItemCodeMultipleCategories_FailsWithAmbiguity()
+        {
+            var order = CreateBaseOutboundOrder("ITEM03");
+            var itemCategories = new Dictionary<string, List<ProductCategory>>
+            {
+                { "ITEM03", new List<ProductCategory> { ProductCategory.FOOD, ProductCategory.PHARMA } }
+            };
+            var attachments = new List<WarehouseEvidenceAttachment>
+            {
+                CreateOutboundAttachment(order.OutboundOrderId, AttachmentSubCategory.WAREHOUSE_ISSUE_NOTE, DocumentStatus.VERIFIED)
+            };
+
+            var result = _engine.ValidateOutboundOrder(order, attachments, itemCategories);
+
+            Assert.False(result.Passed);
+            Assert.Contains(result.FailedRequirements, r => r.Contains("Ambiguous product category"));
+        }
+
+        [Fact]
+        public void ValidateOutboundOrder_NoResolvedCategory_Fails()
+        {
+            var order = CreateBaseOutboundOrder("ITEM04");
+            var itemCategories = new Dictionary<string, List<ProductCategory>>();
+            var attachments = new List<WarehouseEvidenceAttachment>
+            {
+                CreateOutboundAttachment(order.OutboundOrderId, AttachmentSubCategory.WAREHOUSE_ISSUE_NOTE, DocumentStatus.VERIFIED)
+            };
+
+            var result = _engine.ValidateOutboundOrder(order, attachments, itemCategories);
+
+            Assert.False(result.Passed);
+            Assert.Contains(result.FailedRequirements, r => r.Contains("does not have a resolved product category"));
         }
     }
 }

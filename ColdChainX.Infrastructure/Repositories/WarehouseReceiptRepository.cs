@@ -47,6 +47,16 @@ namespace ColdChainX.Infrastructure.Repositories
                 .ToListAsync();
         }
 
+        public async Task<List<WarehouseReceiptItem>> GetReceiptItemsByItemCodesAsync(IEnumerable<string> itemCodes)
+        {
+            if (itemCodes == null || !itemCodes.Any())
+                return new List<WarehouseReceiptItem>();
+
+            return await _db.WarehouseReceiptItems
+                .Where(i => i.ItemCode != null && itemCodes.Contains(i.ItemCode))
+                .ToListAsync();
+        }
+
         public async Task AddAsync(WarehouseReceipt receipt)
         {
             await _db.WarehouseReceipts.AddAsync(receipt);

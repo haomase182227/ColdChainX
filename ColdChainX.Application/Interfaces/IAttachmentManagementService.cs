@@ -14,5 +14,6 @@ namespace ColdChainX.Application.Interfaces
         Task<ApiResponse<AttachmentResponse>> GetAttachmentAsync(Guid attachmentId);
         Task<ApiResponse<List<AttachmentResponse>>> GetAttachmentsByReceiptAsync(Guid receiptId);
         Task<ApiResponse<List<AttachmentResponse>>> GetAttachmentsByReceiptItemAsync(Guid receiptItemId);
+        Task<ApiResponse<List<AttachmentResponse>>> GetAttachmentsByOutboundOrderAsync(Guid outboundOrderId);
     }
 }

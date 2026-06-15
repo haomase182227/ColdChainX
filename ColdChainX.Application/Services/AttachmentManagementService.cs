@@ -199,6 +199,41 @@ namespace ColdChainX.Application.Services
                         complianceResult = engine.ValidateReceipt(receipt, allAttachments.Values);
                     }
                 }
+                else if (attachment.OutboundOrderId.HasValue)
+                {
+                    var order = await _attachmentRepository.GetOutboundOrderWithItemsAsync(attachment.OutboundOrderId.Value);
+                    if (order != null)
+                    {
+                        var outboundAttachments = await _attachmentRepository.GetAttachmentsByOutboundOrderIdAsync(attachment.OutboundOrderId.Value);
+                        
+                        var itemCodes = order.OutboundOrderItems
+                            .Select(oi => oi.ItemCode)
+                            .Where(c => !string.IsNullOrEmpty(c))
+                            .Distinct()
+                            .ToList();
+                        
+                        var receiptItems = await _receiptRepository.GetReceiptItemsByItemCodesAsync(itemCodes);
+                        
+                        var itemCategories = receiptItems
+                            .Where(ri => ri.ItemCode != null)
+                            .GroupBy(ri => ri.ItemCode!)
+                            .ToDictionary(
+                                g => g.Key,
+                                g => g.Select(ri => ri.ProductCategory).Distinct().ToList()
+                            );
+                        
+                        foreach (var code in itemCodes)
+                        {
+                            if (!itemCategories.ContainsKey(code))
+                            {
+                                itemCategories[code] = new List<ProductCategory>();
+                            }
+                        }
+
+                        var engine = new ComplianceRulesEngine();
+                        complianceResult = engine.ValidateOutboundOrder(order, outboundAttachments, itemCategories);
+                    }
+                }
 
                 return ApiResponse<ComplianceCheckResult>.SuccessResponse(complianceResult, "Attachment verified successfully.");
             }
@@ -245,6 +280,20 @@ namespace ColdChainX.Application.Services
             try
             {
                 var attachments = await _attachmentRepository.GetAttachmentsByReceiptItemIdAsync(receiptItemId);
+                var responses = attachments.Select(MapToResponse).ToList();
+                return ApiResponse<List<AttachmentResponse>>.SuccessResponse(responses);
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<List<AttachmentResponse>>.Failure($"Failed to retrieve attachments: {ex.Message}");
+            }
+        }
+
+        public async Task<ApiResponse<List<AttachmentResponse>>> GetAttachmentsByOutboundOrderAsync(Guid outboundOrderId)
+        {
+            try
+            {
+                var attachments = await _attachmentRepository.GetAttachmentsByOutboundOrderIdAsync(outboundOrderId);
                 var responses = attachments.Select(MapToResponse).ToList();
                 return ApiResponse<List<AttachmentResponse>>.SuccessResponse(responses);
             }

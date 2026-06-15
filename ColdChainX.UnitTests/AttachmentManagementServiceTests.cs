@@ -442,6 +442,164 @@ namespace ColdChainX.UnitTests
             Assert.NotNull(current);
             Assert.Equal(DocumentStatus.REJECTED, current.Status); // Status remains REJECTED
         }
+
+        [Fact]
+        public async Task VerifyAttachment_OutboundOrder_RunsOutboundCompliance()
+        {
+            // Arrange
+            var userId = Guid.NewGuid();
+            var orderId = Guid.NewGuid();
+
+            // Seed Outbound Order
+            var order = new OutboundOrder
+            {
+                OutboundOrderId = orderId,
+                OrderCode = "OUT-101",
+                OutboundOrderItems = new List<OutboundOrderItem>
+                {
+                    new OutboundOrderItem
+                    {
+                        OutboundOrderItemId = Guid.NewGuid(),
+                        OutboundOrderId = orderId,
+                        ItemCode = "ITEM-FOOD",
+                        ItemName = "Food Item",
+                        Quantity = 5
+                    }
+                }
+            };
+            _attachmentRepo.OutboundOrders.Add(order);
+
+            // Seed Receipt Item to resolve product category
+            var receiptItem = new WarehouseReceiptItem
+            {
+                ItemId = Guid.NewGuid(),
+                ItemCode = "ITEM-FOOD",
+                ItemName = "Food Item",
+                ProductCategory = ProductCategory.FOOD
+            };
+            _receiptRepo.ReceiptItems.Add(receiptItem);
+
+            // Seed Attachments
+            // Need: WAREHOUSE_ISSUE_NOTE, GOODS_CONDITION_PHOTO, and (TEMPERATURE_PHOTO or TEMPERATURE_LOG)
+            var issueNote = new WarehouseEvidenceAttachment
+            {
+                AttachmentId = Guid.NewGuid(),
+                FileName = "issue_note.pdf",
+                FilePath = "/uploads/issue_note.pdf",
+                Status = DocumentStatus.VERIFIED,
+                Category = AttachmentCategory.COMPLIANCE,
+                SubCategory = AttachmentSubCategory.WAREHOUSE_ISSUE_NOTE,
+                OutboundOrderId = orderId
+            };
+            var conditionPhoto = new WarehouseEvidenceAttachment
+            {
+                AttachmentId = Guid.NewGuid(),
+                FileName = "condition.png",
+                FilePath = "/uploads/condition.png",
+                Status = DocumentStatus.VERIFIED,
+                Category = AttachmentCategory.COMPLIANCE,
+                SubCategory = AttachmentSubCategory.GOODS_CONDITION_PHOTO,
+                OutboundOrderId = orderId
+            };
+            var tempPhoto = new WarehouseEvidenceAttachment
+            {
+                AttachmentId = Guid.NewGuid(),
+                FileName = "temp.png",
+                FilePath = "/uploads/temp.png",
+                Status = DocumentStatus.VERIFIED,
+                Category = AttachmentCategory.COMPLIANCE,
+                SubCategory = AttachmentSubCategory.TEMPERATURE_PHOTO,
+                OutboundOrderId = orderId
+            };
+
+            await _attachmentRepo.AddAttachmentAsync(issueNote);
+            await _attachmentRepo.AddAttachmentAsync(conditionPhoto);
+            await _attachmentRepo.AddAttachmentAsync(tempPhoto);
+
+            var request = new VerifyAttachmentRequest
+            {
+                Status = DocumentStatus.VERIFIED
+            };
+
+            // Act
+            var result = await _service.VerifyAttachmentAsync(tempPhoto.AttachmentId, request, userId);
+
+            // Assert
+            Assert.True(result.Success);
+            Assert.NotNull(result.Data);
+            Assert.True(result.Data.Passed);
+        }
+
+        [Fact]
+        public async Task VerifyAttachment_OutboundOrder_AmbiguitySafeguard_FailsValidation()
+        {
+            // Arrange
+            var userId = Guid.NewGuid();
+            var orderId = Guid.NewGuid();
+
+            // Seed Outbound Order
+            var order = new OutboundOrder
+            {
+                OutboundOrderId = orderId,
+                OrderCode = "OUT-102",
+                OutboundOrderItems = new List<OutboundOrderItem>
+                {
+                    new OutboundOrderItem
+                    {
+                        OutboundOrderItemId = Guid.NewGuid(),
+                        OutboundOrderId = orderId,
+                        ItemCode = "ITEM-AMBIGUOUS",
+                        ItemName = "Ambiguous Item",
+                        Quantity = 5
+                    }
+                }
+            };
+            _attachmentRepo.OutboundOrders.Add(order);
+
+            // Seed two different receipt items for same ItemCode with different categories
+            var item1 = new WarehouseReceiptItem
+            {
+                ItemId = Guid.NewGuid(),
+                ItemCode = "ITEM-AMBIGUOUS",
+                ItemName = "Ambiguous Item",
+                ProductCategory = ProductCategory.FOOD
+            };
+            var item2 = new WarehouseReceiptItem
+            {
+                ItemId = Guid.NewGuid(),
+                ItemCode = "ITEM-AMBIGUOUS",
+                ItemName = "Ambiguous Item",
+                ProductCategory = ProductCategory.PHARMA
+            };
+            _receiptRepo.ReceiptItems.Add(item1);
+            _receiptRepo.ReceiptItems.Add(item2);
+
+            var issueNote = new WarehouseEvidenceAttachment
+            {
+                AttachmentId = Guid.NewGuid(),
+                FileName = "issue_note.pdf",
+                FilePath = "/uploads/issue_note.pdf",
+                Status = DocumentStatus.PENDING,
+                Category = AttachmentCategory.COMPLIANCE,
+                SubCategory = AttachmentSubCategory.WAREHOUSE_ISSUE_NOTE,
+                OutboundOrderId = orderId
+            };
+            await _attachmentRepo.AddAttachmentAsync(issueNote);
+
+            var request = new VerifyAttachmentRequest
+            {
+                Status = DocumentStatus.VERIFIED
+            };
+
+            // Act
+            var result = await _service.VerifyAttachmentAsync(issueNote.AttachmentId, request, userId);
+
+            // Assert
+            Assert.True(result.Success);
+            Assert.NotNull(result.Data);
+            Assert.False(result.Data.Passed);
+            Assert.Contains(result.Data.FailedRequirements, r => r.Contains("Ambiguous product category"));
+        }
     }
 
     #region Mock Classes
@@ -486,6 +644,13 @@ namespace ColdChainX.UnitTests
         {
             var list = Attachments.Where(a => a.OutboundOrderId == outboundOrderId).ToList();
             return Task.FromResult(list);
+        }
+
+        public List<OutboundOrder> OutboundOrders { get; } = new();
+
+        public Task<OutboundOrder?> GetOutboundOrderWithItemsAsync(Guid outboundOrderId)
+        {
+            return Task.FromResult(OutboundOrders.FirstOrDefault(o => o.OutboundOrderId == outboundOrderId));
         }
 
         public Task AddAttachmentAsync(WarehouseEvidenceAttachment attachment)
@@ -553,6 +718,7 @@ namespace ColdChainX.UnitTests
     public class MockReceiptRepository : IWarehouseReceiptRepository
     {
         public List<WarehouseReceipt> Receipts { get; } = new();
+        public List<WarehouseReceiptItem> ReceiptItems { get; } = new();
 
         public Task<WarehouseReceipt?> GetByIdAsync(Guid receiptId)
         {
@@ -569,6 +735,12 @@ namespace ColdChainX.UnitTests
             return Task.FromResult(Receipts.Where(r => r.WarehouseId == warehouseId).ToList());
         }
 
+        public Task<List<WarehouseReceiptItem>> GetReceiptItemsByItemCodesAsync(IEnumerable<string> itemCodes)
+        {
+            var list = ReceiptItems.Where(i => i.ItemCode != null && itemCodes.Contains(i.ItemCode)).ToList();
+            return Task.FromResult(list);
+        }
+
         public Task AddAsync(WarehouseReceipt receipt)
         {
             Receipts.Add(receipt);
@@ -577,6 +749,7 @@ namespace ColdChainX.UnitTests
 
         public Task AddItemAsync(WarehouseReceiptItem item)
         {
+            ReceiptItems.Add(item);
             return Task.CompletedTask;
         }
 

@@ -410,6 +410,7 @@ namespace ColdChainX.UnitTests
         public Task<WarehouseReceipt?> GetByIdAsync(Guid receiptId) => Task.FromResult<WarehouseReceipt?>(null);
         public Task<WarehouseReceipt?> GetByOrderIdAsync(Guid orderId) => Task.FromResult<WarehouseReceipt?>(null);
         public Task<List<WarehouseReceipt>> GetActiveReceiptsByWarehouseIdAsync(Guid warehouseId) => Task.FromResult(new List<WarehouseReceipt>());
+        public Task<List<WarehouseReceiptItem>> GetReceiptItemsByItemCodesAsync(IEnumerable<string> itemCodes) => Task.FromResult(new List<WarehouseReceiptItem>());
         public Task AddAsync(WarehouseReceipt receipt) => Task.CompletedTask;
         public Task AddItemAsync(WarehouseReceiptItem item) => Task.CompletedTask;
         public Task SaveChangesAsync() => Task.CompletedTask;
@@ -459,6 +460,9 @@ namespace ColdChainX.UnitTests
 
         public Task<List<WarehouseEvidenceAttachment>> GetAttachmentsByOutboundOrderIdAsync(Guid outboundOrderId)
             => Task.FromResult(new List<WarehouseEvidenceAttachment>());
+
+        public Task<OutboundOrder?> GetOutboundOrderWithItemsAsync(Guid outboundOrderId)
+            => Task.FromResult<OutboundOrder?>(null);
 
         public Task AddAttachmentAsync(WarehouseEvidenceAttachment attachment)
         {

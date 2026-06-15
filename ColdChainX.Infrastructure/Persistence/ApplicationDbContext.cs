@@ -101,6 +101,8 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<InventoryAllocation> InventoryAllocations { get; set; }
 
+    public virtual DbSet<InventoryHold> InventoryHolds { get; set; }
+
     public virtual DbSet<OutboundOrder> OutboundOrders { get; set; }
 
     public virtual DbSet<OutboundOrderItem> OutboundOrderItems { get; set; }
@@ -2135,6 +2137,69 @@ public partial class ApplicationDbContext : DbContext
                 .HasForeignKey(d => d.StockId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_allocation_stock");
+        });
+
+        modelBuilder.Entity<InventoryHold>(entity =>
+        {
+            entity.HasKey(e => e.HoldId).HasName("inventory_holds_pkey");
+            entity.ToTable("inventory_holds");
+
+            entity.Property(e => e.HoldId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("hold_id");
+            entity.Property(e => e.StockId).HasColumnName("stock_id");
+
+            entity.Property(e => e.HoldQuantity)
+                .HasPrecision(10, 2)
+                .HasColumnName("hold_quantity");
+
+            entity.Property(e => e.ReasonCode)
+                .HasMaxLength(50)
+                .HasColumnName("reason_code");
+
+            entity.Property(e => e.Notes).HasColumnName("notes");
+
+            entity.Property(e => e.Status)
+                .HasMaxLength(30)
+                .HasDefaultValueSql("'HOLD'::character varying")
+                .HasColumnName("status");
+
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+
+            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
+
+            entity.Property(e => e.ReleasedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("released_at");
+
+            entity.Property(e => e.ReleasedBy).HasColumnName("released_by");
+
+            entity.Property(e => e.ReleaseNotes).HasColumnName("release_notes");
+
+            entity.Property(e => e.AdjustmentId).HasColumnName("adjustment_id");
+
+            entity.HasOne(d => d.Stock).WithMany()
+                .HasForeignKey(d => d.StockId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_hold_stock");
+
+            entity.HasOne(d => d.Creator).WithMany()
+                .HasForeignKey(d => d.CreatedBy)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_hold_user_creator");
+
+            entity.HasOne(d => d.Releaser).WithMany()
+                .HasForeignKey(d => d.ReleasedBy)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_hold_user_releaser");
+
+            entity.HasOne(d => d.Adjustment).WithMany()
+                .HasForeignKey(d => d.AdjustmentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_hold_adjustment");
         });
 
         modelBuilder.Entity<OutboundOrder>(entity =>

@@ -67,6 +67,13 @@ namespace ColdChainX.Infrastructure.Repositories
                 .ToListAsync();
         }
 
+        public async Task<OutboundOrder?> GetOutboundOrderWithItemsAsync(Guid outboundOrderId)
+        {
+            return await _db.OutboundOrders
+                .Include(o => o.OutboundOrderItems)
+                .FirstOrDefaultAsync(o => o.OutboundOrderId == outboundOrderId);
+        }
+
         public async Task AddAttachmentAsync(WarehouseEvidenceAttachment attachment)
         {
             await _db.WarehouseEvidenceAttachments.AddAsync(attachment);
