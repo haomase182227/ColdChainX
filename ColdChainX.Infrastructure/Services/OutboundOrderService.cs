@@ -482,6 +482,106 @@ namespace ColdChainX.Infrastructure.Services
             }
         }
 
+        public async Task<ApiResponse<AllocationResponse>> GetAllocationsAsync(Guid outboundOrderId)
+        {
+            try
+            {
+                var order = await _db.OutboundOrders.FindAsync(outboundOrderId);
+                if (order == null)
+                    return ApiResponse<AllocationResponse>.Failure("Outbound order not found.");
+
+                var allocations = await _db.InventoryAllocations
+                    .Include(a => a.Stock)
+                        .ThenInclude(s => s.Batch)
+                    .Include(a => a.Stock)
+                        .ThenInclude(s => s.Location)
+                            .ThenInclude(l => l.Zone)
+                    .Where(a => a.ReferenceDocumentId == outboundOrderId)
+                    .ToListAsync();
+
+                var response = new AllocationResponse
+                {
+                    OutboundOrderId = order.OutboundOrderId,
+                    OrderCode = order.OrderCode,
+                    Allocations = allocations.Select(a => new AllocationItemDto
+                    {
+                        AllocationId = a.AllocationId,
+                        StockId = a.StockId,
+                        ItemCode = a.Stock.ItemCode,
+                        ItemName = a.Stock.ItemName,
+                        BatchNumber = a.Stock.Batch.BatchNumber,
+                        ExpiryDate = a.Stock.Batch.ExpiryDate,
+                        LocationCode = a.Stock.Location.LocationCode,
+                        ZoneCode = a.Stock.Location.Zone?.ZoneCode ?? "N/A",
+                        AllocatedQuantity = a.AllocatedQuantity,
+                        AvailableQuantity = a.Stock.QuantityOnHand - a.Stock.QuantityAllocated,
+                        Status = a.Status
+                    }).ToList()
+                };
+
+                return ApiResponse<AllocationResponse>.SuccessResponse(response, "Allocations retrieved successfully.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to retrieve allocations for order: {Id}", outboundOrderId);
+                return ApiResponse<AllocationResponse>.Failure($"Failed to retrieve allocations: {ex.Message}");
+            }
+        }
+
+        public async Task<ApiResponse<PickingListResponse>> GetPickingListAsync(Guid outboundOrderId)
+        {
+            try
+            {
+                var order = await _db.OutboundOrders
+                    .Include(o => o.AssignedPicker)
+                    .FirstOrDefaultAsync(o => o.OutboundOrderId == outboundOrderId);
+
+                if (order == null)
+                    return ApiResponse<PickingListResponse>.Failure("Outbound order not found.");
+
+                var allocations = await _db.InventoryAllocations
+                    .Include(a => a.Stock)
+                        .ThenInclude(s => s.Batch)
+                    .Include(a => a.Stock)
+                        .ThenInclude(s => s.Location)
+                            .ThenInclude(l => l.Zone)
+                    .Where(a => a.ReferenceDocumentId == outboundOrderId && a.Status == "ALLOCATED")
+                    .ToListAsync();
+
+                // Sort picking list items by LocationCode ascending
+                var pickingItems = allocations
+                    .Select(a => new PickingListItemDto
+                    {
+                        ItemCode = a.Stock.ItemCode,
+                        ItemName = a.Stock.ItemName,
+                        LocationId = a.Stock.LocationId,
+                        LocationCode = a.Stock.Location.LocationCode,
+                        ZoneCode = a.Stock.Location.Zone?.ZoneCode ?? "N/A",
+                        BatchNumber = a.Stock.Batch.BatchNumber,
+                        ExpiryDate = a.Stock.Batch.ExpiryDate,
+                        QuantityToPick = a.AllocatedQuantity
+                    })
+                    .OrderBy(pi => pi.LocationCode)
+                    .ToList();
+
+                var response = new PickingListResponse
+                {
+                    OutboundOrderId = order.OutboundOrderId,
+                    OrderCode = order.OrderCode,
+                    AssignedPickerId = order.AssignedPickerId,
+                    AssignedPickerName = order.AssignedPicker?.FullName,
+                    Items = pickingItems
+                };
+
+                return ApiResponse<PickingListResponse>.SuccessResponse(response, "Picking list retrieved successfully.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to retrieve picking list for order: {Id}", outboundOrderId);
+                return ApiResponse<PickingListResponse>.Failure($"Failed to retrieve picking list: {ex.Message}");
+            }
+        }
+
 
 
         private OutboundOrderResponse MapToResponse(OutboundOrder order)

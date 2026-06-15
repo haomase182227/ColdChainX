@@ -17,5 +17,7 @@ namespace ColdChainX.Application.Interfaces
         Task<ApiResponse<OutboundOrderResponse>> StartPickingAsync(Guid outboundOrderId, Guid pickerId, Guid userId);
         Task<ApiResponse<OutboundOrderResponse>> CompletePickingAsync(Guid outboundOrderId, Guid userId);
         Task<ApiResponse<OutboundOrderResponse>> ShipOrderAsync(Guid outboundOrderId, Guid userId);
+        Task<ApiResponse<AllocationResponse>> GetAllocationsAsync(Guid outboundOrderId);
+        Task<ApiResponse<PickingListResponse>> GetPickingListAsync(Guid outboundOrderId);
     }
 }
