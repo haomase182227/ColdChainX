@@ -7,7 +7,6 @@ namespace ColdChainX.Core.Enums
         PICKING = 3,
         PICKED = 4,
         SHIPPED = 5,
-        COMPLETED = 6,
-        CANCELLED = 7
+        CANCELLED = 6
     }
 }

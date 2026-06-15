@@ -467,33 +467,7 @@ namespace ColdChainX.Infrastructure.Services
             }
         }
 
-        public async Task<ApiResponse<OutboundOrderResponse>> CompleteOrderAsync(Guid outboundOrderId, Guid userId)
-        {
-            using var transaction = await _db.Database.BeginTransactionAsync();
-            try
-            {
-                var order = await _db.OutboundOrders.FindAsync(outboundOrderId);
-                if (order == null)
-                    return ApiResponse<OutboundOrderResponse>.Failure("Outbound order not found.");
 
-                if (order.Status != OutboundOrderStatus.SHIPPED)
-                    return ApiResponse<OutboundOrderResponse>.Failure("Order can only be completed from SHIPPED status.");
-
-                order.Status = OutboundOrderStatus.COMPLETED;
-                order.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
-                order.UpdatedBy = userId;
-
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
-
-                return await GetByIdAsync(outboundOrderId);
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-                return ApiResponse<OutboundOrderResponse>.Failure($"Failed to complete order: {ex.Message}");
-            }
-        }
 
         private OutboundOrderResponse MapToResponse(OutboundOrder order)
         {

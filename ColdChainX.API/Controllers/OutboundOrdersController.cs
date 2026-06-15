@@ -141,18 +141,5 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
-        [HttpPost("{id:guid}/complete")]
-        public async Task<IActionResult> Complete([FromRoute] Guid id)
-        {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (!Guid.TryParse(userIdClaim, out var userId))
-                return Unauthorized("User ID claim is missing or invalid in the token");
-
-            var result = await _outboundOrderService.CompleteOrderAsync(id, userId);
-            if (!result.Success)
-                return BadRequest(result);
-
-            return Ok(result);
-        }
     }
 }
