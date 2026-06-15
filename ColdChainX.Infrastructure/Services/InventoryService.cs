@@ -210,10 +210,18 @@ namespace ColdChainX.Infrastructure.Services
             }
         }
 
-        public async Task<ApiResponse<bool>> AdjustStockAsync(InventoryAdjustmentRequest request, Guid userId)
+        public async Task<ApiResponse<bool>> AdjustStockAsync(InventoryAdjustmentRequest request, Guid userId, bool autoApprove = false)
         {
             if (request == null)
                 return ApiResponse<bool>.Failure("Request is null");
+
+            if (!autoApprove)
+            {
+                var createResult = await CreateAdjustmentRequestAsync(request, userId);
+                if (!createResult.Success)
+                    return ApiResponse<bool>.Failure(createResult.Message);
+                return ApiResponse<bool>.SuccessResponse(true, "Stock adjustment request submitted successfully for approval.");
+            }
 
             var isOuterTransaction = _db.Database.CurrentTransaction == null;
             using var transaction = isOuterTransaction ? await _db.Database.BeginTransactionAsync() : null;
@@ -270,9 +278,9 @@ namespace ColdChainX.Infrastructure.Services
                 stock.QuantityOnHand += deltaQty;
                 decimal qtyAfter = stock.QuantityOnHand;
 
+                int palletsBefore = stock.PalletCount;
                 stock.PalletCount += deltaPallets;
-                stock.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
-                stock.UpdatedBy = userId;
+                int palletsAfter = stock.PalletCount;
 
                 // Update location and zone pallet occupancies
                 if (location != null)
@@ -299,6 +307,9 @@ namespace ColdChainX.Infrastructure.Services
                 {
                     stock.Status = "AVAILABLE";
                 }
+
+                stock.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+                stock.UpdatedBy = userId;
 
                 // 6. Log InventoryMovement
                 var movement = new InventoryMovement
@@ -329,10 +340,16 @@ namespace ColdChainX.Infrastructure.Services
                     QuantityBefore = qtyBefore,
                     QuantityChanged = deltaQty,
                     QuantityAfter = qtyAfter,
+                    PalletsBefore = palletsBefore,
+                    PalletsChanged = deltaPallets,
+                    PalletsAfter = palletsAfter,
                     ReasonNotes = request.Reason.Trim(),
                     CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
                     CreatedBy = userId,
-                    MovementId = movement.MovementId
+                    MovementId = movement.MovementId,
+                    Status = InventoryAdjustmentStatus.APPROVED,
+                    ApprovedBy = userId,
+                    ApprovedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
                 };
                 _db.InventoryAdjustments.Add(adjustment);
 
@@ -342,7 +359,7 @@ namespace ColdChainX.Infrastructure.Services
                     await transaction.CommitAsync();
                 }
 
-                _logger.LogInformation("Stock adjusted successfully. StockId: {StockId}, AdjustmentType: {AdjustmentType}, QtyChanged: {QtyChanged}, PalletsChanged: {PalletsChanged}",
+                _logger.LogInformation("Stock adjusted successfully (auto-approved). StockId: {StockId}, AdjustmentType: {AdjustmentType}, QtyChanged: {QtyChanged}, PalletsChanged: {PalletsChanged}",
                     stock.StockId, request.AdjustmentType, deltaQty, deltaPallets);
 
                 return ApiResponse<bool>.SuccessResponse(true, $"Stock adjusted successfully via {request.AdjustmentType}.");
@@ -355,6 +372,358 @@ namespace ColdChainX.Infrastructure.Services
                 }
                 _logger.LogError(ex, "Failed to adjust stock. StockId: {StockId}, AdjustmentType: {AdjustmentType}", request.StockId, request.AdjustmentType);
                 return ApiResponse<bool>.Failure($"Failed to adjust stock: {ex.Message}");
+            }
+        }
+
+        public async Task<ApiResponse<Guid>> CreateAdjustmentRequestAsync(InventoryAdjustmentRequest request, Guid userId)
+        {
+            if (request == null)
+                return ApiResponse<Guid>.Failure("Request is null");
+
+            try
+            {
+                var stock = await _db.InventoryStocks
+                    .Include(s => s.Location)
+                    .ThenInclude(l => l.Zone)
+                    .FirstOrDefaultAsync(s => s.StockId == request.StockId);
+
+                if (stock == null)
+                    return ApiResponse<Guid>.Failure("Stock record not found.");
+
+                decimal deltaQty = request.IsAbsoluteCount
+                    ? request.Quantity - stock.QuantityOnHand
+                    : request.Quantity;
+
+                int deltaPallets = request.IsAbsoluteCount
+                    ? request.Pallets - stock.PalletCount
+                    : request.Pallets;
+
+                if (stock.QuantityOnHand + deltaQty < 0)
+                {
+                    return ApiResponse<Guid>.Failure($"Adjustment failed: Resulting quantity cannot be negative. Current: {stock.QuantityOnHand}, Delta: {deltaQty}.");
+                }
+
+                if (stock.PalletCount + deltaPallets < 0)
+                {
+                    return ApiResponse<Guid>.Failure($"Adjustment failed: Resulting pallet count cannot be negative. Current: {stock.PalletCount}, Delta: {deltaPallets}.");
+                }
+
+                var location = stock.Location;
+                var zone = location?.Zone;
+                if (deltaPallets > 0)
+                {
+                    if (location != null && location.CurrentPallets + deltaPallets > location.MaxCapacityPallets)
+                    {
+                        return ApiResponse<Guid>.Failure($"Capacity exceeded: Location '{location.LocationCode}' does not have enough capacity. Current: {location.CurrentPallets}, Adding: {deltaPallets}, Max: {location.MaxCapacityPallets}.");
+                    }
+                    if (zone != null && zone.CurrentPallets + deltaPallets > zone.MaxCapacityPallets)
+                    {
+                        return ApiResponse<Guid>.Failure($"Capacity exceeded: Zone '{zone.ZoneCode}' does not have enough capacity. Current: {zone.CurrentPallets}, Adding: {deltaPallets}, Max: {zone.MaxCapacityPallets}.");
+                    }
+                }
+
+                var adjustment = new InventoryAdjustment
+                {
+                    AdjustmentId = Guid.NewGuid(),
+                    StockId = stock.StockId,
+                    AdjustmentType = request.AdjustmentType,
+                    QuantityBefore = stock.QuantityOnHand,
+                    QuantityChanged = deltaQty,
+                    QuantityAfter = stock.QuantityOnHand + deltaQty,
+                    PalletsBefore = stock.PalletCount,
+                    PalletsChanged = deltaPallets,
+                    PalletsAfter = stock.PalletCount + deltaPallets,
+                    ReasonNotes = request.Reason.Trim(),
+                    Status = InventoryAdjustmentStatus.PENDING_APPROVAL,
+                    CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
+                    CreatedBy = userId,
+                    MovementId = null
+                };
+
+                _db.InventoryAdjustments.Add(adjustment);
+                await _db.SaveChangesAsync();
+
+                return ApiResponse<Guid>.SuccessResponse(adjustment.AdjustmentId, "Adjustment request submitted successfully.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to create adjustment request for StockId: {StockId}", request.StockId);
+                return ApiResponse<Guid>.Failure($"Failed to create adjustment request: {ex.Message}");
+            }
+        }
+
+        public async Task<ApiResponse<bool>> ApproveAdjustmentAsync(Guid adjustmentId, Guid userId)
+        {
+            using var transaction = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                var adjustment = await _db.InventoryAdjustments
+                    .Include(a => a.Stock)
+                    .ThenInclude(s => s.Location)
+                    .ThenInclude(l => l.Zone)
+                    .FirstOrDefaultAsync(a => a.AdjustmentId == adjustmentId);
+
+                if (adjustment == null)
+                    return ApiResponse<bool>.Failure("Adjustment request not found.");
+
+                if (adjustment.Status != InventoryAdjustmentStatus.PENDING_APPROVAL)
+                    return ApiResponse<bool>.Failure($"Adjustment request is not pending approval. Current status: {adjustment.Status}");
+
+                var stock = adjustment.Stock;
+                if (stock == null)
+                    return ApiResponse<bool>.Failure("Stock record not found.");
+
+                if (stock.QuantityOnHand + adjustment.QuantityChanged < 0)
+                {
+                    return ApiResponse<bool>.Failure($"Adjustment failed: Resulting quantity cannot be negative. Current: {stock.QuantityOnHand}, Delta: {adjustment.QuantityChanged}.");
+                }
+
+                if (stock.PalletCount + adjustment.PalletsChanged < 0)
+                {
+                    return ApiResponse<bool>.Failure($"Adjustment failed: Resulting pallet count cannot be negative. Current: {stock.PalletCount}, Delta: {adjustment.PalletsChanged}.");
+                }
+
+                var location = stock.Location;
+                var zone = location?.Zone;
+                if (adjustment.PalletsChanged > 0)
+                {
+                    if (location != null && location.CurrentPallets + adjustment.PalletsChanged > location.MaxCapacityPallets)
+                    {
+                        return ApiResponse<bool>.Failure($"Capacity exceeded: Location '{location.LocationCode}' does not have enough capacity. Current: {location.CurrentPallets}, Adding: {adjustment.PalletsChanged}, Max: {location.MaxCapacityPallets}.");
+                    }
+                    if (zone != null && zone.CurrentPallets + adjustment.PalletsChanged > zone.MaxCapacityPallets)
+                    {
+                        return ApiResponse<bool>.Failure($"Capacity exceeded: Zone '{zone.ZoneCode}' does not have enough capacity. Current: {zone.CurrentPallets}, Adding: {adjustment.PalletsChanged}, Max: {zone.MaxCapacityPallets}.");
+                    }
+                }
+
+                decimal qtyBefore = stock.QuantityOnHand;
+                stock.QuantityOnHand += adjustment.QuantityChanged;
+                decimal qtyAfter = stock.QuantityOnHand;
+
+                int palletsBefore = stock.PalletCount;
+                stock.PalletCount += adjustment.PalletsChanged;
+                int palletsAfter = stock.PalletCount;
+
+                if (location != null)
+                {
+                    location.CurrentPallets += adjustment.PalletsChanged;
+                    if (location.CurrentPallets < 0) location.CurrentPallets = 0;
+                }
+
+                if (zone != null)
+                {
+                    zone.CurrentPallets += adjustment.PalletsChanged;
+                    if (zone.CurrentPallets < 0) zone.CurrentPallets = 0;
+                }
+
+                if (stock.QuantityOnHand == 0)
+                {
+                    stock.Status = "INACTIVE";
+                    stock.PalletCount = 0;
+                }
+                else if (stock.Status == "INACTIVE" && stock.QuantityOnHand > 0)
+                {
+                    stock.Status = "AVAILABLE";
+                }
+
+                stock.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+                stock.UpdatedBy = userId;
+
+                var movement = new InventoryMovement
+                {
+                    MovementId = Guid.NewGuid(),
+                    StockId = stock.StockId,
+                    ItemCode = stock.ItemCode,
+                    BatchId = stock.BatchId,
+                    MovementType = "ADJUSTMENT",
+                    Quantity = Math.Abs(adjustment.QuantityChanged),
+                    FromLocationId = adjustment.QuantityChanged < 0 ? stock.LocationId : null,
+                    ToLocationId = adjustment.QuantityChanged > 0 ? stock.LocationId : null,
+                    ReferenceDocumentId = null,
+                    CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
+                    CreatedBy = userId
+                };
+                _db.InventoryMovements.Add(movement);
+                await _db.SaveChangesAsync();
+
+                adjustment.QuantityBefore = qtyBefore;
+                adjustment.QuantityAfter = qtyAfter;
+                adjustment.PalletsBefore = palletsBefore;
+                adjustment.PalletsAfter = palletsAfter;
+                
+                adjustment.Status = InventoryAdjustmentStatus.APPROVED;
+                adjustment.ApprovedBy = userId;
+                adjustment.ApprovedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+                adjustment.MovementId = movement.MovementId;
+
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return ApiResponse<bool>.SuccessResponse(true, "Adjustment approved and executed successfully.");
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Failed to approve adjustment request: {AdjustmentId}", adjustmentId);
+                return ApiResponse<bool>.Failure($"Failed to approve adjustment: {ex.Message}");
+            }
+        }
+
+        public async Task<ApiResponse<bool>> RejectAdjustmentAsync(Guid adjustmentId, string reason, Guid userId)
+        {
+            try
+            {
+                var adjustment = await _db.InventoryAdjustments
+                    .FirstOrDefaultAsync(a => a.AdjustmentId == adjustmentId);
+
+                if (adjustment == null)
+                    return ApiResponse<bool>.Failure("Adjustment request not found.");
+
+                if (adjustment.Status != InventoryAdjustmentStatus.PENDING_APPROVAL)
+                    return ApiResponse<bool>.Failure($"Adjustment request is not pending approval. Current status: {adjustment.Status}");
+
+                adjustment.Status = InventoryAdjustmentStatus.REJECTED;
+                adjustment.ApprovedBy = userId;
+                adjustment.ApprovedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+                adjustment.RejectionReason = reason?.Trim();
+
+                await _db.SaveChangesAsync();
+
+                return ApiResponse<bool>.SuccessResponse(true, "Adjustment request rejected successfully.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to reject adjustment request: {AdjustmentId}", adjustmentId);
+                return ApiResponse<bool>.Failure($"Failed to reject adjustment: {ex.Message}");
+            }
+        }
+
+        public async Task<ApiResponse<InventoryAdjustmentResponse>> GetAdjustmentByIdAsync(Guid adjustmentId)
+        {
+            try
+            {
+                var adjustment = await _db.InventoryAdjustments
+                    .Include(a => a.Stock)
+                    .ThenInclude(s => s.Location)
+                    .FirstOrDefaultAsync(a => a.AdjustmentId == adjustmentId);
+
+                if (adjustment == null)
+                    return ApiResponse<InventoryAdjustmentResponse>.Failure("Adjustment not found.");
+
+                var creatorUser = await _db.Users.FindAsync(adjustment.CreatedBy);
+                var approverUser = adjustment.ApprovedBy.HasValue 
+                    ? await _db.Users.FindAsync(adjustment.ApprovedBy.Value) 
+                    : null;
+
+                var response = new InventoryAdjustmentResponse
+                {
+                    AdjustmentId = adjustment.AdjustmentId,
+                    StockId = adjustment.StockId,
+                    ItemCode = adjustment.Stock.ItemCode,
+                    ItemName = adjustment.Stock.ItemName,
+                    BatchNumber = await _db.InventoryBatches
+                        .Where(b => b.BatchId == adjustment.Stock.BatchId)
+                        .Select(b => b.BatchNumber)
+                        .FirstOrDefaultAsync() ?? "UNKNOWN",
+                    LocationCode = adjustment.Stock.Location.LocationCode,
+                    AdjustmentType = adjustment.AdjustmentType,
+                    QuantityBefore = adjustment.QuantityBefore,
+                    QuantityChanged = adjustment.QuantityChanged,
+                    QuantityAfter = adjustment.QuantityAfter,
+                    PalletsBefore = adjustment.PalletsBefore,
+                    PalletsChanged = adjustment.PalletsChanged,
+                    PalletsAfter = adjustment.PalletsAfter,
+                    ReasonNotes = adjustment.ReasonNotes,
+                    Status = adjustment.Status,
+                    MovementId = adjustment.MovementId,
+                    CreatedAt = adjustment.CreatedAt,
+                    CreatedBy = adjustment.CreatedBy,
+                    CreatedByUsername = creatorUser?.Username ?? "Unknown",
+                    ApprovedBy = adjustment.ApprovedBy,
+                    ApprovedByUsername = approverUser?.Username,
+                    ApprovedAt = adjustment.ApprovedAt,
+                    RejectionReason = adjustment.RejectionReason
+                };
+
+                return ApiResponse<InventoryAdjustmentResponse>.SuccessResponse(response, "Adjustment details retrieved successfully.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to retrieve adjustment: {AdjustmentId}", adjustmentId);
+                return ApiResponse<InventoryAdjustmentResponse>.Failure($"Failed to retrieve adjustment: {ex.Message}");
+            }
+        }
+
+        public async Task<ApiResponse<PagedResult<InventoryAdjustmentResponse>>> GetPagedAdjustmentsAsync(int pageNumber, int pageSize, InventoryAdjustmentStatus? status = null)
+        {
+            try
+            {
+                var query = _db.InventoryAdjustments
+                    .Include(a => a.Stock)
+                    .ThenInclude(s => s.Location)
+                    .AsQueryable();
+
+                if (status.HasValue)
+                {
+                    query = query.Where(a => a.Status == status.Value);
+                }
+
+                int totalCount = await query.CountAsync();
+                var items = await query
+                    .OrderByDescending(a => a.CreatedAt)
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync();
+
+                var userIds = items.Select(a => a.CreatedBy)
+                    .Concat(items.Where(a => a.ApprovedBy.HasValue).Select(a => a.ApprovedBy!.Value))
+                    .Distinct()
+                    .ToList();
+
+                var usersMap = await _db.Users
+                    .Where(u => userIds.Contains(u.UserId))
+                    .ToDictionaryAsync(u => u.UserId, u => u.Username);
+
+                var batchIds = items.Select(a => a.Stock.BatchId).Distinct().ToList();
+                var batchesMap = await _db.InventoryBatches
+                    .Where(b => batchIds.Contains(b.BatchId))
+                    .ToDictionaryAsync(b => b.BatchId, b => b.BatchNumber);
+
+                var responseList = items.Select(adjustment => new InventoryAdjustmentResponse
+                {
+                    AdjustmentId = adjustment.AdjustmentId,
+                    StockId = adjustment.StockId,
+                    ItemCode = adjustment.Stock.ItemCode,
+                    ItemName = adjustment.Stock.ItemName,
+                    BatchNumber = batchesMap.TryGetValue(adjustment.Stock.BatchId, out var batchNo) ? batchNo : "UNKNOWN",
+                    LocationCode = adjustment.Stock.Location.LocationCode,
+                    AdjustmentType = adjustment.AdjustmentType,
+                    QuantityBefore = adjustment.QuantityBefore,
+                    QuantityChanged = adjustment.QuantityChanged,
+                    QuantityAfter = adjustment.QuantityAfter,
+                    PalletsBefore = adjustment.PalletsBefore,
+                    PalletsChanged = adjustment.PalletsChanged,
+                    PalletsAfter = adjustment.PalletsAfter,
+                    ReasonNotes = adjustment.ReasonNotes,
+                    Status = adjustment.Status,
+                    MovementId = adjustment.MovementId,
+                    CreatedAt = adjustment.CreatedAt,
+                    CreatedBy = adjustment.CreatedBy,
+                    CreatedByUsername = usersMap.TryGetValue(adjustment.CreatedBy, out var cUser) ? cUser : "Unknown",
+                    ApprovedBy = adjustment.ApprovedBy,
+                    ApprovedByUsername = adjustment.ApprovedBy.HasValue && usersMap.TryGetValue(adjustment.ApprovedBy.Value, out var aUser) ? aUser : null,
+                    ApprovedAt = adjustment.ApprovedAt,
+                    RejectionReason = adjustment.RejectionReason
+                }).ToList();
+
+                var pagedResult = PagedResult<InventoryAdjustmentResponse>.Create(responseList, totalCount, pageNumber, pageSize);
+                return ApiResponse<PagedResult<InventoryAdjustmentResponse>>.SuccessResponse(pagedResult, "Paged adjustments retrieved successfully.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to retrieve paged adjustments.");
+                return ApiResponse<PagedResult<InventoryAdjustmentResponse>>.Failure($"Failed to retrieve adjustments: {ex.Message}");
             }
         }
 
@@ -584,6 +953,185 @@ namespace ColdChainX.Infrastructure.Services
                 await transaction.RollbackAsync();
                 _logger.LogError(ex, "Failed to release allocations for ReferenceDocumentId: {ReferenceDocumentId}", request.ReferenceDocumentId);
                 return ApiResponse<bool>.Failure($"Failed to release allocation: {ex.Message}");
+            }
+        }
+
+        public async Task<ApiResponse<List<PutawaySuggestionResponse>>> GetPutawaySuggestionsAsync(Guid stockId)
+        {
+            try
+            {
+                var stock = await _db.InventoryStocks
+                    .Include(s => s.Location)
+                    .ThenInclude(l => l.Zone)
+                    .Include(s => s.Batch)
+                    .FirstOrDefaultAsync(s => s.StockId == stockId);
+
+                if (stock == null)
+                {
+                    return ApiResponse<List<PutawaySuggestionResponse>>.Failure("Stock record not found.");
+                }
+
+                var warehouseId = stock.Location.Zone.WarehouseId;
+
+                // Query all active locations in the same warehouse, excluding receiving or shipping zones, and the stock's current location.
+                var locations = await _db.WarehouseLocations
+                    .Include(l => l.Zone)
+                    .Where(l => l.Zone.WarehouseId == warehouseId
+                                && l.Status == "ACTIVE"
+                                && l.Zone.Status == "ACTIVE"
+                                && l.Zone.ZoneType != "RECEIVING"
+                                && l.Zone.ZoneType != "SHIPPING"
+                                && l.LocationId != stock.LocationId)
+                    .ToListAsync();
+
+                var suggestions = new List<PutawaySuggestionResponse>();
+
+                // Get all active stock records in non-receiving zones of this warehouse to check for same item / same batch consolidation
+                var activeStocks = await _db.InventoryStocks
+                    .Include(s => s.Location)
+                    .Include(s => s.Batch)
+                    .Where(s => s.Location.Zone.WarehouseId == warehouseId
+                                && s.QuantityOnHand > 0
+                                && s.Location.Zone.ZoneType != "RECEIVING"
+                                && s.Location.Zone.ZoneType != "SHIPPING")
+                    .ToListAsync();
+
+                foreach (var loc in locations)
+                {
+                    // 1. Temperature compatibility
+                    if (stock.RequiredTempMin.HasValue && loc.Zone.TemperatureMax.HasValue && stock.RequiredTempMin.Value > loc.Zone.TemperatureMax.Value)
+                    {
+                        continue;
+                    }
+
+                    if (stock.RequiredTempMax.HasValue && loc.Zone.TemperatureMin.HasValue && stock.RequiredTempMax.Value < loc.Zone.TemperatureMin.Value)
+                    {
+                        continue;
+                    }
+
+                    // 2. Capacity validation
+                    int palletNeeded = Math.Max(1, stock.PalletCount);
+                    if (loc.CurrentPallets + palletNeeded > loc.MaxCapacityPallets)
+                    {
+                        continue;
+                    }
+
+                    if (loc.Zone.CurrentPallets + palletNeeded > loc.Zone.MaxCapacityPallets)
+                    {
+                        continue;
+                    }
+
+                    // 3. Consolidation evaluation
+                    var locStocks = activeStocks.Where(s => s.LocationId == loc.LocationId).ToList();
+
+                    bool hasSameBatch = locStocks.Any(s => s.ItemCode == stock.ItemCode && s.BatchId == stock.BatchId);
+                    bool hasSameItem = locStocks.Any(s => s.ItemCode == stock.ItemCode);
+
+                    int score = 0;
+                    string matchType = "COMPATIBLE";
+
+                    if (hasSameBatch)
+                    {
+                        score = 100;
+                        matchType = "SAME_BATCH";
+                    }
+                    else if (hasSameItem)
+                    {
+                        score = 80;
+                        matchType = "SAME_ITEM";
+                    }
+                    else if (loc.CurrentPallets == 0)
+                    {
+                        score = 50;
+                        matchType = "EMPTY";
+                    }
+                    else
+                    {
+                        score = 20;
+                        matchType = "COMPATIBLE";
+                    }
+
+                    suggestions.Add(new PutawaySuggestionResponse
+                    {
+                        LocationId = loc.LocationId,
+                        LocationCode = loc.LocationCode,
+                        ZoneCode = loc.Zone.ZoneCode,
+                        CurrentPallets = loc.CurrentPallets,
+                        MaxCapacityPallets = loc.MaxCapacityPallets,
+                        RemainingCapacity = loc.MaxCapacityPallets - loc.CurrentPallets,
+                        SuitabilityScore = score,
+                        MatchType = matchType
+                    });
+                }
+
+                // Rank suggestions: MatchType Score desc, RemainingCapacity desc, LocationCode asc
+                var orderedSuggestions = suggestions
+                    .OrderByDescending(s => s.SuitabilityScore)
+                    .ThenByDescending(s => s.RemainingCapacity)
+                    .ThenBy(s => s.LocationCode)
+                    .ToList();
+
+                return ApiResponse<List<PutawaySuggestionResponse>>.SuccessResponse(orderedSuggestions, "Putaway suggestions retrieved successfully.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get putaway suggestions for stock: {StockId}", stockId);
+                return ApiResponse<List<PutawaySuggestionResponse>>.Failure($"Failed to get putaway suggestions: {ex.Message}");
+            }
+        }
+
+        public async Task<ApiResponse<List<StockPutawaySuggestionsResponse>>> GetPutawaySuggestionsByReceiptAsync(Guid receiptId)
+        {
+            try
+            {
+                var receipt = await _db.WarehouseReceipts.FindAsync(receiptId);
+                if (receipt == null)
+                {
+                    return ApiResponse<List<StockPutawaySuggestionsResponse>>.Failure("Warehouse receipt not found.");
+                }
+
+                var stockIds = await _db.InventoryMovements
+                    .Where(m => m.ReferenceDocumentId == receiptId && m.MovementType == "INBOUND")
+                    .Select(m => m.StockId)
+                    .Distinct()
+                    .ToListAsync();
+
+                if (!stockIds.Any())
+                {
+                    return ApiResponse<List<StockPutawaySuggestionsResponse>>.SuccessResponse(new List<StockPutawaySuggestionsResponse>(), "No inbound stocks found for this receipt.");
+                }
+
+                var stocks = await _db.InventoryStocks
+                    .Include(s => s.Location)
+                    .ThenInclude(l => l.Zone)
+                    .Include(s => s.Batch)
+                    .Where(s => stockIds.Contains(s.StockId))
+                    .ToListAsync();
+
+                var result = new List<StockPutawaySuggestionsResponse>();
+
+                foreach (var stock in stocks)
+                {
+                    var stockResult = await GetPutawaySuggestionsAsync(stock.StockId);
+                    if (stockResult.Success && stockResult.Data != null)
+                    {
+                        result.Add(new StockPutawaySuggestionsResponse
+                        {
+                            StockId = stock.StockId,
+                            ItemCode = stock.ItemCode,
+                            BatchNumber = stock.Batch?.BatchNumber ?? "",
+                            PalletCount = stock.PalletCount,
+                            Suggestions = stockResult.Data
+                        });
+                    }
+                }
+
+                return ApiResponse<List<StockPutawaySuggestionsResponse>>.SuccessResponse(result, "Receipt putaway suggestions retrieved successfully.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get putaway suggestions for receipt: {ReceiptId}", receiptId);
+                return ApiResponse<List<StockPutawaySuggestionsResponse>>.Failure($"Failed to get putaway suggestions: {ex.Message}");
             }
         }
     }

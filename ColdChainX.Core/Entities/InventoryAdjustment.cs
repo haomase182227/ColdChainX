@@ -14,9 +14,19 @@ namespace ColdChainX.Core.Entities
         public string ReasonNotes { get; set; } = null!;
         public DateTime CreatedAt { get; set; }
         public Guid CreatedBy { get; set; }
-        public Guid MovementId { get; set; }
+        public Guid? MovementId { get; set; }
+        
+        public InventoryAdjustmentStatus Status { get; set; }
+        public Guid? ApprovedBy { get; set; }
+        public DateTime? ApprovedAt { get; set; }
+        public string? RejectionReason { get; set; }
+        
+        public int PalletsBefore { get; set; }
+        public int PalletsChanged { get; set; }
+        public int PalletsAfter { get; set; }
 
         public virtual InventoryStock Stock { get; set; } = null!;
-        public virtual InventoryMovement Movement { get; set; } = null!;
+        public virtual InventoryMovement? Movement { get; set; }
     }
 }
+

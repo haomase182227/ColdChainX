@@ -292,7 +292,7 @@ namespace ColdChainX.Infrastructure.Services
                             Reason = $"Cycle Count Plan: {plan.PlanCode}, Entry: {entry.EntryId}. Notes: {dto.ManagerNotes}"
                         };
 
-                        var adjustResult = await _inventoryService.AdjustStockAsync(adjustRequest, managerId);
+                        var adjustResult = await _inventoryService.AdjustStockAsync(adjustRequest, managerId, autoApprove: true);
                         if (!adjustResult.Success)
                         {
                             throw new Exception($"Stock adjustment failed: {adjustResult.Message}");
@@ -400,7 +400,13 @@ namespace ColdChainX.Infrastructure.Services
                             ReasonNotes = $"Cycle Count approved (unexpected stock found). Plan: {plan.PlanCode}. Notes: {dto.ManagerNotes}",
                             CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
                             CreatedBy = managerId,
-                            MovementId = movement.MovementId
+                            MovementId = movement.MovementId,
+                            Status = InventoryAdjustmentStatus.APPROVED,
+                            ApprovedBy = managerId,
+                            ApprovedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
+                            PalletsBefore = 0,
+                            PalletsChanged = newStock.PalletCount,
+                            PalletsAfter = newStock.PalletCount
                         };
                         _db.InventoryAdjustments.Add(adjustment);
                         await _db.SaveChangesAsync();

@@ -2098,6 +2098,24 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.CreatedBy).HasColumnName("created_by");
             entity.Property(e => e.MovementId).HasColumnName("movement_id");
 
+            entity.Property(e => e.Status)
+                .HasConversion<string>()
+                .HasMaxLength(30)
+                .HasDefaultValue(InventoryAdjustmentStatus.PENDING_APPROVAL)
+                .HasColumnName("status");
+
+            entity.Property(e => e.ApprovedBy).HasColumnName("approved_by");
+            entity.Property(e => e.ApprovedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("approved_at");
+            entity.Property(e => e.RejectionReason)
+                .HasMaxLength(255)
+                .HasColumnName("rejection_reason");
+
+            entity.Property(e => e.PalletsBefore).HasColumnName("pallets_before");
+            entity.Property(e => e.PalletsChanged).HasColumnName("pallets_changed");
+            entity.Property(e => e.PalletsAfter).HasColumnName("pallets_after");
+
             entity.HasOne(d => d.Stock).WithMany()
                 .HasForeignKey(d => d.StockId)
                 .OnDelete(DeleteBehavior.Restrict)

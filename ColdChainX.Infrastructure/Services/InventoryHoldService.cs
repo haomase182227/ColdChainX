@@ -304,7 +304,7 @@ namespace ColdChainX.Infrastructure.Services
                 stock.Status = "AVAILABLE";
                 await _db.SaveChangesAsync();
 
-                var adjustResult = await _inventoryService.AdjustStockAsync(adjustRequest, userId);
+                var adjustResult = await _inventoryService.AdjustStockAsync(adjustRequest, userId, autoApprove: true);
                 if (!adjustResult.Success)
                 {
                     // Rollback status
