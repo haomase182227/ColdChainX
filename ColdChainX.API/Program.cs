@@ -3,6 +3,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi.Models;
+using Swashbuckle.AspNetCore.SwaggerGen;
+using Microsoft.OpenApi.Any;
 using ColdChainX.API.Extensions;
 using ColdChainX.API.Middleware;
 using ColdChainX.API.Models;
@@ -42,11 +44,13 @@ builder.Services.AddSwaggerGen(c =>
     }
 
     c.SchemaFilter<CreateOrderRequestSchemaFilter>();
+    c.SchemaFilter<EnumSchemaFilter>();
     c.OperationFilter<CreateOrderFormOperationFilter>();
     c.OperationFilter<RegisterOperationFilter>();
     c.OperationFilter<CreateCustomerOperationFilter>();
     c.OperationFilter<CreateDriverOperationFilter>();
     c.OperationFilter<RemoveAuthFromCreateAccountsFilter>();
+    c.UseInlineDefinitionsForEnums();
 
     var securityScheme = new OpenApiSecurityScheme
     {

@@ -345,7 +345,7 @@ namespace ColdChainX.Application.Services
                 DriverId = Guid.NewGuid(),
                 UserId = user.UserId,
                 DateOfBirth = request.DateOfBirth,
-                Status = ActiveStatus,
+                Status = "AVAILABLE",
                 CreatedAt = DbNow()
             };
 
