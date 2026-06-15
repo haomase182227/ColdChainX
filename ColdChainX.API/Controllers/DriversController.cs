@@ -37,6 +37,8 @@ namespace ColdChainX.API.Controllers
         public async Task<ActionResult<ApiResponse<DriverDto>>> Create([FromBody] DriverCreateRequest request)
         {
             var result = await _driverService.CreateAsync(request);
+            if (!result.Success && result.Message != null && result.Message.Contains("Invalid driver status"))
+                return BadRequest(result);
             if (!result.Success) return Conflict(result);
             return Ok(result);
         }
@@ -46,6 +48,8 @@ namespace ColdChainX.API.Controllers
         {
             var result = await _driverService.UpdateAsync(id, request);
             if (!result.Success && result.Message == "Driver not found") return NotFound(result);
+            if (!result.Success && result.Message != null && result.Message.Contains("Invalid driver status"))
+                return BadRequest(result);
             if (!result.Success) return Conflict(result);
             return Ok(result);
         }

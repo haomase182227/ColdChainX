@@ -15,6 +15,14 @@ namespace ColdChainX.Application.Services
         private const string AvailableStatus = "AVAILABLE";
         private const string InactiveStatus = "INACTIVE";
 
+        private static readonly HashSet<string> ValidDriverStatuses = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "AVAILABLE",
+            "ON_TRIP",
+            "OFFLINE",
+            "INACTIVE"
+        };
+
         private readonly IDriverRepository _driverRepository;
 
         public DriverService(IDriverRepository driverRepository)
@@ -40,6 +48,11 @@ namespace ColdChainX.Application.Services
 
         public async Task<ApiResponse<DriverDto>> CreateAsync(DriverCreateRequest request)
         {
+            // Validate status if provided
+            if (!string.IsNullOrWhiteSpace(request.Status) && !IsValidDriverStatus(request.Status))
+                return ApiResponse<DriverDto>.Failure(
+                    $"Invalid driver status '{request.Status}'. Allowed values: {string.Join(", ", ValidDriverStatuses)}");
+
             var driver = new Driver
             {
                 DriverId = Guid.NewGuid(),
@@ -59,6 +72,11 @@ namespace ColdChainX.Application.Services
             var driver = await _driverRepository.GetByIdAsync(id);
             if (driver == null)
                 return ApiResponse<DriverDto>.Failure("Driver not found");
+
+            // Validate status if provided
+            if (!string.IsNullOrWhiteSpace(request.Status) && !IsValidDriverStatus(request.Status))
+                return ApiResponse<DriverDto>.Failure(
+                    $"Invalid driver status '{request.Status}'. Allowed values: {string.Join(", ", ValidDriverStatuses)}");
 
             if (request.DateOfBirth.HasValue)
                 driver.DateOfBirth = request.DateOfBirth.Value;
@@ -112,10 +130,13 @@ namespace ColdChainX.Application.Services
             };
         }
 
+        private static bool IsValidDriverStatus(string status)
+            => ValidDriverStatuses.Contains(status.Trim());
+
         private static string NormalizeStatus(string? value, string defaultValue)
             => string.IsNullOrWhiteSpace(value) ? defaultValue : value.Trim().ToUpperInvariant();
 
         private static DateTime DbNow()
             => DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
     }
-}
+}
