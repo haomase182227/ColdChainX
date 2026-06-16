@@ -1,5 +1,7 @@
 using FluentValidation;
 using ColdChainX.Application.DTOs;
+using System;
+using System.Linq;
 
 namespace ColdChainX.Application.Validators
 {

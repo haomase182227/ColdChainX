@@ -13,6 +13,7 @@ using ColdChainX.API.Swagger;
 using ColdChainX.API.Workers;
 using ColdChainX.Infrastructure.Hubs;
 using System.Threading.Channels;
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
 var builder = WebApplication.CreateBuilder(args);
 DotEnvLoader.Load(Path.Combine(builder.Environment.ContentRootPath, ".env"));
@@ -34,6 +35,17 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "ColdChainX API", Version = "v1" });
+
+    var xmlFiles = new[] { "ColdChainX.API.xml", "ColdChainX.Application.xml", "ColdChainX.Shared.xml" };
+    foreach (var file in xmlFiles)
+    {
+        var xmlPath = Path.Combine(AppContext.BaseDirectory, file);
+        if (File.Exists(xmlPath))
+        {
+            c.IncludeXmlComments(xmlPath);
+        }
+    }
+
     c.SchemaFilter<CreateOrderRequestSchemaFilter>();
     c.SchemaFilter<EnumSchemaFilter>();
     c.OperationFilter<CreateOrderFormOperationFilter>();

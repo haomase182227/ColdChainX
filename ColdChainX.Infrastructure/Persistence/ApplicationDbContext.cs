@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using ColdChainX.Core.Entities;
+using ColdChainX.Core.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace ColdChainX.Infrastructure.Persistence;
@@ -86,10 +87,45 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<WarehouseReceiptItem> WarehouseReceiptItems { get; set; }
 
+    public virtual DbSet<WarehouseZone> WarehouseZones { get; set; }
+
+    public virtual DbSet<WarehouseLocation> WarehouseLocations { get; set; }
+
+    public virtual DbSet<InventoryBatch> InventoryBatches { get; set; }
+
+    public virtual DbSet<InventoryStock> InventoryStocks { get; set; }
+
+    public virtual DbSet<InventoryMovement> InventoryMovements { get; set; }
+
+    public virtual DbSet<InventoryAdjustment> InventoryAdjustments { get; set; }
+
+    public virtual DbSet<InventoryAllocation> InventoryAllocations { get; set; }
+
+    public virtual DbSet<InventoryHold> InventoryHolds { get; set; }
+
+    public virtual DbSet<CycleCountPlan> CycleCountPlans { get; set; }
+    public virtual DbSet<CycleCountEntry> CycleCountEntries { get; set; }
+
+    public virtual DbSet<OutboundOrder> OutboundOrders { get; set; }
+
+    public virtual DbSet<OutboundOrderItem> OutboundOrderItems { get; set; }
+
+    public virtual DbSet<WarehouseEvidenceAttachment> WarehouseEvidenceAttachments { get; set; }
+    public virtual DbSet<AttachmentAuditHistory> AttachmentAuditHistories { get; set; }
+    public virtual DbSet<ComplianceZoningRule> ComplianceZoningRules { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Set default schema to public for PostgreSQL
         modelBuilder.HasDefaultSchema("public");
+
+        // PostgreSQL Enums Configuration
+        modelBuilder.HasPostgresEnum<AttachmentFormat>();
+        modelBuilder.HasPostgresEnum<AttachmentCategory>();
+        modelBuilder.HasPostgresEnum<AttachmentSubCategory>();
+        modelBuilder.HasPostgresEnum<ProductCategory>();
+        modelBuilder.HasPostgresEnum<DocumentStatus>();
+        modelBuilder.HasPostgresEnum<RequirementLevel>();
 
         modelBuilder.Entity<AlertLog>(entity =>
         {
@@ -1378,12 +1414,13 @@ public partial class ApplicationDbContext : DbContext
             entity.HasIndex(e => e.Username, "users_username_key").IsUnique();
 
             entity.Property(e => e.UserId)
-                .HasDefaultValueSql("gen_random_uuid()")
+                .HasMaxLength(36)
                 .HasColumnName("user_id");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
+            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
             entity.Property(e => e.Email)
                 .HasMaxLength(255)
                 .HasColumnName("email");
@@ -1393,11 +1430,12 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.PasswordHash)
                 .HasMaxLength(255)
                 .HasColumnName("password_hash");
+
             entity.Property(e => e.RefreshToken)
-                .HasMaxLength(255)
+                .HasColumnType("text")
                 .HasColumnName("refresh_token");
             entity.Property(e => e.RefreshTokenExpiryTime)
-                .HasColumnType("timestamp without time zone")
+                .HasColumnType("timestamp with time zone")
                 .HasColumnName("refresh_token_expiry_time");
             entity.Property(e => e.RoleId)
                 .HasColumnName("role_id");
@@ -1406,15 +1444,26 @@ public partial class ApplicationDbContext : DbContext
                 .HasDefaultValueSql("'ACTIVE'::character varying")
                 .HasColumnName("status");
             entity.Property(e => e.UpdatedAt)
-                .HasColumnType("timestamp without time zone")
+                .HasColumnType("timestamp with time zone")
                 .HasColumnName("updated_at");
+            entity.Property(e => e.UpdatedBy).HasColumnName("updated_by");
+            entity.Property(e => e.DeletedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("deleted_at");
+            entity.Property(e => e.DeletedBy).HasColumnName("deleted_by");
             entity.Property(e => e.Username)
                 .HasMaxLength(50)
                 .HasColumnName("username");
 
+            entity.Property(e => e.Phone)
+                .HasMaxLength(20)
+                .HasColumnName("phone");
+
             entity.HasOne(d => d.Role).WithMany(p => p.Users)
                 .HasForeignKey(d => d.RoleId)
                 .HasConstraintName("fk_users_roles");
+
+            entity.HasQueryFilter(e => e.DeletedAt == null);
         });
 
         modelBuilder.Entity<Vehicle>(entity =>
@@ -1514,9 +1563,23 @@ public partial class ApplicationDbContext : DbContext
 
             entity.ToTable("warehouses");
 
+            entity.HasIndex(e => e.WarehouseCode, "warehouses_warehouse_code_key").IsUnique().HasFilter("\"deleted_at\" IS NULL");
+
             entity.Property(e => e.WarehouseId)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("warehouse_id");
+            entity.Property(e => e.WarehouseCode)
+                .HasMaxLength(20)
+                .HasColumnName("warehouse_code");
+            entity.Property(e => e.WarehouseType)
+                .HasMaxLength(20)
+                .HasColumnName("warehouse_type");
+            entity.Property(e => e.DefaultMinTemp)
+                .HasPrecision(5, 2)
+                .HasColumnName("default_min_temp");
+            entity.Property(e => e.DefaultMaxTemp)
+                .HasPrecision(5, 2)
+                .HasColumnName("default_max_temp");
             entity.Property(e => e.Address)
                 .HasMaxLength(100)
                 .HasColumnName("address");
@@ -1524,6 +1587,7 @@ public partial class ApplicationDbContext : DbContext
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
+            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
             entity.Property(e => e.CurrentPallets)
                 .HasDefaultValue(0)
                 .HasColumnName("current_pallets");
@@ -1535,6 +1599,16 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.WarehouseName)
                 .HasMaxLength(100)
                 .HasColumnName("warehouse_name");
+            entity.Property(e => e.UpdatedAt)
+                .HasColumnType("timestamp with time zone")
+                .HasColumnName("updated_at");
+            entity.Property(e => e.UpdatedBy).HasColumnName("updated_by");
+            entity.Property(e => e.DeletedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("deleted_at");
+            entity.Property(e => e.DeletedBy).HasColumnName("deleted_by");
+
+            entity.HasQueryFilter(e => e.DeletedAt == null);
         });
 
         modelBuilder.Entity<WarehouseReceipt>(entity =>
@@ -1633,10 +1707,993 @@ public partial class ApplicationDbContext : DbContext
                 .HasMaxLength(20)
                 .HasColumnName("unit");
 
+            entity.Property(e => e.ActualWeightKg)
+                .HasPrecision(10, 2)
+                .HasColumnName("actual_weight_kg");
+
+            entity.Property(e => e.LengthCm)
+                .HasPrecision(10, 2)
+                .HasColumnName("length_cm");
+
+            entity.Property(e => e.WidthCm)
+                .HasPrecision(10, 2)
+                .HasColumnName("width_cm");
+
+            entity.Property(e => e.HeightCm)
+                .HasPrecision(10, 2)
+                .HasColumnName("height_cm");
+
+            entity.Property(e => e.Barcode)
+                .HasMaxLength(100)
+                .HasColumnName("barcode");
+
+            entity.Property(e => e.QrCode)
+                .HasMaxLength(255)
+                .HasColumnName("qr_code");
+
+            entity.Property(e => e.BatchNumber)
+                .IsRequired()
+                .HasMaxLength(50)
+                .HasColumnName("batch_number");
+
+            entity.Property(e => e.ProductCategory)
+                .HasColumnName("product_category");
+
+            entity.Property(e => e.CountryOfOrigin)
+                .IsRequired()
+                .HasMaxLength(100)
+                .HasColumnName("country_of_origin");
+
+            entity.Property(e => e.ManufacturedDate)
+                .HasColumnName("manufactured_date");
+
+            entity.Property(e => e.ExpiryDate)
+                .HasColumnName("expiry_date");
+
             entity.HasOne(d => d.Receipt).WithMany(p => p.WarehouseReceiptItems)
                 .HasForeignKey(d => d.ReceiptId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("fk_wri_wr");
+        });
+
+        modelBuilder.Entity<WarehouseZone>(entity =>
+        {
+            entity.HasKey(e => e.ZoneId).HasName("warehouse_zones_pkey");
+
+            entity.ToTable("warehouse_zones");
+
+            entity.HasIndex(e => new { e.WarehouseId, e.ZoneCode }, "IX_warehouse_zones_warehouse_id_zone_code").IsUnique().HasFilter("\"deleted_at\" IS NULL");
+
+            entity.Property(e => e.ZoneId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("zone_id");
+
+            entity.Property(e => e.WarehouseId)
+                .HasColumnName("warehouse_id");
+
+            entity.Property(e => e.ZoneCode)
+                .HasMaxLength(20)
+                .HasColumnName("zone_code");
+
+            entity.Property(e => e.ZoneName)
+                .HasMaxLength(100)
+                .HasColumnName("zone_name");
+
+            entity.Property(e => e.ZoneType)
+                .HasMaxLength(30)
+                .HasColumnName("zone_type");
+
+            entity.Property(e => e.StorageType)
+                .HasMaxLength(30)
+                .HasColumnName("storage_type");
+
+            entity.Property(e => e.TemperatureMin)
+                .HasPrecision(5, 2)
+                .HasColumnName("temperature_min");
+
+            entity.Property(e => e.TemperatureMax)
+                .HasPrecision(5, 2)
+                .HasColumnName("temperature_max");
+
+            entity.Property(e => e.MaxCapacityPallets)
+                .HasColumnName("max_capacity_pallets");
+
+            entity.Property(e => e.CurrentPallets)
+                .HasDefaultValue(0)
+                .HasColumnName("current_pallets");
+
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'ACTIVE'::character varying")
+                .HasColumnName("status");
+
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+
+            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
+
+            entity.Property(e => e.UpdatedAt)
+                .HasColumnType("timestamp with time zone")
+                .HasColumnName("updated_at");
+
+            entity.Property(e => e.UpdatedBy).HasColumnName("updated_by");
+
+            entity.Property(e => e.DeletedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("deleted_at");
+
+            entity.Property(e => e.DeletedBy).HasColumnName("deleted_by");
+
+            entity.HasOne(d => d.Warehouse).WithMany(p => p.WarehouseZones)
+                .HasForeignKey(d => d.WarehouseId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_warehouse_zones_warehouses");
+
+            entity.HasQueryFilter(e => e.DeletedAt == null);
+        });
+
+        modelBuilder.Entity<WarehouseLocation>(entity =>
+        {
+            entity.HasKey(e => e.LocationId).HasName("warehouse_locations_pkey");
+
+            entity.ToTable("warehouse_locations");
+
+            entity.HasIndex(e => new { e.ZoneId, e.LocationCode }, "IX_warehouse_locations_zone_id_location_code")
+                .IsUnique()
+                .HasFilter("\"deleted_at\" IS NULL");
+
+            entity.Property(e => e.LocationId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("location_id");
+
+            entity.Property(e => e.ZoneId)
+                .HasColumnName("zone_id");
+
+            entity.Property(e => e.LocationCode)
+                .HasMaxLength(50)
+                .HasColumnName("location_code");
+
+            entity.Property(e => e.RackCode)
+                .HasMaxLength(20)
+                .HasColumnName("rack_code");
+
+            entity.Property(e => e.BayCode)
+                .HasMaxLength(20)
+                .HasColumnName("bay_code");
+
+            entity.Property(e => e.LevelCode)
+                .HasMaxLength(20)
+                .HasColumnName("level_code");
+
+            entity.Property(e => e.MaxCapacityPallets)
+                .HasColumnName("max_capacity_pallets");
+
+            entity.Property(e => e.CurrentPallets)
+                .HasDefaultValue(0)
+                .HasColumnName("current_pallets");
+
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'ACTIVE'::character varying")
+                .HasColumnName("status");
+
+            entity.Property(e => e.Description)
+                .HasColumnName("description");
+
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+
+            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
+
+            entity.Property(e => e.UpdatedAt)
+                .HasColumnType("timestamp with time zone")
+                .HasColumnName("updated_at");
+
+            entity.Property(e => e.UpdatedBy).HasColumnName("updated_by");
+
+            entity.Property(e => e.DeletedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("deleted_at");
+
+            entity.Property(e => e.DeletedBy).HasColumnName("deleted_by");
+
+            entity.HasOne(d => d.Zone).WithMany(p => p.WarehouseLocations)
+                .HasForeignKey(d => d.ZoneId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_warehouse_locations_zones");
+
+            entity.HasQueryFilter(e => e.DeletedAt == null);
+        });
+
+        modelBuilder.Entity<InventoryBatch>(entity =>
+        {
+            entity.HasKey(e => e.BatchId).HasName("inventory_batches_pkey");
+            entity.ToTable("inventory_batches");
+            entity.HasIndex(e => new { e.ItemCode, e.BatchNumber }, "uq_item_batch").IsUnique();
+
+            entity.Property(e => e.BatchId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("batch_id");
+            entity.Property(e => e.ItemCode)
+                .HasMaxLength(50)
+                .HasColumnName("item_code");
+            entity.Property(e => e.BatchNumber)
+                .HasMaxLength(50)
+                .HasColumnName("batch_number");
+            entity.Property(e => e.ManufacturedDate)
+                .HasColumnName("manufactured_date");
+            entity.Property(e => e.ExpiryDate)
+                .HasColumnName("expiry_date");
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'ACTIVE'::character varying")
+                .HasColumnName("status");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
+        });
+
+        modelBuilder.Entity<InventoryStock>(entity =>
+        {
+            entity.HasKey(e => e.StockId).HasName("inventory_stocks_pkey");
+            entity.ToTable("inventory_stocks");
+            entity.HasIndex(e => new { e.LocationId, e.CustomerId, e.ItemCode, e.BatchId }, "uq_location_customer_item_batch").IsUnique();
+
+            entity.Property(e => e.StockId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("stock_id");
+            entity.Property(e => e.LocationId).HasColumnName("location_id");
+            entity.Property(e => e.CustomerId).HasColumnName("customer_id");
+            entity.Property(e => e.ItemCode)
+                .HasMaxLength(50)
+                .HasColumnName("item_code");
+            entity.Property(e => e.ItemName)
+                .HasMaxLength(255)
+                .HasColumnName("item_name");
+            entity.Property(e => e.Unit)
+                .HasMaxLength(20)
+                .HasColumnName("unit");
+            entity.Property(e => e.BatchId).HasColumnName("batch_id");
+            entity.Property(e => e.QuantityOnHand)
+                .HasPrecision(10, 2)
+                .HasDefaultValueSql("0.00")
+                .HasColumnName("quantity_on_hand");
+            entity.Property(e => e.QuantityAllocated)
+                .HasPrecision(10, 2)
+                .HasDefaultValueSql("0.00")
+                .HasColumnName("quantity_allocated");
+            entity.Property(e => e.InboundDate)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("inbound_date");
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'AVAILABLE'::character varying")
+                .HasColumnName("status");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
+            entity.Property(e => e.UpdatedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("updated_at");
+            entity.Property(e => e.UpdatedBy).HasColumnName("updated_by");
+            entity.Property(e => e.PalletCount)
+                .HasDefaultValue(1)
+                .HasColumnName("pallet_count");
+            entity.Property(e => e.RequiredTempMin)
+                .HasPrecision(5, 2)
+                .HasColumnName("required_temp_min");
+            entity.Property(e => e.RequiredTempMax)
+                .HasPrecision(5, 2)
+                .HasColumnName("required_temp_max");
+
+            entity.HasOne(d => d.Location).WithMany()
+                .HasForeignKey(d => d.LocationId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_stock_location");
+
+            entity.HasOne(d => d.Batch).WithMany(p => p.InventoryStocks)
+                .HasForeignKey(d => d.BatchId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_stock_batch");
+
+            entity.HasOne(d => d.Customer).WithMany()
+                .HasForeignKey(d => d.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_stock_customer");
+        });
+
+        modelBuilder.Entity<InventoryMovement>(entity =>
+        {
+            entity.HasKey(e => e.MovementId).HasName("inventory_movements_pkey");
+            entity.ToTable("inventory_movements");
+
+            entity.Property(e => e.MovementId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("movement_id");
+            entity.Property(e => e.StockId).HasColumnName("stock_id");
+            entity.Property(e => e.ItemCode)
+                .HasMaxLength(50)
+                .HasColumnName("item_code");
+            entity.Property(e => e.BatchId).HasColumnName("batch_id");
+            entity.Property(e => e.MovementType)
+                .HasMaxLength(30)
+                .HasColumnName("movement_type");
+            entity.Property(e => e.Quantity)
+                .HasPrecision(10, 2)
+                .HasColumnName("quantity");
+            entity.Property(e => e.FromLocationId).HasColumnName("from_location_id");
+            entity.Property(e => e.ToLocationId).HasColumnName("to_location_id");
+            entity.Property(e => e.ReferenceDocumentId).HasColumnName("reference_document_id");
+            entity.Property(e => e.WarehouseReceiptItemId).HasColumnName("warehouse_receipt_item_id");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
+
+            entity.HasOne(d => d.Batch).WithMany()
+                .HasForeignKey(d => d.BatchId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_movement_batch");
+
+            entity.HasOne(d => d.FromLocation).WithMany()
+                .HasForeignKey(d => d.FromLocationId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_movement_from_loc");
+
+            entity.HasOne(d => d.ToLocation).WithMany()
+                .HasForeignKey(d => d.ToLocationId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_movement_to_loc");
+
+            entity.HasOne(d => d.WarehouseReceiptItem).WithMany()
+                .HasForeignKey(d => d.WarehouseReceiptItemId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_movement_receipt_item");
+        });
+
+        modelBuilder.Entity<InventoryAdjustment>(entity =>
+        {
+            entity.HasKey(e => e.AdjustmentId).HasName("inventory_adjustments_pkey");
+            entity.ToTable("inventory_adjustments");
+
+            entity.Property(e => e.AdjustmentId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("adjustment_id");
+            entity.Property(e => e.StockId).HasColumnName("stock_id");
+            
+            entity.Property(e => e.AdjustmentType)
+                .HasConversion<string>()
+                .HasMaxLength(30)
+                .HasColumnName("adjustment_type");
+
+            entity.Property(e => e.QuantityBefore)
+                .HasPrecision(10, 2)
+                .HasColumnName("quantity_before");
+            entity.Property(e => e.QuantityChanged)
+                .HasPrecision(10, 2)
+                .HasColumnName("quantity_changed");
+            entity.Property(e => e.QuantityAfter)
+                .HasPrecision(10, 2)
+                .HasColumnName("quantity_after");
+
+            entity.Property(e => e.ReasonNotes)
+                .HasMaxLength(255)
+                .HasColumnName("reason_notes");
+
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+
+            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
+            entity.Property(e => e.MovementId).HasColumnName("movement_id");
+
+            entity.Property(e => e.Status)
+                .HasConversion<string>()
+                .HasMaxLength(30)
+                .HasDefaultValue(InventoryAdjustmentStatus.PENDING_APPROVAL)
+                .HasColumnName("status");
+
+            entity.Property(e => e.ApprovedBy).HasColumnName("approved_by");
+            entity.Property(e => e.ApprovedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("approved_at");
+            entity.Property(e => e.RejectionReason)
+                .HasMaxLength(255)
+                .HasColumnName("rejection_reason");
+
+            entity.Property(e => e.PalletsBefore).HasColumnName("pallets_before");
+            entity.Property(e => e.PalletsChanged).HasColumnName("pallets_changed");
+            entity.Property(e => e.PalletsAfter).HasColumnName("pallets_after");
+
+            entity.HasOne(d => d.Stock).WithMany()
+                .HasForeignKey(d => d.StockId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_adj_stock");
+
+            entity.HasOne(d => d.Movement).WithMany()
+                .HasForeignKey(d => d.MovementId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_adj_movement");
+        });
+
+        modelBuilder.Entity<InventoryAllocation>(entity =>
+        {
+            entity.HasKey(e => e.AllocationId).HasName("inventory_allocations_pkey");
+            entity.ToTable("inventory_allocations");
+
+            entity.Property(e => e.AllocationId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("allocation_id");
+            entity.Property(e => e.ReferenceDocumentId).HasColumnName("reference_document_id");
+            entity.Property(e => e.StockId).HasColumnName("stock_id");
+
+            entity.Property(e => e.AllocatedQuantity)
+                .HasPrecision(10, 2)
+                .HasColumnName("allocated_quantity");
+
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'ALLOCATED'::character varying")
+                .HasColumnName("status");
+
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+
+            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
+
+            entity.HasOne(d => d.Stock).WithMany()
+                .HasForeignKey(d => d.StockId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_allocation_stock");
+        });
+
+        modelBuilder.Entity<InventoryHold>(entity =>
+        {
+            entity.HasKey(e => e.HoldId).HasName("inventory_holds_pkey");
+            entity.ToTable("inventory_holds");
+
+            entity.Property(e => e.HoldId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("hold_id");
+            entity.Property(e => e.StockId).HasColumnName("stock_id");
+
+            entity.Property(e => e.HoldQuantity)
+                .HasPrecision(10, 2)
+                .HasColumnName("hold_quantity");
+
+            entity.Property(e => e.ReasonCode)
+                .HasMaxLength(50)
+                .HasColumnName("reason_code");
+
+            entity.Property(e => e.Notes).HasColumnName("notes");
+
+            entity.Property(e => e.Status)
+                .HasMaxLength(30)
+                .HasDefaultValueSql("'HOLD'::character varying")
+                .HasColumnName("status");
+
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+
+            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
+
+            entity.Property(e => e.ReleasedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("released_at");
+
+            entity.Property(e => e.ReleasedBy).HasColumnName("released_by");
+
+            entity.Property(e => e.ReleaseNotes).HasColumnName("release_notes");
+
+            entity.Property(e => e.AdjustmentId).HasColumnName("adjustment_id");
+
+            entity.HasOne(d => d.Stock).WithMany()
+                .HasForeignKey(d => d.StockId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_hold_stock");
+
+            entity.HasOne(d => d.Creator).WithMany()
+                .HasForeignKey(d => d.CreatedBy)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_hold_user_creator");
+
+            entity.HasOne(d => d.Releaser).WithMany()
+                .HasForeignKey(d => d.ReleasedBy)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_hold_user_releaser");
+
+            entity.HasOne(d => d.Adjustment).WithMany()
+                .HasForeignKey(d => d.AdjustmentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_hold_adjustment");
+        });
+
+        modelBuilder.Entity<OutboundOrder>(entity =>
+        {
+            entity.HasKey(e => e.OutboundOrderId).HasName("outbound_orders_pkey");
+            entity.ToTable("outbound_orders");
+
+            entity.HasIndex(e => e.OrderCode, "uq_outbound_order_code").IsUnique();
+
+            entity.Property(e => e.OutboundOrderId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("outbound_order_id");
+            entity.Property(e => e.OrderCode)
+                .HasMaxLength(50)
+                .HasColumnName("order_code");
+            entity.Property(e => e.CustomerId).HasColumnName("customer_id");
+            entity.Property(e => e.ReceiverName)
+                .HasMaxLength(100)
+                .HasColumnName("receiver_name");
+            entity.Property(e => e.ReceiverPhone)
+                .HasMaxLength(20)
+                .HasColumnName("receiver_phone");
+            entity.Property(e => e.DestinationAddress)
+                .HasMaxLength(255)
+                .HasColumnName("destination_address");
+
+            entity.Property(e => e.Status)
+                .HasConversion<string>()
+                .HasMaxLength(30)
+                .HasDefaultValue(OutboundOrderStatus.DRAFT)
+                .HasColumnName("status");
+
+            entity.Property(e => e.AssignedPickerId).HasColumnName("assigned_picker_id");
+            entity.Property(e => e.AllocatedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("allocated_at");
+
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
+
+            entity.Property(e => e.UpdatedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("updated_at");
+            entity.Property(e => e.UpdatedBy).HasColumnName("updated_by");
+
+            entity.HasOne(d => d.Customer).WithMany()
+                .HasForeignKey(d => d.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_outbound_customer");
+
+            entity.HasOne(d => d.AssignedPicker).WithMany()
+                .HasForeignKey(d => d.AssignedPickerId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_outbound_picker");
+        });
+
+        modelBuilder.Entity<OutboundOrderItem>(entity =>
+        {
+            entity.HasKey(e => e.OutboundOrderItemId).HasName("outbound_order_items_pkey");
+            entity.ToTable("outbound_order_items");
+
+            entity.Property(e => e.OutboundOrderItemId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("outbound_order_item_id");
+            entity.Property(e => e.OutboundOrderId).HasColumnName("outbound_order_id");
+            entity.Property(e => e.ItemCode)
+                .HasMaxLength(50)
+                .HasColumnName("item_code");
+            entity.Property(e => e.ItemName)
+                .HasMaxLength(255)
+                .HasColumnName("item_name");
+            entity.Property(e => e.Unit)
+                .HasMaxLength(20)
+                .HasColumnName("unit");
+            entity.Property(e => e.Quantity)
+                .HasPrecision(10, 2)
+                .HasColumnName("quantity");
+
+            entity.HasOne(d => d.OutboundOrder).WithMany(p => p.OutboundOrderItems)
+                .HasForeignKey(d => d.OutboundOrderId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_item_outbound_order");
+        });
+
+        modelBuilder.Entity<WarehouseEvidenceAttachment>(entity =>
+        {
+            entity.HasKey(e => e.AttachmentId).HasName("warehouse_evidence_attachments_pkey");
+            entity.ToTable("warehouse_evidence_attachments");
+
+            entity.Property(e => e.AttachmentId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("attachment_id");
+
+            entity.Property(e => e.FileName)
+                .HasMaxLength(255)
+                .HasColumnName("file_name");
+
+            entity.Property(e => e.FilePath)
+                .HasMaxLength(512)
+                .HasColumnName("file_path");
+
+            entity.Property(e => e.FileUrl)
+                .HasMaxLength(1024)
+                .HasColumnName("file_url");
+
+            entity.Property(e => e.FileSize)
+                .HasColumnName("file_size");
+
+            entity.Property(e => e.ContentType)
+                .HasMaxLength(100)
+                .HasColumnName("content_type");
+
+            entity.Property(e => e.Format)
+                .HasColumnName("format");
+
+            entity.Property(e => e.Category)
+                .HasColumnName("category");
+
+            entity.Property(e => e.SubCategory)
+                .HasColumnName("sub_category");
+
+            entity.Property(e => e.Status)
+                .HasColumnName("status");
+
+            entity.Property(e => e.DocumentNumber)
+                .HasMaxLength(100)
+                .HasColumnName("document_number");
+
+            entity.Property(e => e.Issuer)
+                .HasMaxLength(150)
+                .HasColumnName("issuer");
+
+            entity.Property(e => e.IssueDate)
+                .HasColumnName("issue_date");
+
+            entity.Property(e => e.ExpiryDate)
+                .HasColumnName("expiry_date");
+
+            entity.Property(e => e.CapturedValue)
+                .HasPrecision(18, 4)
+                .HasColumnName("captured_value");
+
+            entity.Property(e => e.SealNumber)
+                .HasMaxLength(100)
+                .HasColumnName("seal_number");
+
+            entity.Property(e => e.RejectionReason)
+                .HasMaxLength(255)
+                .HasColumnName("rejection_reason");
+
+            entity.Property(e => e.VerifiedBy)
+                .HasColumnName("verified_by");
+
+            entity.Property(e => e.VerifiedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("verified_at");
+
+            entity.Property(e => e.WarehouseReceiptId)
+                .HasColumnName("warehouse_receipt_id");
+
+            entity.Property(e => e.WarehouseReceiptItemId)
+                .HasColumnName("warehouse_receipt_item_id");
+
+            entity.Property(e => e.InventoryAdjustmentId)
+                .HasColumnName("inventory_adjustment_id");
+
+            entity.Property(e => e.OutboundOrderId)
+                .HasColumnName("outbound_order_id");
+
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+
+            entity.Property(e => e.CreatedBy)
+                .HasColumnName("created_by");
+
+            // Relationships
+            entity.HasOne(d => d.WarehouseReceipt).WithMany()
+                .HasForeignKey(d => d.WarehouseReceiptId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_att_receipt");
+
+            entity.HasOne(d => d.WarehouseReceiptItem).WithMany()
+                .HasForeignKey(d => d.WarehouseReceiptItemId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_att_receipt_item");
+
+            entity.HasOne(d => d.InventoryAdjustment).WithMany()
+                .HasForeignKey(d => d.InventoryAdjustmentId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_att_adjustment");
+
+            entity.HasOne(d => d.OutboundOrder).WithMany()
+                .HasForeignKey(d => d.OutboundOrderId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_att_outbound");
+
+            // Check constraint
+            entity.ToTable(t => t.HasCheckConstraint("chk_attachment_target",
+                "(warehouse_receipt_id IS NOT NULL)::int + " +
+                "(warehouse_receipt_item_id IS NOT NULL)::int + " +
+                "(inventory_adjustment_id IS NOT NULL)::int + " +
+                "(outbound_order_id IS NOT NULL)::int = 1"));
+
+            // Indexes
+            entity.HasIndex(e => e.WarehouseReceiptId).HasDatabaseName("idx_att_receipt");
+            entity.HasIndex(e => e.WarehouseReceiptItemId).HasDatabaseName("idx_att_receipt_item");
+            entity.HasIndex(e => e.InventoryAdjustmentId).HasDatabaseName("idx_att_adjustment");
+            entity.HasIndex(e => e.OutboundOrderId).HasDatabaseName("idx_att_outbound");
+        });
+
+        modelBuilder.Entity<AttachmentAuditHistory>(entity =>
+        {
+            entity.HasKey(e => e.HistoryId).HasName("attachment_audit_history_pkey");
+            entity.ToTable("attachment_audit_history");
+
+            entity.Property(e => e.HistoryId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("history_id");
+
+            entity.Property(e => e.AttachmentId)
+                .HasColumnName("attachment_id");
+
+            entity.Property(e => e.PreviousStatus)
+                .HasColumnName("previous_status");
+
+            entity.Property(e => e.NewStatus)
+                .HasColumnName("new_status");
+
+            entity.Property(e => e.Reason)
+                .HasMaxLength(255)
+                .HasColumnName("reason");
+
+            entity.Property(e => e.ChangedBy)
+                .HasColumnName("changed_by");
+
+            entity.Property(e => e.ChangedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("changed_at");
+
+            // Relationships
+            entity.HasOne(d => d.Attachment).WithMany()
+                .HasForeignKey(d => d.AttachmentId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_history_attachment");
+
+            entity.HasIndex(e => e.AttachmentId).HasDatabaseName("idx_history_attachment");
+        });
+
+        modelBuilder.Entity<ComplianceZoningRule>(entity =>
+        {
+            entity.HasKey(e => e.RuleId).HasName("compliance_zoning_rules_pkey");
+            entity.ToTable("compliance_zoning_rules");
+
+            entity.Property(e => e.RuleId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("rule_id");
+
+            entity.Property(e => e.ProductCategory)
+                .HasColumnName("product_category");
+
+            entity.Property(e => e.SubCategory)
+                .HasColumnName("sub_category");
+
+            entity.Property(e => e.RequirementLevel)
+                .HasColumnName("requirement_level");
+
+            entity.Property(e => e.IsActive)
+                .HasDefaultValue(true)
+                .HasColumnName("is_active");
+
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+
+            entity.Property(e => e.CreatedBy)
+                .HasColumnName("created_by");
+
+            entity.Property(e => e.UpdatedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("updated_at");
+
+            entity.Property(e => e.UpdatedBy)
+                .HasColumnName("updated_by");
+
+            entity.HasIndex(e => new { e.ProductCategory, e.SubCategory }, "uq_rule_category_subcategory").IsUnique();
+        });
+
+        modelBuilder.Entity<ComplianceZoningRule>().HasData(
+            new ComplianceZoningRule { RuleId = new Guid("b001a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1"), ProductCategory = ProductCategory.FOOD, SubCategory = AttachmentSubCategory.FOOD_SAFETY_CERTIFICATE, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b001a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a2"), ProductCategory = ProductCategory.FOOD, SubCategory = AttachmentSubCategory.VEHICLE_PHOTO, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b001a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a3"), ProductCategory = ProductCategory.FOOD, SubCategory = AttachmentSubCategory.TEMPERATURE_PHOTO, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+
+            new ComplianceZoningRule { RuleId = new Guid("b002a2a2-a2a2-a2a2-a2a2-a2a2a2a2a2a1"), ProductCategory = ProductCategory.SEAFOOD, SubCategory = AttachmentSubCategory.FOOD_SAFETY_CERTIFICATE, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b002a2a2-a2a2-a2a2-a2a2-a2a2a2a2a2a2"), ProductCategory = ProductCategory.SEAFOOD, SubCategory = AttachmentSubCategory.QUARANTINE_CERTIFICATE, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b002a2a2-a2a2-a2a2-a2a2-a2a2a2a2a2a3"), ProductCategory = ProductCategory.SEAFOOD, SubCategory = AttachmentSubCategory.VEHICLE_PHOTO, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b002a2a2-a2a2-a2a2-a2a2-a2a2a2a2a2a4"), ProductCategory = ProductCategory.SEAFOOD, SubCategory = AttachmentSubCategory.TEMPERATURE_PHOTO, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+
+            new ComplianceZoningRule { RuleId = new Guid("b003a3a3-a3a3-a3a3-a3a3-a3a3a3a3a3a1"), ProductCategory = ProductCategory.AGRICULTURE, SubCategory = AttachmentSubCategory.PLANT_QUARANTINE_CERTIFICATE, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b003a3a3-a3a3-a3a3-a3a3-a3a3a3a3a3a2"), ProductCategory = ProductCategory.AGRICULTURE, SubCategory = AttachmentSubCategory.VEHICLE_PHOTO, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+
+            new ComplianceZoningRule { RuleId = new Guid("b004a4a4-a4a4-a4a4-a4a4-a4a4a4a4a4a1"), ProductCategory = ProductCategory.PHARMA, SubCategory = AttachmentSubCategory.PRODUCT_LICENSE, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b004a4a4-a4a4-a4a4-a4a4-a4a4a4a4a4a2"), ProductCategory = ProductCategory.PHARMA, SubCategory = AttachmentSubCategory.COA_CERTIFICATE, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b004a4a4-a4a4-a4a4-a4a4-a4a4a4a4a4a3"), ProductCategory = ProductCategory.PHARMA, SubCategory = AttachmentSubCategory.VEHICLE_PHOTO, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b004a4a4-a4a4-a4a4-a4a4-a4a4a4a4a4a4"), ProductCategory = ProductCategory.PHARMA, SubCategory = AttachmentSubCategory.TEMPERATURE_PHOTO, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+
+            new ComplianceZoningRule { RuleId = new Guid("b005a5a5-a5a5-a5a5-a5a5-a5a5a5a5a5a1"), ProductCategory = ProductCategory.VACCINE, SubCategory = AttachmentSubCategory.PRODUCT_LICENSE, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b005a5a5-a5a5-a5a5-a5a5-a5a5a5a5a5a2"), ProductCategory = ProductCategory.VACCINE, SubCategory = AttachmentSubCategory.BATCH_RELEASE_CERTIFICATE, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b005a5a5-a5a5-a5a5-a5a5-a5a5a5a5a5a3"), ProductCategory = ProductCategory.VACCINE, SubCategory = AttachmentSubCategory.COA_CERTIFICATE, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b005a5a5-a5a5-a5a5-a5a5-a5a5a5a5a5a4"), ProductCategory = ProductCategory.VACCINE, SubCategory = AttachmentSubCategory.VEHICLE_PHOTO, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b005a5a5-a5a5-a5a5-a5a5-a5a5a5a5a5a5"), ProductCategory = ProductCategory.VACCINE, SubCategory = AttachmentSubCategory.TEMPERATURE_PHOTO, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+
+            new ComplianceZoningRule { RuleId = new Guid("b006a6a6-a6a6-a6a6-a6a6-a6a6a6a6a6a1"), ProductCategory = ProductCategory.IMPORT_GOODS, SubCategory = AttachmentSubCategory.CUSTOMS_DECLARATION, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b006a6a6-a6a6-a6a6-a6a6-a6a6a6a6a6a2"), ProductCategory = ProductCategory.IMPORT_GOODS, SubCategory = AttachmentSubCategory.CERTIFICATE_OF_ORIGIN, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b006a6a6-a6a6-a6a6-a6a6-a6a6a6a6a6a3"), ProductCategory = ProductCategory.IMPORT_GOODS, SubCategory = AttachmentSubCategory.SEAL_PHOTO, RequirementLevel = RequirementLevel.CONDITIONAL, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty },
+            new ComplianceZoningRule { RuleId = new Guid("b006a6a6-a6a6-a6a6-a6a6-a6a6a6a6a6a4"), ProductCategory = ProductCategory.IMPORT_GOODS, SubCategory = AttachmentSubCategory.VEHICLE_PHOTO, RequirementLevel = RequirementLevel.MANDATORY, IsActive = true, CreatedAt = new DateTime(2026, 6, 14, 0, 0, 0, DateTimeKind.Unspecified), CreatedBy = Guid.Empty }
+        );
+
+        modelBuilder.Entity<CycleCountPlan>(entity =>
+        {
+            entity.HasKey(e => e.PlanId).HasName("cycle_count_plans_pkey");
+            entity.ToTable("cycle_count_plans");
+
+            entity.Property(e => e.PlanId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("plan_id");
+
+            entity.Property(e => e.PlanCode)
+                .HasMaxLength(50)
+                .HasColumnName("plan_code");
+
+            entity.Property(e => e.Status)
+                .HasConversion<string>()
+                .HasMaxLength(30)
+                .HasColumnName("status");
+
+            entity.Property(e => e.AssignedToUserId).HasColumnName("assigned_to_user_id");
+            entity.Property(e => e.WarehouseId).HasColumnName("warehouse_id");
+            entity.Property(e => e.Notes).HasColumnName("notes");
+
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+
+            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
+
+            entity.Property(e => e.CompletedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("completed_at");
+
+            entity.Property(e => e.CompletedBy).HasColumnName("completed_by");
+
+            entity.HasOne(d => d.Warehouse).WithMany()
+                .HasForeignKey(d => d.WarehouseId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_plan_warehouse");
+
+            entity.HasOne(d => d.AssignedToUser).WithMany()
+                .HasForeignKey(d => d.AssignedToUserId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_plan_assigned_user");
+
+            entity.HasOne(d => d.Creator).WithMany()
+                .HasForeignKey(d => d.CreatedBy)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_plan_creator_user");
+
+            entity.HasOne(d => d.Completer).WithMany()
+                .HasForeignKey(d => d.CompletedBy)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_plan_completer_user");
+
+            entity.HasIndex(e => e.PlanCode).IsUnique().HasDatabaseName("uq_cycle_count_plan_code");
+        });
+
+        modelBuilder.Entity<CycleCountEntry>(entity =>
+        {
+            entity.HasKey(e => e.EntryId).HasName("cycle_count_entries_pkey");
+            entity.ToTable("cycle_count_entries");
+
+            entity.Property(e => e.EntryId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("entry_id");
+
+            entity.Property(e => e.PlanId).HasColumnName("plan_id");
+            entity.Property(e => e.LocationId).HasColumnName("location_id");
+            entity.Property(e => e.StockId).HasColumnName("stock_id");
+
+            entity.Property(e => e.ItemCode)
+                .HasMaxLength(50)
+                .HasColumnName("item_code");
+
+            entity.Property(e => e.BatchId).HasColumnName("batch_id");
+
+            entity.Property(e => e.SystemQuantity)
+                .HasPrecision(10, 2)
+                .HasColumnName("system_quantity");
+
+            entity.Property(e => e.SystemPallets).HasColumnName("system_pallets");
+
+            entity.Property(e => e.CountedQuantity)
+                .HasPrecision(10, 2)
+                .HasColumnName("counted_quantity");
+
+            entity.Property(e => e.CountedPallets).HasColumnName("counted_pallets");
+
+            entity.Property(e => e.VarianceQuantity)
+                .HasPrecision(10, 2)
+                .HasColumnName("variance_quantity");
+
+            entity.Property(e => e.VariancePallets).HasColumnName("variance_pallets");
+
+            entity.Property(e => e.Status)
+                .HasConversion<string>()
+                .HasMaxLength(30)
+                .HasColumnName("status");
+
+            entity.Property(e => e.CountedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("counted_at");
+
+            entity.Property(e => e.CountedBy).HasColumnName("counted_by");
+
+            entity.Property(e => e.ReviewedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("reviewed_at");
+
+            entity.Property(e => e.ReviewedBy).HasColumnName("reviewed_by");
+
+            entity.Property(e => e.ManagerNotes).HasColumnName("manager_notes");
+            entity.Property(e => e.AdjustmentId).HasColumnName("adjustment_id");
+
+            entity.HasOne(d => d.Plan).WithMany(p => p.Entries)
+                .HasForeignKey(d => d.PlanId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_entry_plan");
+
+            entity.HasOne(d => d.Location).WithMany()
+                .HasForeignKey(d => d.LocationId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_entry_location");
+
+            entity.HasOne(d => d.Stock).WithMany()
+                .HasForeignKey(d => d.StockId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_entry_stock");
+
+            entity.HasOne(d => d.Batch).WithMany()
+                .HasForeignKey(d => d.BatchId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_entry_batch");
+
+            entity.HasOne(d => d.Counter).WithMany()
+                .HasForeignKey(d => d.CountedBy)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_entry_counter_user");
+
+            entity.HasOne(d => d.Reviewer).WithMany()
+                .HasForeignKey(d => d.ReviewedBy)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_entry_reviewer_user");
+
+            entity.HasOne(d => d.Adjustment).WithMany()
+                .HasForeignKey(d => d.AdjustmentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_entry_adjustment");
         });
 
         OnModelCreatingPartial(modelBuilder);

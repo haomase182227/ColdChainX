@@ -4,5 +4,6 @@ namespace ColdChainX.Application.Interfaces
     {
         Task<string> SaveContractPdfAsync(string htmlContent, string contractNumber);
         Task<string> SaveQuotationPdfAsync(string htmlContent, string quoteNumber);
+        Task<string> SaveWarehouseReceiptPdfAsync(string htmlContent, string receiptCode);
     }
 }
