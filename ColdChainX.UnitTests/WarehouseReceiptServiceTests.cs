@@ -14,6 +14,7 @@ using ColdChainX.Core.Enums;
 using ColdChainX.Core.Interfaces;
 using ColdChainX.Infrastructure.Persistence;
 using ColdChainX.Infrastructure.Services;
+using ColdChainX.Application.DTOs.WarehouseReceipt;
 using Xunit;
 
 namespace ColdChainX.UnitTests
@@ -38,7 +39,7 @@ namespace ColdChainX.UnitTests
                 .Options;
 
             _db = new ApplicationDbContext(options);
-            _receiptRepository = new MockWarehouseReceiptRepository();
+            _receiptRepository = new MockWarehouseReceiptRepository(_db);
             _locationService = new MockLocationService();
             _pdfService = new MockPdfService();
 
@@ -401,19 +402,94 @@ namespace ColdChainX.UnitTests
             Assert.NotNull(reloadedStock);
             Assert.Equal(100.0m, reloadedStock.QuantityOnHand); // Quantity must not change on compliance failure
         }
+
+        [Fact]
+        public async Task UpdateMeasurements_ValidRequest_PersistsMeasurementsCorrectly()
+        {
+            // Arrange
+            var (orderId, warehouseId, receiverId, customerId, receipt, _) = await SeedBaseDataAsync(ProductCategory.FOOD);
+            
+            // Set the receipt state to pending measurement (as required by the service logic)
+            receipt.ReferenceDocNo = "PENDING_MEASUREMENT";
+            _db.WarehouseReceipts.Update(receipt);
+            await _db.SaveChangesAsync();
+
+            var request = new UpdateMeasurementsRequest
+            {
+                Items = new List<InboundItemMeasurement>
+                {
+                    new InboundItemMeasurement
+                    {
+                        ItemName = "Seafood Box A",
+                        ItemCode = "ITEM-SF-001",
+                        Unit = "BOX",
+                        ActualQty = 15.0m,
+                        LengthCm = 30,
+                        WidthCm = 30,
+                        HeightCm = 30,
+                        WeightKg = 12.5m,
+                        ConditionStatus = "GOOD",
+                        Note = "Slightly wet",
+                        BatchNumber = "BATCH-SF-999",
+                        ManufacturedDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-5)),
+                        ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(20)),
+                        CountryOfOrigin = "Norway",
+                        ProductCategory = ProductCategory.SEAFOOD
+                    }
+                }
+            };
+
+            // Act
+            var result = await _service.UpdateMeasurementsAsync(orderId, request);
+
+            // Assert
+            Assert.True(result.Success);
+            Assert.Equal("PENDING_COMPLETE", result.Data.ReferenceDocNo);
+            Assert.Equal(15.0m, result.Data.TotalActualQty);
+
+            // Verify stored items in the DB
+            var storedItems = await _db.WarehouseReceiptItems
+                .Where(i => i.ReceiptId == receipt.ReceiptId)
+                .ToListAsync();
+
+            Assert.Single(storedItems);
+            var storedItem = storedItems[0];
+            Assert.Equal("Seafood Box A", storedItem.ItemName);
+            Assert.Equal("Norway", storedItem.CountryOfOrigin);
+            Assert.Equal(ProductCategory.SEAFOOD, storedItem.ProductCategory);
+        }
     }
 
     #region Mock Classes
 
     public class MockWarehouseReceiptRepository : IWarehouseReceiptRepository
     {
-        public Task<WarehouseReceipt?> GetByIdAsync(Guid receiptId) => Task.FromResult<WarehouseReceipt?>(null);
-        public Task<WarehouseReceipt?> GetByOrderIdAsync(Guid orderId) => Task.FromResult<WarehouseReceipt?>(null);
-        public Task<List<WarehouseReceipt>> GetActiveReceiptsByWarehouseIdAsync(Guid warehouseId) => Task.FromResult(new List<WarehouseReceipt>());
-        public Task<List<WarehouseReceiptItem>> GetReceiptItemsByItemCodesAsync(IEnumerable<string> itemCodes) => Task.FromResult(new List<WarehouseReceiptItem>());
-        public Task AddAsync(WarehouseReceipt receipt) => Task.CompletedTask;
-        public Task AddItemAsync(WarehouseReceiptItem item) => Task.CompletedTask;
-        public Task SaveChangesAsync() => Task.CompletedTask;
+        private readonly ApplicationDbContext _db;
+        public MockWarehouseReceiptRepository(ApplicationDbContext db)
+        {
+            _db = db;
+        }
+
+        public async Task<WarehouseReceipt?> GetByIdAsync(Guid receiptId) 
+            => await _db.WarehouseReceipts.FindAsync(receiptId);
+
+        public async Task<WarehouseReceipt?> GetByOrderIdAsync(Guid orderId) 
+            => await _db.WarehouseReceipts.FirstOrDefaultAsync(r => r.OrderId == orderId);
+
+        public async Task<List<WarehouseReceipt>> GetActiveReceiptsByWarehouseIdAsync(Guid warehouseId) 
+            => await _db.WarehouseReceipts.Where(r => r.WarehouseId == warehouseId).ToListAsync();
+
+        public async Task<List<WarehouseReceiptItem>> GetReceiptItemsByItemCodesAsync(IEnumerable<string> itemCodes) 
+            => await _db.WarehouseReceiptItems.Where(i => itemCodes.Contains(i.ItemCode)).ToListAsync();
+
+        public async Task AddAsync(WarehouseReceipt receipt) 
+            => await _db.WarehouseReceipts.AddAsync(receipt);
+
+        public async Task AddItemAsync(WarehouseReceiptItem item) 
+            => await _db.WarehouseReceiptItems.AddAsync(item);
+
+        public async Task SaveChangesAsync() 
+            => await _db.SaveChangesAsync();
     }
 
     public class MockLocationService : ILocationService

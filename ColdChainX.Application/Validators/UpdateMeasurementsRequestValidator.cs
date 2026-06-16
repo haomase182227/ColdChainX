@@ -33,6 +33,13 @@ namespace ColdChainX.Application.Validators
                 item.RuleFor(i => i.ExpiryDate)
                     .Must((inst, expDate) => !inst.ManufacturedDate.HasValue || !expDate.HasValue || expDate.Value > inst.ManufacturedDate.Value)
                     .WithMessage("Expiry date must be after manufactured date");
+
+                item.RuleFor(i => i.CountryOfOrigin)
+                    .NotEmpty().WithMessage("Country of origin is required")
+                    .MaximumLength(100).WithMessage("Country of origin cannot exceed 100 characters");
+
+                item.RuleFor(i => i.ProductCategory)
+                    .IsInEnum().WithMessage("Invalid product category");
             });
         }
     }

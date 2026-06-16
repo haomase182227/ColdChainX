@@ -447,5 +447,45 @@ namespace ColdChainX.UnitTests
             Assert.NotNull(qStock2);
             Assert.Equal(0, qStock2.PalletCount); // Proportional pallets should be 0 because source PalletCount was 0
         }
+
+        [Fact]
+        public async Task GetHoldById_ExistingHoldId_ReturnsHoldResponseDto()
+        {
+            // Arrange
+            var (stockId, _, _, _, _) = await SeedStockAsync("ITEM-GET-BY-ID-1", 100.0m, "LOC-GET-BY-ID", "STORAGE");
+            var dto = new CreateInventoryHoldDto
+            {
+                StockId = stockId,
+                Quantity = 100.0m,
+                ReasonCode = "TEMP_EXCURSION",
+                Notes = "Testing retrieval"
+            };
+            var createResult = await _service.CreateHoldAsync(dto, Guid.NewGuid());
+            Assert.True(createResult.Success);
+            var holdId = createResult.Data.HoldId;
+
+            // Act
+            var result = await _service.GetHoldByIdAsync(holdId);
+
+            // Assert
+            Assert.True(result.Success);
+            Assert.NotNull(result.Data);
+            Assert.Equal(holdId, result.Data.HoldId);
+            Assert.Equal(stockId, result.Data.StockId);
+            Assert.Equal("ITEM-GET-BY-ID-1", result.Data.ItemCode);
+            Assert.Equal("LOC-GET-BY-ID", result.Data.LocationCode);
+            Assert.Equal("HOLD", result.Data.Status);
+        }
+
+        [Fact]
+        public async Task GetHoldById_NonExistingHoldId_ReturnsFailure()
+        {
+            // Act
+            var result = await _service.GetHoldByIdAsync(Guid.NewGuid());
+
+            // Assert
+            Assert.False(result.Success);
+            Assert.Equal("Hold record not found.", result.Message);
+        }
     }
 }

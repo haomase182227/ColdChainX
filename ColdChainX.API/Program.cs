@@ -36,11 +36,14 @@ builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "ColdChainX API", Version = "v1" });
 
-    var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
-    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
-    if (File.Exists(xmlPath))
+    var xmlFiles = new[] { "ColdChainX.API.xml", "ColdChainX.Application.xml", "ColdChainX.Shared.xml" };
+    foreach (var file in xmlFiles)
     {
-        c.IncludeXmlComments(xmlPath);
+        var xmlPath = Path.Combine(AppContext.BaseDirectory, file);
+        if (File.Exists(xmlPath))
+        {
+            c.IncludeXmlComments(xmlPath);
+        }
     }
 
     c.SchemaFilter<CreateOrderRequestSchemaFilter>();
