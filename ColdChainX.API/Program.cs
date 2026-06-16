@@ -4,6 +4,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi.Models;
+using Swashbuckle.AspNetCore.SwaggerGen;
+using Microsoft.OpenApi.Any;
 using ColdChainX.API.Extensions;
 using ColdChainX.API.Middleware;
 using ColdChainX.API.Models;
@@ -34,11 +36,13 @@ builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "ColdChainX API", Version = "v1" });
     c.SchemaFilter<CreateOrderRequestSchemaFilter>();
+    c.SchemaFilter<EnumSchemaFilter>();
     c.OperationFilter<CreateOrderFormOperationFilter>();
     c.OperationFilter<RegisterOperationFilter>();
     c.OperationFilter<CreateCustomerOperationFilter>();
     c.OperationFilter<CreateDriverOperationFilter>();
     c.OperationFilter<RemoveAuthFromCreateAccountsFilter>();
+    c.UseInlineDefinitionsForEnums();
     c.OperationFilter<UpdateContractDraftOperationFilter>();
 
     var securityScheme = new OpenApiSecurityScheme

@@ -425,6 +425,11 @@ public partial class ApplicationDbContext : DbContext
                 .HasMaxLength(20)
                 .HasDefaultValueSql("'AVAILABLE'::character varying")
                 .HasColumnName("status");
+
+            entity.HasOne(d => d.User)
+                .WithMany()
+                .HasForeignKey(d => d.UserId)
+                .HasConstraintName("fk_drivers_users");
         });
 
         modelBuilder.Entity<DriverLicense>(entity =>

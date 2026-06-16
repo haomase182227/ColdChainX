@@ -340,7 +340,7 @@ namespace ColdChainX.Application.Services
                 DriverId = Guid.NewGuid(),
                 UserId = user.UserId,
                 DateOfBirth = request.DateOfBirth,
-                Status = ActiveStatus,
+                Status = "AVAILABLE",
                 CreatedAt = DbNow()
             };
 
@@ -377,6 +377,114 @@ namespace ColdChainX.Application.Services
             dto.AccessTokenExpiresAt = accessExpiresAt;
 
             return ApiResponse<AuthResponseDto>.SuccessResponse(dto, "Driver account created successfully");
+        }
+
+        public async Task<ApiResponse<DriverDto>> UpdateDriverAsync(Guid driverId, UpdateDriverInfoRequest request)
+        {
+            var driver = await _driverRepository.GetByIdAsync(driverId);
+            if (driver == null)
+                return ApiResponse<DriverDto>.Failure("Driver not found");
+
+            // Update User fields if the driver has a linked user account
+            if (driver.UserId.HasValue && driver.User != null)
+            {
+                var user = driver.User;
+
+                if (IsInactive(user))
+                    return ApiResponse<DriverDto>.Failure("Driver account has been deactivated");
+
+                if (!string.IsNullOrWhiteSpace(request.FullName))
+                    user.FullName = request.FullName.Trim();
+
+                if (!string.IsNullOrWhiteSpace(request.NewPassword))
+                    user.PasswordHash = _passwordHasher.HashPassword(user, request.NewPassword);
+
+                user.UpdatedAt = DbNow();
+                await _userRepository.UpdateAsync(user);
+            }
+
+            // Update Driver-specific fields
+            if (request.DateOfBirth.HasValue)
+                driver.DateOfBirth = request.DateOfBirth.Value;
+
+            if (!string.IsNullOrWhiteSpace(request.Status))
+            {
+                var validStatuses = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                    { "AVAILABLE", "ON_TRIP", "OFFLINE", "INACTIVE" };
+
+                if (!validStatuses.Contains(request.Status.Trim()))
+                    return ApiResponse<DriverDto>.Failure(
+                        $"Invalid driver status '{request.Status}'. Allowed values: {string.Join(", ", validStatuses)}");
+
+                driver.Status = request.Status.Trim().ToUpperInvariant();
+            }
+
+            // Update or create Driver License
+            if (!string.IsNullOrWhiteSpace(request.LicenseNumber) &&
+                !string.IsNullOrWhiteSpace(request.LicenseClass) &&
+                request.IssueDate.HasValue &&
+                request.ExpiryDate.HasValue)
+            {
+                var existingLicense = driver.DriverLicenses?.FirstOrDefault();
+                if (existingLicense != null)
+                {
+                    existingLicense.LicenseNumber = request.LicenseNumber.Trim();
+                    existingLicense.LicenseClass = request.LicenseClass.Trim();
+                    existingLicense.IssueDate = request.IssueDate.Value;
+                    existingLicense.ExpiryDate = request.ExpiryDate.Value;
+                    if (request.DocumentUrl != null)
+                        existingLicense.DocumentUrl = request.DocumentUrl;
+                }
+                else
+                {
+                    var newLicense = new DriverLicense
+                    {
+                        LicenseId = Guid.NewGuid(),
+                        DriverId = driver.DriverId,
+                        LicenseNumber = request.LicenseNumber.Trim(),
+                        LicenseClass = request.LicenseClass.Trim(),
+                        IssueDate = request.IssueDate.Value,
+                        ExpiryDate = request.ExpiryDate.Value,
+                        DocumentUrl = request.DocumentUrl ?? string.Empty,
+                        Status = ActiveStatus,
+                        CreatedAt = DbNow()
+                    };
+                    await _driverRepository.AddLicenseAsync(newLicense);
+                }
+            }
+
+            await _driverRepository.UpdateAsync(driver);
+            await _driverRepository.SaveChangesAsync();
+
+            var dto = MapDriverDto(driver);
+            return ApiResponse<DriverDto>.SuccessResponse(dto, "Driver information updated successfully");
+        }
+
+        private static DriverDto MapDriverDto(Driver driver)
+        {
+            return new DriverDto
+            {
+                DriverId = driver.DriverId,
+                UserId = driver.UserId,
+                Username = driver.User?.Username,
+                Email = driver.User?.Email,
+                FullName = driver.User?.FullName,
+                DateOfBirth = driver.DateOfBirth,
+                Status = driver.Status,
+                CreatedAt = driver.CreatedAt,
+                DriverLicenses = driver.DriverLicenses?.Select(l => new DriverLicenseDto
+                {
+                    LicenseId = l.LicenseId,
+                    DriverId = l.DriverId,
+                    LicenseNumber = l.LicenseNumber,
+                    LicenseClass = l.LicenseClass,
+                    IssueDate = l.IssueDate,
+                    ExpiryDate = l.ExpiryDate,
+                    DocumentUrl = l.DocumentUrl,
+                    Status = l.Status,
+                    CreatedAt = l.CreatedAt
+                }).ToList() ?? new List<DriverLicenseDto>()
+            };
         }
 
         private async Task<Guid?> ResolveCustomerIdForTokenAsync(User user)

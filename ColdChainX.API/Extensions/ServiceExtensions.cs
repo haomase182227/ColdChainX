@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using AutoMapper;
 using FluentValidation;
 using FluentValidation.AspNetCore;
@@ -90,6 +91,11 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IContractService, ContractService>();
             services.AddScoped<IChatService, ChatService>();
             services.AddScoped<INotificationService, NotificationService>();
+            
+            // Dispatch and Load Planning
+            services.AddHttpClient<ColdChainX.Infrastructure.Integration.GeminiLoadOptimizerClient>();
+            services.AddScoped<IDispatchService, DispatchService>();
+
             services.AddSignalR();
 
             services.AddAutoMapper(typeof(MappingProfile));
@@ -99,7 +105,11 @@ namespace ColdChainX.API.Extensions
             services.AddValidatorsFromAssemblyContaining<Application.Validators.RegisterRequestValidator>();
             services.AddFluentValidationAutoValidation();
             services.AddFluentValidationClientsideAdapters();
-            services.AddControllers();
+            services.AddControllers()
+                .AddJsonOptions(options =>
+                {
+                    options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+                });
 
             // Removed duplicate validator registration line
 

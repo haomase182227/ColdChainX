@@ -21,13 +21,26 @@ namespace ColdChainX.Infrastructure.Repositories
         public async Task<List<Driver>> GetAllAsync()
         {
             return await _db.Drivers
+                .Include(d => d.User)
+                .Include(d => d.DriverLicenses)
                 .OrderByDescending(x => x.CreatedAt)
                 .ToListAsync();
         }
 
         public async Task<Driver?> GetByIdAsync(Guid id)
         {
-            return await _db.Drivers.FirstOrDefaultAsync(x => x.DriverId == id);
+            return await _db.Drivers
+                .Include(d => d.User)
+                .Include(d => d.DriverLicenses)
+                .FirstOrDefaultAsync(x => x.DriverId == id);
+        }
+
+        public async Task<Driver?> GetByUserIdAsync(Guid userId)
+        {
+            return await _db.Drivers
+                .Include(d => d.User)
+                .Include(d => d.DriverLicenses)
+                .FirstOrDefaultAsync(x => x.UserId == userId);
         }
 
         public async Task AddAsync(Driver driver)

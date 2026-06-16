@@ -37,8 +37,8 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
-        // Admin endpoint: create a customer user and customer record with role assigned
-        [Authorize(Roles = "Admin,ADMIN")]
+        // Public endpoint for customer self-registration
+        [AllowAnonymous]
         [HttpPost("create-customer")]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> CreateCustomer([FromForm] CreateCustomerRequest request)
@@ -104,6 +104,59 @@ namespace ColdChainX.API.Controllers
                 return Unauthorized(ApiResponse<bool>.Failure("Invalid token"));
 
             var result = await _authService.UpdateUserAsync(userId, request);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Admin: update driver's full name.
+        /// </summary>
+        [Authorize(Roles = "Admin,ADMIN")]
+        [HttpPatch("update-driver/{driverId:guid}/fullname")]
+        public async Task<IActionResult> UpdateDriverFullName(Guid driverId, [FromBody] UpdateDriverFullNameRequest request)
+        {
+            var mapped = new UpdateDriverInfoRequest { FullName = request.FullName };
+            var result = await _authService.UpdateDriverAsync(driverId, mapped);
+            if (!result.Success && result.Message == "Driver not found") return NotFound(result);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+    
+
+        /// <summary>
+        /// Admin: update driver's date of birth.
+        /// </summary>
+        [Authorize(Roles = "Admin,ADMIN")]
+        [HttpPatch("update-driver/{driverId:guid}/date-of-birth")]
+        public async Task<IActionResult> UpdateDriverDob(Guid driverId, [FromBody] UpdateDriverDobRequest request)
+        {
+            var mapped = new UpdateDriverInfoRequest { DateOfBirth = request.DateOfBirth };
+            var result = await _authService.UpdateDriverAsync(driverId, mapped);
+            if (!result.Success && result.Message == "Driver not found") return NotFound(result);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        
+
+        /// <summary>
+        /// Admin: update or create driver license information.
+        /// </summary>
+        [Authorize(Roles = "Admin,ADMIN")]
+        [HttpPatch("update-driver/{driverId:guid}/license")]
+        public async Task<IActionResult> UpdateDriverLicense(Guid driverId, [FromBody] UpdateDriverLicenseRequest request)
+        {
+            var mapped = new UpdateDriverInfoRequest
+            {
+                LicenseNumber = request.LicenseNumber,
+                LicenseClass = request.LicenseClass,
+                IssueDate = request.IssueDate,
+                ExpiryDate = request.ExpiryDate,
+                DocumentUrl = request.DocumentUrl
+            };
+            var result = await _authService.UpdateDriverAsync(driverId, mapped);
+            if (!result.Success && result.Message == "Driver not found") return NotFound(result);
             if (!result.Success) return BadRequest(result);
             return Ok(result);
         }
