@@ -122,19 +122,7 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>
-        /// Admin: update driver's password.
-        /// </summary>
-        [Authorize(Roles = "Admin,ADMIN")]
-        [HttpPatch("update-driver/{driverId:guid}/password")]
-        public async Task<IActionResult> UpdateDriverPassword(Guid driverId, [FromBody] UpdateDriverPasswordRequest request)
-        {
-            var mapped = new UpdateDriverInfoRequest { NewPassword = request.NewPassword };
-            var result = await _authService.UpdateDriverAsync(driverId, mapped);
-            if (!result.Success && result.Message == "Driver not found") return NotFound(result);
-            if (!result.Success) return BadRequest(result);
-            return Ok(result);
-        }
+    
 
         /// <summary>
         /// Admin: update driver's date of birth.
@@ -150,19 +138,7 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>
-        /// Admin: update driver's operational status (AVAILABLE, ON_TRIP, OFFLINE, INACTIVE).
-        /// </summary>
-        [Authorize(Roles = "Admin,ADMIN")]
-        [HttpPatch("update-driver/{driverId:guid}/status")]
-        public async Task<IActionResult> UpdateDriverStatus(Guid driverId, [FromBody] UpdateDriverStatusRequest request)
-        {
-            var mapped = new UpdateDriverInfoRequest { Status = request.Status };
-            var result = await _authService.UpdateDriverAsync(driverId, mapped);
-            if (!result.Success && result.Message == "Driver not found") return NotFound(result);
-            if (!result.Success) return BadRequest(result);
-            return Ok(result);
-        }
+        
 
         /// <summary>
         /// Admin: update or create driver license information.
