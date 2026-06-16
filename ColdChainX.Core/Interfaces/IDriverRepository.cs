@@ -9,6 +9,7 @@ namespace ColdChainX.Core.Interfaces
     {
         Task<List<Driver>> GetAllAsync();
         Task<Driver?> GetByIdAsync(Guid id);
+        Task<Driver?> GetByUserIdAsync(Guid userId);
         Task AddAsync(Driver driver);
         Task AddLicenseAsync(DriverLicense license);
         Task UpdateAsync(Driver driver);

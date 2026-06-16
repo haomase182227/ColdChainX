@@ -35,6 +35,14 @@ namespace ColdChainX.Infrastructure.Repositories
                 .FirstOrDefaultAsync(x => x.DriverId == id);
         }
 
+        public async Task<Driver?> GetByUserIdAsync(Guid userId)
+        {
+            return await _db.Drivers
+                .Include(d => d.User)
+                .Include(d => d.DriverLicenses)
+                .FirstOrDefaultAsync(x => x.UserId == userId);
+        }
+
         public async Task AddAsync(Driver driver)
         {
             await _db.Drivers.AddAsync(driver);
