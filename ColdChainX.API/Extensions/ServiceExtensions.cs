@@ -96,8 +96,11 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<ComplianceRulesEngine>();
             services.AddScoped<IOrderService, OrderService>();
             services.AddScoped<IQuotationService, QuotationService>();
+            services.AddScoped<IRouteService, RouteService>();
+            services.AddScoped<IAsnService, AsnService>();
             services.AddScoped<IPdfService, SimplePdfService>();
             services.AddScoped<IContractService, ContractService>();
+            services.AddScoped<IChatService, ChatService>();
             services.AddScoped<INotificationService, NotificationService>();
             services.AddScoped<IWarehouseReceiptService, WarehouseReceiptService>();
             services.AddScoped<IInventoryService, InventoryService>();
@@ -158,7 +161,8 @@ namespace ColdChainX.API.Extensions
                         var path = context.HttpContext.Request.Path;
 
                         if (!string.IsNullOrEmpty(accessToken)
-                            && path.StartsWithSegments(new PathString("/hubs/notifications")))
+                            && (path.StartsWithSegments(new PathString("/hubs/notifications"))
+                                || path.StartsWithSegments(new PathString("/hubs/chat"))))
                         {
                             context.Token = accessToken;
                         }

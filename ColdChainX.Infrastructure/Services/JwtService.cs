@@ -72,7 +72,7 @@ namespace ColdChainX.Infrastructure.Services
             => roleName.ToUpperInvariant() switch
             {
                 "ADMIN" => "Admin",
-                "MANAGER" => "Manager",
+                "DISPATCHER" => "Dispatcher",
                 "STAFF" => "Staff",
                 "DRIVER" => "Driver",
                 _ => roleName

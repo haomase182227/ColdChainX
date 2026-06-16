@@ -18,11 +18,9 @@ namespace ColdChainX.Infrastructure.Services
     {
         private const string PendingReview = "PENDING_REVIEW";
         private const string Rejected = "REJECTED";
-        private const string Quoting = "QUOTING";
-        private const string DefaultOriginCity = "Ho Chi Minh";
-        private const decimal MinCharge = 300000m;
-        private const decimal LastMileFreeKm = 10m;
-        private const decimal LastMileUnitPrice = 15000m;
+        private const string Draft = "DRAFT";
+        private const string DefaultOriginCity = "HCM";
+        private const decimal MinChargeableWeightKg = 30m;
         private const decimal VatRate = 0.08m;
 
         private readonly ApplicationDbContext _db;
@@ -111,6 +109,12 @@ namespace ColdChainX.Infrastructure.Services
                 if (!customerExists)
                     return ApiResponse<CreateOrderResponse>.Failure("Customer not found");
 
+                var route = await _db.RouteMasters
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(r => r.RouteId == request.RouteId && r.Status == "ACTIVE");
+                if (route == null)
+                    return ApiResponse<CreateOrderResponse>.Failure("Route_ID is invalid or inactive");
+
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
                 var expectedCbm = Math.Round(request.LengthCm * request.WidthCm * request.HeightCm * request.Quantity / 1000000m, 4);
@@ -142,6 +146,7 @@ namespace ColdChainX.Infrastructure.Services
                     ActualWeightKg = request.ExpectedWeightKg,
                     ExpectedCbm = expectedCbm,
                     DestLocation = location.LocationId,
+                    RouteId = route.RouteId,
                     CargoValue = 0,
                     Status = PendingReview,
                     CreatedAt = DbNow()
@@ -164,6 +169,9 @@ namespace ColdChainX.Infrastructure.Services
                     CreatedAt = DbNow()
                 });
 
+                var draftQuotation = await BuildAutoDraftQuotationAsync(order, route, location);
+                _db.Quotations.Add(draftQuotation);
+
                 var salesUserId = await ResolveSalesUserIdAsync();
                 await AddNotificationAsync(
                     salesUserId,
@@ -180,7 +188,8 @@ namespace ColdChainX.Infrastructure.Services
                     order.OrderId,
                     order.TrackingCode,
                     order.CustomerId,
-                    order.Status
+                    order.Status,
+                    DraftQuoteId = draftQuotation.QuoteId
                 });
 
                 return ApiResponse<CreateOrderResponse>.SuccessResponse(new CreateOrderResponse
@@ -202,9 +211,10 @@ namespace ColdChainX.Infrastructure.Services
             return await strategy.ExecuteAsync(async () =>
             {
                 var order = await _db.TransportOrders
-                    .Include(o => o.Customer)
-                    .Include(o => o.DestLocationNavigation)
-                    .FirstOrDefaultAsync(o => o.OrderId == orderId);
+                .Include(o => o.Customer)
+                .Include(o => o.Route)
+                .Include(o => o.DestLocationNavigation)
+                .FirstOrDefaultAsync(o => o.OrderId == orderId);
 
                 if (order == null)
                     return ApiResponse<ReviewOrderResponse>.Failure("Order not found");
@@ -251,67 +261,16 @@ namespace ColdChainX.Infrastructure.Services
                 if (action != "APPROVE")
                     return ApiResponse<ReviewOrderResponse>.Failure("Action must be APPROVE or REJECT");
 
-                if (order.DestLocationNavigation == null)
-                    return ApiResponse<ReviewOrderResponse>.Failure("Order destination location was not found");
+                var quotation = await _db.Quotations
+                    .Where(q => q.OrderId == order.OrderId && q.Status == Draft)
+                    .OrderByDescending(q => q.CreatedAt)
+                    .FirstOrDefaultAsync();
 
-                var pricing = await ResolvePricingAsync(order);
-                if (pricing == null)
-                    return ApiResponse<ReviewOrderResponse>.Failure("Pricing matrix is missing KG or CBM price for this route");
-
-                var chargeableWeightKg = order.ActualWeightKg;
-                var chargeableCbm = order.ExpectedCbm;
-                var baseFreight = Math.Max(chargeableWeightKg * pricing.PriceKg, chargeableCbm * pricing.PriceCbm);
-                if (baseFreight < MinCharge)
-                    baseFreight = MinCharge;
-
-                var distanceKm = await _locationService.GetDistanceKmAsync(
-                    GoongLocationService.HubLat,
-                    GoongLocationService.HubLon,
-                    order.DestLocationNavigation.Latitude,
-                    order.DestLocationNavigation.Longitude);
-                var lastMileSurcharge = distanceKm > LastMileFreeKm
-                    ? Math.Round((distanceKm - LastMileFreeKm) * LastMileUnitPrice, 0)
-                    : 0m;
-                var vasAmount = 0m;
-                var subtotal = baseFreight + lastMileSurcharge + vasAmount;
-                var vatAmount = Math.Round(subtotal * VatRate, 0);
-                var finalAmount = subtotal + vatAmount;
-
-                var quotation = new Quotation
-                {
-                    QuoteId = Guid.NewGuid(),
-                    OrderId = order.OrderId,
-                    BaseFreight = baseFreight,
-                    LastMileSurcharge = lastMileSurcharge,
-                    VasAmount = vasAmount,
-                    VatAmount = vatAmount,
-                    FinalAmount = finalAmount,
-                    FileUrl = null,
-                    Status = "SENT",
-                    CreatedAt = DbNow()
-                };
-                quotation.FileUrl = await GenerateQuotationPdfAsync(order, quotation);
-                _db.Quotations.Add(quotation);
-                order.Status = Quoting;
-
-                var quoteCustomerUserId = await ResolveCustomerUserIdAsync(order.CustomerId);
-                await AddNotificationAsync(
-                    quoteCustomerUserId,
-                    salesUserId,
-                    "NOTI_QUOTATION_SENT",
-                    order.OrderId,
-                    new { Tracking_Code = order.TrackingCode, Final_Amount = finalAmount.ToString("0") });
+                if (quotation == null)
+                    return ApiResponse<ReviewOrderResponse>.Failure("Draft quotation was not found for this order");
 
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
-
-                await _hubContext.Clients.User(order.CustomerId.ToString()!).SendAsync("ReceiveQuotation", new
-                {
-                    order.OrderId,
-                    quotation.QuoteId,
-                    order.TrackingCode,
-                    quotation.FinalAmount
-                });
 
                 return ApiResponse<ReviewOrderResponse>.SuccessResponse(new ReviewOrderResponse
                 {
@@ -319,12 +278,11 @@ namespace ColdChainX.Infrastructure.Services
                     TrackingCode = order.TrackingCode,
                     Status = order.Status,
                     QuoteId = quotation.QuoteId,
-                    BaseFreight = baseFreight,
-                    LastMileSurcharge = lastMileSurcharge,
-                    VasAmount = vasAmount,
-                    VatAmount = vatAmount,
-                    FinalAmount = finalAmount
-                }, "Quotation generated");
+                    BaseFreight = quotation.BaseFreight,
+                    LastMileSurcharge = quotation.LastMileSurcharge,
+                    VatAmount = quotation.VatAmount,
+                    FinalAmount = quotation.FinalAmount
+                }, "Order approved for quotation review");
             });
         }
 
@@ -359,31 +317,102 @@ namespace ColdChainX.Infrastructure.Services
                 .FirstOrDefaultAsync();
         }
 
+        private async Task<Quotation> BuildAutoDraftQuotationAsync(TransportOrder order, RouteMaster route, Location destination)
+        {
+            var volumetricRate = await GetSystemConfigDecimalAsync("VolumetricConversionRate", 250m);
+            var pricePerKm = await GetSystemConfigDecimalAsync("PricePerKm", 15000m);
+
+            var volumetricWeight = Math.Round(order.ExpectedCbm * volumetricRate, 2);
+            var chargeableWeight = Math.Max(Math.Max(order.ExpectedWeightKg, volumetricWeight), MinChargeableWeightKg);
+
+            var tier = await _db.WeightTiers
+                .AsNoTracking()
+                .Where(t => t.RouteId == route.RouteId
+                            && chargeableWeight >= t.MinWeightKg
+                            && (!t.MaxWeightKg.HasValue || chargeableWeight <= t.MaxWeightKg.Value))
+                .OrderByDescending(t => t.MinWeightKg)
+                .FirstOrDefaultAsync();
+
+            if (tier == null)
+                throw new InvalidOperationException(BuildChargeableWeightErrorMessage(order, chargeableWeight, volumetricWeight));
+
+            var routeDestinationCoordinates = await _locationService.GetCoordinatesAsync($"{route.DestCity}, Vietnam");
+            var distanceKm = await _locationService.GetDistanceKmAsync(
+                routeDestinationCoordinates.Latitude,
+                routeDestinationCoordinates.Longitude,
+                destination.Latitude,
+                destination.Longitude);
+
+            var baseFreight = Math.Round(chargeableWeight * tier.PricePerKg, 0);
+            var lastMileSurcharge = Math.Round(distanceKm * pricePerKm, 0);
+            var subtotal = baseFreight + lastMileSurcharge;
+            var vatAmount = Math.Round(subtotal * VatRate, 0);
+
+            return new Quotation
+            {
+                QuoteId = Guid.NewGuid(),
+                OrderId = order.OrderId,
+                BaseFreight = baseFreight,
+                LastMileSurcharge = lastMileSurcharge,
+                VasAmount = 0m,
+                VatPercentage = VatRate * 100m,
+                VatAmount = vatAmount,
+                FinalAmount = subtotal + vatAmount,
+                ChargeableWeightKg = chargeableWeight,
+                VolumetricWeightKg = volumetricWeight,
+                PricePerKg = tier.PricePerKg,
+                DistanceKm = distanceKm,
+                SystemBaseFreight = baseFreight,
+                ManualAdjustment = 0m,
+                OverrideReason = null,
+                PricingSource = "AUTO",
+                Status = Draft,
+                CreatedAt = DbNow()
+            };
+        }
+
+        private async Task<decimal> GetSystemConfigDecimalAsync(string key, decimal fallback)
+        {
+            var value = await _db.SystemConfigs
+                .AsNoTracking()
+                .Where(c => c.Key == key)
+                .Select(c => c.Value)
+                .FirstOrDefaultAsync();
+
+            return decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed)
+                ? parsed
+                : fallback;
+        }
+
         private async Task<RoutePricing?> ResolvePricingAsync(TransportOrder order)
         {
-            var destinationAddress = order.DestLocationNavigation?.Address ?? string.Empty;
-            var destinationCity = ExtractDestinationCity(destinationAddress);
-
-            var allRoutePrices = await _db.PricingMatrices
-                .AsNoTracking()
-                .Where(p => p.PricingUnit == "KG" || p.PricingUnit == "CBM")
-                .ToListAsync();
-
-            var originKey = NormalizeRouteKey(DefaultOriginCity);
-            var destinationKey = NormalizeRouteKey(destinationCity);
-            var prices = allRoutePrices
-                .Where(p => NormalizeRouteKey(p.OriginCity) == originKey
-                            && NormalizeRouteKey(p.DestCity) == destinationKey)
-                .OrderByDescending(p => p.EffectiveDate)
-                .ToList();
-
-            var priceKg = prices.FirstOrDefault(p => p.PricingUnit == "KG")?.UnitPrice;
-            var priceCbm = prices.FirstOrDefault(p => p.PricingUnit == "CBM")?.UnitPrice;
-
-            if (!priceKg.HasValue || !priceCbm.HasValue)
+            if (!order.RouteId.HasValue)
                 return null;
 
-            return new RoutePricing(priceKg.Value, priceCbm.Value, destinationCity);
+            var volumetricRate = await GetSystemConfigDecimalAsync("VolumetricConversionRate", 250m);
+            var volumetricWeight = Math.Round(order.ExpectedCbm * volumetricRate, 2);
+            var chargeableWeight = Math.Max(Math.Max(order.ExpectedWeightKg, volumetricWeight), MinChargeableWeightKg);
+            var tier = await _db.WeightTiers
+                .AsNoTracking()
+                .Include(t => t.Route)
+                .Where(t => t.RouteId == order.RouteId.Value
+                            && chargeableWeight >= t.MinWeightKg
+                            && (!t.MaxWeightKg.HasValue || chargeableWeight <= t.MaxWeightKg.Value))
+                .OrderByDescending(t => t.MinWeightKg)
+                .FirstOrDefaultAsync();
+
+            if (tier == null)
+                return null;
+
+            var baseFreight = Math.Round(chargeableWeight * tier.PricePerKg, 0);
+
+            return new RoutePricing(
+                BaseFreight: baseFreight,
+                PriceKg: tier.PricePerKg,
+                FreightByKg: baseFreight,
+                ChargeableWeightKg: chargeableWeight,
+                OriginCity: tier.Route.OriginCity,
+                DestinationCity: tier.Route.DestCity);
         }
 
         private async Task<string> GenerateQuotationPdfAsync(TransportOrder order, Quotation quotation)
@@ -401,11 +430,16 @@ namespace ColdChainX.Infrastructure.Services
                 ["Item_Name"] = order.ItemName,
                 ["Quantity"] = order.Quantity.ToString(CultureInfo.InvariantCulture),
                 ["Packing_Type"] = order.PackingType,
-                ["Pickup_Address"] = DefaultOriginCity,
+                ["Pickup_Address"] = order.Route?.OriginCity ?? DefaultOriginCity,
                 ["Dest_Address"] = order.DestLocationNavigation?.Address ?? string.Empty,
                 ["Actual_Weight_KG"] = order.ActualWeightKg.ToString("0.##", CultureInfo.InvariantCulture),
                 ["Actual_CBM"] = order.ExpectedCbm.ToString("0.####", CultureInfo.InvariantCulture),
-                ["Final_Amount"] = quotation.FinalAmount.ToString("N0", CultureInfo.InvariantCulture)
+                ["Route_Code"] = order.Route?.RouteCode,
+                ["ETD"] = string.Empty,
+                ["ETA"] = order.Route?.TransitTime,
+                ["Cut_Off_Time"] = order.Route?.CutOffTime.ToString(@"hh\:mm", CultureInfo.InvariantCulture),
+                ["Base_Freight"] = quotation.BaseFreight.ToString("N0", CultureInfo.InvariantCulture),
+                ["Final_Amount"] = quotation.BaseFreight.ToString("N0", CultureInfo.InvariantCulture)
             };
 
             foreach (var replacement in replacements)
@@ -493,6 +527,7 @@ namespace ColdChainX.Infrastructure.Services
             return _db.TransportOrders
                 .AsNoTracking()
                 .Include(o => o.Customer)
+                .Include(o => o.Route)
                 .Include(o => o.DestLocationNavigation)
                 .Include(o => o.TransportDocuments)
                 .Include(o => o.Quotations);
@@ -518,6 +553,17 @@ namespace ColdChainX.Infrastructure.Services
                 CargoValue = order.CargoValue,
                 Status = order.Status,
                 CreatedAt = order.CreatedAt,
+                Route = order.Route == null
+                    ? null
+                    : new OrderRouteResponse
+                    {
+                        RouteId = order.Route.RouteId,
+                        RouteCode = order.Route.RouteCode,
+                        OriginCity = order.Route.OriginCity,
+                        DestCity = order.Route.DestCity,
+                        TransitTime = order.Route.TransitTime,
+                        CutOffTime = order.Route.CutOffTime
+                    },
                 Destination = order.DestLocationNavigation == null
                     ? null
                     : new OrderLocationResponse
@@ -545,7 +591,7 @@ namespace ColdChainX.Infrastructure.Services
                         QuoteId = q.QuoteId,
                         BaseFreight = q.BaseFreight,
                         LastMileSurcharge = q.LastMileSurcharge,
-                        VasAmount = q.VasAmount,
+                        VatPercentage = q.VatPercentage,
                         VatAmount = q.VatAmount,
                         FinalAmount = q.FinalAmount,
                         FileUrl = q.FileUrl,
@@ -556,6 +602,30 @@ namespace ColdChainX.Infrastructure.Services
             };
         }
 
-        private sealed record RoutePricing(decimal PriceKg, decimal PriceCbm, string DestinationCity);
+        private sealed record RoutePricing(
+            decimal BaseFreight,
+            decimal PriceKg,
+            decimal FreightByKg,
+            decimal ChargeableWeightKg,
+            string OriginCity,
+            string DestinationCity);
+
+        private static string BuildChargeableWeightErrorMessage(
+            TransportOrder order,
+            decimal chargeableWeight,
+            decimal volumetricWeight)
+        {
+            return "Hệ thống phát hiện kích thước Dài x Rộng x Cao và số lượng của bạn quá lớn so với trọng lượng thực tế "
+                   + $"({FormatKg(order.ExpectedWeightKg)}kg), dẫn đến trọng lượng quy đổi lên tới {FormatKg(volumetricWeight)}kg "
+                   + $"và trọng lượng tính cước là {FormatKg(chargeableWeight)}kg. "
+                   + "Bạn vui lòng kiểm tra lại đã nhập đúng kích thước theo đơn vị Centimet (CM) chưa nhé. "
+                   + "Nếu kích thước bạn nhập là chính xác, đơn hàng này cần được vận chuyển theo hình thức Bao Nguyên Xe (FTL). "
+                   + "Vui lòng liên hệ Hotline/Sales để được báo giá riêng.";
+        }
+
+        private static string FormatKg(decimal value)
+        {
+            return value.ToString("#,##0.##", CultureInfo.GetCultureInfo("vi-VN"));
+        }
     }
 }
