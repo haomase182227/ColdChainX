@@ -109,6 +109,19 @@ namespace ColdChainX.API.Controllers
         }
 
         /// <summary>
+        /// Admin endpoint: update driver information (user profile + driver-specific fields).
+        /// </summary>
+        [Authorize(Roles = "Admin,ADMIN")]
+        [HttpPut("update-driver/{driverId:guid}")]
+        public async Task<IActionResult> UpdateDriver(Guid driverId, [FromBody] UpdateDriverInfoRequest request)
+        {
+            var result = await _authService.UpdateDriverAsync(driverId, request);
+            if (!result.Success && result.Message == "Driver not found") return NotFound(result);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        /// <summary>
         /// Soft delete a user by id.
         /// </summary>
         [Authorize(Roles = "Admin,ADMIN")]
