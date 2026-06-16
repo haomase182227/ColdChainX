@@ -83,7 +83,6 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("{quoteId:guid}/accept")]
-        [HttpPut("{quoteId:guid}/accept")]
         public async Task<IActionResult> AcceptQuotation(Guid quoteId, [FromBody] AcceptQuotationRequest request)
         {
             var result = await _quotationService.AcceptQuotationAsync(quoteId, request);

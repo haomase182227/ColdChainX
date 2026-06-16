@@ -171,20 +171,32 @@ namespace ColdChainX.Infrastructure.Services
                 return ApiResponse<QuotationResponse>.Failure("Quotation not found");
             if (!string.Equals(quotation.Status, Draft, StringComparison.OrdinalIgnoreCase))
                 return ApiResponse<QuotationResponse>.Failure("Only DRAFT quotations can be edited");
-            if (request.BaseFreight < 0 || request.LastMileSurcharge < 0)
+            if ((request.BaseFreight.HasValue && request.BaseFreight.Value < 0)
+                || (request.LastMileSurcharge.HasValue && request.LastMileSurcharge.Value < 0))
                 return ApiResponse<QuotationResponse>.Failure("Freight values cannot be negative");
-            if (request.VatPercentage < 0 || request.VatPercentage > 20)
+            if (request.VatPercentage.HasValue && (request.VatPercentage.Value < 0 || request.VatPercentage.Value > 20))
                 return ApiResponse<QuotationResponse>.Failure("VAT percentage is invalid");
+            var additionalCharges = request.AdditionalCharges == null
+                ? DeserializeAdditionalCharges(quotation.AdditionalCharges)
+                : NormalizeAdditionalCharges(request.AdditionalCharges);
+            if (additionalCharges == null)
+                return ApiResponse<QuotationResponse>.Failure("Additional charge name is required and amount cannot be negative");
 
-            var subtotal = request.BaseFreight + request.LastMileSurcharge;
-            quotation.BaseFreight = request.BaseFreight;
-            quotation.LastMileSurcharge = request.LastMileSurcharge;
+            var baseFreight = request.BaseFreight ?? quotation.BaseFreight;
+            var lastMileSurcharge = request.LastMileSurcharge ?? quotation.LastMileSurcharge ?? 0m;
+            var vatPercentage = request.VatPercentage ?? quotation.VatPercentage ?? 8m;
+            var additionalChargesTotal = additionalCharges.Sum(c => c.Amount);
+            var subtotal = baseFreight + lastMileSurcharge + additionalChargesTotal;
+            quotation.BaseFreight = baseFreight;
+            quotation.LastMileSurcharge = lastMileSurcharge;
+            quotation.AdditionalCharges = SerializeAdditionalCharges(additionalCharges);
             quotation.VasAmount = 0m;
-            quotation.VatPercentage = request.VatPercentage;
-            quotation.VatAmount = Math.Round(subtotal * request.VatPercentage / 100m, 0);
+            quotation.VatPercentage = vatPercentage;
+            quotation.VatAmount = Math.Round(subtotal * vatPercentage / 100m, 0);
             quotation.FinalAmount = subtotal + quotation.VatAmount;
-            quotation.ManualAdjustment = quotation.FinalAmount - ((quotation.SystemBaseFreight ?? 0m) + (quotation.LastMileSurcharge ?? 0m));
-            quotation.OverrideReason = request.OverrideReason;
+            quotation.ManualAdjustment = quotation.BaseFreight - (quotation.SystemBaseFreight ?? 0m) + additionalChargesTotal;
+            if (request.OverrideReason != null)
+                quotation.OverrideReason = string.IsNullOrWhiteSpace(request.OverrideReason) ? null : request.OverrideReason.Trim();
             quotation.PricingSource = "MANUAL_OVERRIDE";
 
             await _db.SaveChangesAsync();
@@ -374,7 +386,7 @@ namespace ColdChainX.Infrastructure.Services
                 .FirstOrDefaultAsync();
 
             if (tier == null)
-                throw new InvalidOperationException("Weight tier is missing for selected route and chargeable weight");
+                throw new InvalidOperationException(BuildChargeableWeightErrorMessage(order, chargeableWeight, volumetricWeight));
 
             var routeDestinationCoordinates = await _locationService.GetCoordinatesAsync($"{route.DestCity}, Vietnam");
             var distanceKm = await _locationService.GetDistanceKmAsync(
@@ -479,7 +491,8 @@ namespace ColdChainX.Infrastructure.Services
                 ["ETD"] = string.Empty,
                 ["ETA"] = order.Route?.TransitTime,
                 ["Cut_Off_Time"] = order.Route?.CutOffTime.ToString(@"hh\:mm", CultureInfo.InvariantCulture),
-                ["Final_Amount"] = quotation.FinalAmount.ToString("N0", CultureInfo.InvariantCulture)
+                ["Base_Freight"] = quotation.BaseFreight.ToString("N0", CultureInfo.InvariantCulture),
+                ["Final_Amount"] = quotation.BaseFreight.ToString("N0", CultureInfo.InvariantCulture)
             };
 
             foreach (var replacement in replacements)
@@ -559,6 +572,8 @@ namespace ColdChainX.Infrastructure.Services
 
         private static QuotationResponse ToQuotationResponse(Quotation quotation)
         {
+            var additionalCharges = DeserializeAdditionalCharges(quotation.AdditionalCharges);
+
             return new QuotationResponse
             {
                 QuoteId = quotation.QuoteId,
@@ -568,6 +583,15 @@ namespace ColdChainX.Infrastructure.Services
                 CustomerName = quotation.Order?.Customer?.CompanyName,
                 BaseFreight = quotation.BaseFreight,
                 LastMileSurcharge = quotation.LastMileSurcharge,
+                AdditionalCharges = additionalCharges
+                    .Select(c => new QuotationAdditionalChargeResponse
+                    {
+                        Name = c.Name,
+                        Amount = c.Amount,
+                        Note = c.Note
+                    })
+                    .ToArray(),
+                AdditionalChargesTotal = additionalCharges.Sum(c => c.Amount),
                 VatPercentage = quotation.VatPercentage,
                 VatAmount = quotation.VatAmount,
                 FinalAmount = quotation.FinalAmount,
@@ -583,6 +607,52 @@ namespace ColdChainX.Infrastructure.Services
                 Status = quotation.Status,
                 CreatedAt = quotation.CreatedAt
             };
+        }
+
+        private static IReadOnlyCollection<QuotationAdditionalCharge>? NormalizeAdditionalCharges(
+            IReadOnlyCollection<QuotationAdditionalChargeRequest>? charges)
+        {
+            if (charges == null || charges.Count == 0)
+                return Array.Empty<QuotationAdditionalCharge>();
+
+            var normalized = new List<QuotationAdditionalCharge>();
+            foreach (var charge in charges)
+            {
+                var name = charge.Name?.Trim();
+                if (string.IsNullOrWhiteSpace(name) || charge.Amount < 0)
+                    return null;
+
+                normalized.Add(new QuotationAdditionalCharge(
+                    name,
+                    charge.Amount,
+                    string.IsNullOrWhiteSpace(charge.Note) ? null : charge.Note.Trim()));
+            }
+
+            return normalized;
+        }
+
+        private static string? SerializeAdditionalCharges(IReadOnlyCollection<QuotationAdditionalCharge> charges)
+        {
+            return charges.Count == 0 ? null : JsonSerializer.Serialize(charges);
+        }
+
+        private static IReadOnlyCollection<QuotationAdditionalCharge> DeserializeAdditionalCharges(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return Array.Empty<QuotationAdditionalCharge>();
+
+            try
+            {
+                var charges = JsonSerializer.Deserialize<List<QuotationAdditionalCharge>>(value);
+                if (charges == null)
+                    return Array.Empty<QuotationAdditionalCharge>();
+
+                return charges;
+            }
+            catch (JsonException)
+            {
+                return Array.Empty<QuotationAdditionalCharge>();
+            }
         }
 
         private static DateTime DbNow()
@@ -606,5 +676,25 @@ namespace ColdChainX.Infrastructure.Services
             decimal ChargeableWeightKg,
             string OriginCity,
             string DestinationCity);
+
+        private sealed record QuotationAdditionalCharge(string Name, decimal Amount, string? Note);
+
+        private static string BuildChargeableWeightErrorMessage(
+            TransportOrder order,
+            decimal chargeableWeight,
+            decimal volumetricWeight)
+        {
+            return "Hệ thống phát hiện kích thước Dài x Rộng x Cao và số lượng của bạn quá lớn so với trọng lượng thực tế "
+                   + $"({FormatKg(order.ExpectedWeightKg)}kg), dẫn đến trọng lượng quy đổi lên tới {FormatKg(volumetricWeight)}kg "
+                   + $"và trọng lượng tính cước là {FormatKg(chargeableWeight)}kg. "
+                   + "Bạn vui lòng kiểm tra lại đã nhập đúng kích thước theo đơn vị Centimet (CM) chưa nhé. "
+                   + "Nếu kích thước bạn nhập là chính xác, đơn hàng này cần được vận chuyển theo hình thức Bao Nguyên Xe (FTL). "
+                   + "Vui lòng liên hệ Hotline/Sales để được báo giá riêng.";
+        }
+
+        private static string FormatKg(decimal value)
+        {
+            return value.ToString("#,##0.##", CultureInfo.GetCultureInfo("vi-VN"));
+        }
     }
 }

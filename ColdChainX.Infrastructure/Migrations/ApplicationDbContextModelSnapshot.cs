@@ -91,6 +91,55 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.ToTable("alert_logs", "public");
                 });
 
+            modelBuilder.Entity("ColdChainX.Core.Entities.ChatMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<bool>("IsRead")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_read");
+
+                    b.Property<string>("MessageContent")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("message_content");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_id");
+
+                    b.Property<Guid>("ReceiverId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("receiver_id");
+
+                    b.Property<Guid>("SenderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("sender_id");
+
+                    b.HasKey("Id")
+                        .HasName("chat_messages_pkey");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("ReceiverId");
+
+                    b.HasIndex("SenderId");
+
+                    b.ToTable("chat_messages", "public");
+                });
+
             modelBuilder.Entity("ColdChainX.Core.Entities.Claim", b =>
                 {
                     b.Property<Guid>("ClaimId")
@@ -294,6 +343,10 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("customer_id");
 
+                    b.Property<string>("DraftHtmlContent")
+                        .HasColumnType("text")
+                        .HasColumnName("draft_html_content");
+
                     b.Property<DateOnly>("ExpiredDate")
                         .HasColumnType("date")
                         .HasColumnName("expired_date");
@@ -304,9 +357,22 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("file_url");
 
-                    b.Property<DateOnly>("SignedDate")
+                    b.Property<Guid?>("OrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_id");
+
+                    b.Property<DateTime?>("SentAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("sent_at");
+
+                    b.Property<DateOnly?>("SignedDate")
                         .HasColumnType("date")
                         .HasColumnName("signed_date");
+
+                    b.Property<string>("SignedFileUrl")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("signed_file_url");
 
                     b.Property<string>("Status")
                         .ValueGeneratedOnAdd()
@@ -315,10 +381,24 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("status")
                         .HasDefaultValueSql("'ACTIVE'::character varying");
 
+                    b.Property<DateTime?>("UploadedSignedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("uploaded_signed_at");
+
+                    b.Property<DateTime?>("VerifiedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("verified_at");
+
+                    b.Property<Guid?>("VerifiedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("verified_by");
+
                     b.HasKey("ContractId")
                         .HasName("customer_contracts_pkey");
 
                     b.HasIndex("CustomerId");
+
+                    b.HasIndex("OrderId");
 
                     b.HasIndex(new[] { "ContractNumber" }, "customer_contracts_contract_number_key")
                         .IsUnique();
@@ -425,16 +505,16 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("date")
                         .HasColumnName("date_of_birth");
 
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_id");
-
                     b.Property<string>("Status")
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
                         .HasColumnName("status")
                         .HasDefaultValueSql("'AVAILABLE'::character varying");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
 
                     b.HasKey("DriverId")
                         .HasName("drivers_pkey");
@@ -700,6 +780,59 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.HasIndex("LocationId");
 
                     b.ToTable("geo_fences", "public");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.InboundAsn", b =>
+                {
+                    b.Property<Guid>("AsnId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("asn_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("AsnCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("asn_code");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_id");
+
+                    b.Property<string>("QrCodeValue")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("qr_code_value");
+
+                    b.Property<DateTime>("RequestedDropoffTime")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("requested_dropoff_time");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'SCHEDULED'::character varying");
+
+                    b.HasKey("AsnId")
+                        .HasName("inbound_asn_pkey");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex(new[] { "AsnCode" }, "inbound_asn_asn_code_key")
+                        .IsUnique();
+
+                    b.ToTable("inbound_asn", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.IncidentReport", b =>
@@ -1348,6 +1481,21 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("date")
                         .HasColumnName("effective_date");
 
+                    b.Property<decimal?>("MaxValue")
+                        .HasPrecision(12, 4)
+                        .HasColumnType("numeric(12,4)")
+                        .HasColumnName("max_value");
+
+                    b.Property<decimal?>("MinCharge")
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("min_charge");
+
+                    b.Property<decimal?>("MinValue")
+                        .HasPrecision(12, 4)
+                        .HasColumnType("numeric(12,4)")
+                        .HasColumnName("min_value");
+
                     b.Property<string>("OriginCity")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -1384,11 +1532,26 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("numeric(15,2)")
                         .HasColumnName("base_freight");
 
+                    b.Property<decimal?>("ChargeableWeightKg")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("chargeable_weight_kg");
+
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<decimal?>("DistanceKm")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("distance_km");
+
+                    b.Property<string>("FileUrl")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("file_url");
 
                     b.Property<decimal>("FinalAmount")
                         .HasPrecision(15, 2)
@@ -1402,15 +1565,45 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("last_mile_surcharge")
                         .HasDefaultValueSql("0");
 
+                    b.Property<decimal?>("ManualAdjustment")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("manual_adjustment")
+                        .HasDefaultValueSql("0");
+
                     b.Property<Guid?>("OrderId")
                         .HasColumnType("uuid")
                         .HasColumnName("order_id");
+
+                    b.Property<string>("OverrideReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("override_reason");
+
+                    b.Property<decimal?>("PricePerKg")
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("price_per_kg");
+
+                    b.Property<string>("PricingSource")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("pricing_source")
+                        .HasDefaultValueSql("'AUTO'::character varying");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
                         .HasColumnName("status");
+
+                    b.Property<decimal?>("SystemBaseFreight")
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("system_base_freight");
 
                     b.Property<decimal?>("VasAmount")
                         .ValueGeneratedOnAdd()
@@ -1423,6 +1616,18 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasPrecision(15, 2)
                         .HasColumnType("numeric(15,2)")
                         .HasColumnName("vat_amount");
+
+                    b.Property<decimal?>("VatPercentage")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("vat_percentage")
+                        .HasDefaultValueSql("8");
+
+                    b.Property<decimal?>("VolumetricWeightKg")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("volumetric_weight_kg");
 
                     b.HasKey("QuoteId")
                         .HasName("quotations_pkey");
@@ -1509,18 +1714,11 @@ namespace ColdChainX.Infrastructure.Migrations
 
             modelBuilder.Entity("ColdChainX.Core.Entities.Role", b =>
                 {
-                    b.Property<int>("Id")
+                    b.Property<Guid>("RoleId")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime?>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                        .HasColumnType("uuid")
+                        .HasColumnName("role_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<string>("Description")
                         .HasMaxLength(255)
@@ -1533,13 +1731,114 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("role_name");
 
-                    b.HasKey("Id")
+                    b.HasKey("RoleId")
                         .HasName("roles_pkey");
 
                     b.HasIndex(new[] { "RoleName" }, "roles_role_name_key")
                         .IsUnique();
 
                     b.ToTable("roles", "public");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.RouteMaster", b =>
+                {
+                    b.Property<Guid>("RouteId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("route_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<TimeSpan>("CutOffTime")
+                        .HasColumnType("time without time zone")
+                        .HasColumnName("cut_off_time");
+
+                    b.Property<string>("DestCity")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("dest_city");
+
+                    b.Property<string>("OriginCity")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("origin_city");
+
+                    b.Property<string>("RouteCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("route_code");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'ACTIVE'::character varying");
+
+                    b.Property<string>("TransitTime")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("transit_time");
+
+                    b.HasKey("RouteId")
+                        .HasName("route_master_pkey");
+
+                    b.HasIndex(new[] { "RouteCode" }, "route_master_route_code_key")
+                        .IsUnique();
+
+                    b.ToTable("route_master", "public");
+
+                    b.HasData(
+                        new
+                        {
+                            RouteId = new Guid("10000000-0000-0000-0000-000000000001"),
+                            CutOffTime = new TimeSpan(0, 17, 0, 0, 0),
+                            DestCity = "Dak Lak",
+                            OriginCity = "HCM",
+                            RouteCode = "HCM-DAKLAK",
+                            Status = "ACTIVE",
+                            TransitTime = "1 - 1.5 ngay"
+                        },
+                        new
+                        {
+                            RouteId = new Guid("10000000-0000-0000-0000-000000000002"),
+                            CutOffTime = new TimeSpan(0, 18, 0, 0, 0),
+                            DestCity = "Can Tho",
+                            OriginCity = "HCM",
+                            RouteCode = "HCM-CANTHO",
+                            Status = "ACTIVE",
+                            TransitTime = "1 ngay"
+                        },
+                        new
+                        {
+                            RouteId = new Guid("10000000-0000-0000-0000-000000000003"),
+                            CutOffTime = new TimeSpan(0, 16, 0, 0, 0),
+                            DestCity = "Da Nang",
+                            OriginCity = "HCM",
+                            RouteCode = "HCM-DANANG",
+                            Status = "ACTIVE",
+                            TransitTime = "2 - 3 ngay"
+                        },
+                        new
+                        {
+                            RouteId = new Guid("10000000-0000-0000-0000-000000000004"),
+                            CutOffTime = new TimeSpan(0, 15, 0, 0, 0),
+                            DestCity = "Ha Noi",
+                            OriginCity = "HCM",
+                            RouteCode = "HCM-HANOI",
+                            Status = "ACTIVE",
+                            TransitTime = "3 - 4 ngay"
+                        });
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.Seal", b =>
@@ -1609,6 +1908,56 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.HasIndex("TripId");
 
                     b.ToTable("seals", "public");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.SystemConfig", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("key");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("value");
+
+                    b.HasKey("Id")
+                        .HasName("system_configs_pkey");
+
+                    b.HasIndex(new[] { "Key" }, "system_configs_key_key")
+                        .IsUnique();
+
+                    b.ToTable("system_configs", "public");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("20000000-0000-0000-0000-000000000001"),
+                            Description = "Last-mile surcharge price per kilometer",
+                            Key = "PricePerKm",
+                            Value = "15000"
+                        },
+                        new
+                        {
+                            Id = new Guid("20000000-0000-0000-0000-000000000002"),
+                            Description = "CBM to volumetric kilogram conversion rate",
+                            Key = "VolumetricConversionRate",
+                            Value = "250"
+                        });
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.TelemetryLog", b =>
@@ -1791,9 +2140,27 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("master_trip_id");
 
+                    b.Property<string>("PackingType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("packing_type")
+                        .HasDefaultValueSql("'Thùng'::character varying");
+
                     b.Property<Guid?>("PickupLocation")
                         .HasColumnType("uuid")
                         .HasColumnName("pickup_location");
+
+                    b.Property<int>("Quantity")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("quantity");
+
+                    b.Property<Guid?>("RouteId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("route_id");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -1814,7 +2181,7 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("tracking_code");
 
                     b.HasKey("OrderId")
-                        .HasName("transport_order_pkey");
+                        .HasName("transport_orders_pkey");
 
                     b.HasIndex("CustomerId");
 
@@ -1824,10 +2191,12 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.HasIndex("PickupLocation");
 
-                    b.HasIndex(new[] { "TrackingCode" }, "transport_order_tracking_code_key")
+                    b.HasIndex("RouteId");
+
+                    b.HasIndex(new[] { "TrackingCode" }, "transport_orders_tracking_code_key")
                         .IsUnique();
 
-                    b.ToTable("transport_order", "public");
+                    b.ToTable("transport_orders", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.TripStop", b =>
@@ -1930,11 +2299,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("password_hash");
 
-                    b.Property<string>("Phone")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("phone");
-
                     b.Property<string>("RefreshToken")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
@@ -1944,8 +2308,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("refresh_token_expiry_time");
 
-                    b.Property<int?>("RoleId")
-                        .HasColumnType("integer")
+                    b.Property<Guid?>("RoleId")
+                        .HasColumnType("uuid")
                         .HasColumnName("role_id");
 
                     b.Property<string>("Status")
@@ -2329,10 +2693,143 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.ToTable("warehouse_receipt_items", "public");
                 });
 
+            modelBuilder.Entity("ColdChainX.Core.Entities.WeightTier", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<decimal?>("MaxWeightKg")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("max_weight_kg");
+
+                    b.Property<decimal>("MinWeightKg")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("min_weight_kg");
+
+                    b.Property<decimal>("PricePerKg")
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("price_per_kg");
+
+                    b.Property<Guid>("RouteId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("route_id");
+
+                    b.HasKey("Id")
+                        .HasName("weight_tiers_pkey");
+
+                    b.HasIndex("RouteId");
+
+                    b.ToTable("weight_tiers", "public");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000001"),
+                            MaxWeightKg = 100m,
+                            MinWeightKg = 30m,
+                            PricePerKg = 9000m,
+                            RouteId = new Guid("10000000-0000-0000-0000-000000000004")
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000002"),
+                            MaxWeightKg = 500m,
+                            MinWeightKg = 100m,
+                            PricePerKg = 7500m,
+                            RouteId = new Guid("10000000-0000-0000-0000-000000000004")
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000003"),
+                            MaxWeightKg = 1000m,
+                            MinWeightKg = 500m,
+                            PricePerKg = 6000m,
+                            RouteId = new Guid("10000000-0000-0000-0000-000000000004")
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000004"),
+                            MaxWeightKg = 1500m,
+                            MinWeightKg = 1000m,
+                            PricePerKg = 5000m,
+                            RouteId = new Guid("10000000-0000-0000-0000-000000000004")
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000005"),
+                            MaxWeightKg = 100m,
+                            MinWeightKg = 30m,
+                            PricePerKg = 7000m,
+                            RouteId = new Guid("10000000-0000-0000-0000-000000000003")
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000006"),
+                            MaxWeightKg = 500m,
+                            MinWeightKg = 100m,
+                            PricePerKg = 5500m,
+                            RouteId = new Guid("10000000-0000-0000-0000-000000000003")
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000007"),
+                            MaxWeightKg = 1000m,
+                            MinWeightKg = 500m,
+                            PricePerKg = 4000m,
+                            RouteId = new Guid("10000000-0000-0000-0000-000000000003")
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000008"),
+                            MaxWeightKg = 1500m,
+                            MinWeightKg = 1000m,
+                            PricePerKg = 3500m,
+                            RouteId = new Guid("10000000-0000-0000-0000-000000000003")
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000009"),
+                            MaxWeightKg = 100m,
+                            MinWeightKg = 30m,
+                            PricePerKg = 4500m,
+                            RouteId = new Guid("10000000-0000-0000-0000-000000000002")
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000010"),
+                            MaxWeightKg = 500m,
+                            MinWeightKg = 100m,
+                            PricePerKg = 3500m,
+                            RouteId = new Guid("10000000-0000-0000-0000-000000000002")
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000011"),
+                            MaxWeightKg = 1000m,
+                            MinWeightKg = 500m,
+                            PricePerKg = 2500m,
+                            RouteId = new Guid("10000000-0000-0000-0000-000000000002")
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000012"),
+                            MaxWeightKg = 1500m,
+                            MinWeightKg = 1000m,
+                            PricePerKg = 2000m,
+                            RouteId = new Guid("10000000-0000-0000-0000-000000000002")
+                        });
+                });
+
             modelBuilder.Entity("RolePermission", b =>
                 {
-                    b.Property<int>("RoleId")
-                        .HasColumnType("integer")
+                    b.Property<Guid>("RoleId")
+                        .HasColumnType("uuid")
                         .HasColumnName("role_id");
 
                     b.Property<Guid>("PermId")
@@ -2362,6 +2859,36 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.Navigation("ResolvedByNavigation");
 
                     b.Navigation("Trip");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.ChatMessage", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.TransportOrder", "Order")
+                        .WithMany("ChatMessages")
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_chat_order");
+
+                    b.HasOne("ColdChainX.Core.Entities.User", "Receiver")
+                        .WithMany()
+                        .HasForeignKey("ReceiverId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_chat_receiver");
+
+                    b.HasOne("ColdChainX.Core.Entities.User", "Sender")
+                        .WithMany()
+                        .HasForeignKey("SenderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_chat_sender");
+
+                    b.Navigation("Order");
+
+                    b.Navigation("Receiver");
+
+                    b.Navigation("Sender");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.Claim", b =>
@@ -2413,7 +2940,14 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasForeignKey("CustomerId")
                         .HasConstraintName("fk_cc_customers");
 
+                    b.HasOne("ColdChainX.Core.Entities.TransportOrder", "Order")
+                        .WithMany("CustomerContracts")
+                        .HasForeignKey("OrderId")
+                        .HasConstraintName("fk_cc_orders");
+
                     b.Navigation("Customer");
+
+                    b.Navigation("Order");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.DeliveryEpod", b =>
@@ -2489,6 +3023,18 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasConstraintName("fk_geo_locations");
 
                     b.Navigation("Location");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.InboundAsn", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.TransportOrder", "Order")
+                        .WithMany("InboundAsns")
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_asn_order");
+
+                    b.Navigation("Order");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.IncidentReport", b =>
@@ -2762,6 +3308,11 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasForeignKey("PickupLocation")
                         .HasConstraintName("fk_to_pickup");
 
+                    b.HasOne("ColdChainX.Core.Entities.RouteMaster", "Route")
+                        .WithMany("TransportOrders")
+                        .HasForeignKey("RouteId")
+                        .HasConstraintName("fk_to_route");
+
                     b.Navigation("Customer");
 
                     b.Navigation("DestLocationNavigation");
@@ -2769,6 +3320,8 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.Navigation("MasterTrip");
 
                     b.Navigation("PickupLocationNavigation");
+
+                    b.Navigation("Route");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.TripStop", b =>
@@ -2844,6 +3397,18 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasConstraintName("fk_wri_wr");
 
                     b.Navigation("Receipt");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.WeightTier", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.RouteMaster", "Route")
+                        .WithMany("WeightTiers")
+                        .HasForeignKey("RouteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_weight_tiers_route");
+
+                    b.Navigation("Route");
                 });
 
             modelBuilder.Entity("RolePermission", b =>
@@ -2958,6 +3523,13 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.Navigation("Users");
                 });
 
+            modelBuilder.Entity("ColdChainX.Core.Entities.RouteMaster", b =>
+                {
+                    b.Navigation("TransportOrders");
+
+                    b.Navigation("WeightTiers");
+                });
+
             modelBuilder.Entity("ColdChainX.Core.Entities.TransportDocument", b =>
                 {
                     b.Navigation("ClaimEvidences");
@@ -2965,9 +3537,15 @@ namespace ColdChainX.Infrastructure.Migrations
 
             modelBuilder.Entity("ColdChainX.Core.Entities.TransportOrder", b =>
                 {
+                    b.Navigation("ChatMessages");
+
                     b.Navigation("Claims");
 
+                    b.Navigation("CustomerContracts");
+
                     b.Navigation("DeliveryEpods");
+
+                    b.Navigation("InboundAsns");
 
                     b.Navigation("InvoiceLines");
 

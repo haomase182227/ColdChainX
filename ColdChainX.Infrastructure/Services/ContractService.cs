@@ -40,8 +40,51 @@ namespace ColdChainX.Infrastructure.Services
             _hubContext = hubContext;
         }
 
+        public async Task<ApiResponse<ContractInfoResponse>> GetContractByIdAsync(Guid contractId)
+        {
+            var contract = await _db.CustomerContracts
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => c.ContractId == contractId);
+
+            if (contract == null)
+                return ApiResponse<ContractInfoResponse>.Failure("Contract not found");
+
+            return ApiResponse<ContractInfoResponse>.SuccessResponse(
+                ToContractInfoResponse(contract),
+                "Contract retrieved successfully");
+        }
+
+        public async Task<ApiResponse<string>> GetContractHtmlAsync(Guid contractId)
+        {
+            var html = await _db.CustomerContracts
+                .AsNoTracking()
+                .Where(c => c.ContractId == contractId)
+                .Select(c => c.DraftHtmlContent)
+                .FirstOrDefaultAsync();
+
+            if (html == null)
+                return ApiResponse<string>.Failure("Contract not found");
+
+            if (string.IsNullOrWhiteSpace(html))
+                return ApiResponse<string>.Failure("Contract has no HTML draft content yet");
+
+            return ApiResponse<string>.SuccessResponse(html, "Contract HTML retrieved successfully");
+        }
+
         public async Task<ApiResponse<string>> PreviewContractAsync(Guid orderId)
         {
+            var existingContract = await _db.CustomerContracts
+                .AsNoTracking()
+                .Where(c => c.OrderId == orderId)
+                .OrderByDescending(c => c.CreatedAt)
+                .ThenByDescending(c => c.SentAt)
+                .FirstOrDefaultAsync();
+
+            if (IsValidHtml(existingContract?.DraftHtmlContent))
+                return ApiResponse<string>.SuccessResponse(
+                    existingContract!.DraftHtmlContent!,
+                    "Edited contract preview retrieved");
+
             var data = await LoadContractDataAsync(orderId);
             if (data == null)
                 return ApiResponse<string>.Failure("Order, customer, or accepted quotation was not found");
@@ -131,8 +174,8 @@ namespace ColdChainX.Infrastructure.Services
 
         public async Task<ApiResponse<GenerateContractResponse>> UpdateContractDraftAsync(Guid contractId, UpdateContractDraftRequest request, Guid salesUserId)
         {
-            if (!IsValidHtml(request.DraftHtmlContent))
-                return ApiResponse<GenerateContractResponse>.Failure("DraftHtmlContent must be valid HTML");
+            if (!IsValidHtml(request.EditedHtmlContent))
+                return ApiResponse<GenerateContractResponse>.Failure("EditedHtmlContent must be valid HTML");
 
             var contract = await _db.CustomerContracts.FirstOrDefaultAsync(c => c.ContractId == contractId);
             if (contract == null)
@@ -141,14 +184,14 @@ namespace ColdChainX.Infrastructure.Services
                 && !string.Equals(contract.Status, PendingSignature, StringComparison.OrdinalIgnoreCase))
                 return ApiResponse<GenerateContractResponse>.Failure("Only draft contracts can be edited");
 
-            contract.DraftHtmlContent = request.DraftHtmlContent;
+            contract.DraftHtmlContent = request.EditedHtmlContent;
             contract.Status = Draft;
             await _db.SaveChangesAsync();
 
             return ApiResponse<GenerateContractResponse>.SuccessResponse(ToGenerateContractResponse(contract), "Contract draft updated");
         }
 
-        public async Task<ApiResponse<GenerateContractResponse>> SendContractAsync(Guid contractId, Guid salesUserId)
+        public async Task<ApiResponse<ContractInfoResponse>> SendContractAsync(Guid contractId, Guid salesUserId)
         {
             var contract = await _db.CustomerContracts
                 .Include(c => c.Order)
@@ -162,14 +205,14 @@ namespace ColdChainX.Infrastructure.Services
                 .FirstOrDefaultAsync(c => c.ContractId == contractId);
 
             if (contract?.Order == null)
-                return ApiResponse<GenerateContractResponse>.Failure("Contract/order not found");
+                return ApiResponse<ContractInfoResponse>.Failure("Contract/order not found");
             if (!string.Equals(contract.Status, Draft, StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(contract.Status, PendingSignature, StringComparison.OrdinalIgnoreCase))
-                return ApiResponse<GenerateContractResponse>.Failure("Only draft contracts can be sent");
+                return ApiResponse<ContractInfoResponse>.Failure("Only draft contracts can be sent");
 
             var data = await LoadContractDataAsync(contract.Order.OrderId);
             if (data == null)
-                return ApiResponse<GenerateContractResponse>.Failure("Order, customer, or accepted quotation was not found");
+                return ApiResponse<ContractInfoResponse>.Failure("Order, customer, or accepted quotation was not found");
 
             var html = IsValidHtml(contract.DraftHtmlContent)
                 ? contract.DraftHtmlContent!
@@ -199,32 +242,33 @@ namespace ColdChainX.Infrastructure.Services
                 contract.Order.OrderId
             });
 
-            return ApiResponse<GenerateContractResponse>.SuccessResponse(ToGenerateContractResponse(contract), "Contract sent to customer");
+            return ApiResponse<ContractInfoResponse>.SuccessResponse(ToContractInfoResponse(contract), "Contract sent to customer");
         }
 
-        public async Task<ApiResponse<GenerateContractResponse>> UploadSignedContractAsync(Guid contractId, UploadSignedContractRequest request, Guid customerId)
+        public async Task<ApiResponse<UploadSignedContractResponse>> UploadSignedContractAsync(Guid contractId, UploadSignedContractRequest request, Guid customerId, string baseUrl)
         {
             if (request.SignedFile == null || request.SignedFile.Length == 0)
-                return ApiResponse<GenerateContractResponse>.Failure("SignedFile is required");
+                return ApiResponse<UploadSignedContractResponse>.Failure("SignedFile is required");
             if (request.SignedFile.Length > 10 * 1024 * 1024)
-                return ApiResponse<GenerateContractResponse>.Failure("SignedFile must be smaller than 10MB");
+                return ApiResponse<UploadSignedContractResponse>.Failure("SignedFile must be smaller than 10MB");
 
             var extension = Path.GetExtension(request.SignedFile.FileName).ToLowerInvariant();
             var allowed = new[] { ".pdf", ".png", ".jpg", ".jpeg" };
             if (!allowed.Contains(extension))
-                return ApiResponse<GenerateContractResponse>.Failure("SignedFile must be PDF, PNG, JPG, or JPEG");
+                return ApiResponse<UploadSignedContractResponse>.Failure("SignedFile must be PDF, PNG, JPG, or JPEG");
 
             var contract = await _db.CustomerContracts
                 .Include(c => c.Order)
                 .FirstOrDefaultAsync(c => c.ContractId == contractId);
             if (contract?.Order == null)
-                return ApiResponse<GenerateContractResponse>.Failure("Contract/order not found");
+                return ApiResponse<UploadSignedContractResponse>.Failure("Contract/order not found");
             if (contract.CustomerId != customerId)
-                return ApiResponse<GenerateContractResponse>.Failure("CustomerId does not match contract");
+                return ApiResponse<UploadSignedContractResponse>.Failure("CustomerId does not match contract");
             if (!string.Equals(contract.Status, PendingCustomerSignature, StringComparison.OrdinalIgnoreCase))
-                return ApiResponse<GenerateContractResponse>.Failure("Contract is not waiting for customer signature");
+                return ApiResponse<UploadSignedContractResponse>.Failure("Contract is not waiting for customer signature");
 
-            contract.SignedFileUrl = await SaveSignedContractFileAsync(request.SignedFile, contract.ContractNumber);
+            // Lưu file và ghi full URL vào DB (bao gồm scheme + host)
+            contract.SignedFileUrl = await SaveSignedContractFileAsync(request.SignedFile, contract.ContractNumber, baseUrl);
             contract.UploadedSignedAt = DbNow();
             contract.Status = PendingSalesVerification;
 
@@ -238,11 +282,22 @@ namespace ColdChainX.Infrastructure.Services
                 contract.SignedFileUrl
             });
 
-            return ApiResponse<GenerateContractResponse>.SuccessResponse(ToGenerateContractResponse(contract), "Signed contract uploaded");
+            return ApiResponse<UploadSignedContractResponse>.SuccessResponse(
+                new UploadSignedContractResponse
+                {
+                    ContractId = contract.ContractId,
+                    OrderId = contract.OrderId ?? Guid.Empty,
+                    ContractNumber = contract.ContractNumber,
+                    SignedFileUrl = contract.SignedFileUrl,
+                    UploadedSignedAt = contract.UploadedSignedAt,
+                    Status = contract.Status ?? string.Empty
+                },
+                "Signed contract uploaded");
         }
 
         public async Task<ApiResponse<ApproveContractResponse>> VerifyContractAsync(Guid contractId, Guid salesUserId)
         {
+            // Pre-check trước khi vào transaction
             var contract = await _db.CustomerContracts
                 .Include(c => c.Order)
                 .FirstOrDefaultAsync(c => c.ContractId == contractId);
@@ -252,38 +307,43 @@ namespace ColdChainX.Infrastructure.Services
             if (!string.Equals(contract.Status, PendingSalesVerification, StringComparison.OrdinalIgnoreCase))
                 return ApiResponse<ApproveContractResponse>.Failure("Contract is not pending sales verification");
 
-            await using var transaction = await _db.Database.BeginTransactionAsync();
-
-            var trackingCode = await GenerateUniqueTrackingCodeAsync();
-            contract.Status = Active;
-            contract.VerifiedAt = DbNow();
-            contract.VerifiedBy = salesUserId;
-            contract.SignedDate = DateOnly.FromDateTime(DateTime.UtcNow);
-            contract.Order.TrackingCode = trackingCode;
-            contract.Order.Status = ContractSigned;
-
-            await AddRequiredTransportDocumentsAsync(contract.Order.OrderId, salesUserId, includeInternalTransfer: false);
-
-            await _db.SaveChangesAsync();
-            await transaction.CommitAsync();
-
-            await _hubContext.Clients.Group("Group_Sales").SendAsync("ContractVerified", new
+            // Bọc transaction trong ExecutionStrategy để tương thích với NpgsqlRetryingExecutionStrategy
+            var strategy = _db.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
             {
-                contract.ContractId,
-                contract.Order.OrderId,
-                TrackingCode = trackingCode
+                await using var transaction = await _db.Database.BeginTransactionAsync();
+
+                var trackingCode = await GenerateUniqueTrackingCodeAsync();
+                contract.Status = Active;
+                contract.VerifiedAt = DbNow();
+                contract.VerifiedBy = salesUserId;
+                contract.SignedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+                contract.Order.TrackingCode = trackingCode;
+                contract.Order.Status = ContractSigned;
+
+                await AddRequiredTransportDocumentsAsync(contract.Order.OrderId, salesUserId, includeInternalTransfer: false);
+
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                await _hubContext.Clients.Group("Group_Sales").SendAsync("ContractVerified", new
+                {
+                    contract.ContractId,
+                    contract.Order.OrderId,
+                    TrackingCode = trackingCode
+                });
+
+                return ApiResponse<ApproveContractResponse>.SuccessResponse(new ApproveContractResponse
+                {
+                    ContractId = contract.ContractId,
+                    OrderId = contract.Order.OrderId,
+                    ContractNumber = contract.ContractNumber,
+                    ContractStatus = contract.Status!,
+                    OrderStatus = contract.Order.Status,
+                    TrackingCode = trackingCode,
+                    SignedDate = contract.SignedDate
+                }, "Contract verified and tracking code issued");
             });
-
-            return ApiResponse<ApproveContractResponse>.SuccessResponse(new ApproveContractResponse
-            {
-                ContractId = contract.ContractId,
-                OrderId = contract.Order.OrderId,
-                ContractNumber = contract.ContractNumber,
-                ContractStatus = contract.Status!,
-                OrderStatus = contract.Order.Status,
-                TrackingCode = trackingCode,
-                SignedDate = contract.SignedDate
-            }, "Contract verified and tracking code issued");
         }
 
         public async Task<ApiResponse<ApproveContractResponse>> ApproveContractAsync(Guid contractId, Guid customerId)
@@ -566,7 +626,7 @@ namespace ColdChainX.Infrastructure.Services
             }
         }
 
-        private async Task<string> SaveSignedContractFileAsync(IFormFile file, string contractNumber)
+        private async Task<string> SaveSignedContractFileAsync(IFormFile file, string contractNumber, string baseUrl)
         {
             var root = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot");
             var folder = Path.Combine(root, "contracts", "signed");
@@ -581,7 +641,25 @@ namespace ColdChainX.Infrastructure.Services
                 await file.CopyToAsync(stream);
             }
 
-            return $"/contracts/signed/{fileName}";
+            // Lưu full URL vào DB để frontend có thể dùng trực tiếp
+            var relativePath = $"/contracts/signed/{fileName}";
+            return $"{baseUrl.TrimEnd('/')}{relativePath}";
+        }
+
+        private static ContractInfoResponse ToContractInfoResponse(CustomerContract contract)
+        {
+            return new ContractInfoResponse
+            {
+                ContractId = contract.ContractId,
+                OrderId = contract.OrderId ?? Guid.Empty,
+                ContractNumber = contract.ContractNumber,
+                FileUrl = contract.FileUrl,
+                SignedFileUrl = contract.SignedFileUrl,
+                SentAt = contract.SentAt,
+                UploadedSignedAt = contract.UploadedSignedAt,
+                VerifiedAt = contract.VerifiedAt,
+                Status = contract.Status ?? string.Empty
+            };
         }
 
         private static GenerateContractResponse ToGenerateContractResponse(CustomerContract contract)
@@ -592,6 +670,11 @@ namespace ColdChainX.Infrastructure.Services
                 OrderId = contract.OrderId ?? Guid.Empty,
                 ContractNumber = contract.ContractNumber,
                 FileUrl = contract.FileUrl,
+                DraftHtmlContent = contract.DraftHtmlContent,
+                SignedFileUrl = contract.SignedFileUrl,
+                SentAt = contract.SentAt,
+                UploadedSignedAt = contract.UploadedSignedAt,
+                VerifiedAt = contract.VerifiedAt,
                 Status = contract.Status ?? string.Empty
             };
         }

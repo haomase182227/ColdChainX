@@ -334,8 +334,8 @@ public partial class ApplicationDbContext : DbContext
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("sent_at");
             entity.Property(e => e.Status)
-                .HasMaxLength(20)
-                .HasDefaultValueSql("'ACTIVE'::character varying")
+                .HasMaxLength(50)
+                .HasDefaultValueSql("'DRAFT'::character varying")
                 .HasColumnName("status");
             entity.Property(e => e.UploadedSignedAt)
                 .HasColumnType("timestamp without time zone")
@@ -1127,6 +1127,9 @@ public partial class ApplicationDbContext : DbContext
                 .HasPrecision(15, 2)
                 .HasDefaultValueSql("0")
                 .HasColumnName("manual_adjustment");
+            entity.Property(e => e.AdditionalCharges)
+                .HasColumnType("jsonb")
+                .HasColumnName("additional_charges");
             entity.Property(e => e.OrderId).HasColumnName("order_id");
             entity.Property(e => e.OverrideReason)
                 .HasMaxLength(500)

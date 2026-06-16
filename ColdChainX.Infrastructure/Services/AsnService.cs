@@ -38,10 +38,12 @@ namespace ColdChainX.Infrastructure.Services
                 return ApiResponse<AsnResponse>.Failure("Order has no selected route");
 
             var requestedDropoff = DateTime.SpecifyKind(request.RequestedDropoffTime, DateTimeKind.Unspecified);
-            if (requestedDropoff.TimeOfDay > order.Route.CutOffTime)
+            var latestDropoffTime = order.Route.CutOffTime.Subtract(TimeSpan.FromHours(2));
+            
+            if (requestedDropoff.TimeOfDay > latestDropoffTime)
             {
                 return ApiResponse<AsnResponse>.Failure(
-                    $"Requested_Dropoff_Time must be before or equal to route cut-off time {order.Route.CutOffTime:hh\\:mm\\:ss}");
+                    $"Requested_Dropoff_Time must be at least 2 hours before the route cut-off time ({order.Route.CutOffTime:hh\\:mm\\:ss}). Latest allowed drop-off time is {latestDropoffTime:hh\\:mm\\:ss}");
             }
 
             var asnCode = await GenerateUniqueAsnCodeAsync();

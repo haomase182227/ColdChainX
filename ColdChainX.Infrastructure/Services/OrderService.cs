@@ -334,7 +334,7 @@ namespace ColdChainX.Infrastructure.Services
                 .FirstOrDefaultAsync();
 
             if (tier == null)
-                throw new InvalidOperationException("Weight tier is missing for selected route and chargeable weight");
+                throw new InvalidOperationException(BuildChargeableWeightErrorMessage(order, chargeableWeight, volumetricWeight));
 
             var routeDestinationCoordinates = await _locationService.GetCoordinatesAsync($"{route.DestCity}, Vietnam");
             var distanceKm = await _locationService.GetDistanceKmAsync(
@@ -438,7 +438,8 @@ namespace ColdChainX.Infrastructure.Services
                 ["ETD"] = string.Empty,
                 ["ETA"] = order.Route?.TransitTime,
                 ["Cut_Off_Time"] = order.Route?.CutOffTime.ToString(@"hh\:mm", CultureInfo.InvariantCulture),
-                ["Final_Amount"] = quotation.FinalAmount.ToString("N0", CultureInfo.InvariantCulture)
+                ["Base_Freight"] = quotation.BaseFreight.ToString("N0", CultureInfo.InvariantCulture),
+                ["Final_Amount"] = quotation.BaseFreight.ToString("N0", CultureInfo.InvariantCulture)
             };
 
             foreach (var replacement in replacements)
@@ -608,5 +609,23 @@ namespace ColdChainX.Infrastructure.Services
             decimal ChargeableWeightKg,
             string OriginCity,
             string DestinationCity);
+
+        private static string BuildChargeableWeightErrorMessage(
+            TransportOrder order,
+            decimal chargeableWeight,
+            decimal volumetricWeight)
+        {
+            return "Hệ thống phát hiện kích thước Dài x Rộng x Cao và số lượng của bạn quá lớn so với trọng lượng thực tế "
+                   + $"({FormatKg(order.ExpectedWeightKg)}kg), dẫn đến trọng lượng quy đổi lên tới {FormatKg(volumetricWeight)}kg "
+                   + $"và trọng lượng tính cước là {FormatKg(chargeableWeight)}kg. "
+                   + "Bạn vui lòng kiểm tra lại đã nhập đúng kích thước theo đơn vị Centimet (CM) chưa nhé. "
+                   + "Nếu kích thước bạn nhập là chính xác, đơn hàng này cần được vận chuyển theo hình thức Bao Nguyên Xe (FTL). "
+                   + "Vui lòng liên hệ Hotline/Sales để được báo giá riêng.";
+        }
+
+        private static string FormatKg(decimal value)
+        {
+            return value.ToString("#,##0.##", CultureInfo.GetCultureInfo("vi-VN"));
+        }
     }
 }

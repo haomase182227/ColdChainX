@@ -9,6 +9,8 @@ namespace ColdChainX.Application.DTOs.Quotations
         public string? CustomerName { get; set; }
         public decimal BaseFreight { get; set; }
         public decimal? LastMileSurcharge { get; set; }
+        public IReadOnlyCollection<QuotationAdditionalChargeResponse> AdditionalCharges { get; set; } = Array.Empty<QuotationAdditionalChargeResponse>();
+        public decimal AdditionalChargesTotal { get; set; }
         public decimal? VatPercentage { get; set; }
         public decimal VatAmount { get; set; }
         public decimal FinalAmount { get; set; }
@@ -23,5 +25,12 @@ namespace ColdChainX.Application.DTOs.Quotations
         public string? FileUrl { get; set; }
         public string Status { get; set; } = null!;
         public DateTime? CreatedAt { get; set; }
+    }
+
+    public class QuotationAdditionalChargeResponse
+    {
+        public string Name { get; set; } = null!;
+        public decimal Amount { get; set; }
+        public string? Note { get; set; }
     }
 }

@@ -33,6 +33,8 @@ public partial class Quotation
 
     public decimal? ManualAdjustment { get; set; }
 
+    public string? AdditionalCharges { get; set; }
+
     public string? OverrideReason { get; set; }
 
     public string PricingSource { get; set; } = null!;
