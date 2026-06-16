@@ -10,6 +10,9 @@ namespace ColdChainX.Application.Interfaces
         Task<ApiResponse<QuotationResponse>> GetQuotationByIdAsync(Guid quoteId);
         Task<ApiResponse<PagedResult<QuotationResponse>>> GetQuotationsByOrderAsync(Guid orderId, int pageNumber, int pageSize);
         Task<ApiResponse<QuotationResponse>> CreateQuotationAsync(CreateQuotationRequest request, Guid salesUserId);
+        Task<ApiResponse<QuotationResponse>> GenerateAutoQuotationAsync(Guid orderId);
+        Task<ApiResponse<QuotationResponse>> EditQuotationAsync(Guid quoteId, EditQuotationRequest request, Guid salesUserId);
+        Task<ApiResponse<QuotationResponse>> SendQuotationAsync(Guid quoteId, Guid salesUserId);
         Task<ApiResponse<AcceptQuotationResponse>> AcceptQuotationAsync(Guid quoteId, AcceptQuotationRequest request);
     }
 }

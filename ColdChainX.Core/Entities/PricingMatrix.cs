@@ -15,5 +15,11 @@ public partial class PricingMatrix
 
     public decimal UnitPrice { get; set; }
 
+    public decimal? MinValue { get; set; }
+
+    public decimal? MaxValue { get; set; }
+
+    public decimal? MinCharge { get; set; }
+
     public DateOnly EffectiveDate { get; set; }
 }
