@@ -13,6 +13,16 @@ namespace ColdChainX.Infrastructure.Migrations
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.Sql("""
+DO $$
+BEGIN
+    IF to_regclass('public.transport_order') IS NOT NULL
+       AND to_regclass('public.transport_orders') IS NULL THEN
+        ALTER TABLE public.transport_order RENAME TO transport_orders;
+    END IF;
+END $$;
+""");
+
             migrationBuilder.CreateTable(
                 name: "route_master",
                 columns: table => new

@@ -13,8 +13,6 @@ namespace ColdChainX.Infrastructure.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.Sql("""
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
 CREATE OR REPLACE FUNCTION public._coldchainx_repair_order_fk(
     p_table_name text,
     p_constraint_name text,
@@ -154,6 +152,71 @@ ALTER TABLE public.weight_tiers
     REFERENCES public.route_master(route_id)
     ON DELETE CASCADE;
 
+ALTER TABLE public.customer_contracts
+    ALTER COLUMN signed_date DROP NOT NULL;
+
+ALTER TABLE public.customer_contracts
+    ADD COLUMN IF NOT EXISTS order_id uuid;
+
+CREATE INDEX IF NOT EXISTS ix_customer_contracts_order_id
+    ON public.customer_contracts(order_id);
+
+ALTER TABLE public.customer_contracts DROP CONSTRAINT IF EXISTS fk_cc_orders;
+ALTER TABLE public.customer_contracts
+    ADD CONSTRAINT fk_cc_orders
+    FOREIGN KEY (order_id)
+    REFERENCES public.transport_orders(order_id)
+    ON DELETE SET NULL;
+
+ALTER TABLE public.transport_orders
+    ADD COLUMN IF NOT EXISTS quantity integer NOT NULL DEFAULT 1;
+
+ALTER TABLE public.transport_orders
+    ADD COLUMN IF NOT EXISTS packing_type varchar(50) NOT NULL DEFAULT 'Thung';
+
+ALTER TABLE public.quotations
+    ADD COLUMN IF NOT EXISTS file_url varchar(255);
+
+ALTER TABLE public.drivers
+    ADD COLUMN IF NOT EXISTS user_id uuid;
+
+ALTER TABLE public.locations
+    DROP COLUMN IF EXISTS location_name;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'roles'
+          AND column_name = 'id'
+    ) THEN
+        ALTER TABLE public.users DROP CONSTRAINT IF EXISTS fk_users_roles;
+        DROP TABLE IF EXISTS public.role_permissions CASCADE;
+        ALTER TABLE public.roles DROP CONSTRAINT IF EXISTS roles_pkey;
+        ALTER TABLE public.roles ADD COLUMN IF NOT EXISTS role_id uuid DEFAULT gen_random_uuid();
+        UPDATE public.roles SET role_id = gen_random_uuid() WHERE role_id IS NULL;
+        ALTER TABLE public.roles ALTER COLUMN role_id SET NOT NULL;
+        ALTER TABLE public.roles DROP COLUMN IF EXISTS id;
+        ALTER TABLE public.roles ADD CONSTRAINT roles_pkey PRIMARY KEY (role_id);
+        ALTER TABLE public.users DROP COLUMN IF EXISTS role_id;
+        ALTER TABLE public.users ADD COLUMN role_id uuid;
+        ALTER TABLE public.users
+            ADD CONSTRAINT fk_users_roles
+            FOREIGN KEY (role_id)
+            REFERENCES public.roles(role_id);
+
+        CREATE TABLE public.role_permissions (
+            role_id uuid NOT NULL,
+            perm_id uuid NOT NULL,
+            CONSTRAINT role_permissions_pkey PRIMARY KEY (role_id, perm_id),
+            CONSTRAINT fk_rp_roles FOREIGN KEY (role_id) REFERENCES public.roles(role_id),
+            CONSTRAINT fk_rp_perms FOREIGN KEY (perm_id) REFERENCES public.permissions(perm_id)
+        );
+    END IF;
+END $$;
+
 INSERT INTO public.weight_tiers (id, route_id, min_weight_kg, max_weight_kg, price_per_kg)
 VALUES
     ('30000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000004', 30, 100, 9000),
@@ -193,20 +256,43 @@ SELECT '40000000-0000-0000-0000-000000000004', 'Driver', 'Driver account'
 WHERE NOT EXISTS (SELECT 1 FROM public.roles WHERE role_name = 'Driver');
 
 INSERT INTO public.roles (role_id, role_name, description)
-SELECT '40000000-0000-0000-0000-000000000005', 'Manager', 'Operation manager'
-WHERE NOT EXISTS (SELECT 1 FROM public.roles WHERE role_name = 'Manager');
+SELECT '40000000-0000-0000-0000-000000000005', 'Dispatcher', 'Container dispatcher'
+WHERE NOT EXISTS (SELECT 1 FROM public.roles WHERE role_name = 'Dispatcher');
 
-INSERT INTO public.warehouses (warehouse_id, warehouse_name, address, max_pallets, current_pallets, status, created_at)
-VALUES
-    ('50000000-0000-0000-0000-000000000001', 'Cold Hub HCM', 'Khu Cong Nghe Cao, TP. Thu Duc, TP. HCM', 1000, 0, 'ACTIVE', CURRENT_TIMESTAMP),
-    ('50000000-0000-0000-0000-000000000002', 'Cold Hub Can Tho', 'Ninh Kieu, Can Tho', 500, 0, 'ACTIVE', CURRENT_TIMESTAMP),
-    ('50000000-0000-0000-0000-000000000003', 'Cold Hub Da Nang', 'Hai Chau, Da Nang', 700, 0, 'ACTIVE', CURRENT_TIMESTAMP),
-    ('50000000-0000-0000-0000-000000000004', 'Cold Hub Ha Noi', 'Long Bien, Ha Noi', 900, 0, 'ACTIVE', CURRENT_TIMESTAMP)
-ON CONFLICT (warehouse_id) DO UPDATE
-SET warehouse_name = EXCLUDED.warehouse_name,
-    address = EXCLUDED.address,
-    max_pallets = EXCLUDED.max_pallets,
-    status = EXCLUDED.status;
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'warehouses'
+          AND column_name = 'warehouse_code'
+    ) THEN
+        INSERT INTO public.warehouses (warehouse_id, warehouse_code, warehouse_name, address, max_pallets, current_pallets, status, created_at)
+        VALUES
+            ('50000000-0000-0000-0000-000000000001', 'WH-HCM', 'Cold Hub HCM', 'Khu Cong Nghe Cao, TP. Thu Duc, TP. HCM', 1000, 0, 'ACTIVE', CURRENT_TIMESTAMP),
+            ('50000000-0000-0000-0000-000000000002', 'WH-CT', 'Cold Hub Can Tho', 'Ninh Kieu, Can Tho', 500, 0, 'ACTIVE', CURRENT_TIMESTAMP),
+            ('50000000-0000-0000-0000-000000000003', 'WH-DN', 'Cold Hub Da Nang', 'Hai Chau, Da Nang', 700, 0, 'ACTIVE', CURRENT_TIMESTAMP),
+            ('50000000-0000-0000-0000-000000000004', 'WH-HN', 'Cold Hub Ha Noi', 'Long Bien, Ha Noi', 900, 0, 'ACTIVE', CURRENT_TIMESTAMP)
+        ON CONFLICT (warehouse_id) DO UPDATE
+        SET warehouse_name = EXCLUDED.warehouse_name,
+            address = EXCLUDED.address,
+            max_pallets = EXCLUDED.max_pallets,
+            status = EXCLUDED.status;
+    ELSE
+        INSERT INTO public.warehouses (warehouse_id, warehouse_name, address, max_pallets, current_pallets, status, created_at)
+        VALUES
+            ('50000000-0000-0000-0000-000000000001', 'Cold Hub HCM', 'Khu Cong Nghe Cao, TP. Thu Duc, TP. HCM', 1000, 0, 'ACTIVE', CURRENT_TIMESTAMP),
+            ('50000000-0000-0000-0000-000000000002', 'Cold Hub Can Tho', 'Ninh Kieu, Can Tho', 500, 0, 'ACTIVE', CURRENT_TIMESTAMP),
+            ('50000000-0000-0000-0000-000000000003', 'Cold Hub Da Nang', 'Hai Chau, Da Nang', 700, 0, 'ACTIVE', CURRENT_TIMESTAMP),
+            ('50000000-0000-0000-0000-000000000004', 'Cold Hub Ha Noi', 'Long Bien, Ha Noi', 900, 0, 'ACTIVE', CURRENT_TIMESTAMP)
+        ON CONFLICT (warehouse_id) DO UPDATE
+        SET warehouse_name = EXCLUDED.warehouse_name,
+            address = EXCLUDED.address,
+            max_pallets = EXCLUDED.max_pallets,
+            status = EXCLUDED.status;
+    END IF;
+END $$;
 
 INSERT INTO public.system_configs (key, value, description)
 VALUES

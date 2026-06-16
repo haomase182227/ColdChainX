@@ -566,7 +566,7 @@ namespace ColdChainX.Infrastructure.Services
                 .Where(u => u.Role != null
                             && (u.Role.RoleName.ToLower() == "sales"
                                 || u.Role.RoleName.ToLower() == "admin"
-                                || u.Role.RoleName.ToLower() == "manager"))
+                                || u.Role.RoleName.ToLower() == "dispatcher"))
                 .Select(u => (Guid?)u.UserId)
                 .FirstOrDefaultAsync();
         }

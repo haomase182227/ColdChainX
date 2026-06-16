@@ -52,7 +52,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("generate")]
-        [Authorize(Roles = "Sales,Admin,Manager")]
+        [Authorize(Roles = "Sales,Admin,Dispatcher")]
         public async Task<IActionResult> GenerateContract([FromBody] GenerateContractRequest request)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -66,7 +66,7 @@ namespace ColdChainX.API.Controllers
 
         [HttpPut("{contractId:guid}")]
         [Consumes("application/json", "text/html", "text/plain")]
-        [Authorize(Roles = "Sales,Admin,Manager")]
+        [Authorize(Roles = "Sales,Admin,Dispatcher")]
         public async Task<IActionResult> UpdateContractDraft(Guid contractId)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -245,7 +245,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("{contractId:guid}/send")]
-        [Authorize(Roles = "Sales,Admin,Manager")]
+        [Authorize(Roles = "Sales,Admin,Dispatcher")]
         public async Task<IActionResult> SendContract(Guid contractId)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -272,7 +272,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("{contractId:guid}/verify")]
-        [Authorize(Roles = "Sales,Admin,Manager")]
+        [Authorize(Roles = "Sales,Admin,Dispatcher")]
         public async Task<IActionResult> VerifyContract(Guid contractId)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;

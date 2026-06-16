@@ -47,7 +47,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("{orderId:guid}/review")]
-        [Authorize(Roles = "Sales,Admin,Manager")]
+        [Authorize(Roles = "Sales,Admin,Dispatcher")]
         public async Task<IActionResult> ReviewOrder(Guid orderId, [FromBody] ReviewOrderRequest request)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;

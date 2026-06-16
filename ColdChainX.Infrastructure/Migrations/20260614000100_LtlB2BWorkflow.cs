@@ -13,8 +13,6 @@ namespace ColdChainX.Infrastructure.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.Sql("""
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
 ALTER TABLE public.route_master
     ADD COLUMN IF NOT EXISTS transit_time varchar(50);
 

@@ -119,11 +119,10 @@ SELECT v.role_name, v.description
 FROM (
     VALUES
         ('Admin', 'System administrator'),
-        ('Manager', 'Operations manager'),
         ('Customer', 'Customer account'),
         ('Driver', 'Driver account'),
         ('Dispatcher', 'Container dispatcher'),
-        ('Sale', 'Take care customer')
+        ('Sales', 'Sales staff')
 ) AS v(role_name, description)
 WHERE NOT EXISTS (
     SELECT 1
