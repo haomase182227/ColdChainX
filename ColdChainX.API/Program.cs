@@ -1,3 +1,4 @@
+using System;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,6 +14,8 @@ using ColdChainX.API.Swagger;
 using ColdChainX.API.Workers;
 using ColdChainX.Infrastructure.Hubs;
 using System.Threading.Channels;
+
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
 var builder = WebApplication.CreateBuilder(args);
 DotEnvLoader.Load(Path.Combine(builder.Environment.ContentRootPath, ".env"));
