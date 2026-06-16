@@ -15,6 +15,7 @@ namespace ColdChainX.Application.Interfaces
         Task<ApiResponse<bool>> LogoutAsync(Guid userId);
         Task<ApiResponse<UserProfileDto>> UpdateUserAsync(Guid userId, UpdateUserRequest request);
         Task<ApiResponse<bool>> SoftDeleteUserAsync(Guid targetUserId);
+        Task<ApiResponse<DriverDto>> UpdateDriverAsync(Guid driverId, UpdateDriverInfoRequest request);
         Task<ApiResponse<List<RoleDto>>> GetAllRolesAsync();
     }
 }
