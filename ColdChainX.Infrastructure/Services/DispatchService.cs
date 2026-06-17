@@ -651,7 +651,7 @@ public class DispatchService : IDispatchService
         await _context.SaveChangesAsync();
     }
 
-    public async Task IssueDispatchDocumentsAsync(Guid tripId)
+    public async Task IssueDispatchDocumentsAsync(Guid tripId, Guid? issuerId = null)
     {
         var trip = await _context.MasterTrips
             .Include(t => t.TransportOrders)
@@ -665,7 +665,7 @@ public class DispatchService : IDispatchService
             ImageUrl  = $"https://coldchainx.com/docs/ewaybill/{tripId}.pdf",
             Status    = "ISSUED",
             CreatedAt = DateTime.UtcNow,
-            UploadedBy = trip.DriverId ?? Guid.Empty
+            UploadedBy = trip.DriverId ?? issuerId ?? Guid.Empty
         });
 
         trip.Status = "DISPATCHED";

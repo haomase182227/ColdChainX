@@ -205,7 +205,20 @@ public class DispatchController : ControllerBase
     {
         try
         {
-            var plan = await _dispatchService.SuggestLoadPlanAsync(request.OrderIds, request.VehicleId);
+            var rawVehicleId = ExtractGuid(request.VehicleId);
+            if (!Guid.TryParse(rawVehicleId, out var vehicleId))
+                return BadRequest(new { Success = false, Error = "VehicleId không hợp lệ." });
+
+            var orderIds = new List<Guid>();
+            foreach (var raw in request.OrderIds)
+            {
+                var rawOrderId = ExtractGuid(raw);
+                if (!Guid.TryParse(rawOrderId, out var oid))
+                    return BadRequest(new { Success = false, Error = $"OrderId không hợp lệ: {raw}" });
+                orderIds.Add(oid);
+            }
+
+            var plan = await _dispatchService.SuggestLoadPlanAsync(orderIds, vehicleId);
             return Ok(new { Success = true, Plan = plan });
         }
         catch (InvalidOperationException ex)
@@ -220,11 +233,15 @@ public class DispatchController : ControllerBase
 
     /// <summary>[Legacy] Tính route và LIFO cho Trip đã tạo sẵn.</summary>
     [HttpPost("route-lifo/{tripId}")]
-    public async Task<IActionResult> CalculateRouteAndLIFO(Guid tripId)
+    public async Task<IActionResult> CalculateRouteAndLIFO(string tripId)
     {
         try
         {
-            await _dispatchService.CalculateRouteAndLIFOAsync(tripId);
+            var rawTripId = ExtractGuid(tripId);
+            if (!Guid.TryParse(rawTripId, out var parsedTripId))
+                return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
+
+            await _dispatchService.CalculateRouteAndLIFOAsync(parsedTripId);
             return Ok(new { Success = true, Message = "Route calculated and LIFO stops planned." });
         }
         catch (Exception ex)
@@ -235,15 +252,19 @@ public class DispatchController : ControllerBase
 
     /// <summary>Đóng hàng và kẹp chì niêm phong.</summary>
     [HttpPost("seal/{tripId}")]
-    public async Task<IActionResult> SealTruck(Guid tripId, [FromBody] SealRequest request)
+    public async Task<IActionResult> SealTruck(string tripId, [FromBody] SealRequest request)
     {
         try
         {
+            var rawTripId = ExtractGuid(tripId);
+            if (!Guid.TryParse(rawTripId, out var parsedTripId))
+                return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
+
             // Lấy userId từ JWT claim
             var keeperIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
             var keeperId = keeperIdClaim != null ? Guid.Parse(keeperIdClaim) : Guid.NewGuid();
 
-            await _dispatchService.SealTruckAsync(tripId, request.SealCode, keeperId);
+            await _dispatchService.SealTruckAsync(parsedTripId, request.SealCode, keeperId);
             return Ok(new { Success = true, Message = "Truck sealed successfully." });
         }
         catch (Exception ex)
@@ -254,11 +275,18 @@ public class DispatchController : ControllerBase
 
     /// <summary>Cấp giấy đi đường / E-Waybill cho chuyến.</summary>
     [HttpPost("issue-documents/{tripId}")]
-    public async Task<IActionResult> IssueDocuments(Guid tripId)
+    public async Task<IActionResult> IssueDocuments(string tripId)
     {
         try
         {
-            await _dispatchService.IssueDispatchDocumentsAsync(tripId);
+            var rawTripId = ExtractGuid(tripId);
+            if (!Guid.TryParse(rawTripId, out var parsedTripId))
+                return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
+
+            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var userId = userIdClaim != null ? Guid.Parse(userIdClaim) : Guid.NewGuid();
+
+            await _dispatchService.IssueDispatchDocumentsAsync(parsedTripId, userId);
             return Ok(new { Success = true, Message = "Dispatch documents issued." });
         }
         catch (Exception ex)
@@ -723,8 +751,8 @@ public class DispatchController : ControllerBase
 /// <summary>Request cho endpoint legacy suggest-load (chỉ dùng Gemini).</summary>
 public class SuggestLoadRequest
 {
-    public List<Guid> OrderIds { get; set; } = new();
-    public Guid VehicleId { get; set; }
+    public List<string> OrderIds { get; set; } = new();
+    public string VehicleId { get; set; } = null!;
 }
 
 public class SealRequest
