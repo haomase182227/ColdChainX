@@ -69,13 +69,6 @@ namespace ColdChainX.API.Swagger
                         .Select(o => $"{o.OrderId}: {o.TrackingCode} — {o.ItemName} | {o.ExpectedWeightKg}kg / {o.ExpectedCbm}m³ ({o.TempCondition})")
                         .ToList();
 
-                    // 4. Dispatchers: Status = ACTIVE and Role is Dispatcher
-                    var dispatchers = db.Users
-                        .Include(u => u.Role)
-                        .Where(u => u.Status == "ACTIVE" && u.Role != null && u.Role.RoleName == "Dispatcher")
-                        .Select(u => $"{u.UserId}: {u.FullName} ({u.Username})")
-                        .ToList();
-
                     // Apply to VehicleId
                     ApplyEnum(mediaType.Schema, "VehicleId", vehicles);
                     ApplyEnum(mediaType.Schema, "vehicleId", vehicles);
@@ -83,10 +76,6 @@ namespace ColdChainX.API.Swagger
                     // Apply to OriginWarehouseLocationId
                     ApplyEnum(mediaType.Schema, "OriginWarehouseLocationId", locations);
                     ApplyEnum(mediaType.Schema, "originWarehouseLocationId", locations);
-
-                    // Apply to DispatchCoordinatorId
-                    ApplyEnum(mediaType.Schema, "DispatchCoordinatorId", dispatchers);
-                    ApplyEnum(mediaType.Schema, "dispatchCoordinatorId", dispatchers);
 
                     // Apply to OrderIds (which is string[] array)
                     ApplyArrayEnum(mediaType.Schema, "OrderIds", orders);

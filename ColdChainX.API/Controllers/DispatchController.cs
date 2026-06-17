@@ -135,10 +135,12 @@ public class DispatchController : ControllerBase
     public async Task<IActionResult> PlanLoad([FromForm] PlanLoadFormRequest form)
     {
         // Chuyển đổi từ form sang PlanLoadRequest
-        if (!Guid.TryParse(form.VehicleId, out var vehicleId))
+        var rawVehicleId = ExtractGuid(form.VehicleId);
+        if (!Guid.TryParse(rawVehicleId, out var vehicleId))
             return BadRequest(new { Success = false, Error = "VehicleId không hợp lệ." });
 
-        if (!Guid.TryParse(form.OriginWarehouseLocationId, out var originLocId))
+        var rawOriginWarehouseLocationId = ExtractGuid(form.OriginWarehouseLocationId);
+        if (!Guid.TryParse(rawOriginWarehouseLocationId, out var originLocId))
             return BadRequest(new { Success = false, Error = "OriginWarehouseLocationId không hợp lệ." });
 
         if (form.OrderIds == null || form.OrderIds.Length == 0)
@@ -147,17 +149,17 @@ public class DispatchController : ControllerBase
         var orderIds = new List<Guid>();
         foreach (var raw in form.OrderIds)
         {
-            if (!Guid.TryParse(raw, out var oid))
+            var rawOrderId = ExtractGuid(raw);
+            if (!Guid.TryParse(rawOrderId, out var oid))
                 return BadRequest(new { Success = false, Error = $"OrderId không hợp lệ: {raw}" });
             orderIds.Add(oid);
         }
 
         Guid? coordinatorId = null;
-        if (!string.IsNullOrWhiteSpace(form.DispatchCoordinatorId))
+        var dispatcherIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!string.IsNullOrEmpty(dispatcherIdClaim) && Guid.TryParse(dispatcherIdClaim, out var parsedId))
         {
-            if (!Guid.TryParse(form.DispatchCoordinatorId, out var cid))
-                return BadRequest(new { Success = false, Error = "DispatchCoordinatorId không hợp lệ." });
-            coordinatorId = cid;
+            coordinatorId = parsedId;
         }
 
         var request = new PlanLoadRequest
@@ -707,6 +709,13 @@ public class DispatchController : ControllerBase
             return StatusCode(500, new { Success = false, Error = ex.Message, Details = ex.InnerException?.Message ?? ex.StackTrace });
         }
     }
+
+    private static string ExtractGuid(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return input;
+        var parts = input.Split(':');
+        return parts[0].Trim();
+    }
 }
 
 // ── Request/Response models ──────────────────────────────────────────────────
@@ -753,10 +762,4 @@ public class PlanLoadFormRequest
 
     /// <summary>Thời gian dự kiến hoàn thành chuyến (ISO 8601, VD: 2026-06-18T18:00:00).</summary>
     public DateTime PlannedEndTime { get; set; }
-
-    /// <summary>
-    /// (Tuỳ chọn) UserId điều phối viên nhận thông báo.
-    /// Để trống → hệ thống tự tìm tất cả Dispatcher.
-    /// </summary>
-    public string? DispatchCoordinatorId { get; set; }
 }
