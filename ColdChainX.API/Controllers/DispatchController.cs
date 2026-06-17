@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using ColdChainX.Application.DTOs.Dispatch;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
+using ColdChainX.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -18,10 +19,98 @@ namespace ColdChainX.API.Controllers;
 public class DispatchController : ControllerBase
 {
     private readonly IDispatchService _dispatchService;
+    private readonly IVehicleService _vehicleService;
+    private readonly IOrderService _orderService;
+    private readonly ApplicationDbContext _db;
 
-    public DispatchController(IDispatchService dispatchService)
+    public DispatchController(
+        IDispatchService dispatchService,
+        IVehicleService vehicleService,
+        IOrderService orderService,
+        ApplicationDbContext db)
     {
         _dispatchService = dispatchService;
+        _vehicleService = vehicleService;
+        _orderService = orderService;
+        _db = db;
+    }
+
+    // ── Lookup endpoints (dùng để populate dropdown trong form) ───────────────
+
+    /// <summary>
+    /// [Lookup] Danh sách xe tải đang ACTIVE — dùng để chọn xe cho plan-load.
+    /// </summary>
+    [HttpGet("lookup/vehicles")]
+    [ProducesResponseType(typeof(object), 200)]
+    public async Task<IActionResult> LookupVehicles()
+    {
+        var result = await _vehicleService.GetAllAsync();
+        var items = result.Data?
+            .Where(v => v.Status == "ACTIVE")
+            .Select(v => new
+            {
+                v.VehicleId,
+                Label      = $"{v.TruckPlate} — {v.VehicleType} | tải {v.MaxWeight}kg / {v.MaxCbm}m³",
+                v.TruckPlate,
+                v.VehicleType,
+                v.MaxWeight,
+                v.MaxCbm,
+                v.MinTemp,
+                v.MaxTemp
+            })
+            .ToList();
+        return Ok(new { Success = true, Data = items });
+    }
+
+    /// <summary>
+    /// [Lookup] Danh sách Location đang ACTIVE — dùng để chọn kho xuất phát.
+    /// </summary>
+    [HttpGet("lookup/locations")]
+    [ProducesResponseType(typeof(object), 200)]
+    public async Task<IActionResult> LookupLocations()
+    {
+        var locations = await _db.Locations
+            .Where(l => l.Status == "ACTIVE")
+            .OrderBy(l => l.Address)
+            .Select(l => new
+            {
+                l.LocationId,
+                Label     = l.Address,
+                l.Address,
+                l.Latitude,
+                l.Longitude
+            })
+            .ToListAsync();
+
+        return Ok(new { Success = true, Data = locations });
+    }
+
+    /// <summary>
+    /// [Lookup] Danh sách đơn hàng đang ở trạng thái IN_WAREHOUSE — dùng để chọn đơn cho plan-load.
+    /// </summary>
+    [HttpGet("lookup/orders-ready")]
+    [ProducesResponseType(typeof(object), 200)]
+    public async Task<IActionResult> LookupOrdersReady()
+    {
+        var orders = await _db.TransportOrders
+            .Where(o => o.Status == "IN_WAREHOUSE")
+            .OrderByDescending(o => o.CreatedAt)
+            .Select(o => new
+            {
+                o.OrderId,
+                Label         = $"{o.TrackingCode} — {o.ItemName} | {o.ExpectedWeightKg}kg / {o.ExpectedCbm}m³ ({o.TempCondition})",
+                o.TrackingCode,
+                o.ItemName,
+                o.Category,
+                o.TempCondition,
+                o.ExpectedWeightKg,
+                o.ExpectedCbm,
+                o.Status,
+                o.CreatedAt
+            })
+            .ToListAsync();
+
+        return Ok(new { Success = true, Count = orders.Count, Data = orders });
     }
 
     /// <summary>
@@ -34,13 +123,53 @@ public class DispatchController : ControllerBase
     /// 4. Tạo MasterTrip + TripStops
     /// 5. Cập nhật trạng thái đơn hàng → LOADING (sinh lệnh điều động)
     /// 6. Gửi thông báo cho Điều phối viên (Dispatcher)
+    ///
+    /// Dùng GET /api/dispatch/lookup/vehicles, /lookup/locations, /lookup/orders-ready
+    /// để lấy danh sách ID hợp lệ trước khi gọi endpoint này.
     /// </summary>
     [HttpPost("plan-load")]
+    [Consumes("multipart/form-data")]
     [ProducesResponseType(typeof(PlanLoadResult), 200)]
     [ProducesResponseType(typeof(object), 400)]
     [ProducesResponseType(typeof(object), 500)]
-    public async Task<IActionResult> PlanLoad([FromBody] PlanLoadRequest request)
+    public async Task<IActionResult> PlanLoad([FromForm] PlanLoadFormRequest form)
     {
+        // Chuyển đổi từ form sang PlanLoadRequest
+        if (!Guid.TryParse(form.VehicleId, out var vehicleId))
+            return BadRequest(new { Success = false, Error = "VehicleId không hợp lệ." });
+
+        if (!Guid.TryParse(form.OriginWarehouseLocationId, out var originLocId))
+            return BadRequest(new { Success = false, Error = "OriginWarehouseLocationId không hợp lệ." });
+
+        if (form.OrderIds == null || form.OrderIds.Length == 0)
+            return BadRequest(new { Success = false, Error = "Phải chọn ít nhất 1 đơn hàng." });
+
+        var orderIds = new List<Guid>();
+        foreach (var raw in form.OrderIds)
+        {
+            if (!Guid.TryParse(raw, out var oid))
+                return BadRequest(new { Success = false, Error = $"OrderId không hợp lệ: {raw}" });
+            orderIds.Add(oid);
+        }
+
+        Guid? coordinatorId = null;
+        if (!string.IsNullOrWhiteSpace(form.DispatchCoordinatorId))
+        {
+            if (!Guid.TryParse(form.DispatchCoordinatorId, out var cid))
+                return BadRequest(new { Success = false, Error = "DispatchCoordinatorId không hợp lệ." });
+            coordinatorId = cid;
+        }
+
+        var request = new PlanLoadRequest
+        {
+            OrderIds                  = orderIds,
+            VehicleId                 = vehicleId,
+            OriginWarehouseLocationId = originLocId,
+            PlannedStartTime          = form.PlannedStartTime,
+            PlannedEndTime            = form.PlannedEndTime,
+            DispatchCoordinatorId     = coordinatorId
+        };
+
         try
         {
             var result = await _dispatchService.PlanLoadFromWarehouseAsync(request);
@@ -592,4 +721,42 @@ public class SuggestLoadRequest
 public class SealRequest
 {
     public string SealCode { get; set; } = null!;
+}
+
+/// <summary>
+/// Form request cho POST /api/dispatch/plan-load (multipart/form-data).
+/// Dùng string thay vì Guid vì HTML form / Swagger chỉ gửi được text.
+/// OrderIds được gửi nhiều lần cùng tên field để chọn nhiều đơn hàng.
+/// </summary>
+public class PlanLoadFormRequest
+{
+    /// <summary>
+    /// Danh sách OrderId (IN_WAREHOUSE). Gửi nhiều lần cùng tên field.
+    /// Dùng GET /api/dispatch/lookup/orders-ready để lấy danh sách.
+    /// </summary>
+    public string[] OrderIds { get; set; } = Array.Empty<string>();
+
+    /// <summary>
+    /// VehicleId xe tải được chỉ định.
+    /// Dùng GET /api/dispatch/lookup/vehicles để lấy danh sách.
+    /// </summary>
+    public string VehicleId { get; set; } = null!;
+
+    /// <summary>
+    /// LocationId kho xuất phát (điểm đầu lộ trình).
+    /// Dùng GET /api/dispatch/lookup/locations để lấy danh sách.
+    /// </summary>
+    public string OriginWarehouseLocationId { get; set; } = null!;
+
+    /// <summary>Thời gian dự kiến xuất phát (ISO 8601, VD: 2026-06-18T06:00:00).</summary>
+    public DateTime PlannedStartTime { get; set; }
+
+    /// <summary>Thời gian dự kiến hoàn thành chuyến (ISO 8601, VD: 2026-06-18T18:00:00).</summary>
+    public DateTime PlannedEndTime { get; set; }
+
+    /// <summary>
+    /// (Tuỳ chọn) UserId điều phối viên nhận thông báo.
+    /// Để trống → hệ thống tự tìm tất cả Dispatcher.
+    /// </summary>
+    public string? DispatchCoordinatorId { get; set; }
 }
