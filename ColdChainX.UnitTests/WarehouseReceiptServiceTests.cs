@@ -576,7 +576,7 @@ namespace ColdChainX.UnitTests
             => Task.FromResult(new List<WarehouseEvidenceAttachment>());
 
         public Task<List<WarehouseEvidenceAttachment>> GetAttachmentsByOutboundOrderIdAsync(Guid outboundOrderId)
-            => Task.FromResult(new List<WarehouseEvidenceAttachment>());
+            => Task.FromResult(Attachments.Where(a => a.OutboundOrderId == outboundOrderId).ToList());
 
         public Task<OutboundOrder?> GetOutboundOrderWithItemsAsync(Guid outboundOrderId)
             => Task.FromResult<OutboundOrder?>(null);
