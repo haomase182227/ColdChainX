@@ -297,6 +297,7 @@ public class DispatchController : ControllerBase
 
     /// <summary>Lấy sơ đồ và thứ tự bốc xếp LIFO của chuyến đi cho nhân viên kho.</summary>
     [HttpGet("load-plan/{tripId}")]
+    [AllowAnonymous]
     [ProducesResponseType(typeof(List<LoadInstruction>), 200)]
     [ProducesResponseType(typeof(object), 400)]
     public async Task<IActionResult> GetLoadPlan(string tripId)
