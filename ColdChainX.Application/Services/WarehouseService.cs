@@ -9,7 +9,7 @@ using ColdChainX.Core.Entities;
 using ColdChainX.Core.Interfaces;
 using ColdChainX.Shared.Responses;
 
-namespace ColdChainX.Infrastructure.Services
+namespace ColdChainX.Application.Services
 {
     public class WarehouseService : IWarehouseService
     {

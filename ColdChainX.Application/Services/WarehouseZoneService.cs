@@ -9,19 +9,22 @@ using ColdChainX.Core.Entities;
 using ColdChainX.Core.Interfaces;
 using ColdChainX.Shared.Responses;
 
-namespace ColdChainX.Infrastructure.Services
+namespace ColdChainX.Application.Services
 {
     public class WarehouseZoneService : IWarehouseZoneService
     {
         private readonly IWarehouseZoneRepository _zoneRepository;
         private readonly IWarehouseRepository _warehouseRepository;
+        private readonly IWarehouseLocationRepository _locationRepository;
 
         public WarehouseZoneService(
             IWarehouseZoneRepository zoneRepository,
-            IWarehouseRepository warehouseRepository)
+            IWarehouseRepository warehouseRepository,
+            IWarehouseLocationRepository locationRepository)
         {
             _zoneRepository = zoneRepository;
             _warehouseRepository = warehouseRepository;
+            _locationRepository = locationRepository;
         }
 
         public async Task<ApiResponse<WarehouseZoneResponse>> CreateAsync(Guid warehouseId, CreateWarehouseZoneRequest request, Guid currentUserId)
@@ -151,9 +154,20 @@ namespace ColdChainX.Infrastructure.Services
             zone.Status = "INACTIVE";
 
             await _zoneRepository.UpdateAsync(zone);
+
+            // Cascading soft-delete locations within this zone
+            var (locations, _) = await _locationRepository.GetListAsync(zoneId, 1, 10000);
+            foreach (var loc in locations)
+            {
+                loc.DeletedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+                loc.DeletedBy = currentUserId;
+                loc.Status = "INACTIVE";
+                await _locationRepository.UpdateAsync(loc);
+            }
+
             await _zoneRepository.SaveChangesAsync();
 
-            return ApiResponse<bool>.SuccessResponse(true, "Warehouse zone soft-deleted successfully.");
+            return ApiResponse<bool>.SuccessResponse(true, "Warehouse zone and its locations soft-deleted successfully.");
         }
 
         public async Task<ApiResponse<WarehouseZoneResponse>> GetByIdAsync(Guid zoneId)
