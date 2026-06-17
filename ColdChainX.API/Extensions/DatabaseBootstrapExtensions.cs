@@ -1,6 +1,8 @@
 using System;
 using System.Threading.Tasks;
 using ColdChainX.Infrastructure.Persistence;
+using ColdChainX.Core.Entities;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -16,6 +18,10 @@ namespace ColdChainX.API.Extensions
 
             try
             {
+                logger.LogInformation("Applying database migrations...");
+                await db.Database.MigrateAsync();
+                logger.LogInformation("Database migrations applied.");
+
                 var sqlRename = @"DO $$
 DECLARE
     colname text;
@@ -84,6 +90,18 @@ BEGIN
         END IF;
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND lower(column_name)='phone') THEN
             EXECUTE 'ALTER TABLE public.users ADD COLUMN phone character varying(20)';
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND lower(column_name)='created_by') THEN
+            EXECUTE 'ALTER TABLE public.users ADD COLUMN created_by uuid';
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND lower(column_name)='updated_by') THEN
+            EXECUTE 'ALTER TABLE public.users ADD COLUMN updated_by uuid';
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND lower(column_name)='deleted_by') THEN
+            EXECUTE 'ALTER TABLE public.users ADD COLUMN deleted_by uuid';
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND lower(column_name)='deleted_at') THEN
+            EXECUTE 'ALTER TABLE public.users ADD COLUMN deleted_at timestamp without time zone';
         END IF;
     END IF;
 END $$;";
@@ -188,6 +206,154 @@ END $$;";
                 logger.LogInformation("Ensuring transport_orders table exists...");
                 await db.Database.ExecuteSqlRawAsync(sqlEnsureTransportOrder);
                 logger.LogInformation("transport_orders table ensured.");
+
+                var sqlSeedDemoData = @"DO $$
+BEGIN
+    -- 1. Seed Customer
+    IF NOT EXISTS (SELECT 1 FROM public.customers WHERE customer_id = 'c7b07384-d113-46c6-950c-619f7e5b32cd') THEN
+        INSERT INTO public.customers (customer_id, company_name, tax_code, email, status, payment_term, created_at)
+        VALUES ('c7b07384-d113-46c6-950c-619f7e5b32cd', 'Vinamilk Corporation', '0313456789', 'info@vinamilk.com', 'ACTIVE', 30, CURRENT_TIMESTAMP);
+    END IF;
+
+    -- 2. Seed Location
+    IF NOT EXISTS (SELECT 1 FROM public.locations WHERE location_id = '17b07384-d113-46c6-950c-619f7e5b32cd') THEN
+        INSERT INTO public.locations (location_id, customer_id, address, latitude, longitude, status, created_at)
+        VALUES ('17b07384-d113-46c6-950c-619f7e5b32cd', 'c7b07384-d113-46c6-950c-619f7e5b32cd', '10 Mai Chi Tho, District 2, Ho Chi Minh City, Vietnam', 10.776, 106.700, 'ACTIVE', CURRENT_TIMESTAMP);
+    END IF;
+
+    -- 3. Seed Warehouse
+    IF NOT EXISTS (SELECT 1 FROM public.warehouses WHERE warehouse_id = '87b07384-d113-46c6-950c-619f7e5b32cd') THEN
+        INSERT INTO public.warehouses (warehouse_id, warehouse_name, address, max_pallets, current_pallets, status, created_at)
+        VALUES ('87b07384-d113-46c6-950c-619f7e5b32cd', 'Hub HCM - Thu Duc', 'Thu Duc, Ho Chi Minh', 100, 0, 'ACTIVE', CURRENT_TIMESTAMP);
+    END IF;
+
+    -- 4. Seed TransportOrder
+    IF NOT EXISTS (SELECT 1 FROM public.transport_orders WHERE order_id = 'd3b07384-d113-46c6-950c-619f7e5b32cd') THEN
+        INSERT INTO public.transport_orders (order_id, tracking_code, customer_id, item_name, category, temp_condition, expected_weight_kg, actual_weight_kg, expected_cbm, actual_cbm, pickup_location, dest_location, cargo_value, status, quantity, packing_type, created_at)
+        VALUES ('d3b07384-d113-46c6-950c-619f7e5b32cd', 'TRK-DEMO-001', 'c7b07384-d113-46c6-950c-619f7e5b32cd', 'Sữa chua Vinamilk', 'Dairy', '4', 100.00, 0.00, 1.50, NULL, NULL, '17b07384-d113-46c6-950c-619f7e5b32cd', 5000000.00, 'ASSIGNED', 10, 'Thung', CURRENT_TIMESTAMP);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM public.transport_orders WHERE order_id = 'd3b07384-d113-46c6-950c-619f7e5b32ce') THEN
+        INSERT INTO public.transport_orders (order_id, tracking_code, customer_id, item_name, category, temp_condition, expected_weight_kg, actual_weight_kg, expected_cbm, actual_cbm, pickup_location, dest_location, cargo_value, status, quantity, packing_type, created_at)
+        VALUES ('d3b07384-d113-46c6-950c-619f7e5b32ce', 'TRK-DEMO-ODOR', 'c7b07384-d113-46c6-950c-619f7e5b32cd', 'Sầu riêng Cái Mơn', 'Durian', '15', 200.00, 0.00, 2.50, NULL, NULL, '17b07384-d113-46c6-950c-619f7e5b32cd', 8000000.00, 'ASSIGNED', 20, 'Thung', CURRENT_TIMESTAMP);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM public.transport_orders WHERE order_id = 'd3b07384-d113-46c6-950c-619f7e5b32cf') THEN
+        INSERT INTO public.transport_orders (order_id, tracking_code, customer_id, item_name, category, temp_condition, expected_weight_kg, actual_weight_kg, expected_cbm, actual_cbm, pickup_location, dest_location, cargo_value, status, quantity, packing_type, created_at)
+        VALUES ('d3b07384-d113-46c6-950c-619f7e5b32cf', 'TRK-DEMO-QCFAIL', 'c7b07384-d113-46c6-950c-619f7e5b32cd', 'Thịt bò Mỹ nhập khẩu', 'Frozen Meat', '-18', 150.00, 0.00, 1.00, NULL, NULL, '17b07384-d113-46c6-950c-619f7e5b32cd', 15000000.00, 'ASSIGNED', 15, 'Thung', CURRENT_TIMESTAMP);
+    END IF;
+
+    -- 5. Seed Pricing Matrices
+    IF NOT EXISTS (SELECT 1 FROM public.pricing_matrix WHERE origin_city = 'Ho Chi Minh' AND dest_city = 'Ho Chi Minh' AND pricing_unit = 'KG') THEN
+        INSERT INTO public.pricing_matrix (price_id, origin_city, dest_city, pricing_unit, unit_price, effective_date)
+        VALUES ('a1b07384-d113-46c6-950c-619f7e5b32cd', 'Ho Chi Minh', 'Ho Chi Minh', 'KG', 1500.00, '2026-01-01');
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM public.pricing_matrix WHERE origin_city = 'Ho Chi Minh' AND dest_city = 'Ho Chi Minh' AND pricing_unit = 'CBM') THEN
+        INSERT INTO public.pricing_matrix (price_id, origin_city, dest_city, pricing_unit, unit_price, effective_date)
+        VALUES ('a2b07384-d113-46c6-950c-619f7e5b32cd', 'Ho Chi Minh', 'Ho Chi Minh', 'CBM', 120000.00, '2026-01-01');
+    END IF;
+
+    -- 6. Seed Quotation
+    IF NOT EXISTS (SELECT 1 FROM public.quotations WHERE order_id = 'd3b07384-d113-46c6-950c-619f7e5b32cd') THEN
+        INSERT INTO public.quotations (quote_id, order_id, base_freight, last_mile_surcharge, vas_amount, vat_amount, final_amount, status, created_at)
+        VALUES ('b7b07384-d113-46c6-950c-619f7e5b32cd', 'd3b07384-d113-46c6-950c-619f7e5b32cd', 150000.00, 0.00, 0.00, 12000.00, 162000.00, 'APPROVED', CURRENT_TIMESTAMP);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM public.quotations WHERE order_id = 'd3b07384-d113-46c6-950c-619f7e5b32ce') THEN
+        INSERT INTO public.quotations (quote_id, order_id, base_freight, last_mile_surcharge, vas_amount, vat_amount, final_amount, status, created_at)
+        VALUES ('b7b07384-d113-46c6-950c-619f7e5b32ce', 'd3b07384-d113-46c6-950c-619f7e5b32ce', 300000.00, 0.00, 0.00, 24000.00, 324000.00, 'APPROVED', CURRENT_TIMESTAMP);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM public.quotations WHERE order_id = 'd3b07384-d113-46c6-950c-619f7e5b32cf') THEN
+        INSERT INTO public.quotations (quote_id, order_id, base_freight, last_mile_surcharge, vas_amount, vat_amount, final_amount, status, created_at)
+        VALUES ('b7b07384-d113-46c6-950c-619f7e5b32cf', 'd3b07384-d113-46c6-950c-619f7e5b32cf', 225000.00, 0.00, 0.00, 18000.00, 243000.00, 'APPROVED', CURRENT_TIMESTAMP);
+    END IF;
+END $$;";
+
+                logger.LogInformation("Seeding demo data for warehouse receipt testing...");
+                await db.Database.ExecuteSqlRawAsync(sqlSeedDemoData);
+                logger.LogInformation("Demo data seeded.");
+
+                // Seed Users using EF Core
+                var hasAnyUser = await db.Users.AnyAsync();
+                if (!hasAnyUser)
+                {
+                    logger.LogInformation("Seeding default users...");
+                    var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>();
+                    
+                    var adminRole = await db.Roles.FirstOrDefaultAsync(r => r.RoleName == "Admin");
+                    var managerRole = await db.Roles.FirstOrDefaultAsync(r => r.RoleName == "Manager");
+                    var customerRole = await db.Roles.FirstOrDefaultAsync(r => r.RoleName == "Customer");
+                    var driverRole = await db.Roles.FirstOrDefaultAsync(r => r.RoleName == "Driver");
+
+                    if (adminRole != null)
+                    {
+                        var admin = new User
+                        {
+                            UserId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                            Username = "admin01",
+                            Email = "admin01@coldchainx.com",
+                            FullName = "System Admin",
+                            RoleId = adminRole.RoleId,
+                            Status = "ACTIVE",
+                            CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
+                        };
+                        admin.PasswordHash = passwordHasher.HashPassword(admin, "Password@123");
+                        db.Users.Add(admin);
+                    }
+
+                    if (managerRole != null)
+                    {
+                        var manager = new User
+                        {
+                            UserId = Guid.Parse("22222222-2222-2222-2222-222222222222"),
+                            Username = "manager01",
+                            Email = "manager01@coldchainx.com",
+                            FullName = "Warehouse Manager",
+                            RoleId = managerRole.RoleId,
+                            Status = "ACTIVE",
+                            CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
+                        };
+                        manager.PasswordHash = passwordHasher.HashPassword(manager, "Password@123");
+                        db.Users.Add(manager);
+                    }
+
+                    if (customerRole != null)
+                    {
+                        var customer = new User
+                        {
+                            UserId = Guid.Parse("33333333-3333-3333-3333-333333333333"),
+                            Username = "customer01",
+                            Email = "customer01@coldchainx.com",
+                            FullName = "Vinamilk Customer",
+                            RoleId = customerRole.RoleId,
+                            Status = "ACTIVE",
+                            CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
+                        };
+                        customer.PasswordHash = passwordHasher.HashPassword(customer, "Password@123");
+                        db.Users.Add(customer);
+                    }
+
+                    if (driverRole != null)
+                    {
+                        var driver = new User
+                        {
+                            UserId = Guid.Parse("44444444-4444-4444-4444-444444444444"),
+                            Username = "driver01",
+                            Email = "driver01@coldchainx.com",
+                            FullName = "Main Driver",
+                            RoleId = driverRole.RoleId,
+                            Status = "ACTIVE",
+                            CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
+                        };
+                        driver.PasswordHash = passwordHasher.HashPassword(driver, "Password@123");
+                        db.Users.Add(driver);
+                    }
+
+                    await db.SaveChangesAsync();
+                    logger.LogInformation("Default users seeded.");
+                }
             }
             catch (Exception ex)
             {

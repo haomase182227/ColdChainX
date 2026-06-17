@@ -81,7 +81,7 @@ namespace ColdChainX.Application.Services
             var refreshToken = _jwtService.GenerateRefreshToken();
 
             user.RefreshToken = refreshToken;
-            user.RefreshTokenExpiryTime = DbNow().AddDays(7);
+            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
 
             await _userRepository.AddAsync(user);
             await _userRepository.SaveChangesAsync();
@@ -113,7 +113,7 @@ namespace ColdChainX.Application.Services
             var refreshToken = _jwtService.GenerateRefreshToken();
 
             user.RefreshToken = refreshToken;
-            user.RefreshTokenExpiryTime = DbNow().AddDays(7);
+            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
 
             await _userRepository.UpdateAsync(user);
             await _userRepository.SaveChangesAsync();
@@ -141,7 +141,7 @@ namespace ColdChainX.Application.Services
             var newRefreshToken = _jwtService.GenerateRefreshToken();
 
             user.RefreshToken = newRefreshToken;
-            user.RefreshTokenExpiryTime = DbNow().AddDays(7);
+            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
 
             await _userRepository.UpdateAsync(user);
             await _userRepository.SaveChangesAsync();
@@ -183,7 +183,7 @@ namespace ColdChainX.Application.Services
             if (!string.IsNullOrWhiteSpace(request.NewPassword))
                 user.PasswordHash = _passwordHasher.HashPassword(user, request.NewPassword);
 
-            user.UpdatedAt = DbNow();
+            user.UpdatedAt = DateTime.UtcNow;
 
             await _userRepository.UpdateAsync(user);
             await _userRepository.SaveChangesAsync();
@@ -203,7 +203,7 @@ namespace ColdChainX.Application.Services
             user.Status = InactiveStatus;
             user.RefreshToken = null;
             user.RefreshTokenExpiryTime = null;
-            user.UpdatedAt = DbNow();
+            user.UpdatedAt = DateTime.UtcNow;
 
             await _userRepository.UpdateAsync(user);
             await _userRepository.SaveChangesAsync();
@@ -257,6 +257,7 @@ namespace ColdChainX.Application.Services
 
             user.PasswordHash = _passwordHasher.HashPassword(user, request.Password);
 
+
             // Create Customer entity with provided information
             var customer = new Customer
             {
@@ -275,7 +276,7 @@ namespace ColdChainX.Application.Services
             var refreshToken = _jwtService.GenerateRefreshToken();
 
             user.RefreshToken = refreshToken;
-            user.RefreshTokenExpiryTime = DbNow().AddDays(7);
+            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
 
             await _userRepository.AddCustomerAsync(customer);
             await _userRepository.AddAsync(user);
@@ -332,9 +333,13 @@ namespace ColdChainX.Application.Services
             var refreshToken = _jwtService.GenerateRefreshToken();
 
             user.RefreshToken = refreshToken;
-            user.RefreshTokenExpiryTime = DbNow().AddDays(7);
+            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
 
-            // Create Driver entity with provided information and link to User account
+            // 1. Save user account first to satisfy foreign key constraints on the drivers table
+            await _userRepository.AddAsync(user);
+            await _userRepository.SaveChangesAsync();
+
+            // 2. Create Driver entity linked to the saved user
             var driver = new Driver
             {
                 DriverId = Guid.NewGuid(),
@@ -346,7 +351,7 @@ namespace ColdChainX.Application.Services
 
             await _driverRepository.AddAsync(driver);
 
-            // Create Driver License if provided
+            // 3. Create Driver License if provided
             if (!string.IsNullOrWhiteSpace(request.LicenseNumber) &&
                 !string.IsNullOrWhiteSpace(request.LicenseClass) &&
                 request.IssueDate.HasValue &&
@@ -368,7 +373,7 @@ namespace ColdChainX.Application.Services
                 await _driverRepository.AddLicenseAsync(license);
             }
 
-            await _userRepository.AddAsync(user);
+            // 4. Save driver and driver license records
             await _userRepository.SaveChangesAsync();
 
             var dto = _mapper.Map<AuthResponseDto>(user);

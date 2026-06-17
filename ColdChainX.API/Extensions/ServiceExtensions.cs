@@ -71,12 +71,21 @@ namespace ColdChainX.API.Extensions
                     errorCodesToAdd: null)));
 
             services.AddScoped<IUserRepository, UserRepository>();
+            services.AddScoped<IWarehouseRepository, WarehouseRepository>();
+            services.AddScoped<IWarehouseZoneRepository, WarehouseZoneRepository>();
+            services.AddScoped<IWarehouseLocationRepository, WarehouseLocationRepository>();
+            services.AddScoped<IWarehouseReceiptRepository, WarehouseReceiptRepository>();
             services.AddScoped<IVehicleRepository, VehicleRepository>();
             services.AddScoped<IDriverRepository, DriverRepository>();
+            services.AddScoped<IWarehouseAttachmentRepository, WarehouseAttachmentRepository>();
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IVehicleService, VehicleService>();
             services.AddScoped<IDriverService, DriverService>();
             services.AddScoped<IJwtService, JwtService>();
+            services.AddScoped<IUserService, UserService>();
+            services.AddScoped<IWarehouseService, WarehouseService>();
+            services.AddScoped<IWarehouseZoneService, WarehouseZoneService>();
+            services.AddScoped<IWarehouseLocationService, WarehouseLocationService>();
             services.AddScoped<ICustomerService, CustomerService>();
             services.AddHttpClient<ILocationService, GoongLocationService>(client =>
             {
@@ -84,6 +93,8 @@ namespace ColdChainX.API.Extensions
                 client.Timeout = TimeSpan.FromSeconds(20);
             });
             services.AddScoped<IFileService, FileService>();
+            services.AddScoped<IAttachmentManagementService, AttachmentManagementService>();
+            services.AddScoped<ComplianceRulesEngine>();
             services.AddScoped<IOrderService, OrderService>();
             services.AddScoped<IQuotationService, QuotationService>();
             services.AddScoped<IRouteService, RouteService>();
@@ -92,6 +103,13 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IContractService, ContractService>();
             services.AddScoped<IChatService, ChatService>();
             services.AddScoped<INotificationService, NotificationService>();
+            services.AddScoped<IWarehouseReceiptService, WarehouseReceiptService>();
+            services.AddScoped<IInventoryService, InventoryService>();
+            services.AddScoped<IOutboundOrderService, OutboundOrderService>();
+            services.AddScoped<IInventoryHoldRepository, InventoryHoldRepository>();
+            services.AddScoped<IInventoryHoldService, InventoryHoldService>();
+            services.AddScoped<ICycleCountRepository, CycleCountRepository>();
+            services.AddScoped<ICycleCountService, CycleCountService>();
             services.AddScoped<IFleetManagementService, FleetManagementService>();
             services.AddHostedService<FleetComplianceWorker>();
             
@@ -155,6 +173,14 @@ namespace ColdChainX.API.Extensions
                         return Task.CompletedTask;
                     }
                 };
+            });
+
+            services.AddAuthorization(options =>
+            {
+                options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
+                options.AddPolicy("ManagerOnly", policy => policy.RequireRole("Manager"));
+                options.AddPolicy("DriverOnly", policy => policy.RequireRole("Driver"));
+                options.AddPolicy("CustomerOnly", policy => policy.RequireRole("Customer"));
             });
 
             return services;

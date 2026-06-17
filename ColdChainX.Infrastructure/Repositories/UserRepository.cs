@@ -33,6 +33,7 @@ namespace ColdChainX.Infrastructure.Repositories
             var normalizedEmail = email.ToLower();
 
             return await _db.Users
+                .IgnoreQueryFilters() // Also check soft-deleted users to prevent email duplication
                 .Include(u => u.Role)
                 .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == normalizedEmail);
         }
@@ -42,6 +43,7 @@ namespace ColdChainX.Infrastructure.Repositories
             var normalizedUsername = username.ToLower();
 
             return await _db.Users
+                .IgnoreQueryFilters() // Also check soft-deleted users to prevent username duplication
                 .Include(u => u.Role)
                 .FirstOrDefaultAsync(u => u.Username.ToLower() == normalizedUsername);
         }
@@ -49,6 +51,7 @@ namespace ColdChainX.Infrastructure.Repositories
         public async Task<User?> GetByIdAsync(Guid id)
         {
             return await _db.Users
+                .IgnoreQueryFilters() // Allow fetching soft-deleted users by ID (required for Restore and Admin detail)
                 .Include(u => u.Role)
                 .FirstOrDefaultAsync(u => u.UserId == id);
         }
@@ -111,6 +114,73 @@ namespace ColdChainX.Infrastructure.Repositories
             return await _db.Users
                 .Include(u => u.Role)
                 .FirstOrDefaultAsync(u => u.RefreshToken == refreshToken);
+        }
+
+        public async Task<List<User>> GetAllAsync()
+        {
+            return await _db.Users
+                .Include(u => u.Role)
+                .ToListAsync();
+        }
+
+        public async Task<(List<User> Items, int TotalCount)> GetPagedAsync(
+            int page,
+            int pageSize,
+            string? search,
+            string? role,
+            ColdChainX.Core.Enums.UserStatus? status,
+            string? sortBy,
+            string? order)
+        {
+            IQueryable<User> query = _db.Users.Include(u => u.Role);
+
+            // If we explicitly search for Inactive/Deleted status, we must ignore the query filter
+            if (status.HasValue && status.Value == ColdChainX.Core.Enums.UserStatus.Inactive)
+            {
+                query = _db.Users.IgnoreQueryFilters()
+                    .Include(u => u.Role)
+                    .Where(u => u.DeletedAt != null || u.Status == "INACTIVE");
+            }
+            else if (status.HasValue && status.Value == ColdChainX.Core.Enums.UserStatus.Active)
+            {
+                query = query.Where(u => u.Status == "ACTIVE");
+            }
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var s = search.Trim().ToLower();
+                query = query.Where(u => u.Username.ToLower().Contains(s)
+                                      || (u.Email != null && u.Email.ToLower().Contains(s))
+                                      || u.FullName.ToLower().Contains(s));
+            }
+
+            if (!string.IsNullOrWhiteSpace(role))
+            {
+                var roleName = role.Trim().ToLower();
+                query = query.Where(u => u.Role != null && u.Role.RoleName.ToLower() == roleName);
+            }
+
+            var totalCount = await query.CountAsync();
+
+            var isDesc = string.Equals(order, "desc", StringComparison.OrdinalIgnoreCase);
+            sortBy = sortBy?.Trim().ToLowerInvariant();
+
+            query = sortBy switch
+            {
+                "username" => isDesc ? query.OrderByDescending(u => u.Username) : query.OrderBy(u => u.Username),
+                "email" => isDesc ? query.OrderByDescending(u => u.Email) : query.OrderBy(u => u.Email),
+                "fullname" => isDesc ? query.OrderByDescending(u => u.FullName) : query.OrderBy(u => u.FullName),
+                "status" => isDesc ? query.OrderByDescending(u => u.Status) : query.OrderBy(u => u.Status),
+                "role" => isDesc ? query.OrderByDescending(u => u.Role != null ? u.Role.RoleName : "") : query.OrderBy(u => u.Role != null ? u.Role.RoleName : ""),
+                "createdat" or _ => isDesc ? query.OrderByDescending(u => u.CreatedAt) : query.OrderBy(u => u.CreatedAt)
+            };
+
+            var items = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return (items, totalCount);
         }
     }
 }

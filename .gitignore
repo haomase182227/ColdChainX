@@ -398,5 +398,8 @@ FodyWeavers.xsd
 *.msp
 
 # JetBrains Rider
-*.sln.iml
 .idea/
+
+# ColdChainX Custom Ignores (Inbound Flow Testing)
+scratch/
+ColdChainX.API/wwwroot/receipts/
