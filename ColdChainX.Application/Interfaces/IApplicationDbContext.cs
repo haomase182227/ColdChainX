@@ -33,8 +33,10 @@ namespace ColdChainX.Application.Interfaces
         DbSet<Quotation> Quotations { get; }
         DbSet<ComplianceZoningRule> ComplianceZoningRules { get; }
         DbSet<AttachmentAuditHistory> AttachmentAuditHistories { get; }
+        DbSet<PricingMatrix> PricingMatrices { get; }
 
         DatabaseFacade Database { get; }
+        Microsoft.EntityFrameworkCore.ChangeTracking.ChangeTracker ChangeTracker { get; }
 
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     }
