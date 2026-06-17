@@ -25,6 +25,8 @@ namespace ColdChainX.Application.Services
         private const decimal LastMileUnitPrice = 15000m;
         private const decimal VatRate = 0.08m;
         private const string DefaultOriginCity = "Ho Chi Minh";
+        private const decimal HubLat = 10.732537m;
+        private const decimal HubLon = 106.732148m;
 
         private readonly IApplicationDbContext _db;
         private readonly IWarehouseReceiptRepository _receiptRepository;
@@ -360,8 +362,8 @@ namespace ColdChainX.Application.Services
                                 baseFreight = MinCharge;
 
                             var distanceKm = await _locationService.GetDistanceKmAsync(
-                                GoongLocationService.HubLat,
-                                GoongLocationService.HubLon,
+                                HubLat,
+                                HubLon,
                                 order.DestLocationNavigation.Latitude,
                                 order.DestLocationNavigation.Longitude);
                             var lastMileSurcharge = distanceKm > LastMileFreeKm
@@ -437,9 +439,12 @@ namespace ColdChainX.Application.Services
                     }
 
                     // Pessimistic Lock on Zone
-                    receivingZone = await _db.WarehouseZones
-                        .FromSqlRaw("SELECT * FROM warehouse_zones WHERE zone_id = {0} FOR UPDATE", receivingZone.ZoneId)
-                        .FirstOrDefaultAsync();
+                    if (_db.Database.IsRelational())
+                    {
+                        receivingZone = await _db.WarehouseZones
+                            .FromSqlRaw("SELECT * FROM warehouse_zones WHERE zone_id = {0} FOR UPDATE", receivingZone.ZoneId)
+                            .FirstOrDefaultAsync();
+                    }
 
                     // Resolve or create RCV-STAGE-01 Location in RECEIVING Zone
                     var receivingLocation = await _db.WarehouseLocations
@@ -462,9 +467,12 @@ namespace ColdChainX.Application.Services
                     }
 
                     // Pessimistic Lock on Location
-                    receivingLocation = await _db.WarehouseLocations
-                        .FromSqlRaw("SELECT * FROM warehouse_locations WHERE location_id = {0} FOR UPDATE", receivingLocation.LocationId)
-                        .FirstOrDefaultAsync();
+                    if (_db.Database.IsRelational())
+                    {
+                        receivingLocation = await _db.WarehouseLocations
+                            .FromSqlRaw("SELECT * FROM warehouse_locations WHERE location_id = {0} FOR UPDATE", receivingLocation.LocationId)
+                            .FirstOrDefaultAsync();
+                    }
 
                     // Perform core temperature QC check again for stock hold determination
                     bool tempPassed = true;
