@@ -9,23 +9,22 @@ using ColdChainX.Application.Interfaces;
 using ColdChainX.Application.DTOs.Inventory;
 using ColdChainX.Shared.Responses;
 using ColdChainX.Application.DTOs.Common;
-using ColdChainX.Infrastructure.Persistence;
 using Microsoft.Extensions.Logging;
 using ColdChainX.Core.Enums;
 using ColdChainX.Application.DTOs.WarehouseReceipt;
 
-namespace ColdChainX.Infrastructure.Services
+namespace ColdChainX.Application.Services
 {
     public class InventoryHoldService : IInventoryHoldService
     {
         private readonly IInventoryHoldRepository _holdRepo;
-        private readonly ApplicationDbContext _db;
+        private readonly IApplicationDbContext _db;
         private readonly IInventoryService _inventoryService;
         private readonly ILogger<InventoryHoldService> _logger;
 
         public InventoryHoldService(
             IInventoryHoldRepository holdRepo, 
-            ApplicationDbContext db, 
+            IApplicationDbContext db, 
             IInventoryService inventoryService, 
             ILogger<InventoryHoldService> logger)
         {
@@ -48,7 +47,7 @@ namespace ColdChainX.Infrastructure.Services
                     var isOuterTransaction = _db.Database.CurrentTransaction == null;
                     using var transaction = isOuterTransaction ? await _db.Database.BeginTransactionAsync() : null;
                     try
-                    {
+                      {
                         var stock = await _db.InventoryStocks
                             .Include(s => s.Location)
                             .FirstOrDefaultAsync(s => s.StockId == dto.StockId);
@@ -200,13 +199,32 @@ namespace ColdChainX.Infrastructure.Services
                         if (stock == null)
                             return ApiResponse<bool>.Failure("Held stock record not found.");
 
-                        // Revert Status back to AVAILABLE
-                        stock.Status = "AVAILABLE";
+                        // Check if other active holds exist for this stock record
+                        var otherActiveHoldsExist = await _db.InventoryHolds
+                            .AnyAsync(h => h.StockId == stock.StockId && h.HoldId != holdId && h.Status == "HOLD");
+
+                        if (otherActiveHoldsExist)
+                        {
+                            // Keep status as HOLD
+                            stock.Status = "HOLD";
+                            
+                            // If user requested relocation, block it
+                            if (dto.TargetReleaseLocationId.HasValue && dto.TargetReleaseLocationId.Value != stock.LocationId)
+                            {
+                                return ApiResponse<bool>.Failure("Cannot relocate stock out of quarantine because other active holds exist on this stock.");
+                            }
+                        }
+                        else
+                        {
+                            // Revert Status back to AVAILABLE since no other active holds exist
+                            stock.Status = "AVAILABLE";
+                        }
+
                         stock.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
                         stock.UpdatedBy = userId;
 
                         // Handle Optional Release Relocation (moving stock out of quarantine zone)
-                        if (dto.TargetReleaseLocationId.HasValue && dto.TargetReleaseLocationId.Value != stock.LocationId)
+                        if (!otherActiveHoldsExist && dto.TargetReleaseLocationId.HasValue && dto.TargetReleaseLocationId.Value != stock.LocationId)
                         {
                             var relocateRequest = new StockRelocationRequest
                             {
