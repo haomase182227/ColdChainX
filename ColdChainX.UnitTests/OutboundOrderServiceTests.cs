@@ -90,8 +90,7 @@ namespace ColdChainX.UnitTests
                 ItemName = "Salmon Box",
                 Unit = "BOX",
                 ActualQty = 10m,
-                ProductCategory = ProductCategory.SEAFOOD,
-                Status = "ACTIVE"
+                ProductCategory = ProductCategory.SEAFOOD
             };
             _db.WarehouseReceiptItems.Add(receiptItem);
 
@@ -165,8 +164,7 @@ namespace ColdChainX.UnitTests
                 ItemName = "Salmon Box",
                 Unit = "BOX",
                 ActualQty = 10m,
-                ProductCategory = ProductCategory.SEAFOOD,
-                Status = "ACTIVE"
+                ProductCategory = ProductCategory.SEAFOOD
             };
             _db.WarehouseReceiptItems.Add(receiptItem);
 
