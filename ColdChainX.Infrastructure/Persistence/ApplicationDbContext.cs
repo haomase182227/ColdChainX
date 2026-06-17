@@ -3,10 +3,11 @@ using System.Collections.Generic;
 using ColdChainX.Core.Entities;
 using ColdChainX.Core.Enums;
 using Microsoft.EntityFrameworkCore;
+using ColdChainX.Application.Interfaces;
 
 namespace ColdChainX.Infrastructure.Persistence;
 
-public partial class ApplicationDbContext : DbContext
+public partial class ApplicationDbContext : DbContext, IApplicationDbContext
 {
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)
@@ -113,6 +114,13 @@ public partial class ApplicationDbContext : DbContext
     public virtual DbSet<WarehouseEvidenceAttachment> WarehouseEvidenceAttachments { get; set; }
     public virtual DbSet<AttachmentAuditHistory> AttachmentAuditHistories { get; set; }
     public virtual DbSet<ComplianceZoningRule> ComplianceZoningRules { get; set; }
+
+    public virtual DbSet<RouteMaster> RouteMasters { get; set; }
+    public virtual DbSet<WeightTier> WeightTiers { get; set; }
+    public virtual DbSet<SystemConfig> SystemConfigs { get; set; }
+    public virtual DbSet<InboundAsn> InboundAsns { get; set; }
+    public virtual DbSet<ChatMessage> ChatMessages { get; set; }
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -2696,7 +2704,99 @@ public partial class ApplicationDbContext : DbContext
                 .HasConstraintName("fk_entry_adjustment");
         });
 
+        modelBuilder.Entity<RouteMaster>(entity =>
+        {
+            entity.HasKey(e => e.RouteId).HasName("route_master_pkey");
+            entity.ToTable("route_master", "public");
+            entity.Property(e => e.RouteId).HasColumnName("route_id");
+            entity.Property(e => e.RouteCode).HasColumnName("route_code").HasMaxLength(50);
+            entity.Property(e => e.OriginCity).HasColumnName("origin_city").HasMaxLength(50);
+            entity.Property(e => e.DestCity).HasColumnName("dest_city").HasMaxLength(50);
+            entity.Property(e => e.TransitTime).HasColumnName("transit_time").HasMaxLength(50);
+            entity.Property(e => e.CutOffTime).HasColumnName("cut_off_time");
+            entity.Property(e => e.Status).HasColumnName("status").HasMaxLength(20);
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+        });
+
+        modelBuilder.Entity<WeightTier>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("weight_tiers_pkey");
+            entity.ToTable("weight_tiers", "public");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.RouteId).HasColumnName("route_id");
+            entity.Property(e => e.MinWeightKg).HasColumnName("min_weight_kg");
+            entity.Property(e => e.MaxWeightKg).HasColumnName("max_weight_kg");
+            entity.Property(e => e.PricePerKg).HasColumnName("price_per_kg");
+
+            entity.HasOne(d => d.Route)
+                .WithMany(p => p.WeightTiers)
+                .HasForeignKey(d => d.RouteId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_weight_tiers_route");
+        });
+
+        modelBuilder.Entity<SystemConfig>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("system_configs_pkey");
+            entity.ToTable("system_configs", "public");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Key).HasColumnName("key").HasMaxLength(100);
+            entity.Property(e => e.Value).HasColumnName("value").HasMaxLength(255);
+            entity.Property(e => e.Description).HasColumnName("description").HasMaxLength(500);
+        });
+
+        modelBuilder.Entity<InboundAsn>(entity =>
+        {
+            entity.HasKey(e => e.AsnId).HasName("inbound_asn_pkey");
+            entity.ToTable("inbound_asn", "public");
+            entity.Property(e => e.AsnId).HasColumnName("asn_id");
+            entity.Property(e => e.AsnCode).HasColumnName("asn_code").HasMaxLength(50);
+            entity.Property(e => e.OrderId).HasColumnName("order_id");
+            entity.Property(e => e.RequestedDropoffTime).HasColumnName("requested_dropoff_time");
+            entity.Property(e => e.QrCodeValue).HasColumnName("qr_code_value").HasMaxLength(500);
+            entity.Property(e => e.Status).HasColumnName("status").HasMaxLength(30);
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+
+            entity.HasOne(d => d.Order)
+                .WithMany()
+                .HasForeignKey(d => d.OrderId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_asn_order");
+        });
+
+        modelBuilder.Entity<ChatMessage>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("chat_messages_pkey");
+            entity.ToTable("chat_messages", "public");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.OrderId).HasColumnName("order_id");
+            entity.Property(e => e.SenderId).HasColumnName("sender_id");
+            entity.Property(e => e.ReceiverId).HasColumnName("receiver_id");
+            entity.Property(e => e.MessageContent).HasColumnName("message_content");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.IsRead).HasColumnName("is_read");
+
+            entity.HasOne(d => d.Order)
+                .WithMany()
+                .HasForeignKey(d => d.OrderId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_chat_order");
+
+            entity.HasOne(d => d.Sender)
+                .WithMany()
+                .HasForeignKey(d => d.SenderId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_chat_sender");
+
+            entity.HasOne(d => d.Receiver)
+                .WithMany()
+                .HasForeignKey(d => d.ReceiverId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_chat_receiver");
+        });
+
         OnModelCreatingPartial(modelBuilder);
+
     }
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
