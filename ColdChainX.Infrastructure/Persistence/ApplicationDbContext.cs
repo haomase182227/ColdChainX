@@ -18,6 +18,8 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<ClaimEvidence> ClaimEvidences { get; set; }
 
+    public virtual DbSet<ChatMessage> ChatMessages { get; set; }
+
     public virtual DbSet<Customer> Customers { get; set; }
 
     public virtual DbSet<CustomerContract> CustomerContracts { get; set; }
@@ -42,6 +44,8 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<IotDevice> IotDevices { get; set; }
 
+    public virtual DbSet<InboundAsn> InboundAsns { get; set; }
+
     public virtual DbSet<Location> Locations { get; set; }
 
     public virtual DbSet<MaintenanceTicket> MaintenanceTickets { get; set; }
@@ -64,7 +68,11 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<Role> Roles { get; set; }
 
+    public virtual DbSet<RouteMaster> RouteMasters { get; set; }
+
     public virtual DbSet<Seal> Seals { get; set; }
+
+    public virtual DbSet<SystemConfig> SystemConfigs { get; set; }
 
     public virtual DbSet<TelemetryLog> TelemetryLogs { get; set; }
 
@@ -85,6 +93,8 @@ public partial class ApplicationDbContext : DbContext
     public virtual DbSet<WarehouseReceipt> WarehouseReceipts { get; set; }
 
     public virtual DbSet<WarehouseReceiptItem> WarehouseReceiptItems { get; set; }
+
+    public virtual DbSet<WeightTier> WeightTiers { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -218,6 +228,43 @@ public partial class ApplicationDbContext : DbContext
                 .HasConstraintName("fk_ce_users");
         });
 
+        modelBuilder.Entity<ChatMessage>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("chat_messages_pkey");
+
+            entity.ToTable("chat_messages");
+
+            entity.Property(e => e.Id)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("id");
+            entity.Property(e => e.OrderId).HasColumnName("order_id");
+            entity.Property(e => e.SenderId).HasColumnName("sender_id");
+            entity.Property(e => e.ReceiverId).HasColumnName("receiver_id");
+            entity.Property(e => e.MessageContent).HasColumnName("message_content");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+            entity.Property(e => e.IsRead)
+                .HasDefaultValue(false)
+                .HasColumnName("is_read");
+
+            entity.HasOne(d => d.Order).WithMany(p => p.ChatMessages)
+                .HasForeignKey(d => d.OrderId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_chat_order");
+
+            entity.HasOne(d => d.Sender).WithMany()
+                .HasForeignKey(d => d.SenderId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_chat_sender");
+
+            entity.HasOne(d => d.Receiver).WithMany()
+                .HasForeignKey(d => d.ReceiverId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_chat_receiver");
+        });
+
         modelBuilder.Entity<Customer>(entity =>
         {
             entity.HasKey(e => e.CustomerId).HasName("customers_pkey");
@@ -273,16 +320,30 @@ public partial class ApplicationDbContext : DbContext
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
             entity.Property(e => e.CustomerId).HasColumnName("customer_id");
+            entity.Property(e => e.DraftHtmlContent).HasColumnName("draft_html_content");
             entity.Property(e => e.ExpiredDate).HasColumnName("expired_date");
             entity.Property(e => e.FileUrl)
                 .HasMaxLength(255)
                 .HasColumnName("file_url");
             entity.Property(e => e.OrderId).HasColumnName("order_id");
             entity.Property(e => e.SignedDate).HasColumnName("signed_date");
+            entity.Property(e => e.SignedFileUrl)
+                .HasMaxLength(255)
+                .HasColumnName("signed_file_url");
+            entity.Property(e => e.SentAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("sent_at");
             entity.Property(e => e.Status)
-                .HasMaxLength(20)
-                .HasDefaultValueSql("'ACTIVE'::character varying")
+                .HasMaxLength(50)
+                .HasDefaultValueSql("'DRAFT'::character varying")
                 .HasColumnName("status");
+            entity.Property(e => e.UploadedSignedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("uploaded_signed_at");
+            entity.Property(e => e.VerifiedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("verified_at");
+            entity.Property(e => e.VerifiedBy).HasColumnName("verified_by");
 
             entity.HasOne(d => d.Customer).WithMany(p => p.CustomerContracts)
                 .HasForeignKey(d => d.CustomerId)
@@ -719,6 +780,42 @@ public partial class ApplicationDbContext : DbContext
                 .HasConstraintName("fk_iot_vehicles");
         });
 
+        modelBuilder.Entity<InboundAsn>(entity =>
+        {
+            entity.HasKey(e => e.AsnId).HasName("inbound_asn_pkey");
+
+            entity.ToTable("inbound_asn");
+
+            entity.HasIndex(e => e.AsnCode, "inbound_asn_asn_code_key").IsUnique();
+
+            entity.Property(e => e.AsnId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("asn_id");
+            entity.Property(e => e.AsnCode)
+                .HasMaxLength(50)
+                .HasColumnName("asn_code");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+            entity.Property(e => e.OrderId).HasColumnName("order_id");
+            entity.Property(e => e.QrCodeValue)
+                .HasMaxLength(500)
+                .HasColumnName("qr_code_value");
+            entity.Property(e => e.RequestedDropoffTime)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("requested_dropoff_time");
+            entity.Property(e => e.Status)
+                .HasMaxLength(30)
+                .HasDefaultValueSql("'SCHEDULED'::character varying")
+                .HasColumnName("status");
+
+            entity.HasOne(d => d.Order).WithMany(p => p.InboundAsns)
+                .HasForeignKey(d => d.OrderId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_asn_order");
+        });
+
         modelBuilder.Entity<Location>(entity =>
         {
             entity.HasKey(e => e.LocationId).HasName("locations_pkey");
@@ -979,6 +1076,15 @@ public partial class ApplicationDbContext : DbContext
                 .HasMaxLength(50)
                 .HasColumnName("dest_city");
             entity.Property(e => e.EffectiveDate).HasColumnName("effective_date");
+            entity.Property(e => e.MaxValue)
+                .HasPrecision(12, 4)
+                .HasColumnName("max_value");
+            entity.Property(e => e.MinCharge)
+                .HasPrecision(15, 2)
+                .HasColumnName("min_charge");
+            entity.Property(e => e.MinValue)
+                .HasPrecision(12, 4)
+                .HasColumnName("min_value");
             entity.Property(e => e.OriginCity)
                 .HasMaxLength(50)
                 .HasColumnName("origin_city");
@@ -1012,14 +1118,44 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.FileUrl)
                 .HasMaxLength(255)
                 .HasColumnName("file_url");
+            entity.Property(e => e.ChargeableWeightKg)
+                .HasPrecision(10, 2)
+                .HasColumnName("chargeable_weight_kg");
+            entity.Property(e => e.DistanceKm)
+                .HasPrecision(10, 2)
+                .HasColumnName("distance_km");
             entity.Property(e => e.LastMileSurcharge)
                 .HasPrecision(15, 2)
                 .HasDefaultValueSql("0")
                 .HasColumnName("last_mile_surcharge");
+            entity.Property(e => e.ManualAdjustment)
+                .HasPrecision(15, 2)
+                .HasDefaultValueSql("0")
+                .HasColumnName("manual_adjustment");
+            entity.Property(e => e.AdditionalCharges)
+                .HasColumnType("jsonb")
+                .HasColumnName("additional_charges");
             entity.Property(e => e.OrderId).HasColumnName("order_id");
+            entity.Property(e => e.OverrideReason)
+                .HasMaxLength(500)
+                .HasColumnName("override_reason");
+            entity.Property(e => e.PricingSource)
+                .HasMaxLength(30)
+                .HasDefaultValueSql("'AUTO'::character varying")
+                .HasColumnName("pricing_source");
+            entity.Property(e => e.PricePerKg)
+                .HasPrecision(15, 2)
+                .HasColumnName("price_per_kg");
             entity.Property(e => e.Status)
                 .HasMaxLength(20)
                 .HasColumnName("status");
+            entity.Property(e => e.SystemBaseFreight)
+                .HasPrecision(15, 2)
+                .HasColumnName("system_base_freight");
+            entity.Property(e => e.VatPercentage)
+                .HasPrecision(5, 2)
+                .HasDefaultValueSql("8")
+                .HasColumnName("vat_percentage");
             entity.Property(e => e.VasAmount)
                 .HasPrecision(15, 2)
                 .HasDefaultValueSql("0")
@@ -1027,6 +1163,9 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.VatAmount)
                 .HasPrecision(15, 2)
                 .HasColumnName("vat_amount");
+            entity.Property(e => e.VolumetricWeightKg)
+                .HasPrecision(10, 2)
+                .HasColumnName("volumetric_weight_kg");
 
             entity.HasOne(d => d.Order).WithMany(p => p.Quotations)
                 .HasForeignKey(d => d.OrderId)
@@ -1079,6 +1218,90 @@ public partial class ApplicationDbContext : DbContext
             entity.HasOne(d => d.ProcessedByNavigation).WithMany(p => p.ReturnedItems)
                 .HasForeignKey(d => d.ProcessedBy)
                 .HasConstraintName("fk_ri_users");
+        });
+
+        modelBuilder.Entity<RouteMaster>(entity =>
+        {
+            entity.HasKey(e => e.RouteId).HasName("route_master_pkey");
+
+            entity.ToTable("route_master");
+
+            entity.HasIndex(e => e.RouteCode, "route_master_route_code_key").IsUnique();
+
+            entity.Property(e => e.RouteId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("route_id");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+            entity.Property(e => e.CutOffTime)
+                .HasColumnType("time without time zone")
+                .HasColumnName("cut_off_time");
+            entity.Property(e => e.DestCity)
+                .HasMaxLength(50)
+                .HasColumnName("dest_city");
+            entity.Property(e => e.OriginCity)
+                .HasMaxLength(50)
+                .HasColumnName("origin_city");
+            entity.Property(e => e.RouteCode)
+                .HasMaxLength(50)
+                .HasColumnName("route_code");
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'ACTIVE'::character varying")
+                .HasColumnName("status");
+            entity.Property(e => e.TransitTime)
+                .HasMaxLength(50)
+                .HasColumnName("transit_time");
+        });
+
+        modelBuilder.Entity<SystemConfig>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("system_configs_pkey");
+
+            entity.ToTable("system_configs");
+
+            entity.HasIndex(e => e.Key, "system_configs_key_key").IsUnique();
+
+            entity.Property(e => e.Id)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("id");
+            entity.Property(e => e.Key)
+                .HasMaxLength(100)
+                .HasColumnName("key");
+            entity.Property(e => e.Value)
+                .HasMaxLength(255)
+                .HasColumnName("value");
+            entity.Property(e => e.Description)
+                .HasMaxLength(500)
+                .HasColumnName("description");
+        });
+
+        modelBuilder.Entity<WeightTier>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("weight_tiers_pkey");
+
+            entity.ToTable("weight_tiers");
+
+            entity.Property(e => e.Id)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("id");
+            entity.Property(e => e.RouteId).HasColumnName("route_id");
+            entity.Property(e => e.MinWeightKg)
+                .HasPrecision(10, 2)
+                .HasColumnName("min_weight_kg");
+            entity.Property(e => e.MaxWeightKg)
+                .HasPrecision(10, 2)
+                .HasColumnName("max_weight_kg");
+            entity.Property(e => e.PricePerKg)
+                .HasPrecision(15, 2)
+                .HasColumnName("price_per_kg");
+
+            entity.HasOne(d => d.Route).WithMany(p => p.WeightTiers)
+                .HasForeignKey(d => d.RouteId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_weight_tiers_route");
         });
 
         modelBuilder.Entity<Role>(entity =>
@@ -1296,6 +1519,7 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.Quantity)
                 .HasDefaultValue(1)
                 .HasColumnName("quantity");
+            entity.Property(e => e.RouteId).HasColumnName("route_id");
             entity.Property(e => e.Status)
                 .HasMaxLength(30)
                 .HasColumnName("status");
@@ -1321,6 +1545,10 @@ public partial class ApplicationDbContext : DbContext
             entity.HasOne(d => d.PickupLocationNavigation).WithMany(p => p.TransportOrderPickupLocationNavigations)
                 .HasForeignKey(d => d.PickupLocation)
                 .HasConstraintName("fk_to_pickup");
+
+            entity.HasOne(d => d.Route).WithMany(p => p.TransportOrders)
+                .HasForeignKey(d => d.RouteId)
+                .HasConstraintName("fk_to_route");
         });
 
         modelBuilder.Entity<TripStop>(entity =>
@@ -1639,7 +1867,55 @@ public partial class ApplicationDbContext : DbContext
                 .HasConstraintName("fk_wri_wr");
         });
 
+        SeedLtlReferenceData(modelBuilder);
+
         OnModelCreatingPartial(modelBuilder);
+    }
+
+    private static void SeedLtlReferenceData(ModelBuilder modelBuilder)
+    {
+        var hcmDakLak = Guid.Parse("10000000-0000-0000-0000-000000000001");
+        var hcmCanTho = Guid.Parse("10000000-0000-0000-0000-000000000002");
+        var hcmDaNang = Guid.Parse("10000000-0000-0000-0000-000000000003");
+        var hcmHaNoi = Guid.Parse("10000000-0000-0000-0000-000000000004");
+
+        modelBuilder.Entity<SystemConfig>().HasData(
+            new SystemConfig
+            {
+                Id = Guid.Parse("20000000-0000-0000-0000-000000000001"),
+                Key = "PricePerKm",
+                Value = "15000",
+                Description = "Last-mile surcharge price per kilometer"
+            },
+            new SystemConfig
+            {
+                Id = Guid.Parse("20000000-0000-0000-0000-000000000002"),
+                Key = "VolumetricConversionRate",
+                Value = "250",
+                Description = "CBM to volumetric kilogram conversion rate"
+            });
+
+        modelBuilder.Entity<RouteMaster>().HasData(
+            new RouteMaster { RouteId = hcmDakLak, RouteCode = "HCM-DAKLAK", OriginCity = "HCM", DestCity = "Dak Lak", TransitTime = "1 - 1.5 ngay", CutOffTime = new TimeSpan(17, 0, 0), Status = "ACTIVE" },
+            new RouteMaster { RouteId = hcmCanTho, RouteCode = "HCM-CANTHO", OriginCity = "HCM", DestCity = "Can Tho", TransitTime = "1 ngay", CutOffTime = new TimeSpan(18, 0, 0), Status = "ACTIVE" },
+            new RouteMaster { RouteId = hcmDaNang, RouteCode = "HCM-DANANG", OriginCity = "HCM", DestCity = "Da Nang", TransitTime = "2 - 3 ngay", CutOffTime = new TimeSpan(16, 0, 0), Status = "ACTIVE" },
+            new RouteMaster { RouteId = hcmHaNoi, RouteCode = "HCM-HANOI", OriginCity = "HCM", DestCity = "Ha Noi", TransitTime = "3 - 4 ngay", CutOffTime = new TimeSpan(15, 0, 0), Status = "ACTIVE" });
+
+        modelBuilder.Entity<WeightTier>().HasData(
+            new WeightTier { Id = Guid.Parse("30000000-0000-0000-0000-000000000001"), RouteId = hcmHaNoi, MinWeightKg = 30, MaxWeightKg = 100, PricePerKg = 9000 },
+            new WeightTier { Id = Guid.Parse("30000000-0000-0000-0000-000000000002"), RouteId = hcmHaNoi, MinWeightKg = 100, MaxWeightKg = 500, PricePerKg = 7500 },
+            new WeightTier { Id = Guid.Parse("30000000-0000-0000-0000-000000000003"), RouteId = hcmHaNoi, MinWeightKg = 500, MaxWeightKg = 1000, PricePerKg = 6000 },
+            new WeightTier { Id = Guid.Parse("30000000-0000-0000-0000-000000000004"), RouteId = hcmHaNoi, MinWeightKg = 1000, MaxWeightKg = 1500, PricePerKg = 5000 },
+
+            new WeightTier { Id = Guid.Parse("30000000-0000-0000-0000-000000000005"), RouteId = hcmDaNang, MinWeightKg = 30, MaxWeightKg = 100, PricePerKg = 7000 },
+            new WeightTier { Id = Guid.Parse("30000000-0000-0000-0000-000000000006"), RouteId = hcmDaNang, MinWeightKg = 100, MaxWeightKg = 500, PricePerKg = 5500 },
+            new WeightTier { Id = Guid.Parse("30000000-0000-0000-0000-000000000007"), RouteId = hcmDaNang, MinWeightKg = 500, MaxWeightKg = 1000, PricePerKg = 4000 },
+            new WeightTier { Id = Guid.Parse("30000000-0000-0000-0000-000000000008"), RouteId = hcmDaNang, MinWeightKg = 1000, MaxWeightKg = 1500, PricePerKg = 3500 },
+
+            new WeightTier { Id = Guid.Parse("30000000-0000-0000-0000-000000000009"), RouteId = hcmCanTho, MinWeightKg = 30, MaxWeightKg = 100, PricePerKg = 4500 },
+            new WeightTier { Id = Guid.Parse("30000000-0000-0000-0000-000000000010"), RouteId = hcmCanTho, MinWeightKg = 100, MaxWeightKg = 500, PricePerKg = 3500 },
+            new WeightTier { Id = Guid.Parse("30000000-0000-0000-0000-000000000011"), RouteId = hcmCanTho, MinWeightKg = 500, MaxWeightKg = 1000, PricePerKg = 2500 },
+            new WeightTier { Id = Guid.Parse("30000000-0000-0000-0000-000000000012"), RouteId = hcmCanTho, MinWeightKg = 1000, MaxWeightKg = 1500, PricePerKg = 2000 });
     }
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);

@@ -1,5 +1,6 @@
 using System;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -45,6 +46,7 @@ builder.Services.AddSwaggerGen(c =>
     c.OperationFilter<CreateDriverOperationFilter>();
     c.OperationFilter<RemoveAuthFromCreateAccountsFilter>();
     c.UseInlineDefinitionsForEnums();
+    c.OperationFilter<UpdateContractDraftOperationFilter>();
 
     var securityScheme = new OpenApiSecurityScheme
     {
@@ -84,6 +86,18 @@ await app.Services.ApplyAuthSchemaCompatibilityPatchAsync(app.Logger);
 
 app.UseMiddleware<ExceptionMiddleware>();
 
+// Cần thiết khi deploy trên Render/cloud (reverse proxy).
+// Đọc X-Forwarded-Proto & X-Forwarded-Host để Request.Scheme và Request.Host
+// phản ánh đúng URL công khai thay vì địa chỉ nội bộ của proxy.
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor
+                     | ForwardedHeaders.XForwardedProto
+                     | ForwardedHeaders.XForwardedHost,
+    KnownNetworks = { },
+    KnownProxies = { }
+});
+
 // Enable Swagger in all environments for testing
 app.UseSwagger();
 app.UseSwaggerUI(c =>
@@ -98,9 +112,9 @@ app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Add health check endpoint
-app.MapGet("/", () => Results.Ok(new 
-{ 
+// Health check endpoint
+app.MapGet("/", () => Results.Ok(new
+{
     status = "healthy",
     service = "ColdChainX API",
     version = "1.0.0",
@@ -110,5 +124,6 @@ app.MapGet("/", () => Results.Ok(new
 
 app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications");
+app.MapHub<ChatHub>("/hubs/chat");
 
 app.Run();

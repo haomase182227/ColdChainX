@@ -19,6 +19,18 @@ public partial class CustomerContract
 
     public string FileUrl { get; set; } = null!;
 
+    public string? DraftHtmlContent { get; set; }
+
+    public string? SignedFileUrl { get; set; }
+
+    public DateTime? SentAt { get; set; }
+
+    public DateTime? UploadedSignedAt { get; set; }
+
+    public DateTime? VerifiedAt { get; set; }
+
+    public Guid? VerifiedBy { get; set; }
+
     public string? Status { get; set; }
 
     public DateTime? CreatedAt { get; set; }

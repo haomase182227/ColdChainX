@@ -10,6 +10,15 @@
       "dotnetRunMessages": true,
       "applicationUrl": "http://localhost:5244"
     },
+    "lan": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "launchBrowser": false,
+      "dotnetRunMessages": true,
+      "applicationUrl": "http://0.0.0.0:5244"
+    },
     "https": {
       "commandName": "Project",
       "environmentVariables": {
