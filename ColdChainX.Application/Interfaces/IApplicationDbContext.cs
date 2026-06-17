@@ -16,12 +16,14 @@ namespace ColdChainX.Application.Interfaces
         DbSet<WarehouseReceipt> WarehouseReceipts { get; }
         DbSet<WarehouseReceiptItem> WarehouseReceiptItems { get; }
         DbSet<InventoryStock> InventoryStocks { get; }
+        DbSet<InventoryAdjustment> InventoryAdjustments { get; }
         DbSet<InventoryHold> InventoryHolds { get; }
         DbSet<InventoryMovement> InventoryMovements { get; }
         DbSet<InventoryBatch> InventoryBatches { get; }
         DbSet<OutboundOrder> OutboundOrders { get; }
         DbSet<OutboundOrderItem> OutboundOrderItems { get; }
         DbSet<InventoryAllocation> InventoryAllocations { get; }
+        DbSet<WarehouseEvidenceAttachment> WarehouseEvidenceAttachments { get; }
         DbSet<CycleCountPlan> CycleCountPlans { get; }
         DbSet<CycleCountEntry> CycleCountEntries { get; }
         DbSet<TransportOrder> TransportOrders { get; }
