@@ -15,7 +15,7 @@ namespace ColdChainX.API.Controllers
     /// Manages warehouse entities, including creation, updates, listing, and deletion.
     /// </summary>
     [ApiController]
-    [Route("api/warehouses")]
+    [Route("api/v1/warehouses")]
     [Authorize]
     public class WarehouseController : ControllerBase
     {
