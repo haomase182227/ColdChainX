@@ -10,7 +10,7 @@ using ColdChainX.Shared.Responses;
 using ColdChainX.Core.Entities;
 using ColdChainX.Core.Enums;
 using Microsoft.Extensions.Logging;
-using Npgsql;
+using ColdChainX.Application.DTOs.WarehouseReceipt;
 
 namespace ColdChainX.Application.Services
 {
@@ -971,10 +971,16 @@ namespace ColdChainX.Application.Services
                     var currentEx = ex;
                     while (currentEx != null)
                     {
-                        if (currentEx is NpgsqlException nex && nex.SqlState == "40001")
+                        var typeName = currentEx.GetType().Name;
+                        if (typeName == "NpgsqlException" || typeName == "PostgresException")
                         {
-                            isSerializationFailure = true;
-                            break;
+                            var sqlStateProp = currentEx.GetType().GetProperty("SqlState");
+                            var sqlState = sqlStateProp?.GetValue(currentEx) as string;
+                            if (sqlState == "40001")
+                            {
+                                isSerializationFailure = true;
+                                break;
+                            }
                         }
                         currentEx = currentEx.InnerException;
                     }
