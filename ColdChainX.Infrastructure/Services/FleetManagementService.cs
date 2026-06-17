@@ -297,6 +297,94 @@ public class FleetManagementService : IFleetManagementService
         return ApiResponse<DriverFleetResponse>.SuccessResponse(ToDriverResponse(driver), "Driver created successfully. Default password: @123@");
     }
 
+    public async Task<ApiResponse<DriverFleetResponse>> UpdateDriverAsync(Guid driverId, UpdateDriverRequest request)
+    {
+        var driver = await _db.Drivers
+            .Include(d => d.DriverLicenses)
+            .Include(d => d.User)
+            .FirstOrDefaultAsync(d => d.DriverId == driverId && d.Status != "DELETED");
+
+        if (driver == null)
+            return ApiResponse<DriverFleetResponse>.Failure("Driver not found");
+
+        if (!string.IsNullOrWhiteSpace(request.IdentityNumber))
+        {
+            var identityNumber = NormalizeRequired(request.IdentityNumber);
+            var identityExists = await _db.Drivers.AnyAsync(d =>
+                d.DriverId != driverId
+                && d.IdentityNumber == identityNumber
+                && d.Status != "DELETED");
+
+            if (identityExists)
+                return ApiResponse<DriverFleetResponse>.Failure("Identity number already exists");
+
+            driver.IdentityNumber = identityNumber;
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.FullName))
+        {
+            driver.FullName = NormalizeRequired(request.FullName);
+            if (driver.User != null)
+                driver.User.FullName = driver.FullName;
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.PhoneNumber))
+            driver.PhoneNumber = NormalizeRequired(request.PhoneNumber);
+
+        if (request.DateOfBirth.HasValue)
+            driver.DateOfBirth = request.DateOfBirth.Value;
+
+        if (request.JoinDate.HasValue)
+            driver.JoinDate = request.JoinDate.Value;
+
+        if (!string.IsNullOrWhiteSpace(request.Email))
+        {
+            var email = NormalizeRequired(request.Email).ToLowerInvariant();
+            var emailExists = await _db.Users.AnyAsync(u =>
+                u.UserId != driver.UserId
+                && u.Email != null
+                && u.Email.ToLower() == email);
+
+            if (emailExists)
+                return ApiResponse<DriverFleetResponse>.Failure("Email already in use");
+
+            if (driver.User == null)
+            {
+                var driverRole = await _db.Roles.FirstOrDefaultAsync(r => r.RoleName == "Driver");
+                if (driverRole == null)
+                    return ApiResponse<DriverFleetResponse>.Failure("Driver role not found in the system");
+
+                driver.User = new User
+                {
+                    UserId = Guid.NewGuid(),
+                    Username = email,
+                    FullName = driver.FullName,
+                    Email = email,
+                    RoleId = driverRole.RoleId,
+                    Status = "ACTIVE",
+                    CreatedAt = DateTime.Now
+                };
+                driver.User.PasswordHash = _passwordHasher.HashPassword(driver.User, DefaultDriverPassword);
+                driver.UserId = driver.User.UserId;
+                _db.Users.Add(driver.User);
+            }
+            else
+            {
+                driver.User.Email = email;
+                driver.User.Username = email;
+                driver.User.UpdatedAt = DateTime.Now;
+            }
+        }
+
+        await RefreshDriverStatusAsync(driver);
+
+        if (!string.IsNullOrWhiteSpace(request.Status))
+            driver.Status = NormalizeRequired(request.Status).ToUpperInvariant();
+
+        await _db.SaveChangesAsync();
+        return ApiResponse<DriverFleetResponse>.SuccessResponse(ToDriverResponse(driver), "Driver updated successfully");
+    }
+
     public async Task<ApiResponse<bool>> SoftDeleteDriverAsync(Guid driverId)
     {
         var driver = await _db.Drivers.FindAsync(driverId);

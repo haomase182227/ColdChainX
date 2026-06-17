@@ -6,6 +6,7 @@ using ColdChainX.Application.Interfaces;
 using ColdChainX.Shared.Responses;
 using Microsoft.AspNetCore.Mvc;
 using FleetCreateDriverRequest = ColdChainX.Application.DTOs.Fleet.CreateDriverRequest;
+using FleetUpdateDriverRequest = ColdChainX.Application.DTOs.Fleet.UpdateDriverRequest;
 using ColdChainX.Application.DTOs.Fleet;
 
 namespace ColdChainX.API.Controllers
@@ -61,11 +62,11 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPut("{id:guid}")]
-        public async Task<ActionResult<ApiResponse<DriverDto>>> Update(Guid id, [FromBody] DriverUpdateRequest request)
+        public async Task<IActionResult> Update(Guid id, [FromBody] FleetUpdateDriverRequest request)
         {
-            var result = await _driverService.UpdateAsync(id, request);
+            var result = await _fleetService.UpdateDriverAsync(id, request);
             if (!result.Success && result.Message == "Driver not found") return NotFound(result);
-            if (!result.Success && result.Message != null && result.Message.Contains("Invalid driver status"))
+            if (!result.Success && result.Message != null && (result.Message.Contains("already") || result.Message.Contains("not found")))
                 return BadRequest(result);
             if (!result.Success) return Conflict(result);
             return Ok(result);

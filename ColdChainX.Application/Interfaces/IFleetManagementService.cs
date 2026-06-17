@@ -15,6 +15,7 @@ public interface IFleetManagementService
     Task<ApiResponse<IReadOnlyCollection<DriverFleetResponse>>> GetDriversAsync();
     Task<ApiResponse<DriverFleetResponse>> GetDriverByIdAsync(Guid driverId);
     Task<ApiResponse<DriverFleetResponse>> CreateDriverAsync(CreateDriverRequest request);
+    Task<ApiResponse<DriverFleetResponse>> UpdateDriverAsync(Guid driverId, UpdateDriverRequest request);
     Task<ApiResponse<bool>> SoftDeleteDriverAsync(Guid driverId);
     Task<ApiResponse<ImportResultResponse>> ImportDriversAsync(IFormFile excelFile);
 

@@ -64,6 +64,17 @@ public class CreateDriverRequest
     public InlineDriverLicenseRequest? License { get; set; }
 }
 
+public class UpdateDriverRequest
+{
+    public string? FullName { get; set; }
+    public string? Email { get; set; }
+    public string? IdentityNumber { get; set; }
+    public string? PhoneNumber { get; set; }
+    public DateOnly? DateOfBirth { get; set; }
+    public DateOnly? JoinDate { get; set; }
+    public string? Status { get; set; }
+}
+
 public class CreateVehicleDocumentRequest
 {
     public string DocumentType { get; set; } = null!;

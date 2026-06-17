@@ -19,6 +19,8 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<ClaimEvidence> ClaimEvidences { get; set; }
 
+    public virtual DbSet<ChatMessage> ChatMessages { get; set; }
+
     public virtual DbSet<Customer> Customers { get; set; }
 
     public virtual DbSet<CustomerContract> CustomerContracts { get; set; }
@@ -40,6 +42,8 @@ public partial class ApplicationDbContext : DbContext
     public virtual DbSet<Invoice> Invoices { get; set; }
 
     public virtual DbSet<InvoiceLine> InvoiceLines { get; set; }
+
+    public virtual DbSet<InboundAsn> InboundAsns { get; set; }
 
     public virtual DbSet<IotDevice> IotDevices { get; set; }
 
@@ -65,7 +69,11 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<Role> Roles { get; set; }
 
+    public virtual DbSet<RouteMaster> RouteMasters { get; set; }
+
     public virtual DbSet<Seal> Seals { get; set; }
+
+    public virtual DbSet<SystemConfig> SystemConfigs { get; set; }
 
     public virtual DbSet<TelemetryLog> TelemetryLogs { get; set; }
 
@@ -88,6 +96,8 @@ public partial class ApplicationDbContext : DbContext
     public virtual DbSet<WarehouseReceiptItem> WarehouseReceiptItems { get; set; }
 
     public virtual DbSet<WarehouseZone> WarehouseZones { get; set; }
+
+    public virtual DbSet<WeightTier> WeightTiers { get; set; }
 
     public virtual DbSet<WarehouseLocation> WarehouseLocations { get; set; }
 
@@ -126,6 +136,72 @@ public partial class ApplicationDbContext : DbContext
         modelBuilder.HasPostgresEnum<ProductCategory>();
         modelBuilder.HasPostgresEnum<DocumentStatus>();
         modelBuilder.HasPostgresEnum<RequirementLevel>();
+
+        modelBuilder.Entity<ChatMessage>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("chat_messages_pkey");
+            entity.ToTable("chat_messages");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.OrderId).HasColumnName("order_id");
+            entity.Property(e => e.SenderId).HasColumnName("sender_id");
+            entity.Property(e => e.ReceiverId).HasColumnName("receiver_id");
+            entity.Property(e => e.MessageContent).HasColumnName("message_content");
+            entity.Property(e => e.CreatedAt).HasColumnType("timestamp without time zone").HasColumnName("created_at");
+            entity.Property(e => e.IsRead).HasColumnName("is_read");
+            entity.HasOne(d => d.Order).WithMany(p => p.ChatMessages).HasForeignKey(d => d.OrderId).HasConstraintName("fk_chat_messages_orders");
+            entity.HasOne(d => d.Sender).WithMany().HasForeignKey(d => d.SenderId).HasConstraintName("fk_chat_messages_sender");
+            entity.HasOne(d => d.Receiver).WithMany().HasForeignKey(d => d.ReceiverId).HasConstraintName("fk_chat_messages_receiver");
+        });
+
+        modelBuilder.Entity<InboundAsn>(entity =>
+        {
+            entity.HasKey(e => e.AsnId).HasName("inbound_asns_pkey");
+            entity.ToTable("inbound_asns");
+            entity.Property(e => e.AsnId).HasColumnName("asn_id");
+            entity.Property(e => e.AsnCode).HasColumnName("asn_code");
+            entity.Property(e => e.OrderId).HasColumnName("order_id");
+            entity.Property(e => e.RequestedDropoffTime).HasColumnType("timestamp without time zone").HasColumnName("requested_dropoff_time");
+            entity.Property(e => e.QrCodeValue).HasColumnName("qr_code_value");
+            entity.Property(e => e.Status).HasColumnName("status");
+            entity.Property(e => e.CreatedAt).HasColumnType("timestamp without time zone").HasColumnName("created_at");
+            entity.HasOne(d => d.Order).WithMany(p => p.InboundAsns).HasForeignKey(d => d.OrderId).HasConstraintName("fk_inbound_asns_orders");
+        });
+
+        modelBuilder.Entity<RouteMaster>(entity =>
+        {
+            entity.HasKey(e => e.RouteId).HasName("route_master_pkey");
+            entity.ToTable("route_master");
+            entity.Property(e => e.RouteId).HasColumnName("route_id");
+            entity.Property(e => e.RouteCode).HasColumnName("route_code");
+            entity.Property(e => e.OriginCity).HasColumnName("origin_city");
+            entity.Property(e => e.DestCity).HasColumnName("dest_city");
+            entity.Property(e => e.TransitTime).HasColumnName("transit_time");
+            entity.Property(e => e.CutOffTime).HasColumnName("cut_off_time");
+            entity.Property(e => e.Status).HasColumnName("status");
+            entity.Property(e => e.CreatedAt).HasColumnType("timestamp without time zone").HasColumnName("created_at");
+        });
+
+        modelBuilder.Entity<SystemConfig>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("system_configs_pkey");
+            entity.ToTable("system_configs");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Key).HasColumnName("key");
+            entity.Property(e => e.Value).HasColumnName("value");
+            entity.Property(e => e.Description).HasColumnName("description");
+        });
+
+        modelBuilder.Entity<WeightTier>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("weight_tiers_pkey");
+            entity.ToTable("weight_tiers");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.RouteId).HasColumnName("route_id");
+            entity.Property(e => e.MinWeightKg).HasPrecision(10, 2).HasColumnName("min_weight_kg");
+            entity.Property(e => e.MaxWeightKg).HasPrecision(10, 2).HasColumnName("max_weight_kg");
+            entity.Property(e => e.PricePerKg).HasPrecision(18, 2).HasColumnName("price_per_kg");
+            entity.HasOne(d => d.Route).WithMany(p => p.WeightTiers).HasForeignKey(d => d.RouteId).HasConstraintName("fk_weight_tiers_route_master");
+        });
 
         modelBuilder.Entity<AlertLog>(entity =>
         {
@@ -2120,6 +2196,7 @@ public partial class ApplicationDbContext : DbContext
                 .HasConversion<string>()
                 .HasMaxLength(30)
                 .HasDefaultValue(InventoryAdjustmentStatus.PENDING_APPROVAL)
+                .HasSentinel((InventoryAdjustmentStatus)0)
                 .HasColumnName("status");
 
             entity.Property(e => e.ApprovedBy).HasColumnName("approved_by");
@@ -2269,6 +2346,7 @@ public partial class ApplicationDbContext : DbContext
                 .HasConversion<string>()
                 .HasMaxLength(30)
                 .HasDefaultValue(OutboundOrderStatus.DRAFT)
+                .HasSentinel((OutboundOrderStatus)0)
                 .HasColumnName("status");
 
             entity.Property(e => e.AssignedPickerId).HasColumnName("assigned_picker_id");
@@ -2713,6 +2791,39 @@ public partial class ApplicationDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_entry_adjustment");
         });
+
+        modelBuilder.Entity<ChatMessage>()
+            .HasQueryFilter(e => e.Sender.DeletedAt == null && e.Receiver.DeletedAt == null);
+        modelBuilder.Entity<ClaimEvidence>()
+            .HasQueryFilter(e => e.UploadedByNavigation.DeletedAt == null);
+        modelBuilder.Entity<CycleCountEntry>()
+            .HasQueryFilter(e => e.Location.DeletedAt == null);
+        modelBuilder.Entity<CycleCountPlan>()
+            .HasQueryFilter(e => e.Creator.DeletedAt == null);
+        modelBuilder.Entity<ExpenseAdvance>()
+            .HasQueryFilter(e => e.ApprovedByNavigation.DeletedAt == null);
+        modelBuilder.Entity<ExpenseReceipt>()
+            .HasQueryFilter(e => e.Advance.ApprovedByNavigation.DeletedAt == null);
+        modelBuilder.Entity<IncidentReport>()
+            .HasQueryFilter(e => e.ReportedByNavigation.DeletedAt == null);
+        modelBuilder.Entity<InventoryAdjustment>()
+            .HasQueryFilter(e => e.Stock.Location.DeletedAt == null);
+        modelBuilder.Entity<InventoryAllocation>()
+            .HasQueryFilter(e => e.Stock.Location.DeletedAt == null);
+        modelBuilder.Entity<InventoryHold>()
+            .HasQueryFilter(e => e.Creator.DeletedAt == null);
+        modelBuilder.Entity<InventoryStock>()
+            .HasQueryFilter(e => e.Location.DeletedAt == null);
+        modelBuilder.Entity<MaintenanceTicket>()
+            .HasQueryFilter(e => e.CreatedByNavigation.DeletedAt == null);
+        modelBuilder.Entity<Notification>()
+            .HasQueryFilter(e => e.User.DeletedAt == null);
+        modelBuilder.Entity<TransportDocument>()
+            .HasQueryFilter(e => e.UploadedByNavigation.DeletedAt == null);
+        modelBuilder.Entity<WarehouseReceipt>()
+            .HasQueryFilter(e => e.Receiver.DeletedAt == null);
+        modelBuilder.Entity<WarehouseReceiptItem>()
+            .HasQueryFilter(e => e.Receipt.Receiver.DeletedAt == null);
 
         OnModelCreatingPartial(modelBuilder);
     }
