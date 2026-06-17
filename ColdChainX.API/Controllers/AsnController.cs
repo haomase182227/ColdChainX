@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace ColdChainX.API.Controllers
 {
     [ApiController]
-    [Route("api/asns")]
+    [Route("api/v1/asns")]
     public class AsnController : ControllerBase
     {
         private readonly IAsnService _asnService;
