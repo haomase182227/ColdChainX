@@ -62,18 +62,21 @@ namespace ColdChainX.Application.Services
                 var locationIdsToLock = new List<Guid> { request.SourceLocationId, request.DestinationLocationId }.Distinct().OrderBy(id => id).ToList();
 
                 // Apply pessimistic locks
-                foreach (var zoneId in zoneIdsToLock)
+                if (_db.Database.IsRelational())
                 {
-                    await _db.WarehouseZones
-                        .FromSqlRaw("SELECT * FROM warehouse_zones WHERE zone_id = {0} FOR UPDATE", zoneId)
-                        .FirstOrDefaultAsync();
-                }
+                    foreach (var zoneId in zoneIdsToLock)
+                    {
+                        await _db.WarehouseZones
+                            .FromSqlRaw("SELECT * FROM warehouse_zones WHERE zone_id = {0} FOR UPDATE", zoneId)
+                            .FirstOrDefaultAsync();
+                    }
 
-                foreach (var locId in locationIdsToLock)
-                {
-                    await _db.WarehouseLocations
-                        .FromSqlRaw("SELECT * FROM warehouse_locations WHERE location_id = {0} FOR UPDATE", locId)
-                        .FirstOrDefaultAsync();
+                    foreach (var locId in locationIdsToLock)
+                    {
+                        await _db.WarehouseLocations
+                            .FromSqlRaw("SELECT * FROM warehouse_locations WHERE location_id = {0} FOR UPDATE", locId)
+                            .FirstOrDefaultAsync();
+                    }
                 }
 
                 // 2. Fetch Source Stock with Batch to verify details under lock
@@ -282,7 +285,7 @@ namespace ColdChainX.Application.Services
                     return ApiResponse<bool>.Failure("Stock record not found.");
 
                 // 2. Lock Location and Zone to prevent capacity/pallets race conditions
-                if (stock.Location != null)
+                if (stock.Location != null && _db.Database.IsRelational())
                 {
                     if (stock.Location.ZoneId != Guid.Empty)
                     {
@@ -533,7 +536,7 @@ namespace ColdChainX.Application.Services
                     return ApiResponse<bool>.Failure("Stock record not found.");
 
                 // Lock Location and Zone to prevent capacity/pallets race conditions
-                if (stock.Location != null)
+                if (stock.Location != null && _db.Database.IsRelational())
                 {
                     if (stock.Location.ZoneId != Guid.Empty)
                     {
