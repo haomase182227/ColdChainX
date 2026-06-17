@@ -16,7 +16,7 @@ namespace ColdChainX.API.Controllers
     /// Manages warehouse inventory operations including relocation, adjustments, availability queries, and allocations.
     /// </summary>
     [ApiController]
-    [Route("api/inventory")]
+    [Route("api/v1/inventory")]
     [Authorize]
     public class InventoryController : ControllerBase
     {
@@ -48,7 +48,7 @@ namespace ColdChainX.API.Controllers
         /// </remarks>
         /// <param name="request">The relocation parameters including source/destination coordinates, batch, and quantity.</param>
         /// <returns>A boolean success indicator wrapped in ApiResponse.</returns>
-        [HttpPost("relocate")]
+        [HttpPost("relocations")]
         [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
@@ -82,7 +82,7 @@ namespace ColdChainX.API.Controllers
         /// </remarks>
         /// <param name="request">The adjustment parameters detailing deltas or absolute quantities.</param>
         /// <returns>A boolean success indicator wrapped in ApiResponse.</returns>
-        [HttpPost("adjust")]
+        [HttpPost("adjustments")]
         [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
@@ -151,7 +151,7 @@ namespace ColdChainX.API.Controllers
         /// </remarks>
         /// <param name="request">The allocation request specifying the outbound document and items requested.</param>
         /// <returns>The allocation details including selected locations and batch numbers.</returns>
-        [HttpPost("allocate")]
+        [HttpPost("allocations")]
         [ProducesResponseType(typeof(ApiResponse<AllocationResultResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
@@ -185,7 +185,7 @@ namespace ColdChainX.API.Controllers
         /// </remarks>
         /// <param name="request">The release request specifying the document identifier.</param>
         /// <returns>A boolean success indicator wrapped in ApiResponse.</returns>
-        [HttpPost("release-allocation")]
+        [HttpDelete("allocations")]
         [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
