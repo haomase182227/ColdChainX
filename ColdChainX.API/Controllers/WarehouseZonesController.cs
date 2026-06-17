@@ -47,7 +47,7 @@ namespace ColdChainX.API.Controllers
         /// <param name="warehouseId">The unique identifier of the warehouse.</param>
         /// <param name="request">The zone creation parameters.</param>
         /// <returns>The newly created warehouse zone details.</returns>
-        [HttpPost("api/warehouses/{warehouseId:guid}/zones")]
+        [HttpPost("api/v1/warehouses/{warehouseId:guid}/zones")]
         [Authorize(Roles = "Admin,Manager")]
         [ProducesResponseType(typeof(ApiResponse<WarehouseZoneResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
@@ -84,7 +84,7 @@ namespace ColdChainX.API.Controllers
         /// <param name="id">The unique identifier of the warehouse zone.</param>
         /// <param name="request">The updated zone properties.</param>
         /// <returns>The updated zone details.</returns>
-        [HttpPut("api/zones/{id:guid}")]
+        [HttpPut("api/v1/zones/{id:guid}")]
         [Authorize(Roles = "Admin,Manager")]
         [ProducesResponseType(typeof(ApiResponse<WarehouseZoneResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
@@ -121,7 +121,7 @@ namespace ColdChainX.API.Controllers
         /// </remarks>
         /// <param name="id">The unique identifier of the zone to delete.</param>
         /// <returns>A boolean success indicator wrapped in ApiResponse.</returns>
-        [HttpDelete("api/zones/{id:guid}")]
+        [HttpDelete("api/v1/zones/{id:guid}")]
         [Authorize(Roles = "Admin")]
         [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
@@ -157,7 +157,7 @@ namespace ColdChainX.API.Controllers
         /// </remarks>
         /// <param name="id">The unique identifier of the warehouse zone.</param>
         /// <returns>The zone details.</returns>
-        [HttpGet("api/zones/{id:guid}")]
+        [HttpGet("api/v1/zones/{id:guid}")]
         [ProducesResponseType(typeof(ApiResponse<WarehouseZoneResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
@@ -190,7 +190,7 @@ namespace ColdChainX.API.Controllers
         /// <param name="pageSize">The number of records per page.</param>
         /// <param name="search">Optional query string to search zones by name or code.</param>
         /// <returns>A paginated list of warehouse zones.</returns>
-        [HttpGet("api/warehouses/{warehouseId:guid}/zones")]
+        [HttpGet("api/v1/warehouses/{warehouseId:guid}/zones")]
         [ProducesResponseType(typeof(ApiResponse<PagedResult<WarehouseZoneResponse>>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> GetList(
