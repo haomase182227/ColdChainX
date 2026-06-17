@@ -40,11 +40,13 @@ builder.Services.AddSwaggerGen(c =>
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "ColdChainX API", Version = "v1" });
     c.SchemaFilter<CreateOrderRequestSchemaFilter>();
     c.SchemaFilter<EnumSchemaFilter>();
+    c.SchemaFilter<SuggestLoadRequestSchemaFilter>();
     c.OperationFilter<CreateOrderFormOperationFilter>();
     c.OperationFilter<RegisterOperationFilter>();
     c.OperationFilter<CreateCustomerOperationFilter>();
     c.OperationFilter<CreateDriverOperationFilter>();
     c.OperationFilter<RemoveAuthFromCreateAccountsFilter>();
+    c.OperationFilter<PlanLoadFormOperationFilter>();
     c.UseInlineDefinitionsForEnums();
     c.OperationFilter<UpdateContractDraftOperationFilter>();
 

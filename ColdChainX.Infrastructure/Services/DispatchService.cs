@@ -651,7 +651,7 @@ public class DispatchService : IDispatchService
         await _context.SaveChangesAsync();
     }
 
-    public async Task IssueDispatchDocumentsAsync(Guid tripId)
+    public async Task IssueDispatchDocumentsAsync(Guid tripId, Guid? issuerId = null)
     {
         var trip = await _context.MasterTrips
             .Include(t => t.TransportOrders)
@@ -665,10 +665,32 @@ public class DispatchService : IDispatchService
             ImageUrl  = $"https://coldchainx.com/docs/ewaybill/{tripId}.pdf",
             Status    = "ISSUED",
             CreatedAt = DateTime.UtcNow,
-            UploadedBy = trip.DriverId ?? Guid.Empty
+            UploadedBy = trip.DriverId ?? issuerId ?? Guid.Empty
         });
 
         trip.Status = "DISPATCHED";
         await _context.SaveChangesAsync();
+    }
+
+    public async Task<List<LoadInstruction>> GetLoadPlanAsync(Guid tripId)
+    {
+        var trip = await _context.MasterTrips
+            .Include(t => t.TransportOrders)
+            .FirstOrDefaultAsync(t => t.TripId == tripId)
+            ?? throw new KeyNotFoundException("Không tìm thấy chuyến đi.");
+
+        var stops = await _context.TripStops
+            .Where(ts => ts.TripId == tripId)
+            .OrderBy(ts => ts.StopSequence)
+            .ToListAsync();
+
+        var stopInfos = stops.Select(s => new StopInfo
+        {
+            LocationId = s.LocationId ?? Guid.Empty,
+            Sequence = s.StopSequence
+        }).ToList();
+
+        var loadPlan = BuildLIFOLoadPlan(trip.TransportOrders.ToList(), stopInfos);
+        return loadPlan;
     }
 }

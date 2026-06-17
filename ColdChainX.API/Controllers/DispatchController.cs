@@ -135,10 +135,12 @@ public class DispatchController : ControllerBase
     public async Task<IActionResult> PlanLoad([FromForm] PlanLoadFormRequest form)
     {
         // Chuyển đổi từ form sang PlanLoadRequest
-        if (!Guid.TryParse(form.VehicleId, out var vehicleId))
+        var rawVehicleId = ExtractGuid(form.VehicleId);
+        if (!Guid.TryParse(rawVehicleId, out var vehicleId))
             return BadRequest(new { Success = false, Error = "VehicleId không hợp lệ." });
 
-        if (!Guid.TryParse(form.OriginWarehouseLocationId, out var originLocId))
+        var rawOriginWarehouseLocationId = ExtractGuid(form.OriginWarehouseLocationId);
+        if (!Guid.TryParse(rawOriginWarehouseLocationId, out var originLocId))
             return BadRequest(new { Success = false, Error = "OriginWarehouseLocationId không hợp lệ." });
 
         if (form.OrderIds == null || form.OrderIds.Length == 0)
@@ -147,17 +149,17 @@ public class DispatchController : ControllerBase
         var orderIds = new List<Guid>();
         foreach (var raw in form.OrderIds)
         {
-            if (!Guid.TryParse(raw, out var oid))
+            var rawOrderId = ExtractGuid(raw);
+            if (!Guid.TryParse(rawOrderId, out var oid))
                 return BadRequest(new { Success = false, Error = $"OrderId không hợp lệ: {raw}" });
             orderIds.Add(oid);
         }
 
         Guid? coordinatorId = null;
-        if (!string.IsNullOrWhiteSpace(form.DispatchCoordinatorId))
+        var dispatcherIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!string.IsNullOrEmpty(dispatcherIdClaim) && Guid.TryParse(dispatcherIdClaim, out var parsedId))
         {
-            if (!Guid.TryParse(form.DispatchCoordinatorId, out var cid))
-                return BadRequest(new { Success = false, Error = "DispatchCoordinatorId không hợp lệ." });
-            coordinatorId = cid;
+            coordinatorId = parsedId;
         }
 
         var request = new PlanLoadRequest
@@ -203,7 +205,20 @@ public class DispatchController : ControllerBase
     {
         try
         {
-            var plan = await _dispatchService.SuggestLoadPlanAsync(request.OrderIds, request.VehicleId);
+            var rawVehicleId = ExtractGuid(request.VehicleId);
+            if (!Guid.TryParse(rawVehicleId, out var vehicleId))
+                return BadRequest(new { Success = false, Error = "VehicleId không hợp lệ." });
+
+            var orderIds = new List<Guid>();
+            foreach (var raw in request.OrderIds)
+            {
+                var rawOrderId = ExtractGuid(raw);
+                if (!Guid.TryParse(rawOrderId, out var oid))
+                    return BadRequest(new { Success = false, Error = $"OrderId không hợp lệ: {raw}" });
+                orderIds.Add(oid);
+            }
+
+            var plan = await _dispatchService.SuggestLoadPlanAsync(orderIds, vehicleId);
             return Ok(new { Success = true, Plan = plan });
         }
         catch (InvalidOperationException ex)
@@ -218,11 +233,15 @@ public class DispatchController : ControllerBase
 
     /// <summary>[Legacy] Tính route và LIFO cho Trip đã tạo sẵn.</summary>
     [HttpPost("route-lifo/{tripId}")]
-    public async Task<IActionResult> CalculateRouteAndLIFO(Guid tripId)
+    public async Task<IActionResult> CalculateRouteAndLIFO(string tripId)
     {
         try
         {
-            await _dispatchService.CalculateRouteAndLIFOAsync(tripId);
+            var rawTripId = ExtractGuid(tripId);
+            if (!Guid.TryParse(rawTripId, out var parsedTripId))
+                return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
+
+            await _dispatchService.CalculateRouteAndLIFOAsync(parsedTripId);
             return Ok(new { Success = true, Message = "Route calculated and LIFO stops planned." });
         }
         catch (Exception ex)
@@ -233,15 +252,19 @@ public class DispatchController : ControllerBase
 
     /// <summary>Đóng hàng và kẹp chì niêm phong.</summary>
     [HttpPost("seal/{tripId}")]
-    public async Task<IActionResult> SealTruck(Guid tripId, [FromBody] SealRequest request)
+    public async Task<IActionResult> SealTruck(string tripId, [FromBody] SealRequest request)
     {
         try
         {
+            var rawTripId = ExtractGuid(tripId);
+            if (!Guid.TryParse(rawTripId, out var parsedTripId))
+                return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
+
             // Lấy userId từ JWT claim
             var keeperIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
             var keeperId = keeperIdClaim != null ? Guid.Parse(keeperIdClaim) : Guid.NewGuid();
 
-            await _dispatchService.SealTruckAsync(tripId, request.SealCode, keeperId);
+            await _dispatchService.SealTruckAsync(parsedTripId, request.SealCode, keeperId);
             return Ok(new { Success = true, Message = "Truck sealed successfully." });
         }
         catch (Exception ex)
@@ -252,12 +275,45 @@ public class DispatchController : ControllerBase
 
     /// <summary>Cấp giấy đi đường / E-Waybill cho chuyến.</summary>
     [HttpPost("issue-documents/{tripId}")]
-    public async Task<IActionResult> IssueDocuments(Guid tripId)
+    public async Task<IActionResult> IssueDocuments(string tripId)
     {
         try
         {
-            await _dispatchService.IssueDispatchDocumentsAsync(tripId);
+            var rawTripId = ExtractGuid(tripId);
+            if (!Guid.TryParse(rawTripId, out var parsedTripId))
+                return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
+
+            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var userId = userIdClaim != null ? Guid.Parse(userIdClaim) : Guid.NewGuid();
+
+            await _dispatchService.IssueDispatchDocumentsAsync(parsedTripId, userId);
             return Ok(new { Success = true, Message = "Dispatch documents issued." });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { Success = false, Error = ex.Message });
+        }
+    }
+
+    /// <summary>Lấy sơ đồ và thứ tự bốc xếp LIFO của chuyến đi cho nhân viên kho.</summary>
+    [HttpGet("load-plan/{tripId}")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(List<LoadInstruction>), 200)]
+    [ProducesResponseType(typeof(object), 400)]
+    public async Task<IActionResult> GetLoadPlan(string tripId)
+    {
+        try
+        {
+            var rawTripId = ExtractGuid(tripId);
+            if (!Guid.TryParse(rawTripId, out var parsedTripId))
+                return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
+
+            var loadPlan = await _dispatchService.GetLoadPlanAsync(parsedTripId);
+            return Ok(new { Success = true, Data = loadPlan });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { Success = false, Error = ex.Message });
         }
         catch (Exception ex)
         {
@@ -707,6 +763,13 @@ public class DispatchController : ControllerBase
             return StatusCode(500, new { Success = false, Error = ex.Message, Details = ex.InnerException?.Message ?? ex.StackTrace });
         }
     }
+
+    private static string ExtractGuid(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return input;
+        var parts = input.Split(':');
+        return parts[0].Trim();
+    }
 }
 
 // ── Request/Response models ──────────────────────────────────────────────────
@@ -714,8 +777,8 @@ public class DispatchController : ControllerBase
 /// <summary>Request cho endpoint legacy suggest-load (chỉ dùng Gemini).</summary>
 public class SuggestLoadRequest
 {
-    public List<Guid> OrderIds { get; set; } = new();
-    public Guid VehicleId { get; set; }
+    public List<string> OrderIds { get; set; } = new();
+    public string VehicleId { get; set; } = null!;
 }
 
 public class SealRequest
@@ -753,10 +816,4 @@ public class PlanLoadFormRequest
 
     /// <summary>Thời gian dự kiến hoàn thành chuyến (ISO 8601, VD: 2026-06-18T18:00:00).</summary>
     public DateTime PlannedEndTime { get; set; }
-
-    /// <summary>
-    /// (Tuỳ chọn) UserId điều phối viên nhận thông báo.
-    /// Để trống → hệ thống tự tìm tất cả Dispatcher.
-    /// </summary>
-    public string? DispatchCoordinatorId { get; set; }
 }

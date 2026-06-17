@@ -17,5 +17,6 @@ public interface IDispatchService
     Task<string> SuggestLoadPlanAsync(List<Guid> orderIds, Guid vehicleId);
     Task CalculateRouteAndLIFOAsync(Guid tripId);
     Task SealTruckAsync(Guid tripId, string sealCode, Guid warehouseKeeperId);
-    Task IssueDispatchDocumentsAsync(Guid tripId);
+    Task IssueDispatchDocumentsAsync(Guid tripId, Guid? issuerId = null);
+    Task<List<LoadInstruction>> GetLoadPlanAsync(Guid tripId);
 }
