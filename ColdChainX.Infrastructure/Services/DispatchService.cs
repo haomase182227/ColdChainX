@@ -686,7 +686,7 @@ public class DispatchService : IDispatchService
 
         var stopInfos = stops.Select(s => new StopInfo
         {
-            LocationId = s.LocationId,
+            LocationId = s.LocationId ?? Guid.Empty,
             Sequence = s.StopSequence
         }).ToList();
 
