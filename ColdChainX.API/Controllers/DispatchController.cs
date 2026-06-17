@@ -321,6 +321,32 @@ public class DispatchController : ControllerBase
         }
     }
 
+    /// <summary>Lấy danh sách giấy đi đường / E-Waybill đã phát hành cho chuyến.</summary>
+    [HttpGet("issue-documents/{tripId}")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(List<TransportDocument>), 200)]
+    [ProducesResponseType(typeof(object), 400)]
+    public async Task<IActionResult> GetIssuedDocuments(string tripId)
+    {
+        try
+        {
+            var rawTripId = ExtractGuid(tripId);
+            if (!Guid.TryParse(rawTripId, out var parsedTripId))
+                return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
+
+            var documents = await _dispatchService.GetIssuedDocumentsAsync(parsedTripId);
+            return Ok(new { Success = true, Data = documents });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { Success = false, Error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { Success = false, Error = ex.Message });
+        }
+    }
+
     /// <summary>[Test Only] Test kết nối Gemini API.</summary>
     [AllowAnonymous]
     [HttpGet("test-gemini")]
