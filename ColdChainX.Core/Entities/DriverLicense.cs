@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace ColdChainX.Core.Entities;
 
@@ -17,7 +16,8 @@ public partial class DriverLicense
 
     public DateOnly ExpiryDate { get; set; }
 
-    public string DocumentUrl { get; set; } = null!;
+    [NotMapped]
+    public string DocumentUrl { get; set; } = string.Empty;
 
     public string? Status { get; set; }
 

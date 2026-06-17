@@ -13,6 +13,8 @@ public partial class MaintenanceTicket
 
     public string MaintenanceType { get; set; } = null!;
 
+    public double TriggeredAtOdometer { get; set; }
+
     public string GarageName { get; set; } = null!;
 
     public string Description { get; set; } = null!;

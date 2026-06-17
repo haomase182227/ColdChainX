@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using ColdChainX.Application.DTOs;
+using ColdChainX.Application.DTOs.Fleet;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Shared.Responses;
 using Microsoft.AspNetCore.Mvc;
@@ -13,32 +15,68 @@ namespace ColdChainX.API.Controllers
     public class VehiclesController : ControllerBase
     {
         private readonly IVehicleService _vehicleService;
+        private readonly IFleetManagementService _fleetService;
 
-        public VehiclesController(IVehicleService vehicleService)
+        public VehiclesController(IVehicleService vehicleService, IFleetManagementService fleetService)
         {
             _vehicleService = vehicleService;
+            _fleetService = fleetService;
         }
 
         [HttpGet]
-        public async Task<ActionResult<ApiResponse<List<VehicleDto>>>> GetAll()
+        public async Task<IActionResult> GetAll()
         {
-            var result = await _vehicleService.GetAllAsync();
+            var result = await _fleetService.GetVehiclesAsync();
             return Ok(result);
         }
 
         [HttpGet("{id:guid}")]
-        public async Task<ActionResult<ApiResponse<VehicleDto>>> GetById(Guid id)
+        public async Task<IActionResult> GetById(Guid id)
         {
-            var result = await _vehicleService.GetByIdAsync(id);
+            var result = await _fleetService.GetVehicleByIdAsync(id);
             return result.Success ? Ok(result) : NotFound(result);
         }
 
         [HttpPost]
-        [Consumes("multipart/form-data")]
-        public async Task<ActionResult<ApiResponse<VehicleDto>>> Create([FromForm] VehicleCreateRequest request)
+        public async Task<IActionResult> Create([FromBody] CreateVehicleRequest request)
         {
-            var result = await _vehicleService.CreateAsync(request);
+            var result = await _fleetService.CreateVehicleAsync(request);
             if (!result.Success) return Conflict(result);
+            return Ok(result);
+        }
+
+        [HttpPost("import")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> Import([FromForm] ImportExcelRequest request)
+        {
+            var result = await _fleetService.ImportVehiclesAsync(request.ExcelFile);
+            return result.Success ? Ok(result) : BadRequest(result);
+        }
+
+        [HttpPost("{vehicleId:guid}/documents")]
+        public async Task<IActionResult> CreateDocument(Guid vehicleId, [FromBody] CreateVehicleDocumentRequest request)
+        {
+            var result = await _fleetService.CreateVehicleDocumentAsync(vehicleId, request);
+            return result.Success ? Ok(result) : NotFound(result);
+        }
+
+        [HttpPost("{truckPlate}/sync-odometer")]
+        public async Task<IActionResult> SyncOdometer(string truckPlate, [FromBody] SyncOdometerRequest request)
+        {
+            var result = await _fleetService.SyncOdometerAsync(truckPlate, request);
+            return result.Success ? Ok(result) : NotFound(result);
+        }
+
+        [HttpPost("{vehicleId:guid}/maintenance-tickets")]
+        public async Task<IActionResult> CreateMaintenanceTicket(Guid vehicleId, [FromBody] CreateMaintenanceTicketRequest request)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var userId))
+                return Unauthorized("UserId claim is missing from token");
+
+            var result = await _fleetService.CreateMaintenanceTicketAsync(vehicleId, request, userId);
+            if (!result.Success && result.Message == "Vehicle not found") return NotFound(result);
+            if (!result.Success) return BadRequest(result);
             return Ok(result);
         }
 
@@ -54,7 +92,7 @@ namespace ColdChainX.API.Controllers
         [HttpDelete("{id:guid}")]
         public async Task<ActionResult<ApiResponse<bool>>> Delete(Guid id)
         {
-            var result = await _vehicleService.DeleteAsync(id);
+            var result = await _fleetService.SoftDeleteVehicleAsync(id);
             return result.Success ? Ok(result) : NotFound(result);
         }
     }
