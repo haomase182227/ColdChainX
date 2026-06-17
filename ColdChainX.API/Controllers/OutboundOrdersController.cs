@@ -24,7 +24,7 @@ namespace ColdChainX.API.Controllers
     /// All write operations require a valid JWT bearer token.
     /// </remarks>
     [ApiController]
-    [Route("api/outbound-orders")]
+    [Route("api/v1/outbound-orders")]
     [Authorize]
     public class OutboundOrdersController : ControllerBase
     {
@@ -176,7 +176,7 @@ namespace ColdChainX.API.Controllers
         /// <response code="200">Stock allocated successfully. Returns <see cref="AllocationResponse"/>.</response>
         /// <response code="400">Insufficient stock, order is not in <c>Pending</c> status, or order not found.</response>
         /// <response code="401">Bearer token is missing or invalid.</response>
-        [HttpPost("{id:guid}/allocate")]
+        [HttpPost("{id:guid}/allocations")]
         [ProducesResponseType(typeof(AllocationResponse), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(401)]
@@ -206,7 +206,7 @@ namespace ColdChainX.API.Controllers
         /// <response code="200">Order cancelled successfully.</response>
         /// <response code="400">Order is already shipped or in a non-cancellable state.</response>
         /// <response code="401">Bearer token is missing or invalid.</response>
-        [HttpPost("{id:guid}/cancel")]
+        [HttpDelete("{id:guid}")]
         [ProducesResponseType(typeof(OutboundOrderResponse), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(401)]
@@ -237,7 +237,7 @@ namespace ColdChainX.API.Controllers
         /// <response code="200">Picking started successfully. Returns <see cref="OutboundOrderResponse"/>.</response>
         /// <response code="400">Order is not in <c>Allocated</c> status, or picker not found.</response>
         /// <response code="401">Bearer token is missing or invalid.</response>
-        [HttpPost("{id:guid}/start-picking")]
+        [HttpPost("{id:guid}/picking-assignment")]
         [ProducesResponseType(typeof(OutboundOrderResponse), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(401)]
@@ -267,7 +267,7 @@ namespace ColdChainX.API.Controllers
         /// <response code="200">Picking completed successfully. Returns <see cref="OutboundOrderResponse"/>.</response>
         /// <response code="400">Order is not currently in <c>Picking</c> status.</response>
         /// <response code="401">Bearer token is missing or invalid.</response>
-        [HttpPost("{id:guid}/complete-picking")]
+        [HttpPost("{id:guid}/picking-completion")]
         [ProducesResponseType(typeof(OutboundOrderResponse), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(401)]
@@ -298,7 +298,7 @@ namespace ColdChainX.API.Controllers
         /// <response code="200">Order shipped successfully. Returns <see cref="OutboundOrderResponse"/>.</response>
         /// <response code="400">Order is not in <c>Picked</c> status, or order not found.</response>
         /// <response code="401">Bearer token is missing or invalid.</response>
-        [HttpPost("{id:guid}/ship")]
+        [HttpPost("{id:guid}/shipment")]
         [ProducesResponseType(typeof(OutboundOrderResponse), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(401)]
