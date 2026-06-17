@@ -69,6 +69,8 @@ namespace ColdChainX.API.Extensions
                     maxRetryDelay: TimeSpan.FromSeconds(10),
                     errorCodesToAdd: null)));
 
+            services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<ApplicationDbContext>());
+
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IWarehouseRepository, WarehouseRepository>();
             services.AddScoped<IWarehouseZoneRepository, WarehouseZoneRepository>();
