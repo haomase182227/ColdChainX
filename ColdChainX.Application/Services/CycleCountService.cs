@@ -364,12 +364,15 @@ namespace ColdChainX.Application.Services
 
                         if (locationToUpdate != null)
                         {
-                            await _db.WarehouseZones
-                                .FromSqlRaw("SELECT * FROM warehouse_zones WHERE zone_id = {0} FOR UPDATE", locationToUpdate.ZoneId)
-                                .FirstOrDefaultAsync();
-                            await _db.WarehouseLocations
-                                .FromSqlRaw("SELECT * FROM warehouse_locations WHERE location_id = {0} FOR UPDATE", locationToUpdate.LocationId)
-                                .FirstOrDefaultAsync();
+                            if (_db.Database.IsRelational())
+                            {
+                                await _db.WarehouseZones
+                                    .FromSqlRaw("SELECT * FROM warehouse_zones WHERE zone_id = {0} FOR UPDATE", locationToUpdate.ZoneId)
+                                    .FirstOrDefaultAsync();
+                                await _db.WarehouseLocations
+                                    .FromSqlRaw("SELECT * FROM warehouse_locations WHERE location_id = {0} FOR UPDATE", locationToUpdate.LocationId)
+                                    .FirstOrDefaultAsync();
+                            }
 
                             int addedPallets = entry.CountedPallets ?? 0;
                             if (locationToUpdate.CurrentPallets + addedPallets > locationToUpdate.MaxCapacityPallets)
