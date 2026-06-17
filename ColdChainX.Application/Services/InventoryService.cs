@@ -1,24 +1,25 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using ColdChainX.Application.Interfaces;
-using ColdChainX.Application.DTOs.WarehouseReceipt;
 using ColdChainX.Application.DTOs.Inventory;
 using ColdChainX.Application.DTOs.Common;
 using ColdChainX.Shared.Responses;
-using ColdChainX.Infrastructure.Persistence;
 using ColdChainX.Core.Entities;
 using ColdChainX.Core.Enums;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 
-namespace ColdChainX.Infrastructure.Services
+namespace ColdChainX.Application.Services
 {
     public class InventoryService : IInventoryService
     {
-        private readonly ApplicationDbContext _db;
+        private readonly IApplicationDbContext _db;
         private readonly ILogger<InventoryService> _logger;
 
-        public InventoryService(ApplicationDbContext db, ILogger<InventoryService> logger)
+        public InventoryService(IApplicationDbContext db, ILogger<InventoryService> logger)
         {
             _db = db;
             _logger = logger;
@@ -36,7 +37,46 @@ namespace ColdChainX.Infrastructure.Services
             using var transaction = isOuterTransaction ? await _db.Database.BeginTransactionAsync() : null;
             try
             {
-                // 1. Fetch Source Stock with Batch to verify details
+                // 1. Fetch Source Stock and Destination Location without locks first to get Zone IDs.
+                var tempStock = await _db.InventoryStocks
+                    .Include(s => s.Location)
+                    .FirstOrDefaultAsync(s => s.LocationId == request.SourceLocationId 
+                                              && s.ItemCode == request.ItemCode 
+                                              && s.BatchId == request.BatchId 
+                                              && s.Status == "AVAILABLE");
+
+                if (tempStock == null)
+                    return ApiResponse<bool>.Failure($"Source stock not found for item '{request.ItemCode}' and batch '{request.BatchId}' in the specified location.");
+
+                var tempDestLocation = await _db.WarehouseLocations
+                    .FirstOrDefaultAsync(l => l.LocationId == request.DestinationLocationId);
+
+                if (tempDestLocation == null)
+                    return ApiResponse<bool>.Failure("Destination location not found.");
+
+                var sourceZoneId = tempStock.Location.ZoneId;
+                var destZoneId = tempDestLocation.ZoneId;
+
+                // Sort Zone and Location IDs to lock deterministically (prevents deadlocks)
+                var zoneIdsToLock = new List<Guid> { sourceZoneId, destZoneId }.Distinct().OrderBy(id => id).ToList();
+                var locationIdsToLock = new List<Guid> { request.SourceLocationId, request.DestinationLocationId }.Distinct().OrderBy(id => id).ToList();
+
+                // Apply pessimistic locks
+                foreach (var zoneId in zoneIdsToLock)
+                {
+                    await _db.WarehouseZones
+                        .FromSqlRaw("SELECT * FROM warehouse_zones WHERE zone_id = {0} FOR UPDATE", zoneId)
+                        .FirstOrDefaultAsync();
+                }
+
+                foreach (var locId in locationIdsToLock)
+                {
+                    await _db.WarehouseLocations
+                        .FromSqlRaw("SELECT * FROM warehouse_locations WHERE location_id = {0} FOR UPDATE", locId)
+                        .FirstOrDefaultAsync();
+                }
+
+                // 2. Fetch Source Stock with Batch to verify details under lock
                 var sourceStock = await _db.InventoryStocks
                     .Include(s => s.Location)
                     .ThenInclude(l => l.Zone)
@@ -53,7 +93,7 @@ namespace ColdChainX.Infrastructure.Services
                 if (availableQty < request.Quantity)
                     return ApiResponse<bool>.Failure($"Insufficient stock. Requested: {request.Quantity}, Available (unallocated): {availableQty}.");
 
-                // 2. Fetch Destination Location & Zone
+                // 3. Fetch Destination Location & Zone under lock
                 var destLocation = await _db.WarehouseLocations
                     .Include(l => l.Zone)
                     .FirstOrDefaultAsync(l => l.LocationId == request.DestinationLocationId);
@@ -71,20 +111,24 @@ namespace ColdChainX.Infrastructure.Services
                 if (destZone.Status != "ACTIVE")
                     return ApiResponse<bool>.Failure("Destination zone is not active.");
 
-                // 3. Validation: Destination Location Capacity Check
-                if (destLocation.CurrentPallets + request.Pallets > destLocation.MaxCapacityPallets)
+                // Cap relocation pallets to source stock pallet count to prevent pallet drift
+                int palletsToMove = Math.Min(request.Pallets, sourceStock.PalletCount);
+                if (palletsToMove < 0)
+                    palletsToMove = 0;
+
+                // 4. Validation: Destination Location Capacity Check
+                if (destLocation.CurrentPallets + palletsToMove > destLocation.MaxCapacityPallets)
                 {
-                    return ApiResponse<bool>.Failure($"Capacity exceeded: Destination location '{destLocation.LocationCode}' does not have enough capacity. Current: {destLocation.CurrentPallets}, Adding: {request.Pallets}, Max: {destLocation.MaxCapacityPallets}.");
+                    return ApiResponse<bool>.Failure($"Capacity exceeded: Destination location '{destLocation.LocationCode}' does not have enough capacity. Current: {destLocation.CurrentPallets}, Adding: {palletsToMove}, Max: {destLocation.MaxCapacityPallets}.");
                 }
 
-                // 4. Validation: Destination Zone Capacity Check
-                if (destZone.CurrentPallets + request.Pallets > destZone.MaxCapacityPallets)
+                // 5. Validation: Destination Zone Capacity Check
+                if (destZone.CurrentPallets + palletsToMove > destZone.MaxCapacityPallets)
                 {
-                    return ApiResponse<bool>.Failure($"Capacity exceeded: Destination zone '{destZone.ZoneCode}' does not have enough capacity. Current: {destZone.CurrentPallets}, Adding: {request.Pallets}, Max: {destZone.MaxCapacityPallets}.");
+                    return ApiResponse<bool>.Failure($"Capacity exceeded: Destination zone '{destZone.ZoneCode}' does not have enough capacity. Current: {destZone.CurrentPallets}, Adding: {palletsToMove}, Max: {destZone.MaxCapacityPallets}.");
                 }
 
-                // 5. Validation: Destination Zone Temperature Compatibility Check
-                // Read pre-populated RequiredTempMin and RequiredTempMax directly from stock. Do not parse TempCondition.
+                // 6. Validation: Destination Zone Temperature Compatibility Check
                 if (sourceStock.RequiredTempMin.HasValue && destZone.TemperatureMax.HasValue && sourceStock.RequiredTempMin.Value > destZone.TemperatureMax.Value)
                 {
                     return ApiResponse<bool>.Failure($"Temperature incompatible: Stock requires min temp {sourceStock.RequiredTempMin.Value}°C, but destination zone max temp is {destZone.TemperatureMax.Value}°C.");
@@ -95,11 +139,11 @@ namespace ColdChainX.Infrastructure.Services
                     return ApiResponse<bool>.Failure($"Temperature incompatible: Stock requires max temp {sourceStock.RequiredTempMax.Value}°C, but destination zone min temp is {destZone.TemperatureMin.Value}°C.");
                 }
 
-                // 6. Deduct Quantity and Pallets from Source Stock
+                // 7. Deduct Quantity and Pallets from Source Stock
                 var sourceZone = sourceStock.Location.Zone;
                 
                 sourceStock.QuantityOnHand -= request.Quantity;
-                sourceStock.PalletCount -= request.Pallets;
+                sourceStock.PalletCount -= palletsToMove;
                 if (sourceStock.PalletCount < 0)
                     sourceStock.PalletCount = 0;
 
@@ -114,21 +158,21 @@ namespace ColdChainX.Infrastructure.Services
                 }
 
                 // Update Pallets in Locations and Zones
-                destLocation.CurrentPallets += request.Pallets;
-                destZone.CurrentPallets += request.Pallets;
+                destLocation.CurrentPallets += palletsToMove;
+                destZone.CurrentPallets += palletsToMove;
 
-                sourceStock.Location.CurrentPallets -= request.Pallets;
+                sourceStock.Location.CurrentPallets -= palletsToMove;
                 if (sourceStock.Location.CurrentPallets < 0)
                     sourceStock.Location.CurrentPallets = 0;
 
                 if (sourceZone != null)
                 {
-                    sourceZone.CurrentPallets -= request.Pallets;
+                    sourceZone.CurrentPallets -= palletsToMove;
                     if (sourceZone.CurrentPallets < 0)
                         sourceZone.CurrentPallets = 0;
                 }
 
-                // 7. Find or Create Destination Stock (Status = "AVAILABLE")
+                // 8. Find or Create Destination Stock (Status = "AVAILABLE")
                 var destStock = await _db.InventoryStocks
                     .FirstOrDefaultAsync(s => s.LocationId == request.DestinationLocationId 
                                               && s.ItemCode == request.ItemCode 
@@ -140,6 +184,7 @@ namespace ColdChainX.Infrastructure.Services
                     {
                         StockId = Guid.NewGuid(),
                         LocationId = request.DestinationLocationId,
+                        CustomerId = sourceStock.CustomerId,
                         ItemCode = request.ItemCode,
                         ItemName = sourceStock.ItemName,
                         Unit = sourceStock.Unit,
@@ -150,7 +195,7 @@ namespace ColdChainX.Infrastructure.Services
                         Status = "AVAILABLE",
                         CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
                         CreatedBy = userId,
-                        PalletCount = request.Pallets,
+                        PalletCount = palletsToMove,
                         RequiredTempMin = sourceStock.RequiredTempMin,
                         RequiredTempMax = sourceStock.RequiredTempMax
                     };
@@ -159,7 +204,7 @@ namespace ColdChainX.Infrastructure.Services
                 else
                 {
                     destStock.QuantityOnHand += request.Quantity;
-                    destStock.PalletCount += request.Pallets;
+                    destStock.PalletCount += palletsToMove;
                     destStock.Status = "AVAILABLE"; // Reactivate if it was INACTIVE
                     destStock.RequiredTempMin = sourceStock.RequiredTempMin;
                     destStock.RequiredTempMax = sourceStock.RequiredTempMax;
@@ -167,7 +212,7 @@ namespace ColdChainX.Infrastructure.Services
                     destStock.UpdatedBy = userId;
                 }
 
-                // 8. Log InventoryMovement
+                // 9. Log InventoryMovement
                 string movementType = (sourceStock.Location.LocationCode == "RCV-STAGE-01" || sourceZone?.ZoneType == "RECEIVING") 
                     ? "PUTAWAY" 
                     : "RELOCATION";
@@ -236,7 +281,21 @@ namespace ColdChainX.Infrastructure.Services
                 if (stock == null)
                     return ApiResponse<bool>.Failure("Stock record not found.");
 
-                // 2. Calculate Qty Delta and Pallet Delta
+                // 2. Lock Location and Zone to prevent capacity/pallets race conditions
+                if (stock.Location != null)
+                {
+                    if (stock.Location.ZoneId != Guid.Empty)
+                    {
+                        await _db.WarehouseZones
+                            .FromSqlRaw("SELECT * FROM warehouse_zones WHERE zone_id = {0} FOR UPDATE", stock.Location.ZoneId)
+                            .FirstOrDefaultAsync();
+                    }
+                    await _db.WarehouseLocations
+                        .FromSqlRaw("SELECT * FROM warehouse_locations WHERE location_id = {0} FOR UPDATE", stock.LocationId)
+                        .FirstOrDefaultAsync();
+                }
+
+                // 3. Calculate Qty Delta and Pallet Delta
                 decimal deltaQty = request.IsAbsoluteCount
                     ? request.Quantity - stock.QuantityOnHand
                     : request.Quantity;
@@ -245,7 +304,7 @@ namespace ColdChainX.Infrastructure.Services
                     ? request.Pallets - stock.PalletCount
                     : request.Pallets;
 
-                // 3. Validation: Quantity and Pallet Count must not become negative
+                // 4. Validation: Quantity and Pallet Count must not become negative
                 if (stock.QuantityOnHand + deltaQty < 0)
                 {
                     return ApiResponse<bool>.Failure($"Adjustment failed: Resulting quantity cannot be negative. Current: {stock.QuantityOnHand}, Delta: {deltaQty}.");
@@ -256,7 +315,7 @@ namespace ColdChainX.Infrastructure.Services
                     return ApiResponse<bool>.Failure($"Adjustment failed: Resulting pallet count cannot be negative. Current: {stock.PalletCount}, Delta: {deltaPallets}.");
                 }
 
-                // 4. Validation: Location and Zone Capacity checks when adding pallets
+                // 5. Validation: Location and Zone Capacity checks when adding pallets
                 var location = stock.Location;
                 var zone = location?.Zone;
 
@@ -273,7 +332,7 @@ namespace ColdChainX.Infrastructure.Services
                     }
                 }
 
-                // 5. Apply changes and save state snapshots
+                // 6. Apply changes and save state snapshots
                 decimal qtyBefore = stock.QuantityOnHand;
                 stock.QuantityOnHand += deltaQty;
                 decimal qtyAfter = stock.QuantityOnHand;
@@ -311,7 +370,7 @@ namespace ColdChainX.Infrastructure.Services
                 stock.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
                 stock.UpdatedBy = userId;
 
-                // 6. Log InventoryMovement
+                // 7. Log InventoryMovement
                 var movement = new InventoryMovement
                 {
                     MovementId = Guid.NewGuid(),
@@ -331,7 +390,7 @@ namespace ColdChainX.Infrastructure.Services
                 // Save to generate movement ID
                 await _db.SaveChangesAsync();
 
-                // 7. Log InventoryAdjustment
+                // 8. Log InventoryAdjustment
                 var adjustment = new InventoryAdjustment
                 {
                     AdjustmentId = Guid.NewGuid(),
@@ -472,6 +531,20 @@ namespace ColdChainX.Infrastructure.Services
                 var stock = adjustment.Stock;
                 if (stock == null)
                     return ApiResponse<bool>.Failure("Stock record not found.");
+
+                // Lock Location and Zone to prevent capacity/pallets race conditions
+                if (stock.Location != null)
+                {
+                    if (stock.Location.ZoneId != Guid.Empty)
+                    {
+                        await _db.WarehouseZones
+                            .FromSqlRaw("SELECT * FROM warehouse_zones WHERE zone_id = {0} FOR UPDATE", stock.Location.ZoneId)
+                            .FirstOrDefaultAsync();
+                    }
+                    await _db.WarehouseLocations
+                        .FromSqlRaw("SELECT * FROM warehouse_locations WHERE location_id = {0} FOR UPDATE", stock.LocationId)
+                        .FirstOrDefaultAsync();
+                }
 
                 if (stock.QuantityOnHand + adjustment.QuantityChanged < 0)
                 {
@@ -784,112 +857,141 @@ namespace ColdChainX.Infrastructure.Services
 
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
-            using var transaction = await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead);
-            try
-            {
-                var result = new AllocationResultResponse
-                {
-                    ReferenceDocumentId = request.ReferenceDocumentId
-                };
+            int maxRetries = 5;
+            int delayMs = 100;
 
-                foreach (var itemRequest in request.Items)
+            for (int retry = 1; retry <= maxRetries; retry++)
+            {
+                using var transaction = await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead);
+                try
                 {
-                    var itemDetail = new AllocatedItemDetailDto
+                    var result = new AllocationResultResponse
                     {
-                        ItemCode = itemRequest.ItemCode,
-                        RequestedQuantity = itemRequest.Quantity
+                        ReferenceDocumentId = request.ReferenceDocumentId
                     };
 
-                    // Fetch available stock records sorted by FEFO + FIFO tie-breaker, excluding expired batches
-                    var stocks = await _db.InventoryStocks
-                        .Include(s => s.Location)
-                        .Include(s => s.Batch)
-                        .Where(s => s.ItemCode == itemRequest.ItemCode 
-                                    && s.Status == "AVAILABLE" 
-                                    && (s.QuantityOnHand - s.QuantityAllocated) > 0
-                                    && s.Batch.ExpiryDate > today)
-                        .OrderBy(s => s.Batch.ExpiryDate)
-                        .ThenBy(s => s.InboundDate)
-                        .ToListAsync();
-
-                    decimal totalAvailable = stocks.Sum(s => s.QuantityOnHand - s.QuantityAllocated);
-                    if (totalAvailable < itemRequest.Quantity)
+                    foreach (var itemRequest in request.Items)
                     {
-                        await transaction.RollbackAsync();
-                        return ApiResponse<AllocationResultResponse>.Failure($"Insufficient inventory for item '{itemRequest.ItemCode}'. Available: {totalAvailable}, Requested: {itemRequest.Quantity}");
-                    }
-
-                    decimal remainingToAllocate = itemRequest.Quantity;
-                    foreach (var stock in stocks)
-                    {
-                        decimal stockAvailable = stock.QuantityOnHand - stock.QuantityAllocated;
-                        if (stockAvailable <= 0) continue;
-
-                        decimal toAllocate = Math.Min(remainingToAllocate, stockAvailable);
-                        
-                        stock.QuantityAllocated += toAllocate;
-                        stock.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
-                        stock.UpdatedBy = userId;
-
-                        // Create inventory allocation record
-                        var allocation = new InventoryAllocation
+                        var itemDetail = new AllocatedItemDetailDto
                         {
-                            AllocationId = Guid.NewGuid(),
-                            ReferenceDocumentId = request.ReferenceDocumentId,
-                            StockId = stock.StockId,
-                            AllocatedQuantity = toAllocate,
-                            Status = "ALLOCATED",
-                            CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
-                            CreatedBy = userId
-                        };
-                        _db.InventoryAllocations.Add(allocation);
-
-                        // Create movement ledger entry
-                        var movement = new InventoryMovement
-                        {
-                            MovementId = Guid.NewGuid(),
-                            StockId = stock.StockId,
                             ItemCode = itemRequest.ItemCode,
-                            BatchId = stock.BatchId,
-                            MovementType = "ALLOCATION",
-                            Quantity = toAllocate,
-                            FromLocationId = stock.LocationId,
-                            ToLocationId = null,
-                            ReferenceDocumentId = request.ReferenceDocumentId,
-                            CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
-                            CreatedBy = userId
+                            RequestedQuantity = itemRequest.Quantity
                         };
-                        _db.InventoryMovements.Add(movement);
 
-                        itemDetail.Allocations.Add(new AllocatedBatchDetailDto
+                        // Fetch available stock records sorted by FEFO + FIFO tie-breaker, excluding expired batches
+                        var stocks = await _db.InventoryStocks
+                            .Include(s => s.Location)
+                            .Include(s => s.Batch)
+                            .Where(s => s.ItemCode == itemRequest.ItemCode 
+                                        && s.Status == "AVAILABLE" 
+                                        && (s.QuantityOnHand - s.QuantityAllocated) > 0
+                                        && s.Batch.ExpiryDate > today)
+                            .OrderBy(s => s.Batch.ExpiryDate)
+                            .ThenBy(s => s.InboundDate)
+                            .ToListAsync();
+
+                        decimal totalAvailable = stocks.Sum(s => s.QuantityOnHand - s.QuantityAllocated);
+                        if (totalAvailable < itemRequest.Quantity)
                         {
-                            StockId = stock.StockId,
-                            BatchId = stock.BatchId,
-                            BatchNumber = stock.Batch.BatchNumber,
-                            LocationId = stock.LocationId,
-                            LocationCode = stock.Location.LocationCode,
-                            AllocatedQuantity = toAllocate
-                        });
+                            await transaction.RollbackAsync();
+                            return ApiResponse<AllocationResultResponse>.Failure($"Insufficient inventory for item '{itemRequest.ItemCode}'. Available: {totalAvailable}, Requested: {itemRequest.Quantity}");
+                        }
 
-                        remainingToAllocate -= toAllocate;
-                        if (remainingToAllocate == 0) break;
+                        decimal remainingToAllocate = itemRequest.Quantity;
+                        foreach (var stock in stocks)
+                        {
+                            decimal stockAvailable = stock.QuantityOnHand - stock.QuantityAllocated;
+                            if (stockAvailable <= 0) continue;
+
+                            decimal toAllocate = Math.Min(remainingToAllocate, stockAvailable);
+                            
+                            stock.QuantityAllocated += toAllocate;
+                            stock.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+                            stock.UpdatedBy = userId;
+
+                            // Create inventory allocation record
+                            var allocation = new InventoryAllocation
+                            {
+                                AllocationId = Guid.NewGuid(),
+                                ReferenceDocumentId = request.ReferenceDocumentId,
+                                StockId = stock.StockId,
+                                AllocatedQuantity = toAllocate,
+                                Status = "ALLOCATED",
+                                CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
+                                CreatedBy = userId
+                            };
+                            _db.InventoryAllocations.Add(allocation);
+
+                            // Create movement ledger entry
+                            var movement = new InventoryMovement
+                            {
+                                MovementId = Guid.NewGuid(),
+                                StockId = stock.StockId,
+                                ItemCode = itemRequest.ItemCode,
+                                BatchId = stock.BatchId,
+                                MovementType = "ALLOCATION",
+                                Quantity = toAllocate,
+                                FromLocationId = stock.LocationId,
+                                ToLocationId = null,
+                                ReferenceDocumentId = request.ReferenceDocumentId,
+                                CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
+                                CreatedBy = userId
+                            };
+                            _db.InventoryMovements.Add(movement);
+
+                            itemDetail.Allocations.Add(new AllocatedBatchDetailDto
+                            {
+                                StockId = stock.StockId,
+                                BatchId = stock.BatchId,
+                                BatchNumber = stock.Batch.BatchNumber,
+                                LocationId = stock.LocationId,
+                                LocationCode = stock.Location.LocationCode,
+                                AllocatedQuantity = toAllocate
+                            });
+
+                            remainingToAllocate -= toAllocate;
+                            if (remainingToAllocate == 0) break;
+                        }
+
+                        result.Items.Add(itemDetail);
                     }
 
-                    result.Items.Add(itemDetail);
+                    await _db.SaveChangesAsync();
+                    await transaction.CommitAsync();
+
+                    _logger.LogInformation("Allocated stock atomically for ReferenceDocumentId: {ReferenceDocumentId}", request.ReferenceDocumentId);
+                    return ApiResponse<AllocationResultResponse>.SuccessResponse(result, "Inventory allocated successfully.");
                 }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    _db.ChangeTracker.Clear();
 
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+                    bool isSerializationFailure = false;
+                    var currentEx = ex;
+                    while (currentEx != null)
+                    {
+                        if (currentEx is NpgsqlException nex && nex.SqlState == "40001")
+                        {
+                            isSerializationFailure = true;
+                            break;
+                        }
+                        currentEx = currentEx.InnerException;
+                    }
 
-                _logger.LogInformation("Allocated stock atomically for ReferenceDocumentId: {ReferenceDocumentId}", request.ReferenceDocumentId);
-                return ApiResponse<AllocationResultResponse>.SuccessResponse(result, "Inventory allocated successfully.");
+                    if (isSerializationFailure && retry < maxRetries)
+                    {
+                        _logger.LogWarning("Serialization failure (40001) occurred during stock allocation. Retrying {Retry}/{MaxRetries}...", retry, maxRetries);
+                        await Task.Delay(delayMs * retry);
+                        continue;
+                    }
+
+                    _logger.LogError(ex, "Allocation failed for ReferenceDocumentId: {ReferenceDocumentId}", request.ReferenceDocumentId);
+                    return ApiResponse<AllocationResultResponse>.Failure($"Allocation failed: {ex.Message}");
+                }
             }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-                _logger.LogError(ex, "Allocation failed for ReferenceDocumentId: {ReferenceDocumentId}", request.ReferenceDocumentId);
-                return ApiResponse<AllocationResultResponse>.Failure($"Allocation failed: {ex.Message}");
-            }
+
+            return ApiResponse<AllocationResultResponse>.Failure("Allocation failed due to persistent serialization conflicts. Please try again.");
         }
 
         public async Task<ApiResponse<bool>> ReleaseAllocationAsync(ReleaseAllocationRequest request, Guid userId)
