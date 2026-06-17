@@ -280,6 +280,48 @@ namespace ColdChainX.UnitTests
         }
 
         [Fact]
+        public async Task CompleteInbound_TemperatureCheckFails_CreatesInventoryHold()
+        {
+            // Arrange
+            var (orderId, warehouseId, receiverId, customerId, receipt, item) = await SeedBaseDataAsync(ProductCategory.SEAFOOD);
+
+            var att = new WarehouseEvidenceAttachment
+            {
+                AttachmentId = Guid.NewGuid(),
+                WarehouseReceiptId = receipt.ReceiptId,
+                FileName = "quarantine.pdf",
+                FilePath = "/uploads/quarantine.pdf",
+                Category = AttachmentCategory.COMPLIANCE,
+                SubCategory = AttachmentSubCategory.QUARANTINE_CERTIFICATE,
+                Status = DocumentStatus.VERIFIED
+            };
+            await _attachmentRepository.AddAttachmentAsync(att);
+
+            var order = await _db.TransportOrders.FindAsync(orderId);
+            order.TempCondition = "-18.0";
+            receipt.RecordedTemperature = -10.0m;
+            _db.TransportOrders.Update(order);
+            _db.WarehouseReceipts.Update(receipt);
+            await _db.SaveChangesAsync();
+
+            // Act
+            var result = await _service.CompleteInboundAsync(orderId);
+
+            // Assert
+            Assert.True(result.Success);
+            
+            var stock = await _db.InventoryStocks
+                .FirstOrDefaultAsync(s => s.ItemCode == item.ItemCode);
+            Assert.NotNull(stock);
+            Assert.Equal("HOLD", stock.Status);
+
+            var hold = await _db.InventoryHolds.FirstOrDefaultAsync(h => h.StockId == stock.StockId);
+            Assert.NotNull(hold);
+            Assert.Equal("QC_TEMP_VIOLATION", hold.ReasonCode);
+            Assert.Equal(item.ActualQty, hold.HoldQuantity);
+        }
+
+        [Fact]
         public async Task CompleteInbound_ComplianceFailure_NoInventoryBatchCreated()
         {
             // Arrange
