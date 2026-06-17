@@ -1690,6 +1690,10 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
 
             entity.ToTable("warehouse_receipt_items");
 
+            entity.HasIndex(e => e.ReceiptId).HasDatabaseName("idx_warehouse_receipt_items_receipt_id");
+            entity.HasIndex(e => e.Barcode).HasDatabaseName("idx_warehouse_receipt_items_barcode");
+            entity.HasIndex(e => e.ItemCode).HasDatabaseName("idx_warehouse_receipt_items_item_code");
+
             entity.Property(e => e.ItemId)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("item_id");
