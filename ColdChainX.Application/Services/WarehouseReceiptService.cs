@@ -10,14 +10,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Hosting;
 using ColdChainX.Application.DTOs.WarehouseReceipt;
 using ColdChainX.Application.Interfaces;
-using ColdChainX.Application.Services;
 using ColdChainX.Core.Entities;
 using ColdChainX.Core.Enums;
 using ColdChainX.Core.Interfaces;
-using ColdChainX.Infrastructure.Persistence;
 using ColdChainX.Shared.Responses;
 
-namespace ColdChainX.Infrastructure.Services
+namespace ColdChainX.Application.Services
 {
     public class WarehouseReceiptService : IWarehouseReceiptService
     {
@@ -28,7 +26,7 @@ namespace ColdChainX.Infrastructure.Services
         private const decimal VatRate = 0.08m;
         private const string DefaultOriginCity = "Ho Chi Minh";
 
-        private readonly ApplicationDbContext _db;
+        private readonly IApplicationDbContext _db;
         private readonly IWarehouseReceiptRepository _receiptRepository;
         private readonly ILocationService _locationService;
         private readonly IPdfService _pdfService;
@@ -37,7 +35,7 @@ namespace ColdChainX.Infrastructure.Services
         private readonly ComplianceRulesEngine _complianceEngine;
 
         public WarehouseReceiptService(
-            ApplicationDbContext db,
+            IApplicationDbContext db,
             IWarehouseReceiptRepository receiptRepository,
             ILocationService locationService,
             IPdfService pdfService,
@@ -85,11 +83,9 @@ namespace ColdChainX.Infrastructure.Services
             {
                 if (double.TryParse(order.TempCondition, NumberStyles.Any, CultureInfo.InvariantCulture, out double targetTemp))
                 {
-                    // If targetTemp is positive (e.g., 2 to 8 degrees chill range), we check if it is within range.
-                    // If targetTemp is negative (e.g. -18 frozen), we check if it is below that.
                     if (targetTemp < 0)
                     {
-                        if ((double)request.RecordedTemperature > targetTemp + 3.0) // Allow small buffer, e.g. -15
+                        if ((double)request.RecordedTemperature > targetTemp + 3.0)
                         {
                             tempPassed = false;
                             qcNote = $"[QC FAILED] Core temperature {request.RecordedTemperature}°C exceeds frozen threshold of {targetTemp}°C";
@@ -97,7 +93,6 @@ namespace ColdChainX.Infrastructure.Services
                     }
                     else
                     {
-                        // Assume chill range e.g. 2 to 8, targetTemp represents the upper bound or single value.
                         if ((double)request.RecordedTemperature > 8.0 || (double)request.RecordedTemperature < 0.0)
                         {
                             tempPassed = false;
@@ -441,15 +436,20 @@ namespace ColdChainX.Infrastructure.Services
                         await _db.SaveChangesAsync();
                     }
 
+                    // Pessimistic Lock on Zone
+                    receivingZone = await _db.WarehouseZones
+                        .FromSqlRaw("SELECT * FROM warehouse_zones WHERE zone_id = {0} FOR UPDATE", receivingZone.ZoneId)
+                        .FirstOrDefaultAsync();
+
                     // Resolve or create RCV-STAGE-01 Location in RECEIVING Zone
                     var receivingLocation = await _db.WarehouseLocations
-                        .FirstOrDefaultAsync(l => l.ZoneId == receivingZone.ZoneId && l.LocationCode == "RCV-STAGE-01");
+                        .FirstOrDefaultAsync(l => l.ZoneId == receivingZone!.ZoneId && l.LocationCode == "RCV-STAGE-01");
                     if (receivingLocation == null)
                     {
                         receivingLocation = new WarehouseLocation
                         {
                             LocationId = Guid.NewGuid(),
-                            ZoneId = receivingZone.ZoneId,
+                            ZoneId = receivingZone!.ZoneId,
                             LocationCode = "RCV-STAGE-01",
                             MaxCapacityPallets = 1000,
                             CurrentPallets = 0,
@@ -460,6 +460,36 @@ namespace ColdChainX.Infrastructure.Services
                         _db.WarehouseLocations.Add(receivingLocation);
                         await _db.SaveChangesAsync();
                     }
+
+                    // Pessimistic Lock on Location
+                    receivingLocation = await _db.WarehouseLocations
+                        .FromSqlRaw("SELECT * FROM warehouse_locations WHERE location_id = {0} FOR UPDATE", receivingLocation.LocationId)
+                        .FirstOrDefaultAsync();
+
+                    // Perform core temperature QC check again for stock hold determination
+                    bool tempPassed = true;
+                    if (receipt.RecordedTemperature.HasValue && !string.IsNullOrWhiteSpace(order.TempCondition))
+                    {
+                        if (double.TryParse(order.TempCondition, NumberStyles.Any, CultureInfo.InvariantCulture, out double targetTemp))
+                        {
+                            if (targetTemp < 0)
+                            {
+                                if ((double)receipt.RecordedTemperature.Value > targetTemp + 3.0)
+                                {
+                                    tempPassed = false;
+                                }
+                            }
+                            else
+                            {
+                                if ((double)receipt.RecordedTemperature.Value > 8.0 || (double)receipt.RecordedTemperature.Value < 0.0)
+                                {
+                                    tempPassed = false;
+                                }
+                            }
+                        }
+                    }
+
+                    var stockStatus = tempPassed ? "AVAILABLE" : "HOLD";
 
                     // Initialize stock and movements for each item
                     foreach (var item in receipt.WarehouseReceiptItems)
@@ -491,7 +521,7 @@ namespace ColdChainX.Infrastructure.Services
                         var customerId = order.CustomerId.GetValueOrDefault();
                         // Find or create InventoryStock under default receiving location
                         var stock = await _db.InventoryStocks
-                            .FirstOrDefaultAsync(s => s.LocationId == receivingLocation.LocationId 
+                            .FirstOrDefaultAsync(s => s.LocationId == receivingLocation!.LocationId 
                                                       && s.CustomerId == customerId
                                                       && s.ItemCode == itemCode 
                                                       && s.BatchId == batch.BatchId);
@@ -530,7 +560,7 @@ namespace ColdChainX.Infrastructure.Services
                             stock = new InventoryStock
                             {
                                 StockId = Guid.NewGuid(),
-                                LocationId = receivingLocation.LocationId,
+                                LocationId = receivingLocation!.LocationId,
                                 CustomerId = customerId,
                                 ItemCode = itemCode,
                                 ItemName = item.ItemName.Trim(),
@@ -539,13 +569,15 @@ namespace ColdChainX.Infrastructure.Services
                                 QuantityOnHand = item.ActualQty,
                                 QuantityAllocated = 0,
                                 InboundDate = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
-                                Status = "AVAILABLE",
+                                Status = stockStatus,
                                 CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
                                 PalletCount = 1,
                                 RequiredTempMin = requiredTempMin,
                                 RequiredTempMax = requiredTempMax
                             };
                             _db.InventoryStocks.Add(stock);
+                            receivingLocation.CurrentPallets += 1;
+                            receivingZone!.CurrentPallets += 1;
                         }
                         else
                         {
@@ -553,9 +585,30 @@ namespace ColdChainX.Infrastructure.Services
                             stock.PalletCount += 1;
                             stock.RequiredTempMin = requiredTempMin;
                             stock.RequiredTempMax = requiredTempMax;
+                            stock.Status = stockStatus; // Update to reflect current receipt hold status
                             stock.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+                            receivingLocation!.CurrentPallets += 1;
+                            receivingZone!.CurrentPallets += 1;
                         }
                         await _db.SaveChangesAsync();
+
+                        // Create Inventory Hold if Temp QC failed
+                        if (!tempPassed)
+                        {
+                            var hold = new InventoryHold
+                            {
+                                HoldId = Guid.NewGuid(),
+                                StockId = stock.StockId,
+                                HoldQuantity = item.ActualQty,
+                                ReasonCode = "QC_TEMP_VIOLATION",
+                                Notes = $"[AUTOMATIC QC HOLD] Temperature check failed during receiving: {receipt.RecordedTemperature}°C vs condition {order.TempCondition}.",
+                                Status = "HOLD",
+                                CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
+                                CreatedBy = receipt.ReceiverId
+                            };
+                            _db.InventoryHolds.Add(hold);
+                            await _db.SaveChangesAsync();
+                        }
 
                         // Log Inbound InventoryMovement
                         var movement = new InventoryMovement
@@ -566,7 +619,7 @@ namespace ColdChainX.Infrastructure.Services
                             BatchId = batch.BatchId,
                             MovementType = "INBOUND",
                             Quantity = item.ActualQty,
-                            ToLocationId = receivingLocation.LocationId,
+                            ToLocationId = receivingLocation!.LocationId,
                             ReferenceDocumentId = receipt.ReceiptId,
                             CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
                             CreatedBy = receipt.ReceiverId
@@ -610,18 +663,18 @@ namespace ColdChainX.Infrastructure.Services
             {
                 itemsRows += $@"
                 <tr>
-                    <td>{no}</td>
-                    <td>{item.ItemName}</td>
-                    <td>{item.ItemCode ?? "-"}</td>
-                    <td>{item.BatchNumber ?? "-"}</td>
-                    <td>{item.ExpiryDate?.ToString("dd/MM/yyyy") ?? "-"}</td>
-                    <td>{item.Unit}</td>
-                    <td>{item.ExpectedQty:0.##}</td>
-                    <td>{item.ActualQty:0.##}</td>
-                    <td>{item.ActualWeightKg?.ToString("0.##") ?? "-"}</td>
-                    <td>{item.LengthCm:0}x{item.WidthCm:0}x{item.HeightCm:0}</td>
-                    <td><span style='color: {(item.ConditionStatus == "GOOD" ? "green" : "red")}; font-weight: bold;'>{item.ConditionStatus}</span></td>
-                    <td>{item.Note ?? "-"}</td>
+                     <td>{no}</td>
+                     <td>{item.ItemName}</td>
+                     <td>{item.ItemCode ?? "-"}</td>
+                     <td>{item.BatchNumber ?? "-"}</td>
+                     <td>{item.ExpiryDate?.ToString("dd/MM/yyyy") ?? "-"}</td>
+                     <td>{item.Unit}</td>
+                     <td>{item.ExpectedQty:0.##}</td>
+                     <td>{item.ActualQty:0.##}</td>
+                     <td>{item.ActualWeightKg?.ToString("0.##") ?? "-"}</td>
+                     <td>{item.LengthCm:0}x{item.WidthCm:0}x{item.HeightCm:0}</td>
+                     <td><span style='color: {(item.ConditionStatus == "GOOD" ? "green" : "red")}; font-weight: bold;'>{item.ConditionStatus}</span></td>
+                     <td>{item.Note ?? "-"}</td>
                 </tr>";
                 no++;
             }
@@ -631,7 +684,7 @@ namespace ColdChainX.Infrastructure.Services
             {
                 warningBlock = $@"
                 <div class='qc-alert qc-failed'>
-                    <strong>⚠️ CẢNH BÁO QC CHẤT LƯỢNG:</strong> {receipt.Note}
+                     <strong>⚠️ CẢNH BÁO QC CHẤT LƯỢNG:</strong> {receipt.Note}
                 </div>";
             }
 
@@ -769,7 +822,7 @@ namespace ColdChainX.Infrastructure.Services
                 ReceiverId = receipt.ReceiverId,
                 Note = receipt.Note,
                 PdfUrl = receipt.PdfUrl,
-                Status = receipt.ReferenceDocNo, // Using ReferenceDocNo as Status representation
+                Status = receipt.ReferenceDocNo,
                 WarningMessage = warningMessage,
                 CreatedAt = receipt.CreatedAt,
                 Items = receipt.WarehouseReceiptItems?.Select(i => new WarehouseReceiptItemDto
