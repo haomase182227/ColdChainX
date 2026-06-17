@@ -14,7 +14,7 @@ namespace ColdChainX.API.Controllers
     /// Manages the inbound warehouse receipt process, quality control receiving, and measurement verification.
     /// </summary>
     [ApiController]
-    [Route("api/warehouse-receipts")]
+    [Route("api/v1/warehouse-receipts")]
     [Authorize]
     public class WarehouseReceiptController : ControllerBase
     {
@@ -48,7 +48,7 @@ namespace ColdChainX.API.Controllers
         /// <param name="warehouseId">The unique identifier of the warehouse where cargo is dropped off.</param>
         /// <param name="request">The QC details including deliverer name, temperature, and quality notes.</param>
         /// <returns>The newly created warehouse receipt details.</returns>
-        [HttpPost("qc-receive/{orderId:guid}")]
+        [HttpPost("orders/{orderId:guid}/qc")]
         [ProducesResponseType(typeof(ApiResponse<WarehouseReceiptResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
@@ -86,7 +86,7 @@ namespace ColdChainX.API.Controllers
         /// <param name="orderId">The unique identifier of the transport order.</param>
         /// <param name="request">The actual physical measurements of all items.</param>
         /// <returns>The updated warehouse receipt details.</returns>
-        [HttpPut("measurements/{orderId:guid}")]
+        [HttpPut("orders/{orderId:guid}/measurements")]
         [ProducesResponseType(typeof(ApiResponse<WarehouseReceiptResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
@@ -118,7 +118,7 @@ namespace ColdChainX.API.Controllers
         /// </remarks>
         /// <param name="orderId">The unique identifier of the transport order.</param>
         /// <returns>The finalized warehouse receipt details.</returns>
-        [HttpPost("complete/{orderId:guid}")]
+        [HttpPost("orders/{orderId:guid}/completion")]
         [ProducesResponseType(typeof(ApiResponse<WarehouseReceiptResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
