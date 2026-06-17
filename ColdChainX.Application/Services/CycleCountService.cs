@@ -11,21 +11,20 @@ using ColdChainX.Application.DTOs.CycleCount;
 using ColdChainX.Application.DTOs.Inventory;
 using ColdChainX.Application.DTOs.Common;
 using ColdChainX.Shared.Responses;
-using ColdChainX.Infrastructure.Persistence;
 using Microsoft.Extensions.Logging;
 
-namespace ColdChainX.Infrastructure.Services
+namespace ColdChainX.Application.Services
 {
     public class CycleCountService : ICycleCountService
     {
         private readonly ICycleCountRepository _cycleCountRepo;
-        private readonly ApplicationDbContext _db;
+        private readonly IApplicationDbContext _db;
         private readonly IInventoryService _inventoryService;
         private readonly ILogger<CycleCountService> _logger;
 
         public CycleCountService(
             ICycleCountRepository cycleCountRepo,
-            ApplicationDbContext db,
+            IApplicationDbContext db,
             IInventoryService inventoryService,
             ILogger<CycleCountService> logger)
         {
@@ -41,7 +40,8 @@ namespace ColdChainX.Infrastructure.Services
                 return ApiResponse<CycleCountPlanResponse>.Failure("Request data is null.");
 
             var user = await _db.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.UserId == userId);
-            if (user == null || (user.Role?.RoleName != "Manager" && user.Role?.RoleName != "Admin"))
+            if (user == null || (!string.Equals(user.Role?.RoleName, "Manager", StringComparison.OrdinalIgnoreCase) 
+                                 && !string.Equals(user.Role?.RoleName, "Admin", StringComparison.OrdinalIgnoreCase)))
             {
                 return ApiResponse<CycleCountPlanResponse>.Failure("Only Managers or Admins can create cycle count plans.");
             }
@@ -163,6 +163,12 @@ namespace ColdChainX.Infrastructure.Services
                 return ApiResponse<bool>.Failure("Plan is not in COUNTING status.");
             }
 
+            // Verify that the executing user is the one assigned to the plan
+            if (plan.AssignedToUserId.HasValue && plan.AssignedToUserId.Value != userId)
+            {
+                return ApiResponse<bool>.Failure("This plan is assigned to another user. You cannot submit counts for it.");
+            }
+
             var isOuterTransaction = _db.Database.CurrentTransaction == null;
             using var transaction = isOuterTransaction ? await _db.Database.BeginTransactionAsync() : null;
             try
@@ -248,7 +254,8 @@ namespace ColdChainX.Infrastructure.Services
                 return ApiResponse<bool>.Failure("Review variance data is null.");
 
             var manager = await _db.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.UserId == managerId);
-            if (manager == null || (manager.Role?.RoleName != "Manager" && manager.Role?.RoleName != "Admin"))
+            if (manager == null || (!string.Equals(manager.Role?.RoleName, "Manager", StringComparison.OrdinalIgnoreCase) 
+                                     && !string.Equals(manager.Role?.RoleName, "Admin", StringComparison.OrdinalIgnoreCase)))
             {
                 return ApiResponse<bool>.Failure("Only Managers or Admins can review variances.");
             }
@@ -309,7 +316,7 @@ namespace ColdChainX.Infrastructure.Services
                         }
                     }
                     else
-                    {
+                      {
                         // Picker found unexpected stock. We need to create a new stock record!
                         if (entry.ItemCode == "EMPTY" || string.IsNullOrWhiteSpace(entry.ItemCode))
                         {
@@ -347,6 +354,37 @@ namespace ColdChainX.Infrastructure.Services
                             else
                             {
                                 throw new Exception($"No active batch found for ItemCode '{entry.ItemCode}'. A batch must be specified/resolved.");
+                            }
+                        }
+
+                        // Update Location and Zone Pallets under pessimistic lock to prevent concurrent overflow
+                        var locationToUpdate = await _db.WarehouseLocations
+                            .Include(l => l.Zone)
+                            .FirstOrDefaultAsync(l => l.LocationId == entry.LocationId);
+
+                        if (locationToUpdate != null)
+                        {
+                            await _db.WarehouseZones
+                                .FromSqlRaw("SELECT * FROM warehouse_zones WHERE zone_id = {0} FOR UPDATE", locationToUpdate.ZoneId)
+                                .FirstOrDefaultAsync();
+                            await _db.WarehouseLocations
+                                .FromSqlRaw("SELECT * FROM warehouse_locations WHERE location_id = {0} FOR UPDATE", locationToUpdate.LocationId)
+                                .FirstOrDefaultAsync();
+
+                            int addedPallets = entry.CountedPallets ?? 0;
+                            if (locationToUpdate.CurrentPallets + addedPallets > locationToUpdate.MaxCapacityPallets)
+                            {
+                                throw new Exception($"Location capacity exceeded. Current: {locationToUpdate.CurrentPallets}, Max: {locationToUpdate.MaxCapacityPallets}, Adding: {addedPallets}");
+                            }
+                            if (locationToUpdate.Zone != null && locationToUpdate.Zone.CurrentPallets + addedPallets > locationToUpdate.Zone.MaxCapacityPallets)
+                            {
+                                throw new Exception($"Zone capacity exceeded. Current: {locationToUpdate.Zone.CurrentPallets}, Max: {locationToUpdate.Zone.MaxCapacityPallets}, Adding: {addedPallets}");
+                            }
+
+                            locationToUpdate.CurrentPallets += addedPallets;
+                            if (locationToUpdate.Zone != null)
+                            {
+                                locationToUpdate.Zone.CurrentPallets += addedPallets;
                             }
                         }
 
@@ -461,7 +499,9 @@ namespace ColdChainX.Infrastructure.Services
                 return ApiResponse<CycleCountPlanResponse>.Failure("Cycle count plan not found.");
 
             var user = await _db.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.UserId == userId);
-            bool isManagerOrAdmin = user?.Role?.RoleName == "Manager" || user?.Role?.RoleName == "Admin";
+            bool isManagerOrAdmin = user != null && 
+                                    (string.Equals(user.Role?.RoleName, "Manager", StringComparison.OrdinalIgnoreCase) 
+                                     || string.Equals(user.Role?.RoleName, "Admin", StringComparison.OrdinalIgnoreCase));
 
             var response = new CycleCountPlanResponse
             {
