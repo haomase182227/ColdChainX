@@ -9,7 +9,7 @@ using ColdChainX.Application.DTOs.Inventory;
 using ColdChainX.Core.Entities;
 using ColdChainX.Core.Enums;
 using ColdChainX.Infrastructure.Persistence;
-using ColdChainX.Infrastructure.Services;
+using ColdChainX.Application.Services;
 using Xunit;
 
 namespace ColdChainX.UnitTests
