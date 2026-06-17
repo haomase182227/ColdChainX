@@ -90,7 +90,9 @@ namespace ColdChainX.UnitTests
                 ItemName = "Salmon Box",
                 Unit = "BOX",
                 ActualQty = 10m,
-                ProductCategory = ProductCategory.SEAFOOD
+                ProductCategory = ProductCategory.SEAFOOD,
+                BatchNumber = "B-01",
+                CountryOfOrigin = "Vietnam"
             };
             _db.WarehouseReceiptItems.Add(receiptItem);
 
@@ -164,7 +166,9 @@ namespace ColdChainX.UnitTests
                 ItemName = "Salmon Box",
                 Unit = "BOX",
                 ActualQty = 10m,
-                ProductCategory = ProductCategory.SEAFOOD
+                ProductCategory = ProductCategory.SEAFOOD,
+                BatchNumber = "B-02",
+                CountryOfOrigin = "Vietnam"
             };
             _db.WarehouseReceiptItems.Add(receiptItem);
 
