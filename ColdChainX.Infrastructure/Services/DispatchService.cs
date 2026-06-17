@@ -693,4 +693,18 @@ public class DispatchService : IDispatchService
         var loadPlan = BuildLIFOLoadPlan(trip.TransportOrders.ToList(), stopInfos);
         return loadPlan;
     }
+
+    public async Task<List<TransportDocument>> GetIssuedDocumentsAsync(Guid tripId)
+    {
+        var tripExists = await _context.MasterTrips.AnyAsync(t => t.TripId == tripId);
+        if (!tripExists)
+            throw new KeyNotFoundException("Không tìm thấy chuyến đi.");
+
+        var documents = await _context.TransportDocuments
+            .Where(d => d.ImageUrl.Contains(tripId.ToString()))
+            .OrderByDescending(d => d.CreatedAt)
+            .ToListAsync();
+
+        return documents;
+    }
 }
