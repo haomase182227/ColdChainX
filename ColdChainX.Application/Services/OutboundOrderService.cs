@@ -9,25 +9,31 @@ using ColdChainX.Application.DTOs.Outbound;
 using ColdChainX.Application.DTOs.Inventory;
 using ColdChainX.Application.DTOs.Common;
 using ColdChainX.Shared.Responses;
-using ColdChainX.Infrastructure.Persistence;
 using ColdChainX.Core.Entities;
 using ColdChainX.Core.Enums;
+using ColdChainX.Core.Interfaces;
 
-namespace ColdChainX.Infrastructure.Services
+namespace ColdChainX.Application.Services
 {
     public class OutboundOrderService : IOutboundOrderService
     {
-        private readonly ApplicationDbContext _db;
+        private readonly IApplicationDbContext _db;
         private readonly IInventoryService _inventoryService;
+        private readonly IWarehouseAttachmentRepository _attachmentRepository;
+        private readonly ComplianceRulesEngine _complianceEngine;
         private readonly ILogger<OutboundOrderService> _logger;
 
         public OutboundOrderService(
-            ApplicationDbContext db,
+            IApplicationDbContext db,
             IInventoryService inventoryService,
+            IWarehouseAttachmentRepository attachmentRepository,
+            ComplianceRulesEngine complianceEngine,
             ILogger<OutboundOrderService> logger)
         {
             _db = db;
             _inventoryService = inventoryService;
+            _attachmentRepository = attachmentRepository;
+            _complianceEngine = complianceEngine;
             _logger = logger;
         }
 
@@ -384,15 +390,75 @@ namespace ColdChainX.Infrastructure.Services
 
         public async Task<ApiResponse<OutboundOrderResponse>> ShipOrderAsync(Guid outboundOrderId, Guid userId)
         {
-            using var transaction = await _db.Database.BeginTransactionAsync();
+            var isOuterTransaction = _db.Database.CurrentTransaction == null;
+            using var transaction = isOuterTransaction ? await _db.Database.BeginTransactionAsync() : null;
             try
             {
-                var order = await _db.OutboundOrders.FindAsync(outboundOrderId);
+                var order = await _db.OutboundOrders
+                    .Include(o => o.OutboundOrderItems)
+                    .FirstOrDefaultAsync(o => o.OutboundOrderId == outboundOrderId);
+
                 if (order == null)
                     return ApiResponse<OutboundOrderResponse>.Failure("Outbound order not found.");
 
                 if (order.Status != OutboundOrderStatus.PICKED)
                     return ApiResponse<OutboundOrderResponse>.Failure("Shipping is only allowed from PICKED status.");
+
+                // Compliance Validation
+                var attachments = await _attachmentRepository.GetAttachmentsByOutboundOrderIdAsync(outboundOrderId);
+                var itemCodes = order.OutboundOrderItems.Select(i => i.ItemCode).ToList();
+                var categories = await _db.WarehouseReceiptItems
+                    .Where(ri => itemCodes.Contains(ri.ItemCode))
+                    .Select(ri => new { ri.ItemCode, ri.ProductCategory })
+                    .Distinct()
+                    .ToListAsync();
+
+                var itemCategories = categories
+                    .GroupBy(c => c.ItemCode)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => g.Select(x => x.ProductCategory).ToList()
+                    );
+
+                var complianceResult = _complianceEngine.ValidateOutboundOrder(order, attachments, itemCategories);
+
+                if (!complianceResult.Passed)
+                {
+                    var sb = new System.Text.StringBuilder();
+                    sb.AppendLine("Outbound shipment blocked due to compliance validation failure.");
+
+                    if (complianceResult.MissingRequirements.Any())
+                    {
+                        sb.AppendLine();
+                        sb.AppendLine("Missing:");
+                        foreach (var req in complianceResult.MissingRequirements)
+                        {
+                            sb.AppendLine($"* {req}");
+                        }
+                    }
+
+                    if (complianceResult.PendingRequirements.Any())
+                    {
+                        sb.AppendLine();
+                        sb.AppendLine("Pending:");
+                        foreach (var req in complianceResult.PendingRequirements)
+                        {
+                            sb.AppendLine($"* {req}");
+                        }
+                    }
+
+                    if (complianceResult.FailedRequirements.Any())
+                    {
+                        sb.AppendLine();
+                        sb.AppendLine("Failed:");
+                        foreach (var req in complianceResult.FailedRequirements)
+                        {
+                            sb.AppendLine($"* {req}");
+                        }
+                    }
+
+                    return ApiResponse<OutboundOrderResponse>.Failure(sb.ToString().TrimEnd());
+                }
 
                 // 1. Fetch all active allocations for the document ID
                 var allocations = await _db.InventoryAllocations
@@ -469,14 +535,20 @@ namespace ColdChainX.Infrastructure.Services
                 order.UpdatedBy = userId;
 
                 await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+                if (isOuterTransaction && transaction != null)
+                {
+                    await transaction.CommitAsync();
+                }
 
                 _logger.LogInformation("Outbound order {OrderCode} shipped physically and stock deducted.", order.OrderCode);
                 return await GetByIdAsync(outboundOrderId);
             }
             catch (Exception ex)
             {
-                await transaction.RollbackAsync();
+                if (isOuterTransaction && transaction != null)
+                {
+                    await transaction.RollbackAsync();
+                }
                 _logger.LogError(ex, "Transaction failed for shipping order: {Id}", outboundOrderId);
                 return ApiResponse<OutboundOrderResponse>.Failure($"Failed to ship order: {ex.Message}");
             }
@@ -581,8 +653,6 @@ namespace ColdChainX.Infrastructure.Services
                 return ApiResponse<PickingListResponse>.Failure($"Failed to retrieve picking list: {ex.Message}");
             }
         }
-
-
 
         private OutboundOrderResponse MapToResponse(OutboundOrder order)
         {
