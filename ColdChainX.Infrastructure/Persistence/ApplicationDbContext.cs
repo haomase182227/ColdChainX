@@ -420,10 +420,20 @@ public partial class ApplicationDbContext : DbContext
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
             entity.Property(e => e.DateOfBirth).HasColumnName("date_of_birth");
+            entity.Property(e => e.FullName)
+                .HasMaxLength(150)
+                .HasColumnName("full_name");
+            entity.Property(e => e.IdentityNumber)
+                .HasMaxLength(30)
+                .HasColumnName("identity_number");
+            entity.Property(e => e.JoinDate).HasColumnName("join_date");
+            entity.Property(e => e.PhoneNumber)
+                .HasMaxLength(20)
+                .HasColumnName("phone_number");
             entity.Property(e => e.UserId).HasColumnName("user_id");
             entity.Property(e => e.Status)
                 .HasMaxLength(20)
-                .HasDefaultValueSql("'AVAILABLE'::character varying")
+                .HasDefaultValueSql("'ACTIVE'::character varying")
                 .HasColumnName("status");
 
             entity.HasOne(d => d.User)
@@ -447,9 +457,6 @@ public partial class ApplicationDbContext : DbContext
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
-            entity.Property(e => e.DocumentUrl)
-                .HasMaxLength(255)
-                .HasColumnName("document_url");
             entity.Property(e => e.DriverId).HasColumnName("driver_id");
             entity.Property(e => e.ExpiryDate).HasColumnName("expiry_date");
             entity.Property(e => e.IssueDate).HasColumnName("issue_date");
@@ -883,6 +890,7 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.TicketCode)
                 .HasMaxLength(50)
                 .HasColumnName("ticket_code");
+            entity.Property(e => e.TriggeredAtOdometer).HasColumnName("triggered_at_odometer");
             entity.Property(e => e.VehicleId).HasColumnName("vehicle_id");
 
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.MaintenanceTickets)
@@ -1670,6 +1678,11 @@ public partial class ApplicationDbContext : DbContext
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
+            entity.Property(e => e.CurrentLocation)
+                .HasMaxLength(255)
+                .HasColumnName("current_location");
+            entity.Property(e => e.CurrentOdometer).HasColumnName("current_odometer");
+            entity.Property(e => e.DriverId).HasColumnName("driver_id");
             entity.Property(e => e.EngineNumber)
                 .HasMaxLength(50)
                 .HasColumnName("engine_number");
@@ -1686,6 +1699,7 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.MinTemp)
                 .HasPrecision(5, 2)
                 .HasColumnName("min_temp");
+            entity.Property(e => e.NextMaintenanceOdometer).HasColumnName("next_maintenance_odometer");
             entity.Property(e => e.StandardFuelLiters)
                 .HasPrecision(5, 2)
                 .HasColumnName("standard_fuel_liters");
@@ -1699,6 +1713,10 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.VehicleType)
                 .HasMaxLength(50)
                 .HasColumnName("vehicle_type");
+
+            entity.HasOne(d => d.Driver).WithMany(p => p.Vehicles)
+                .HasForeignKey(d => d.DriverId)
+                .HasConstraintName("fk_vehicles_drivers");
         });
 
         modelBuilder.Entity<VehicleDocument>(entity =>
@@ -1717,10 +1735,10 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.DocumentNumber)
                 .HasMaxLength(50)
                 .HasColumnName("document_number");
+            entity.Property(e => e.DocumentType)
+                .HasMaxLength(50)
+                .HasColumnName("document_type");
             entity.Property(e => e.ExpireDate).HasColumnName("expire_date");
-            entity.Property(e => e.ImageUrl)
-                .HasMaxLength(255)
-                .HasColumnName("image_url");
             entity.Property(e => e.IssueDate).HasColumnName("issue_date");
             entity.Property(e => e.Issuer)
                 .HasMaxLength(150)
