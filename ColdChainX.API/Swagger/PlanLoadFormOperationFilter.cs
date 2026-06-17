@@ -91,10 +91,11 @@ namespace ColdChainX.API.Swagger
                 return;
             }
 
-            // ── Case 2: path parameter {tripId} endpoints (seal, issue-documents, route-lifo) ──
+            // ── Case 2: path parameter {tripId} endpoints (seal, issue-documents, route-lifo, load-plan) ──
             if (path.Contains("seal/{tripId}", StringComparison.OrdinalIgnoreCase)
                 || path.Contains("issue-documents/{tripId}", StringComparison.OrdinalIgnoreCase)
-                || path.Contains("route-lifo/{tripId}", StringComparison.OrdinalIgnoreCase))
+                || path.Contains("route-lifo/{tripId}", StringComparison.OrdinalIgnoreCase)
+                || path.Contains("load-plan/{tripId}", StringComparison.OrdinalIgnoreCase))
             {
                 var tripIdParam = operation.Parameters?.FirstOrDefault(p => string.Equals(p.Name, "tripId", StringComparison.OrdinalIgnoreCase));
                 if (tripIdParam != null)

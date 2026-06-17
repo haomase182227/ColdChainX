@@ -295,6 +295,31 @@ public class DispatchController : ControllerBase
         }
     }
 
+    /// <summary>Lấy sơ đồ và thứ tự bốc xếp LIFO của chuyến đi cho nhân viên kho.</summary>
+    [HttpGet("load-plan/{tripId}")]
+    [ProducesResponseType(typeof(List<LoadInstruction>), 200)]
+    [ProducesResponseType(typeof(object), 400)]
+    public async Task<IActionResult> GetLoadPlan(string tripId)
+    {
+        try
+        {
+            var rawTripId = ExtractGuid(tripId);
+            if (!Guid.TryParse(rawTripId, out var parsedTripId))
+                return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
+
+            var loadPlan = await _dispatchService.GetLoadPlanAsync(parsedTripId);
+            return Ok(new { Success = true, Data = loadPlan });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { Success = false, Error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { Success = false, Error = ex.Message });
+        }
+    }
+
     /// <summary>[Test Only] Test kết nối Gemini API.</summary>
     [AllowAnonymous]
     [HttpGet("test-gemini")]

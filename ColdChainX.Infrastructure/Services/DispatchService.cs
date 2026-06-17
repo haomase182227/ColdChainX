@@ -671,4 +671,26 @@ public class DispatchService : IDispatchService
         trip.Status = "DISPATCHED";
         await _context.SaveChangesAsync();
     }
+
+    public async Task<List<LoadInstruction>> GetLoadPlanAsync(Guid tripId)
+    {
+        var trip = await _context.MasterTrips
+            .Include(t => t.TransportOrders)
+            .FirstOrDefaultAsync(t => t.TripId == tripId)
+            ?? throw new KeyNotFoundException("Không tìm thấy chuyến đi.");
+
+        var stops = await _context.TripStops
+            .Where(ts => ts.TripId == tripId)
+            .OrderBy(ts => ts.StopSequence)
+            .ToListAsync();
+
+        var stopInfos = stops.Select(s => new StopInfo
+        {
+            LocationId = s.LocationId,
+            Sequence = s.StopSequence
+        }).ToList();
+
+        var loadPlan = BuildLIFOLoadPlan(trip.TransportOrders.ToList(), stopInfos);
+        return loadPlan;
+    }
 }
