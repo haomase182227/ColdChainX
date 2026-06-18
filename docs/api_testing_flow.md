@@ -153,7 +153,7 @@ Outbound shipment of `SEAFOOD` requires verified evidence documentation:
 | **1.2** | Create Inbound ASN | **Y** | Verified through order status QC and receipt generation. |
 | **1.3** | Process Inbound Receipt & Stock | **Y** | QC recorded, package measurements updated, PDF generated successfully. |
 | **2.2** | Place Stock on Hold & Release | **Y** | Created quarantine hold (status HOLD), verified and successfully released (status RELEASED). |
-| **3.1** | Create Outbound Order | **N** | Pending outbound integration testing. |
-| **3.2** | Allocate Outbound Stock | **N** | Pending outbound integration testing. |
-| **3.3** | Verify Compliance Evidence | **N** | Pending outbound integration testing. |
-| **3.4** | Execute Outbound Shipment | **N** | Pending outbound integration testing. |
+| **3.1** | Create Outbound Order | **Y** | Created draft order for 40 units successfully. |
+| **3.2** | Allocate Outbound Stock | **Y** | Allocated FEFO stock, assigned picker, and completed picking successfully. |
+| **3.3** | Verify Compliance Evidence | **Y** | Blocked shipment without documents; uploaded and verified WAREHOUSE_ISSUE_NOTE, GOODS_CONDITION_PHOTO, and TEMPERATURE_PHOTO successfully. |
+| **3.4** | Execute Outbound Shipment | **Y** | Completed shipment successfully and verified that stock decremented from 100.00 to 60.00. |
