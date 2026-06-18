@@ -83,6 +83,7 @@ namespace ColdChainX.API.Controllers
         /// <param name="request">The adjustment parameters detailing deltas or absolute quantities.</param>
         /// <returns>A boolean success indicator wrapped in ApiResponse.</returns>
         [HttpPost("adjustments")]
+        [Authorize(Roles = "Admin,ADMIN")]
         [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
