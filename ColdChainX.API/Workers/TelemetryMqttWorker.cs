@@ -7,6 +7,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using MQTTnet;
 using MQTTnet.Client;
+using MQTTnet.Formatter;
 using MQTTnet.Protocol;
 
 namespace ColdChainX.API.Workers;
@@ -46,6 +47,7 @@ public sealed class TelemetryMqttWorker : BackgroundService
         var optionsBuilder = new MqttClientOptionsBuilder()
             .WithClientId(clientId)
             .WithTcpServer(host, port)
+            .WithProtocolVersion(MqttProtocolVersion.V311)
             .WithCleanSession();
 
         var username = _configuration["Mqtt:Username"];

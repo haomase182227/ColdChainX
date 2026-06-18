@@ -1,6 +1,7 @@
 using System.Text.Json;
 using ColdChainX.API.Models;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 
 namespace ColdChainX.API.Services;
@@ -16,15 +17,23 @@ public sealed class RedisService : IAsyncDisposable
 
     private readonly Lazy<ConnectionMultiplexer> _redis;
 
-    public RedisService(IConfiguration configuration)
+    public RedisService(IConfiguration configuration, ILogger<RedisService> logger)
     {
-        var connectionString = configuration.GetConnectionString("Redis")
-            ?? configuration["Redis:ConnectionString"]
-            ?? "localhost:6379";
+        var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__Redis")
+            ?? Environment.GetEnvironmentVariable("REDIS_CONNECTION_STRING");
+
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException(
+                "Redis connection string is missing. Set ConnectionStrings__Redis or REDIS_CONNECTION_STRING in environment variables.");
+        }
 
         _redis = new Lazy<ConnectionMultiplexer>(
             () => ConnectionMultiplexer.Connect(connectionString),
             LazyThreadSafetyMode.ExecutionAndPublication);
+
+        var ping = _redis.Value.GetDatabase().Ping();
+        logger.LogInformation("Redis connected successfully. Ping={PingMs}ms", ping.TotalMilliseconds);
     }
 
     public async Task<long> AddTelemetryAndTrimAsync(string deviceId, TelemetryData data)
