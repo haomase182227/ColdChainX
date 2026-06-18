@@ -16,6 +16,15 @@ namespace ColdChainX.Infrastructure.Services
 
         public FileService(IConfiguration configuration)
         {
+            // Ưu tiên đọc từ CLOUDINARY_URL env var (format: cloudinary://API_KEY:API_SECRET@CLOUD_NAME)
+            var cloudinaryUrl = Environment.GetEnvironmentVariable("CLOUDINARY_URL");
+            if (!string.IsNullOrWhiteSpace(cloudinaryUrl))
+            {
+                _cloudinary = new Cloudinary(cloudinaryUrl);
+                return;
+            }
+
+            // Fallback: đọc từ appsettings / environment variables (Cloudinary__CloudName, ...)
             var cloudName = configuration["Cloudinary:CloudName"] 
                 ?? throw new InvalidOperationException("Cloudinary:CloudName is not configured.");
             var apiKey = configuration["Cloudinary:ApiKey"] 
