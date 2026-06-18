@@ -83,6 +83,7 @@ namespace ColdChainX.API.Controllers
         /// <param name="id">The unique identifier of the cycle count plan.</param>
         /// <returns>A boolean success indicator wrapped in ApiResponse.</returns>
         [HttpPost("{id}/start")]
+        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,WarehouseOperator")]
         [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
@@ -116,6 +117,7 @@ namespace ColdChainX.API.Controllers
         /// <param name="dto">The list of counted quantities per entry.</param>
         /// <returns>A boolean success indicator wrapped in ApiResponse.</returns>
         [HttpPost("{id}/submit")]
+        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,WarehouseOperator")]
         [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
