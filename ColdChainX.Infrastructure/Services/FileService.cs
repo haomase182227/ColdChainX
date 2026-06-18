@@ -1,18 +1,30 @@
-using Microsoft.AspNetCore.Hosting;
+using System;
+using System.IO;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using ColdChainX.Application.Interfaces;
+using CloudinaryDotNet;
+using CloudinaryDotNet.Actions;
 
 namespace ColdChainX.Infrastructure.Services
 {
     public class FileService : IFileService
     {
         private const long MaxFileSizeBytes = 10 * 1024 * 1024;
+        private readonly Cloudinary _cloudinary;
 
-        private readonly IWebHostEnvironment _environment;
-
-        public FileService(IWebHostEnvironment environment)
+        public FileService(IConfiguration configuration)
         {
-            _environment = environment;
+            var cloudName = configuration["Cloudinary:CloudName"] 
+                ?? throw new InvalidOperationException("Cloudinary:CloudName is not configured.");
+            var apiKey = configuration["Cloudinary:ApiKey"] 
+                ?? throw new InvalidOperationException("Cloudinary:ApiKey is not configured.");
+            var apiSecret = configuration["Cloudinary:ApiSecret"] 
+                ?? throw new InvalidOperationException("Cloudinary:ApiSecret is not configured.");
+
+            var account = new Account(cloudName, apiKey, apiSecret);
+            _cloudinary = new Cloudinary(account);
         }
 
         public async Task<string> UploadFileAsync(IFormFile file)
@@ -23,17 +35,39 @@ namespace ColdChainX.Infrastructure.Services
             if (file.Length > MaxFileSizeBytes)
                 throw new InvalidOperationException("Uploaded file must be smaller than 10MB");
 
-            var uploadsPath = Path.Combine(_environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot"), "uploads");
-            Directory.CreateDirectory(uploadsPath);
+            using var stream = file.OpenReadStream();
+            return await UploadStreamToCloudinaryAsync(stream, file.FileName);
+        }
 
-            var extension = Path.GetExtension(file.FileName);
-            var fileName = $"{Guid.NewGuid():N}{extension}";
-            var fullPath = Path.Combine(uploadsPath, fileName);
+        public async Task<string> UploadFileAsync(Stream stream, string fileName)
+        {
+            return await UploadStreamToCloudinaryAsync(stream, fileName);
+        }
 
-            await using var stream = new FileStream(fullPath, FileMode.CreateNew);
-            await file.CopyToAsync(stream);
+        public async Task<string> UploadFileAsync(byte[] fileBytes, string fileName)
+        {
+            using var stream = new MemoryStream(fileBytes);
+            return await UploadStreamToCloudinaryAsync(stream, fileName);
+        }
 
-            return $"/uploads/{fileName}";
+        private async Task<string> UploadStreamToCloudinaryAsync(Stream stream, string fileName)
+        {
+            var cleanFileName = Path.GetFileNameWithoutExtension(fileName);
+            var sanitizedName = string.Concat(cleanFileName.Split(Path.GetInvalidFileNameChars()));
+            
+            var uploadParams = new ImageUploadParams
+            {
+                File = new FileDescription(sanitizedName, stream),
+                Folder = "coldchainx",
+                PublicId = $"{sanitizedName}_{Guid.NewGuid():N}"
+            };
+
+            var uploadResult = await _cloudinary.UploadAsync(uploadParams);
+
+            if (uploadResult.Error != null)
+                throw new InvalidOperationException($"Cloudinary upload failed: {uploadResult.Error.Message}");
+
+            return uploadResult.SecureUrl.ToString();
         }
     }
 }

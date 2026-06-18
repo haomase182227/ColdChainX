@@ -27,17 +27,20 @@ namespace ColdChainX.Infrastructure.Services
         private readonly IPdfService _pdfService;
         private readonly IWebHostEnvironment _environment;
         private readonly IHubContext<NotificationHub> _hubContext;
+        private readonly IFileService _fileService;
 
         public ContractService(
             ApplicationDbContext db,
             IPdfService pdfService,
             IWebHostEnvironment environment,
-            IHubContext<NotificationHub> hubContext)
+            IHubContext<NotificationHub> hubContext,
+            IFileService fileService)
         {
             _db = db;
             _pdfService = pdfService;
             _environment = environment;
             _hubContext = hubContext;
+            _fileService = fileService;
         }
 
         public async Task<ApiResponse<ContractInfoResponse>> GetContractByIdAsync(Guid contractId)
@@ -628,22 +631,8 @@ namespace ColdChainX.Infrastructure.Services
 
         private async Task<string> SaveSignedContractFileAsync(IFormFile file, string contractNumber, string baseUrl)
         {
-            var root = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot");
-            var folder = Path.Combine(root, "contracts", "signed");
-            Directory.CreateDirectory(folder);
-
-            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-            var fileName = $"{contractNumber}-signed-{DateTime.UtcNow:yyyyMMddHHmmss}{extension}";
-            var fullPath = Path.Combine(folder, fileName);
-
-            await using (var stream = File.Create(fullPath))
-            {
-                await file.CopyToAsync(stream);
-            }
-
-            // Lưu full URL vào DB để frontend có thể dùng trực tiếp
-            var relativePath = $"/contracts/signed/{fileName}";
-            return $"{baseUrl.TrimEnd('/')}{relativePath}";
+            // Upload directly to Cloudinary using _fileService
+            return await _fileService.UploadFileAsync(file);
         }
 
         private static ContractInfoResponse ToContractInfoResponse(CustomerContract contract)
