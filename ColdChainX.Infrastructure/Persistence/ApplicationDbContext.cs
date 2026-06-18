@@ -1119,13 +1119,22 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.QuoteId)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("quote_id");
+            entity.Property(e => e.AdditionalCharges)
+                .HasColumnType("jsonb")
+                .HasColumnName("additional_charges");
             entity.Property(e => e.BaseFreight)
                 .HasPrecision(15, 2)
                 .HasColumnName("base_freight");
+            entity.Property(e => e.ChargeableWeightKg)
+                .HasPrecision(10, 2)
+                .HasColumnName("chargeable_weight_kg");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
+            entity.Property(e => e.DistanceKm)
+                .HasPrecision(10, 2)
+                .HasColumnName("distance_km");
             entity.Property(e => e.FinalAmount)
                 .HasPrecision(15, 2)
                 .HasColumnName("final_amount");
@@ -1136,10 +1145,27 @@ public partial class ApplicationDbContext : DbContext
                 .HasPrecision(15, 2)
                 .HasDefaultValueSql("0")
                 .HasColumnName("last_mile_surcharge");
+            entity.Property(e => e.ManualAdjustment)
+                .HasPrecision(15, 2)
+                .HasDefaultValueSql("0")
+                .HasColumnName("manual_adjustment");
             entity.Property(e => e.OrderId).HasColumnName("order_id");
+            entity.Property(e => e.OverrideReason)
+                .HasMaxLength(500)
+                .HasColumnName("override_reason");
+            entity.Property(e => e.PricePerKg)
+                .HasPrecision(15, 2)
+                .HasColumnName("price_per_kg");
+            entity.Property(e => e.PricingSource)
+                .HasMaxLength(30)
+                .HasDefaultValue("AUTO")
+                .HasColumnName("pricing_source");
             entity.Property(e => e.Status)
                 .HasMaxLength(20)
                 .HasColumnName("status");
+            entity.Property(e => e.SystemBaseFreight)
+                .HasPrecision(15, 2)
+                .HasColumnName("system_base_freight");
             entity.Property(e => e.VasAmount)
                 .HasPrecision(15, 2)
                 .HasDefaultValueSql("0")
@@ -1147,6 +1173,13 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.VatAmount)
                 .HasPrecision(15, 2)
                 .HasColumnName("vat_amount");
+            entity.Property(e => e.VatPercentage)
+                .HasPrecision(5, 2)
+                .HasDefaultValue(8m)
+                .HasColumnName("vat_percentage");
+            entity.Property(e => e.VolumetricWeightKg)
+                .HasPrecision(10, 2)
+                .HasColumnName("volumetric_weight_kg");
 
             entity.HasOne(d => d.Order).WithMany(p => p.Quotations)
                 .HasForeignKey(d => d.OrderId)
