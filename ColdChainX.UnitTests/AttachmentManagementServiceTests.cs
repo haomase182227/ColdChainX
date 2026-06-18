@@ -765,6 +765,16 @@ namespace ColdChainX.UnitTests
         {
             return Task.FromResult($"/uploads/{file.FileName}");
         }
+
+        public Task<string> UploadFileAsync(Stream stream, string fileName)
+        {
+            return Task.FromResult($"/uploads/{fileName}");
+        }
+
+        public Task<string> UploadFileAsync(byte[] fileBytes, string fileName)
+        {
+            return Task.FromResult($"/uploads/{fileName}");
+        }
     }
 
     #endregion

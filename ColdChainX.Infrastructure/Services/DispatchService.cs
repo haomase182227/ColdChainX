@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -10,6 +11,7 @@ using ColdChainX.Core.Entities;
 using ColdChainX.Infrastructure.Integration;
 using ColdChainX.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Hosting;
 
 namespace ColdChainX.Infrastructure.Services;
 
@@ -18,6 +20,8 @@ public class DispatchService : IDispatchService
     private readonly ApplicationDbContext _context;
     private readonly GeminiLoadOptimizerClient _geminiClient;
     private readonly ILocationService _locationService;
+    private readonly IPdfService _pdfService;
+    private readonly IWebHostEnvironment _environment;
 
     // Tên role điều phối viên
     private const string CoordinatorRoleName = "Dispatcher";
@@ -28,11 +32,15 @@ public class DispatchService : IDispatchService
     public DispatchService(
         ApplicationDbContext context,
         GeminiLoadOptimizerClient geminiClient,
-        ILocationService locationService)
+        ILocationService locationService,
+        IPdfService pdfService,
+        IWebHostEnvironment environment)
     {
         _context = context;
         _geminiClient = geminiClient;
         _locationService = locationService;
+        _pdfService = pdfService;
+        _environment = environment;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -654,15 +662,22 @@ public class DispatchService : IDispatchService
     public async Task IssueDispatchDocumentsAsync(Guid tripId, Guid? issuerId = null)
     {
         var trip = await _context.MasterTrips
+            .Include(t => t.Vehicle)
+            .Include(t => t.Driver)
+            .Include(t => t.OriginLocation)
+            .Include(t => t.DestinationLocation)
             .Include(t => t.TransportOrders)
+                .ThenInclude(o => o.Customer)
             .FirstOrDefaultAsync(t => t.TripId == tripId)
             ?? throw new Exception("Trip not found.");
+
+        var pdfUrl = await GenerateWaybillPdfAsync(trip);
 
         _context.TransportDocuments.Add(new TransportDocument
         {
             DocId     = Guid.NewGuid(),
             DocType   = "E-WAYBILL",
-            ImageUrl  = $"https://coldchainx.com/docs/ewaybill/{tripId}.pdf",
+            ImageUrl  = pdfUrl,
             Status    = "ISSUED",
             CreatedAt = DateTime.UtcNow,
             UploadedBy = trip.DriverId ?? issuerId ?? Guid.Empty
@@ -670,6 +685,55 @@ public class DispatchService : IDispatchService
 
         trip.Status = "DISPATCHED";
         await _context.SaveChangesAsync();
+    }
+
+    private async Task<string> GenerateWaybillPdfAsync(MasterTrip trip)
+    {
+        var templatePath = Path.Combine(_environment.ContentRootPath, "Templates", "WaybillTemplate.html");
+        if (!File.Exists(templatePath))
+            throw new InvalidOperationException("WaybillTemplate.html template was not found");
+
+        var html = await File.ReadAllTextAsync(templatePath);
+
+        var ordersRows = "";
+        int no = 1;
+        foreach (var order in trip.TransportOrders)
+        {
+            ordersRows += $@"
+            <tr>
+                <td>{no}</td>
+                <td>{order.TrackingCode}</td>
+                <td>{order.Customer?.CompanyName ?? "Khách hàng vãng lai"}</td>
+                <td>{order.ItemName}</td>
+                <td>{order.Quantity}</td>
+                <td>{order.ExpectedWeightKg:0.##} kg</td>
+                <td>{order.TempCondition}</td>
+            </tr>";
+            no++;
+        }
+
+        var replacements = new Dictionary<string, string?>
+        {
+            ["Trip_Id"] = trip.TripId.ToString(),
+            ["Issue_Date"] = DateTime.UtcNow.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture),
+            ["Truck_Plate"] = trip.Vehicle?.TruckPlate ?? "N/A",
+            ["Vehicle_Type"] = trip.Vehicle?.VehicleType ?? "N/A",
+            ["Driver_Name"] = trip.Driver?.FullName ?? "N/A",
+            ["Driver_Phone"] = trip.Driver?.PhoneNumber ?? "N/A",
+            ["Driver_Identity"] = trip.Driver?.IdentityNumber ?? "N/A",
+            ["Origin_Address"] = trip.OriginLocation?.Address ?? "N/A",
+            ["Dest_Address"] = trip.DestinationLocation?.Address ?? "N/A",
+            ["Total_Distance"] = trip.TotalDistanceKm?.ToString("F1", CultureInfo.InvariantCulture) ?? "0",
+            ["Target_Temp"] = trip.TargetTemperature.ToString("F1", CultureInfo.InvariantCulture),
+            ["Planned_Start"] = trip.PlannedStartTime.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture),
+            ["Planned_End"] = trip.PlannedEndTime.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture),
+            ["Orders_Table_Rows"] = ordersRows
+        };
+
+        foreach (var replacement in replacements)
+            html = html.Replace($"{{{{{replacement.Key}}}}}", replacement.Value ?? string.Empty);
+
+        return await _pdfService.SaveWaybillPdfAsync(html, trip.TripId.ToString());
     }
 
     public async Task<List<LoadInstruction>> GetLoadPlanAsync(Guid tripId)
