@@ -49,7 +49,7 @@ namespace ColdChainX.API.Controllers
         /// <param name="request">The attachment request containing the file binary and polymorphic reference IDs.</param>
         /// <returns>The details of the uploaded attachment.</returns>
         [HttpPost]
-        [Authorize(Roles = "WarehouseOperator,Supervisor,Admin")]
+        [Authorize(Roles = "WarehouseOperator,Manager,Admin")]
         [ProducesResponseType(typeof(ApiResponse<AttachmentResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
@@ -85,7 +85,7 @@ namespace ColdChainX.API.Controllers
         /// <param name="attachmentId">The unique identifier of the attachment.</param>
         /// <returns>The attachment details.</returns>
         [HttpGet("{attachmentId:guid}")]
-        [Authorize(Roles = "WarehouseOperator,Supervisor,Admin")]
+        [Authorize(Roles = "WarehouseOperator,Manager,Admin")]
         [ProducesResponseType(typeof(ApiResponse<AttachmentResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
@@ -117,7 +117,7 @@ namespace ColdChainX.API.Controllers
         /// <param name="receiptId">The unique identifier of the warehouse receipt.</param>
         /// <returns>A list of matching attachments.</returns>
         [HttpGet("receipts/{receiptId:guid}")]
-        [Authorize(Roles = "WarehouseOperator,Supervisor,Admin")]
+        [Authorize(Roles = "WarehouseOperator,Manager,Admin")]
         [ProducesResponseType(typeof(ApiResponse<List<AttachmentResponse>>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
@@ -149,7 +149,7 @@ namespace ColdChainX.API.Controllers
         /// <param name="receiptItemId">The unique identifier of the warehouse receipt item.</param>
         /// <returns>A list of matching attachments.</returns>
         [HttpGet("receipt-items/{receiptItemId:guid}")]
-        [Authorize(Roles = "WarehouseOperator,Supervisor,Admin")]
+        [Authorize(Roles = "WarehouseOperator,Manager,Admin")]
         [ProducesResponseType(typeof(ApiResponse<List<AttachmentResponse>>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
@@ -182,7 +182,7 @@ namespace ColdChainX.API.Controllers
         /// <param name="request">The verification status and optional rejection reason.</param>
         /// <returns>The resulting compliance check outcomes.</returns>
         [HttpPatch("{attachmentId:guid}/verify")]
-        [Authorize(Roles = "Supervisor,Admin")]
+        [Authorize(Roles = "Manager,Admin")]
         [ProducesResponseType(typeof(ApiResponse<ComplianceCheckResult>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
