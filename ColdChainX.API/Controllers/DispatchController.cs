@@ -321,6 +321,42 @@ public class DispatchController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Sinh PDF sơ đồ xếp hàng LIFO cho nhân viên kho.
+    /// PDF bao gồm: sơ đồ container theo ngăn nhiệt độ (ĐÔNG/MÁT/THƯỜNG),
+    /// bảng thứ tự bốc xếp và lý do, upload lên Cloudinary và trả về URL tải về.
+    /// </summary>
+    [HttpGet("load-plan/{tripId}/pdf")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(object), 200)]
+    [ProducesResponseType(typeof(object), 400)]
+    [ProducesResponseType(typeof(object), 404)]
+    public async Task<IActionResult> GetLoadPlanPdf(string tripId)
+    {
+        try
+        {
+            var rawTripId = ExtractGuid(tripId);
+            if (!Guid.TryParse(rawTripId, out var parsedTripId))
+                return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
+
+            var pdfUrl = await _dispatchService.GenerateLoadPlanPdfAsync(parsedTripId);
+            return Ok(new
+            {
+                Success = true,
+                Message = "PDF sơ đồ xếp hàng LIFO đã được sinh thành công.",
+                PdfUrl = pdfUrl
+            });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { Success = false, Error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { Success = false, Error = "Lỗi khi sinh PDF.", Details = ex.Message });
+        }
+    }
+
     /// <summary>Lấy danh sách giấy đi đường / E-Waybill đã phát hành cho chuyến.</summary>
     [HttpGet("issue-documents/{tripId}")]
     [AllowAnonymous]
