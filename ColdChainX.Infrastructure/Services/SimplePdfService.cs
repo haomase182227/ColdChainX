@@ -13,11 +13,13 @@ namespace ColdChainX.Infrastructure.Services
 
         private readonly IWebHostEnvironment _environment;
         private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly IFileService _fileService;
 
-        public SimplePdfService(IWebHostEnvironment environment, IHttpContextAccessor httpContextAccessor)
+        public SimplePdfService(IWebHostEnvironment environment, IHttpContextAccessor httpContextAccessor, IFileService fileService)
         {
             _environment = environment;
             _httpContextAccessor = httpContextAccessor;
+            _fileService = fileService;
         }
 
         public async Task<string> SaveContractPdfAsync(string htmlContent, string contractNumber)
@@ -29,14 +31,13 @@ namespace ColdChainX.Infrastructure.Services
         public async Task<string> SaveWarehouseReceiptPdfAsync(string htmlContent, string receiptCode)
             => await SavePdfAsync(htmlContent, "receipts", receiptCode);
 
+        public async Task<string> SaveWaybillPdfAsync(string htmlContent, string tripId)
+            => await SavePdfAsync(htmlContent, "waybills", tripId);
+
         private async Task<string> SavePdfAsync(string htmlContent, string folderName, string fileCode)
         {
             var root = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot");
-            var folder = Path.Combine(root, folderName);
-            Directory.CreateDirectory(folder);
-
             var fileName = $"{SanitizeFileName(fileCode)}.pdf";
-            var fullPath = Path.Combine(folder, fileName);
             var normalizedHtml = NormalizeHtmlForLocalAssets(htmlContent, root);
 
             await using var browser = await LaunchBrowserAsync();
@@ -58,18 +59,8 @@ namespace ColdChainX.Infrastructure.Services
                 }
             });
 
-            await File.WriteAllBytesAsync(fullPath, pdfBytes);
-
-            // Build absolute URL so the link works from any client/browser
-            var request = _httpContextAccessor.HttpContext?.Request;
-            if (request != null)
-            {
-                var baseUrl = $"{request.Scheme}://{request.Host}";
-                return $"{baseUrl}/{folderName}/{fileName}";
-            }
-
-            // Fallback to relative path if no HTTP context (e.g., background jobs)
-            return $"/{folderName}/{fileName}";
+            // Upload directly to Cloudinary via IFileService
+            return await _fileService.UploadFileAsync(pdfBytes, fileName);
         }
 
         private static async Task<IBrowser> LaunchBrowserAsync()

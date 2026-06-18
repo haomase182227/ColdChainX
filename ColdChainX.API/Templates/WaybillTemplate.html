@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1e293b; margin: 0; padding: 20px; line-height: 1.5; background-color: #ffffff; }
+        .header { border-bottom: 3px solid #3b82f6; padding-bottom: 15px; margin-bottom: 25px; }
+        .company-name { font-size: 26px; font-weight: 800; color: #1e3a8a; letter-spacing: 0.5px; }
+        .company-sub { font-size: 12px; color: #64748b; font-weight: 500; }
+        .doc-meta { float: right; text-align: right; font-size: 13px; color: #475569; line-height: 1.6; }
+        .doc-meta strong { color: #0f172a; }
+        .title-container { text-align: center; margin: 25px 0; }
+        .doc-title { font-size: 22px; font-weight: 800; color: #1e293b; text-transform: uppercase; letter-spacing: 1px; margin: 0; }
+        .doc-subtitle { font-size: 13px; color: #64748b; font-style: italic; margin-top: 5px; }
+        
+        .section-title { font-size: 14px; font-weight: 700; color: #1e3a8a; text-transform: uppercase; margin-bottom: 10px; border-left: 4px solid #3b82f6; padding-left: 8px; }
+        
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px; }
+        .info-card { background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 15px; }
+        .info-card p { margin: 6px 0; font-size: 13.5px; color: #334155; }
+        .info-card strong { color: #0f172a; font-weight: 600; display: inline-block; width: 140px; }
+        
+        table { width: 100%; border-collapse: collapse; margin-bottom: 30px; margin-top: 10px; }
+        th, td { border: 1px solid #cbd5e1; padding: 10px 12px; text-align: left; font-size: 13px; }
+        th { background-color: #f1f5f9; font-weight: 700; color: #1e293b; text-transform: uppercase; font-size: 11.5px; letter-spacing: 0.5px; }
+        tr:nth-child(even) td { background-color: #f8fafc; }
+        
+        .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 50px; text-align: center; margin-top: 60px; page-break-inside: avoid; }
+        .sig-block { border-top: 1px dashed #cbd5e1; padding-top: 12px; font-size: 14px; color: #334155; }
+        .sig-block strong { color: #0f172a; display: block; margin-bottom: 40px; }
+        
+        .footer { text-align: center; font-size: 11px; color: #94a3b8; margin-top: 50px; border-top: 1px solid #e2e8f0; padding-top: 12px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div style="float: left;">
+            <span class="company-name">COLDCHAINX</span><br>
+            <span class="company-sub">HỆ THỐNG GIÁM SÁT & VẬN TẢI CHUỖI LẠNH TỰ ĐỘNG</span>
+        </div>
+        <div class="doc-meta">
+            <strong>Mã chuyến đi:</strong> {{Trip_Id}}<br>
+            <strong>Ngày phát hành:</strong> {{Issue_Date}}
+        </div>
+        <div style="clear: both;"></div>
+    </div>
+
+    <div class="title-container">
+        <h1 class="doc-title">Giấy Đi Đường Điện Tử</h1>
+        <div class="doc-subtitle">(e-Waybill & Dispatch Instruction)</div>
+    </div>
+
+    <div class="info-grid">
+        <div class="info-card">
+            <div class="section-title">Thông tin phương tiện & tài xế</div>
+            <p><strong>Biển số xe:</strong> {{Truck_Plate}}</p>
+            <p><strong>Loại xe:</strong> {{Vehicle_Type}}</p>
+            <p><strong>Tài xế phụ trách:</strong> {{Driver_Name}}</p>
+            <p><strong>Số điện thoại:</strong> {{Driver_Phone}}</p>
+            <p><strong>Số CMND/CCCD:</strong> {{Driver_Identity}}</p>
+        </div>
+        <div class="info-card">
+            <div class="section-title">Thông tin hành trình</div>
+            <p><strong>Điểm xuất phát:</strong> {{Origin_Address}}</p>
+            <p><strong>Điểm kết thúc:</strong> {{Dest_Address}}</p>
+            <p><strong>Khoảng cách dự kiến:</strong> {{Total_Distance}} km</p>
+            <p><strong>Nhiệt độ cài đặt:</strong> {{Target_Temp}}°C</p>
+            <p><strong>Thời gian dự kiến:</strong> {{Planned_Start}} - {{Planned_End}}</p>
+        </div>
+    </div>
+
+    <div class="section-title">Danh sách đơn hàng vận chuyển</div>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 5%;">STT</th>
+                <th style="width: 15%;">Mã vận đơn</th>
+                <th style="width: 20%;">Khách hàng</th>
+                <th style="width: 25%;">Tên sản phẩm</th>
+                <th style="width: 10%;">Số lượng</th>
+                <th style="width: 10%;">Trọng lượng</th>
+                <th style="width: 15%;">Điều kiện bảo quản</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{Orders_Table_Rows}}
+        </tbody>
+    </table>
+
+    <div class="signatures">
+        <div class="sig-block">
+            <strong>Đại diện điều phối vận tải</strong>
+            (Ký và ghi rõ họ tên)
+        </div>
+        <div class="sig-block">
+            <strong>Tài xế xác nhận nhận hàng</strong>
+            (Ký và ghi rõ họ tên)
+        </div>
+    </div>
+
+    <div class="footer">
+        Giấy đi đường điện tử được tạo tự động bởi Hệ thống quản lý chuỗi lạnh ColdChainX. Hợp lệ pháp lý trong lưu thông vận tải đường bộ.
+    </div>
+</body>
+</html>

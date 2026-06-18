@@ -515,6 +515,11 @@ public class DispatchController : ControllerBase
                 {
                     DriverId = driverUserId, // DriverId trùng với UserId để tránh lỗi khóa ngoại UploadedBy khi tạo E-Waybill
                     UserId = driverUserId,
+                    FullName = "Nguyễn Văn Tải",
+                    IdentityNumber = "037095000123",
+                    PhoneNumber = "0912345678",
+                    DateOfBirth = new DateOnly(1990, 1, 1),
+                    JoinDate = DateOnly.FromDateTime(DateTime.UtcNow),
                     Status = "AVAILABLE",
                     CreatedAt = DateTime.UtcNow
                 };
