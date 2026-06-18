@@ -387,6 +387,62 @@ namespace ColdChainX.UnitTests
         }
 
         [Fact]
+        public async Task AdjustOutHold_MultipleActiveHolds_PreservesStatus()
+        {
+            // Arrange: Seed stock with 100 qty
+            var (stockId, _, _, _, stock) = await SeedStockAsync("ITEM-HOLD-MULTIPLE", 100.0m);
+            stock.Status = "HOLD";
+            _db.InventoryStocks.Update(stock);
+
+            // Add two active holds directly to the db
+            var hold1 = new InventoryHold
+            {
+                HoldId = Guid.NewGuid(),
+                StockId = stockId,
+                HoldQuantity = 40.0m,
+                ReasonCode = "DAMAGED",
+                Status = "HOLD",
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = _testUserId
+            };
+            var hold2 = new InventoryHold
+            {
+                HoldId = Guid.NewGuid(),
+                StockId = stockId,
+                HoldQuantity = 60.0m,
+                ReasonCode = "TEMP_EXCURSION",
+                Status = "HOLD",
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = _testUserId
+            };
+            _db.InventoryHolds.AddRange(hold1, hold2);
+            await _db.SaveChangesAsync();
+
+            // Act: Adjust out the first hold
+            var resultAdjust = await _service.AdjustOutHoldAsync(hold1.HoldId, "Scrapped damaged part", _testUserId);
+
+            // Assert
+            Assert.True(resultAdjust.Success);
+
+            // Stock status should remain "HOLD" because hold2 is still active
+            var dbStock = await _db.InventoryStocks.FindAsync(stockId);
+            Assert.NotNull(dbStock);
+            Assert.Equal("HOLD", dbStock.Status);
+            // QuantityOnHand should be adjusted (100 - 40 = 60)
+            Assert.Equal(60.0m, dbStock.QuantityOnHand);
+
+            // hold1 status should be "ADJUSTED"
+            var dbHold1 = await _db.InventoryHolds.FindAsync(hold1.HoldId);
+            Assert.NotNull(dbHold1);
+            Assert.Equal("ADJUSTED", dbHold1.Status);
+
+            // hold2 status should remain "HOLD"
+            var dbHold2 = await _db.InventoryHolds.FindAsync(hold2.HoldId);
+            Assert.NotNull(dbHold2);
+            Assert.Equal("HOLD", dbHold2.Status);
+        }
+
+        [Fact]
         public async Task CreateHold_PartialQuantity_CalculatesProportionalPallets()
         {
             // Arrange: Seed stock with 100 qty and 4 pallets

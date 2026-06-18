@@ -418,6 +418,20 @@ namespace ColdChainX.Application.Services
                             return ApiResponse<bool>.Failure($"Adjustment failed: {adjustResult.Message}");
                         }
 
+                        // Determine the final status of the stock post-adjustment
+                        var otherActiveHoldsExist = await _db.InventoryHolds
+                            .AnyAsync(h => h.StockId == stock.StockId && h.HoldId != holdId && h.Status == "HOLD");
+
+                        if (otherActiveHoldsExist)
+                        {
+                            stock.Status = "HOLD";
+                        }
+                        else
+                        {
+                            stock.Status = stock.QuantityOnHand > 0 ? "AVAILABLE" : "INACTIVE";
+                        }
+                        await _db.SaveChangesAsync();
+
                         // Retrieve the latest logged adjustment to link it
                         var latestAdjustment = await _db.InventoryAdjustments
                             .Where(a => a.StockId == hold.StockId)
