@@ -385,16 +385,30 @@ public partial class ApplicationDbContext : DbContext
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
             entity.Property(e => e.CustomerId).HasColumnName("customer_id");
+            entity.Property(e => e.DraftHtmlContent).HasColumnName("draft_html_content");
             entity.Property(e => e.ExpiredDate).HasColumnName("expired_date");
             entity.Property(e => e.FileUrl)
                 .HasMaxLength(255)
                 .HasColumnName("file_url");
             entity.Property(e => e.OrderId).HasColumnName("order_id");
+            entity.Property(e => e.SentAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("sent_at");
             entity.Property(e => e.SignedDate).HasColumnName("signed_date");
+            entity.Property(e => e.SignedFileUrl)
+                .HasMaxLength(255)
+                .HasColumnName("signed_file_url");
             entity.Property(e => e.Status)
                 .HasMaxLength(20)
                 .HasDefaultValueSql("'ACTIVE'::character varying")
                 .HasColumnName("status");
+            entity.Property(e => e.UploadedSignedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("uploaded_signed_at");
+            entity.Property(e => e.VerifiedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("verified_at");
+            entity.Property(e => e.VerifiedBy).HasColumnName("verified_by");
 
             entity.HasOne(d => d.Customer).WithMany(p => p.CustomerContracts)
                 .HasForeignKey(d => d.CustomerId)
