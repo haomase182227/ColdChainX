@@ -133,6 +133,15 @@ namespace ColdChainX.UnitTests
         {
             // Arrange
             var customerId = Guid.NewGuid();
+            var customer = new Customer
+            {
+                CustomerId = customerId,
+                CompanyName = "Test Customer Company",
+                TaxCode = "TAX-12345",
+                Status = "ACTIVE"
+            };
+            _db.Customers.Add(customer);
+
             var orderId = Guid.NewGuid();
             var order = new OutboundOrder
             {
@@ -188,18 +197,37 @@ namespace ColdChainX.UnitTests
             var allocation = new InventoryAllocation { AllocationId = Guid.NewGuid(), ReferenceDocumentId = orderId, StockId = stock.StockId, AllocatedQuantity = 10m, Status = "ALLOCATED", CreatedAt = DateTime.UtcNow, Stock = stock };
             _db.InventoryAllocations.Add(allocation);
 
-            // Add verified compliance document so compliance validation succeeds
-            var att = new WarehouseEvidenceAttachment
+            // Add verified compliance documents so compliance validation succeeds
+            await _attachmentRepository.AddAttachmentAsync(new WarehouseEvidenceAttachment
             {
                 AttachmentId = Guid.NewGuid(),
                 OutboundOrderId = orderId,
-                FileName = "quarantine.pdf",
-                FilePath = "/uploads/quarantine.pdf",
+                FileName = "issue_note.pdf",
+                FilePath = "/uploads/issue_note.pdf",
                 Category = AttachmentCategory.COMPLIANCE,
-                SubCategory = AttachmentSubCategory.QUARANTINE_CERTIFICATE,
+                SubCategory = AttachmentSubCategory.WAREHOUSE_ISSUE_NOTE,
                 Status = DocumentStatus.VERIFIED
-            };
-            await _attachmentRepository.AddAttachmentAsync(att);
+            });
+            await _attachmentRepository.AddAttachmentAsync(new WarehouseEvidenceAttachment
+            {
+                AttachmentId = Guid.NewGuid(),
+                OutboundOrderId = orderId,
+                FileName = "condition.jpg",
+                FilePath = "/uploads/condition.jpg",
+                Category = AttachmentCategory.COMPLIANCE,
+                SubCategory = AttachmentSubCategory.GOODS_CONDITION_PHOTO,
+                Status = DocumentStatus.VERIFIED
+            });
+            await _attachmentRepository.AddAttachmentAsync(new WarehouseEvidenceAttachment
+            {
+                AttachmentId = Guid.NewGuid(),
+                OutboundOrderId = orderId,
+                FileName = "temp.jpg",
+                FilePath = "/uploads/temp.jpg",
+                Category = AttachmentCategory.COMPLIANCE,
+                SubCategory = AttachmentSubCategory.TEMPERATURE_PHOTO,
+                Status = DocumentStatus.VERIFIED
+            });
 
             await _db.SaveChangesAsync();
 
@@ -207,7 +235,7 @@ namespace ColdChainX.UnitTests
             var result = await _service.ShipOrderAsync(orderId, Guid.NewGuid());
 
             // Assert
-            Assert.True(result.Success);
+            Assert.True(result.Success, result.Message);
 
             var checkOrder = await _db.OutboundOrders.FindAsync(orderId);
             Assert.NotNull(checkOrder);
