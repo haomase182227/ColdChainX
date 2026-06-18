@@ -1409,6 +1409,7 @@ public partial class ApplicationDbContext : DbContext
                 .HasColumnName("item_name");
             entity.Property(e => e.MasterTripId).HasColumnName("master_trip_id");
             entity.Property(e => e.PickupLocation).HasColumnName("pickup_location");
+            entity.Property(e => e.RouteId).HasColumnName("route_id");
             entity.Property(e => e.PackingType)
                 .HasMaxLength(50)
                 .HasDefaultValueSql("'Thùng'::character varying")
@@ -1441,6 +1442,10 @@ public partial class ApplicationDbContext : DbContext
             entity.HasOne(d => d.PickupLocationNavigation).WithMany(p => p.TransportOrderPickupLocationNavigations)
                 .HasForeignKey(d => d.PickupLocation)
                 .HasConstraintName("fk_to_pickup");
+
+            entity.HasOne(d => d.Route).WithMany(p => p.TransportOrders)
+                .HasForeignKey(d => d.RouteId)
+                .HasConstraintName("fk_transport_orders_route_master");
         });
 
         modelBuilder.Entity<TripStop>(entity =>
