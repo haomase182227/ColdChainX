@@ -2105,7 +2105,11 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
         modelBuilder.Entity<InventoryStock>(entity =>
         {
             entity.HasKey(e => e.StockId).HasName("inventory_stocks_pkey");
-            entity.ToTable("inventory_stocks");
+            entity.ToTable("inventory_stocks", t =>
+            {
+                t.HasCheckConstraint("CK_inventory_stocks_quantity_on_hand_gte_zero", "quantity_on_hand >= 0");
+                t.HasCheckConstraint("CK_inventory_stocks_quantity_allocated_gte_zero", "quantity_allocated >= 0");
+            });
             entity.HasIndex(e => new { e.LocationId, e.CustomerId, e.ItemCode, e.BatchId }, "uq_location_customer_item_batch").IsUnique();
 
             entity.Property(e => e.StockId)
