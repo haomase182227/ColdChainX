@@ -48,9 +48,20 @@ namespace ColdChainX.Application.Services
                     using var transaction = isOuterTransaction ? await _db.Database.BeginTransactionAsync() : null;
                     try
                       {
-                        var stock = await _db.InventoryStocks
-                            .Include(s => s.Location)
-                            .FirstOrDefaultAsync(s => s.StockId == dto.StockId);
+                        InventoryStock? stock = null;
+                        if (_db.Database.ProviderName == "Npgsql.EntityFrameworkCore.PostgreSQL")
+                        {
+                            stock = await _db.InventoryStocks
+                                .FromSqlRaw("SELECT * FROM inventory_stocks WHERE stock_id = {0} FOR UPDATE", dto.StockId)
+                                .Include(s => s.Location)
+                                .FirstOrDefaultAsync();
+                        }
+                        else
+                        {
+                            stock = await _db.InventoryStocks
+                                .Include(s => s.Location)
+                                .FirstOrDefaultAsync(s => s.StockId == dto.StockId);
+                        }
 
                         if (stock == null)
                             return ApiResponse<HoldResponseDto>.Failure("Stock record not found.");
@@ -133,6 +144,24 @@ namespace ColdChainX.Application.Services
                         };
 
                         await _holdRepo.AddAsync(hold);
+
+                        // Log InventoryMovement for Quarantine Hold
+                        var movement = new InventoryMovement
+                        {
+                            MovementId = Guid.NewGuid(),
+                            StockId = targetStockId,
+                            ItemCode = stock.ItemCode,
+                            BatchId = stock.BatchId,
+                            MovementType = "QUARANTINE_HOLD",
+                            Quantity = dto.Quantity,
+                            FromLocationId = stock.LocationId,
+                            ToLocationId = stock.LocationId,
+                            ReferenceDocumentId = hold.HoldId,
+                            CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
+                            CreatedBy = userId
+                        };
+                        _db.InventoryMovements.Add(movement);
+
                         await _holdRepo.SaveChangesAsync();
                         if (isOuterTransaction && transaction != null)
                         {
@@ -195,7 +224,21 @@ namespace ColdChainX.Application.Services
                         if (hold.Status != "HOLD")
                             return ApiResponse<bool>.Failure($"Hold is already in '{hold.Status}' status.");
 
-                        var stock = hold.Stock;
+                        InventoryStock? stock = null;
+                        if (_db.Database.ProviderName == "Npgsql.EntityFrameworkCore.PostgreSQL")
+                        {
+                            stock = await _db.InventoryStocks
+                                .FromSqlRaw("SELECT * FROM inventory_stocks WHERE stock_id = {0} FOR UPDATE", hold.StockId)
+                                .Include(s => s.Location)
+                                .FirstOrDefaultAsync();
+                        }
+                        else
+                        {
+                            stock = await _db.InventoryStocks
+                                .Include(s => s.Location)
+                                .FirstOrDefaultAsync(s => s.StockId == hold.StockId);
+                        }
+
                         if (stock == null)
                             return ApiResponse<bool>.Failure("Held stock record not found.");
 
@@ -218,6 +261,23 @@ namespace ColdChainX.Application.Services
                         {
                             // Revert Status back to AVAILABLE since no other active holds exist
                             stock.Status = "AVAILABLE";
+
+                            // Log InventoryMovement for Quarantine Release
+                            var movement = new InventoryMovement
+                            {
+                                MovementId = Guid.NewGuid(),
+                                StockId = stock.StockId,
+                                ItemCode = stock.ItemCode,
+                                BatchId = stock.BatchId,
+                                MovementType = "QUARANTINE_RELEASE",
+                                Quantity = hold.HoldQuantity,
+                                FromLocationId = stock.LocationId,
+                                ToLocationId = stock.LocationId,
+                                ReferenceDocumentId = hold.HoldId,
+                                CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
+                                CreatedBy = userId
+                            };
+                            _db.InventoryMovements.Add(movement);
                         }
 
                         stock.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
@@ -357,6 +417,20 @@ namespace ColdChainX.Application.Services
                             await _db.SaveChangesAsync();
                             return ApiResponse<bool>.Failure($"Adjustment failed: {adjustResult.Message}");
                         }
+
+                        // Determine the final status of the stock post-adjustment
+                        var otherActiveHoldsExist = await _db.InventoryHolds
+                            .AnyAsync(h => h.StockId == stock.StockId && h.HoldId != holdId && h.Status == "HOLD");
+
+                        if (otherActiveHoldsExist)
+                        {
+                            stock.Status = "HOLD";
+                        }
+                        else
+                        {
+                            stock.Status = stock.QuantityOnHand > 0 ? "AVAILABLE" : "INACTIVE";
+                        }
+                        await _db.SaveChangesAsync();
 
                         // Retrieve the latest logged adjustment to link it
                         var latestAdjustment = await _db.InventoryAdjustments

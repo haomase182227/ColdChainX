@@ -600,6 +600,35 @@ namespace ColdChainX.UnitTests
             Assert.False(result.Data.Passed);
             Assert.Contains(result.Data.FailedRequirements, r => r.Contains("Ambiguous product category"));
         }
+
+        [Fact]
+        public async Task UploadAttachment_FileExceeds10MB_ValidationFails()
+        {
+            // Arrange
+            var userId = Guid.NewGuid();
+            var receiptId = Guid.NewGuid();
+            var content11Mb = new string('A', 11 * 1024 * 1024);
+            var file = CreateFormFile("huge_report.pdf", "application/pdf", content11Mb);
+            
+            var request = new UploadAttachmentRequest
+            {
+                File = file,
+                Category = AttachmentCategory.COMPLIANCE,
+                SubCategory = AttachmentSubCategory.CUSTOMS_DECLARATION,
+                WarehouseReceiptId = receiptId,
+                DocumentNumber = "CD-9988",
+                Issuer = "Customs Dept",
+                IssueDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1)),
+                ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(30))
+            };
+
+            // Act
+            var result = await _service.UploadAttachmentAsync(request, userId);
+
+            // Assert
+            Assert.False(result.Success);
+            Assert.Contains("File size must not exceed 10 MB", result.Message);
+        }
     }
 
     #region Mock Classes

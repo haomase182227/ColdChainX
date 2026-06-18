@@ -18,6 +18,7 @@ namespace ColdChainX.Infrastructure.Services
     {
         private const string PendingReview = "PENDING_REVIEW";
         private const string Rejected = "REJECTED";
+        private const string Approved = "APPROVED";
         private const string Draft = "DRAFT";
         private const string DefaultOriginCity = "HCM";
         private const decimal MinChargeableWeightKg = 30m;
@@ -268,6 +269,8 @@ namespace ColdChainX.Infrastructure.Services
 
                 if (quotation == null)
                     return ApiResponse<ReviewOrderResponse>.Failure("Draft quotation was not found for this order");
+
+                order.Status = Approved;
 
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();

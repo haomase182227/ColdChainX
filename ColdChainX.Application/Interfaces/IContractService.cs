@@ -6,6 +6,7 @@ namespace ColdChainX.Application.Interfaces
     public interface IContractService
     {
         Task<ApiResponse<ContractInfoResponse>> GetContractByIdAsync(Guid contractId);
+        Task<ApiResponse<ContractInfoResponse>> GetContractByOrderIdAsync(Guid orderId);
         Task<ApiResponse<string>> GetContractHtmlAsync(Guid contractId);
         Task<ApiResponse<string>> PreviewContractAsync(Guid orderId);
         Task<ApiResponse<GenerateContractResponse>> GenerateContractAsync(GenerateContractRequest request, Guid salesUserId);

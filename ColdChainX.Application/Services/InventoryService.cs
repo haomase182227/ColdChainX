@@ -865,7 +865,10 @@ namespace ColdChainX.Application.Services
 
             for (int retry = 1; retry <= maxRetries; retry++)
             {
-                using var transaction = await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead);
+                var isOuterTransaction = _db.Database.CurrentTransaction == null;
+                using var transaction = isOuterTransaction 
+                    ? await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead) 
+                    : null;
                 try
                 {
                     var result = new AllocationResultResponse
@@ -896,7 +899,10 @@ namespace ColdChainX.Application.Services
                         decimal totalAvailable = stocks.Sum(s => s.QuantityOnHand - s.QuantityAllocated);
                         if (totalAvailable < itemRequest.Quantity)
                         {
-                            await transaction.RollbackAsync();
+                            if (isOuterTransaction && transaction != null)
+                            {
+                                await transaction.RollbackAsync();
+                            }
                             return ApiResponse<AllocationResultResponse>.Failure($"Insufficient inventory for item '{itemRequest.ItemCode}'. Available: {totalAvailable}, Requested: {itemRequest.Quantity}");
                         }
 
@@ -960,14 +966,20 @@ namespace ColdChainX.Application.Services
                     }
 
                     await _db.SaveChangesAsync();
-                    await transaction.CommitAsync();
+                    if (isOuterTransaction && transaction != null)
+                    {
+                        await transaction.CommitAsync();
+                    }
 
                     _logger.LogInformation("Allocated stock atomically for ReferenceDocumentId: {ReferenceDocumentId}", request.ReferenceDocumentId);
                     return ApiResponse<AllocationResultResponse>.SuccessResponse(result, "Inventory allocated successfully.");
                 }
                 catch (Exception ex)
                 {
-                    await transaction.RollbackAsync();
+                    if (isOuterTransaction && transaction != null)
+                    {
+                        await transaction.RollbackAsync();
+                    }
                     _db.ChangeTracker.Clear();
 
                     bool isSerializationFailure = false;
@@ -1008,7 +1020,8 @@ namespace ColdChainX.Application.Services
             if (request == null)
                 return ApiResponse<bool>.Failure("Request is null");
 
-            using var transaction = await _db.Database.BeginTransactionAsync();
+            var isOuterTransaction = _db.Database.CurrentTransaction == null;
+            using var transaction = isOuterTransaction ? await _db.Database.BeginTransactionAsync() : null;
             try
             {
                 var allocations = await _db.InventoryAllocations
@@ -1054,14 +1067,20 @@ namespace ColdChainX.Application.Services
                 }
 
                 await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+                if (isOuterTransaction && transaction != null)
+                {
+                    await transaction.CommitAsync();
+                }
 
                 _logger.LogInformation("Released allocations for ReferenceDocumentId: {ReferenceDocumentId}", request.ReferenceDocumentId);
                 return ApiResponse<bool>.SuccessResponse(true, "Allocations released successfully.");
             }
             catch (Exception ex)
             {
-                await transaction.RollbackAsync();
+                if (isOuterTransaction && transaction != null)
+                {
+                    await transaction.RollbackAsync();
+                }
                 _logger.LogError(ex, "Failed to release allocations for ReferenceDocumentId: {ReferenceDocumentId}", request.ReferenceDocumentId);
                 return ApiResponse<bool>.Failure($"Failed to release allocation: {ex.Message}");
             }

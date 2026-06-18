@@ -57,6 +57,20 @@ namespace ColdChainX.Infrastructure.Services
                 "Contract retrieved successfully");
         }
 
+        public async Task<ApiResponse<ContractInfoResponse>> GetContractByOrderIdAsync(Guid orderId)
+        {
+            var contract = await _db.CustomerContracts
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => c.OrderId == orderId);
+
+            if (contract == null)
+                return ApiResponse<ContractInfoResponse>.Failure("Contract not found");
+
+            return ApiResponse<ContractInfoResponse>.SuccessResponse(
+                ToContractInfoResponse(contract),
+                "Contract retrieved successfully");
+        }
+
         public async Task<ApiResponse<string>> GetContractHtmlAsync(Guid contractId)
         {
             var html = await _db.CustomerContracts

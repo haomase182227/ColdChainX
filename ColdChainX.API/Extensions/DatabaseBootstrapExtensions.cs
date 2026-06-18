@@ -152,6 +152,31 @@ WHERE NOT EXISTS (
                 await db.Database.ExecuteSqlRawAsync(sqlSeed);
                 logger.LogInformation("Roles seeding executed.");
 
+                var sqlCheckConstraints = @"DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='inventory_stocks') THEN
+        IF NOT EXISTS (
+            SELECT 1 
+            FROM pg_constraint 
+            WHERE conrelid = 'public.inventory_stocks'::regclass AND conname = 'ck_inventory_stocks_quantity_on_hand_gte_zero'
+        ) THEN
+            ALTER TABLE public.inventory_stocks ADD CONSTRAINT ck_inventory_stocks_quantity_on_hand_gte_zero CHECK (quantity_on_hand >= 0);
+        END IF;
+
+        IF NOT EXISTS (
+            SELECT 1 
+            FROM pg_constraint 
+            WHERE conrelid = 'public.inventory_stocks'::regclass AND conname = 'ck_inventory_stocks_quantity_allocated_gte_zero'
+        ) THEN
+            ALTER TABLE public.inventory_stocks ADD CONSTRAINT ck_inventory_stocks_quantity_allocated_gte_zero CHECK (quantity_allocated >= 0);
+        END IF;
+    END IF;
+END $$;";
+
+                logger.LogInformation("Ensuring inventory_stocks check constraints exist...");
+                await db.Database.ExecuteSqlRawAsync(sqlCheckConstraints);
+                logger.LogInformation("Inventory check constraints check executed.");
+
                 var sqlEnsureTransportOrder = @"DO $$
 BEGIN
     IF NOT EXISTS (

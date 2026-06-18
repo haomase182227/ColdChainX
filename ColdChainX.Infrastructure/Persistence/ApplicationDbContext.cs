@@ -1126,6 +1126,15 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.UnitPrice)
                 .HasPrecision(15, 2)
                 .HasColumnName("unit_price");
+            entity.Property(e => e.MinValue)
+                .HasPrecision(12, 4)
+                .HasColumnName("min_value");
+            entity.Property(e => e.MaxValue)
+                .HasPrecision(12, 4)
+                .HasColumnName("max_value");
+            entity.Property(e => e.MinCharge)
+                .HasPrecision(15, 2)
+                .HasColumnName("min_charge");
         });
 
         modelBuilder.Entity<Quotation>(entity =>
@@ -2096,7 +2105,11 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
         modelBuilder.Entity<InventoryStock>(entity =>
         {
             entity.HasKey(e => e.StockId).HasName("inventory_stocks_pkey");
-            entity.ToTable("inventory_stocks");
+            entity.ToTable("inventory_stocks", t =>
+            {
+                t.HasCheckConstraint("CK_inventory_stocks_quantity_on_hand_gte_zero", "quantity_on_hand >= 0");
+                t.HasCheckConstraint("CK_inventory_stocks_quantity_allocated_gte_zero", "quantity_allocated >= 0");
+            });
             entity.HasIndex(e => new { e.LocationId, e.CustomerId, e.ItemCode, e.BatchId }, "uq_location_customer_item_batch").IsUnique();
 
             entity.Property(e => e.StockId)

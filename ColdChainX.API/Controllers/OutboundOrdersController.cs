@@ -53,6 +53,7 @@ namespace ColdChainX.API.Controllers
         /// <response code="400">Validation failed or business rule was violated (e.g. unknown SKU).</response>
         /// <response code="401">Bearer token is missing or invalid.</response>
         [HttpPost]
+        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Dispatcher")]
         [ProducesResponseType(typeof(OutboundOrderResponse), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(401)]
@@ -145,6 +146,7 @@ namespace ColdChainX.API.Controllers
         /// <response code="400">Order is not editable at its current status, or validation failed.</response>
         /// <response code="401">Bearer token is missing or invalid.</response>
         [HttpPut("{id:guid}")]
+        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Dispatcher")]
         [ProducesResponseType(typeof(OutboundOrderResponse), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(401)]
@@ -177,6 +179,7 @@ namespace ColdChainX.API.Controllers
         /// <response code="400">Insufficient stock, order is not in <c>Pending</c> status, or order not found.</response>
         /// <response code="401">Bearer token is missing or invalid.</response>
         [HttpPost("{id:guid}/allocations")]
+        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Dispatcher")]
         [ProducesResponseType(typeof(AllocationResponse), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(401)]
@@ -207,6 +210,7 @@ namespace ColdChainX.API.Controllers
         /// <response code="400">Order is already shipped or in a non-cancellable state.</response>
         /// <response code="401">Bearer token is missing or invalid.</response>
         [HttpDelete("{id:guid}")]
+        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Dispatcher")]
         [ProducesResponseType(typeof(OutboundOrderResponse), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(401)]
@@ -238,6 +242,7 @@ namespace ColdChainX.API.Controllers
         /// <response code="400">Order is not in <c>Allocated</c> status, or picker not found.</response>
         /// <response code="401">Bearer token is missing or invalid.</response>
         [HttpPost("{id:guid}/picking-assignment")]
+        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,WarehouseOperator")]
         [ProducesResponseType(typeof(OutboundOrderResponse), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(401)]
@@ -268,6 +273,7 @@ namespace ColdChainX.API.Controllers
         /// <response code="400">Order is not currently in <c>Picking</c> status.</response>
         /// <response code="401">Bearer token is missing or invalid.</response>
         [HttpPost("{id:guid}/picking-completion")]
+        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,WarehouseOperator")]
         [ProducesResponseType(typeof(OutboundOrderResponse), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(401)]
@@ -299,6 +305,7 @@ namespace ColdChainX.API.Controllers
         /// <response code="400">Order is not in <c>Picked</c> status, or order not found.</response>
         /// <response code="401">Bearer token is missing or invalid.</response>
         [HttpPost("{id:guid}/shipment")]
+        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Dispatcher")]
         [ProducesResponseType(typeof(OutboundOrderResponse), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(401)]

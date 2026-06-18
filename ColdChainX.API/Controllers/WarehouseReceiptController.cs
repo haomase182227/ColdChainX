@@ -49,6 +49,7 @@ namespace ColdChainX.API.Controllers
         /// <param name="request">The QC details including deliverer name, temperature, and quality notes.</param>
         /// <returns>The newly created warehouse receipt details.</returns>
         [HttpPost("orders/{orderId:guid}/qc")]
+        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,WarehouseOperator")]
         [ProducesResponseType(typeof(ApiResponse<WarehouseReceiptResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
@@ -87,6 +88,7 @@ namespace ColdChainX.API.Controllers
         /// <param name="request">The actual physical measurements of all items.</param>
         /// <returns>The updated warehouse receipt details.</returns>
         [HttpPut("orders/{orderId:guid}/measurements")]
+        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,WarehouseOperator")]
         [ProducesResponseType(typeof(ApiResponse<WarehouseReceiptResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
@@ -119,6 +121,7 @@ namespace ColdChainX.API.Controllers
         /// <param name="orderId">The unique identifier of the transport order.</param>
         /// <returns>The finalized warehouse receipt details.</returns>
         [HttpPost("orders/{orderId:guid}/completion")]
+        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,WarehouseOperator")]
         [ProducesResponseType(typeof(ApiResponse<WarehouseReceiptResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]

@@ -29,6 +29,14 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
+        [HttpGet("by-order/{orderId:guid}")]
+        public async Task<IActionResult> GetContractByOrderId(Guid orderId)
+        {
+            var result = await _contractService.GetContractByOrderIdAsync(orderId);
+            if (!result.Success) return NotFound(result);
+            return Ok(result);
+        }
+
         /// <summary>
         /// Lấy nội dung HTML nháp của hợp đồng dưới dạng raw HTML.
         /// </summary>
