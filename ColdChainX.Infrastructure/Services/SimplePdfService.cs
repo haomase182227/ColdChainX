@@ -29,6 +29,9 @@ namespace ColdChainX.Infrastructure.Services
         public async Task<string> SaveWarehouseReceiptPdfAsync(string htmlContent, string receiptCode)
             => await SavePdfAsync(htmlContent, "receipts", receiptCode);
 
+        public async Task<string> SaveWaybillPdfAsync(string htmlContent, string tripId)
+            => await SavePdfAsync(htmlContent, "waybills", tripId);
+
         private async Task<string> SavePdfAsync(string htmlContent, string folderName, string fileCode)
         {
             var root = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot");
