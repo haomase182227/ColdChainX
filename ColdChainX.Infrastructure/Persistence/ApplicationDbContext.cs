@@ -1126,6 +1126,15 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.UnitPrice)
                 .HasPrecision(15, 2)
                 .HasColumnName("unit_price");
+            entity.Property(e => e.MinValue)
+                .HasPrecision(12, 4)
+                .HasColumnName("min_value");
+            entity.Property(e => e.MaxValue)
+                .HasPrecision(12, 4)
+                .HasColumnName("max_value");
+            entity.Property(e => e.MinCharge)
+                .HasPrecision(15, 2)
+                .HasColumnName("min_charge");
         });
 
         modelBuilder.Entity<Quotation>(entity =>

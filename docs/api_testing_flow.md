@@ -147,13 +147,13 @@ Outbound shipment of `SEAFOOD` requires verified evidence documentation:
 
 | Step ID | Description | Tested (Y/N) | Status / Notes |
 | :--- | :--- | :---: | :--- |
-| **0.1** | Docker running and PostgreSQL started | **Y** | Active |
-| **0.2** | API local compile & database migration | **Y** | Running on http://localhost:5244 |
-| **1.1** | Verify default seeded data | **N** | Pending |
-| **1.2** | Create Inbound ASN | **N** | Pending |
-| **1.3** | Process Inbound Receipt & Stock | **N** | Pending |
-| **2.2** | Place Stock on Hold | **N** | Pending |
-| **3.1** | Create Outbound Order | **N** | Pending |
-| **3.2** | Allocate Outbound Stock | **N** | Pending |
-| **3.3** | Verify Compliance Evidence | **N** | Pending |
-| **3.4** | Execute Outbound Shipment | **N** | Pending |
+| **0.1** | Docker running and PostgreSQL started | **Y** | Active local Docker PG database. |
+| **0.2** | API local compile & database migration | **Y** | Compiled and migrated successfully. |
+| **1.1** | Verify default seeded data | **Y** | Confirmed admin01 and demo orders exist. |
+| **1.2** | Create Inbound ASN | **Y** | Verified through order status QC and receipt generation. |
+| **1.3** | Process Inbound Receipt & Stock | **Y** | QC recorded, package measurements updated, PDF generated successfully. |
+| **2.2** | Place Stock on Hold & Release | **Y** | Created quarantine hold (status HOLD), verified and successfully released (status RELEASED). |
+| **3.1** | Create Outbound Order | **N** | Pending outbound integration testing. |
+| **3.2** | Allocate Outbound Stock | **N** | Pending outbound integration testing. |
+| **3.3** | Verify Compliance Evidence | **N** | Pending outbound integration testing. |
+| **3.4** | Execute Outbound Shipment | **N** | Pending outbound integration testing. |
