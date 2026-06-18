@@ -81,11 +81,36 @@ namespace ColdChainX.UnitTests
             };
             _db.OutboundOrderItems.Add(item);
 
+            // Seed User and WarehouseReceipt to satisfy query filter on WarehouseReceiptItem
+            var receiverId = Guid.NewGuid();
+            var receiver = new User
+            {
+                UserId = receiverId,
+                Username = "receiver_user_1",
+                PasswordHash = "hash",
+                FullName = "Receiver User 1",
+                Status = "ACTIVE"
+            };
+            _db.Users.Add(receiver);
+
+            var receiptId = Guid.NewGuid();
+            var receipt = new WarehouseReceipt
+            {
+                ReceiptId = receiptId,
+                ReceiptCode = "WR-SF-1",
+                ReceiverId = receiverId,
+                ReceiptType = "INBOUND",
+                DelivererName = "Deliverer",
+                OrderId = Guid.NewGuid(),
+                WarehouseId = Guid.NewGuid()
+            };
+            _db.WarehouseReceipts.Add(receipt);
+
             // Add reference receipt item of same item code under SEAFOOD category so engine knows its category
             var receiptItem = new WarehouseReceiptItem
             {
                 ItemId = Guid.NewGuid(),
-                ReceiptId = Guid.NewGuid(),
+                ReceiptId = receiptId,
                 ItemCode = "ITEM-SF-1",
                 ItemName = "Salmon Box",
                 Unit = "BOX",
@@ -167,10 +192,35 @@ namespace ColdChainX.UnitTests
             };
             _db.OutboundOrderItems.Add(item);
 
+            // Seed User and WarehouseReceipt to satisfy query filter on WarehouseReceiptItem
+            var receiverId = Guid.NewGuid();
+            var receiver = new User
+            {
+                UserId = receiverId,
+                Username = "receiver_user_2",
+                PasswordHash = "hash",
+                FullName = "Receiver User 2",
+                Status = "ACTIVE"
+            };
+            _db.Users.Add(receiver);
+
+            var receiptId = Guid.NewGuid();
+            var receipt = new WarehouseReceipt
+            {
+                ReceiptId = receiptId,
+                ReceiptCode = "WR-SF-2",
+                ReceiverId = receiverId,
+                ReceiptType = "INBOUND",
+                DelivererName = "Deliverer",
+                OrderId = Guid.NewGuid(),
+                WarehouseId = Guid.NewGuid()
+            };
+            _db.WarehouseReceipts.Add(receipt);
+
             var receiptItem = new WarehouseReceiptItem
             {
                 ItemId = Guid.NewGuid(),
-                ReceiptId = Guid.NewGuid(),
+                ReceiptId = receiptId,
                 ItemCode = "ITEM-SF-2",
                 ItemName = "Salmon Box",
                 Unit = "BOX",

@@ -22,6 +22,7 @@ namespace ColdChainX.UnitTests
         private readonly InventoryService _inventoryService;
         private readonly InventoryHoldRepository _holdRepository;
         private readonly InventoryHoldService _service;
+        private readonly Guid _testUserId;
 
         public InventoryHoldServiceTests()
         {
@@ -31,6 +32,20 @@ namespace ColdChainX.UnitTests
                 .Options;
 
             _db = new ApplicationDbContext(options);
+
+            // Seed user to satisfy query filter e.Creator.DeletedAt == null
+            _testUserId = Guid.NewGuid();
+            var user = new User
+            {
+                UserId = _testUserId,
+                Username = "test_creator",
+                PasswordHash = "hash",
+                FullName = "Test Creator",
+                Status = "ACTIVE"
+            };
+            _db.Users.Add(user);
+            _db.SaveChanges();
+
             _inventoryService = new InventoryService(_db, NullLogger<InventoryService>.Instance);
             _holdRepository = new InventoryHoldRepository(_db);
             _service = new InventoryHoldService(
@@ -151,7 +166,7 @@ namespace ColdChainX.UnitTests
             };
 
             // Act
-            var result = await _service.CreateHoldAsync(dto, Guid.NewGuid());
+            var result = await _service.CreateHoldAsync(dto, _testUserId);
 
             // Assert
             Assert.True(result.Success);
@@ -211,7 +226,7 @@ namespace ColdChainX.UnitTests
             };
 
             // Act
-            var result = await _service.CreateHoldAsync(dto, Guid.NewGuid());
+            var result = await _service.CreateHoldAsync(dto, _testUserId);
 
             // Assert
             Assert.True(result.Success);
@@ -255,7 +270,7 @@ namespace ColdChainX.UnitTests
             };
 
             // Act
-            var result = await _service.CreateHoldAsync(dto, Guid.NewGuid());
+            var result = await _service.CreateHoldAsync(dto, _testUserId);
 
             // Assert
             Assert.False(result.Success);
@@ -274,7 +289,7 @@ namespace ColdChainX.UnitTests
                 ReasonCode = "QA_QUARANTINE",
                 Notes = "QA holding batch."
             };
-            var resultHold = await _service.CreateHoldAsync(dtoHold, Guid.NewGuid());
+            var resultHold = await _service.CreateHoldAsync(dtoHold, _testUserId);
             Assert.True(resultHold.Success);
 
             var releaseDto = new ReleaseInventoryHoldDto
@@ -283,7 +298,7 @@ namespace ColdChainX.UnitTests
             };
 
             // Act
-            var resultRelease = await _service.ReleaseHoldAsync(resultHold.Data.HoldId, releaseDto, Guid.NewGuid());
+            var resultRelease = await _service.ReleaseHoldAsync(resultHold.Data.HoldId, releaseDto, _testUserId);
 
             // Assert
             Assert.True(resultRelease.Success);
@@ -312,7 +327,7 @@ namespace ColdChainX.UnitTests
                 ReasonCode = "TEMP_EXCURSION",
                 Notes = "Spike logged."
             };
-            var resultHold = await _service.CreateHoldAsync(dtoHold, Guid.NewGuid());
+            var resultHold = await _service.CreateHoldAsync(dtoHold, _testUserId);
             Assert.True(resultHold.Success);
 
             // Try to allocate
@@ -326,7 +341,7 @@ namespace ColdChainX.UnitTests
             };
 
             // Act
-            var allocateResult = await _inventoryService.AllocateStockAsync(allocateRequest, Guid.NewGuid());
+            var allocateResult = await _inventoryService.AllocateStockAsync(allocateRequest, _testUserId);
 
             // Assert
             Assert.False(allocateResult.Success);
@@ -345,11 +360,11 @@ namespace ColdChainX.UnitTests
                 ReasonCode = "DAMAGED",
                 Notes = "Crushed pallets."
             };
-            var resultHold = await _service.CreateHoldAsync(dtoHold, Guid.NewGuid());
+            var resultHold = await _service.CreateHoldAsync(dtoHold, _testUserId);
             Assert.True(resultHold.Success);
 
             // Act
-            var resultAdjust = await _service.AdjustOutHoldAsync(resultHold.Data.HoldId, "Scrapped completely", Guid.NewGuid());
+            var resultAdjust = await _service.AdjustOutHoldAsync(resultHold.Data.HoldId, "Scrapped completely", _testUserId);
 
             // Assert
             Assert.True(resultAdjust.Success);
@@ -417,7 +432,7 @@ namespace ColdChainX.UnitTests
                 ReasonCode = "DAMAGED",
                 TargetQuarantineLocationId = quarantineLocId
             };
-            var result1 = await _service.CreateHoldAsync(dto1, Guid.NewGuid());
+            var result1 = await _service.CreateHoldAsync(dto1, _testUserId);
             Assert.True(result1.Success);
 
             var qStock1 = await _db.InventoryStocks
@@ -439,7 +454,7 @@ namespace ColdChainX.UnitTests
                 ReasonCode = "DAMAGED",
                 TargetQuarantineLocationId = quarantineLocId
             };
-            var result2 = await _service.CreateHoldAsync(dto2, Guid.NewGuid());
+            var result2 = await _service.CreateHoldAsync(dto2, _testUserId);
             Assert.True(result2.Success);
 
             var qStock2 = await _db.InventoryStocks
@@ -460,7 +475,7 @@ namespace ColdChainX.UnitTests
                 ReasonCode = "TEMP_EXCURSION",
                 Notes = "Testing retrieval"
             };
-            var createResult = await _service.CreateHoldAsync(dto, Guid.NewGuid());
+            var createResult = await _service.CreateHoldAsync(dto, _testUserId);
             Assert.True(createResult.Success);
             var holdId = createResult.Data.HoldId;
 

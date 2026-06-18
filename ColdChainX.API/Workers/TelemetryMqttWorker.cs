@@ -85,7 +85,14 @@ public sealed class TelemetryMqttWorker : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Telemetry MQTT worker connection failed. Retrying in 5 seconds.");
-                await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
             }
         }
     }

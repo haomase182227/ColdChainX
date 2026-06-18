@@ -50,6 +50,7 @@ builder.Services.AddSwaggerGen(c =>
         }
     }
 
+    c.CustomSchemaIds(type => (type.FullName ?? type.Name).Replace("+", "."));
     c.SchemaFilter<CreateOrderRequestSchemaFilter>();
     c.SchemaFilter<EnumSchemaFilter>();
     c.SchemaFilter<SuggestLoadRequestSchemaFilter>();

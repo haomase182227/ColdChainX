@@ -9,7 +9,15 @@ public partial class Driver
 
     public Guid? UserId { get; set; }
 
+    public string FullName { get; set; } = null!;
+
+    public string IdentityNumber { get; set; } = null!;
+
+    public string PhoneNumber { get; set; } = null!;
+
     public DateOnly DateOfBirth { get; set; }
+
+    public DateOnly JoinDate { get; set; }
 
     public string? Status { get; set; }
 
@@ -22,4 +30,6 @@ public partial class Driver
     public virtual ICollection<MasterTrip> MasterTrips { get; set; } = new List<MasterTrip>();
 
     public virtual User? User { get; set; }
+
+    public virtual ICollection<Vehicle> Vehicles { get; set; } = new List<Vehicle>();
 }

@@ -13,6 +13,7 @@ using Microsoft.IdentityModel.Tokens;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Application.Mappings;
 using ColdChainX.Application.Services;
+using ColdChainX.API.Workers;
 using ColdChainX.Core.Entities;
 using ColdChainX.Core.Interfaces;
 using ColdChainX.Infrastructure.Persistence;
@@ -111,6 +112,8 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IInventoryHoldService, InventoryHoldService>();
             services.AddScoped<ICycleCountRepository, CycleCountRepository>();
             services.AddScoped<ICycleCountService, CycleCountService>();
+            services.AddScoped<IFleetManagementService, FleetManagementService>();
+            services.AddHostedService<FleetComplianceWorker>();
             
             // Dispatch and Load Planning
             services.AddHttpClient<ColdChainX.Infrastructure.Integration.GeminiLoadOptimizerClient>();

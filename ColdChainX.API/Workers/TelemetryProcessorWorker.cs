@@ -24,30 +24,37 @@ public sealed class TelemetryProcessorWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await foreach (var data in _telemetryChannel.Reader.ReadAllAsync(stoppingToken))
+        try
         {
-            try
+            await foreach (var data in _telemetryChannel.Reader.ReadAllAsync(stoppingToken))
             {
-                var currentCount = await _redisService.AddTelemetryAndTrimAsync(data.DeviceId, data);
-                var redisKey = $"temp_history:{data.DeviceId}";
+                try
+                {
+                    var currentCount = await _redisService.AddTelemetryAndTrimAsync(data.DeviceId, data);
+                    var redisKey = $"temp_history:{data.DeviceId}";
 
-                _logger.LogInformation(
-                    "Telemetry buffered in Redis device={DeviceId} redisKey={RedisKey} count={Count}",
-                    data.DeviceId,
-                    redisKey,
-                    currentCount);
+                    _logger.LogInformation(
+                        "Telemetry buffered in Redis device={DeviceId} redisKey={RedisKey} count={Count}",
+                        data.DeviceId,
+                        redisKey,
+                        currentCount);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(
+                        ex,
+                        "Failed to buffer telemetry in Redis device={DeviceId}",
+                        data.DeviceId);
+                }
             }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Failed to buffer telemetry in Redis device={DeviceId}",
-                    data.DeviceId);
-            }
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            // Normal host shutdown.
         }
     }
 }
