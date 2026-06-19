@@ -59,6 +59,20 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
+        /// <summary>
+        /// Admin: tạo tài khoản Loader (Người vận chuyển hàng lên container).
+        /// Chỉ tạo record trong bảng users, không cần bảng phụ.
+        /// </summary>
+        [Authorize(Roles = "Admin,ADMIN")]
+        [HttpPost("create-loader")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> CreateLoader([FromForm] CreateLoaderRequest request)
+        {
+            var result = await _authService.CreateLoaderAsync(request);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
