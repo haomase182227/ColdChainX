@@ -70,28 +70,14 @@ namespace ColdChainX.Infrastructure.Services
                             (fileName.EndsWith(".pdf") && fileName.Contains("-"));
             var publicId = isLifo ? sanitizedName : $"{sanitizedName}_{Guid.NewGuid():N}";
 
-            CloudinaryDotNet.Actions.RawUploadResult uploadResult;
+            var uploadParams = new ImageUploadParams
+            {
+                File = new FileDescription(sanitizedName, stream),
+                Folder = folder,
+                PublicId = publicId
+            };
 
-            if (fileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
-            {
-                var uploadParams = new RawUploadParams
-                {
-                    File = new FileDescription(sanitizedName, stream),
-                    Folder = folder,
-                    PublicId = publicId
-                };
-                uploadResult = await _cloudinary.UploadAsync(uploadParams);
-            }
-            else
-            {
-                var uploadParams = new ImageUploadParams
-                {
-                    File = new FileDescription(sanitizedName, stream),
-                    Folder = folder,
-                    PublicId = publicId
-                };
-                uploadResult = await _cloudinary.UploadAsync(uploadParams);
-            }
+            var uploadResult = await _cloudinary.UploadAsync(uploadParams);
 
             if (uploadResult.Error != null)
                 throw new InvalidOperationException($"Cloudinary upload failed: {uploadResult.Error.Message}");

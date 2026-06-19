@@ -1099,6 +1099,11 @@ public class DispatchService : IDispatchService
         try
         {
             waybillUrl = await GenerateWaybillPdfAsync(trip);
+            var documentUploader = sealedBy;
+            if (trip.DriverId.HasValue && await _context.Users.AnyAsync(u => u.UserId == trip.DriverId.Value))
+            {
+                documentUploader = trip.DriverId.Value;
+            }
             _context.TransportDocuments.Add(new TransportDocument
             {
                 DocId = Guid.NewGuid(),
@@ -1106,7 +1111,7 @@ public class DispatchService : IDispatchService
                 ImageUrl = waybillUrl,
                 Status = "ISSUED",
                 CreatedAt = DateTime.UtcNow,
-                UploadedBy = trip.DriverId ?? sealedBy
+                UploadedBy = documentUploader
             });
             trip.Status = "DISPATCHED";
         }
@@ -1418,6 +1423,20 @@ public class DispatchService : IDispatchService
 
         var pdfUrl = await GenerateWaybillPdfAsync(trip);
 
+        var documentUploader = issuerId ?? Guid.Empty;
+        if (trip.DriverId.HasValue && await _context.Users.AnyAsync(u => u.UserId == trip.DriverId.Value))
+        {
+            documentUploader = trip.DriverId.Value;
+        }
+        else if (documentUploader == Guid.Empty || !await _context.Users.AnyAsync(u => u.UserId == documentUploader))
+        {
+            var fallbackUser = await _context.Users.FirstOrDefaultAsync(u => u.DeletedAt == null);
+            if (fallbackUser != null)
+            {
+                documentUploader = fallbackUser.UserId;
+            }
+        }
+
         _context.TransportDocuments.Add(new TransportDocument
         {
             DocId     = Guid.NewGuid(),
@@ -1425,7 +1444,7 @@ public class DispatchService : IDispatchService
             ImageUrl  = pdfUrl,
             Status    = "ISSUED",
             CreatedAt = DateTime.UtcNow,
-            UploadedBy = trip.DriverId ?? issuerId ?? Guid.Empty
+            UploadedBy = documentUploader
         });
 
         trip.Status = "DISPATCHED";
