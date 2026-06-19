@@ -61,28 +61,45 @@ namespace ColdChainX.Infrastructure.Services
 
         private async Task<string> UploadStreamToCloudinaryAsync(Stream stream, string fileName)
         {
-            var cleanFileName = Path.GetFileNameWithoutExtension(fileName);
+            var isPdf = fileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase);
+            var folder = "coldchainx";
+            
+            var cleanFileName = isPdf ? fileName : Path.GetFileNameWithoutExtension(fileName);
             var sanitizedName = string.Concat(cleanFileName.Split(Path.GetInvalidFileNameChars()));
             
-            // Nếu là file lifo, không thêm Guid để URL luôn cố định theo tên file (TripId)
-            var folder = "coldchainx";
             var isLifo = fileName.StartsWith("lifo_", StringComparison.OrdinalIgnoreCase) || 
                             (fileName.EndsWith(".pdf") && fileName.Contains("-"));
-            var publicId = isLifo ? sanitizedName : $"{sanitizedName}_{Guid.NewGuid():N}";
+            
+            var publicId = isLifo ? sanitizedName : (isPdf 
+                ? $"{Path.GetFileNameWithoutExtension(sanitizedName)}_{Guid.NewGuid():N}.pdf" 
+                : $"{sanitizedName}_{Guid.NewGuid():N}");
 
-            var uploadParams = new ImageUploadParams
+            if (isPdf)
             {
-                File = new FileDescription(sanitizedName, stream),
-                Folder = folder,
-                PublicId = publicId
-            };
-
-            var uploadResult = await _cloudinary.UploadAsync(uploadParams);
-
-            if (uploadResult.Error != null)
-                throw new InvalidOperationException($"Cloudinary upload failed: {uploadResult.Error.Message}");
-
-            return uploadResult.SecureUrl.ToString();
+                var uploadParams = new RawUploadParams
+                {
+                    File = new FileDescription(sanitizedName, stream),
+                    Folder = folder,
+                    PublicId = publicId
+                };
+                var uploadResult = await _cloudinary.UploadAsync(uploadParams);
+                if (uploadResult.Error != null)
+                    throw new InvalidOperationException($"Cloudinary upload failed: {uploadResult.Error.Message}");
+                return uploadResult.SecureUrl.ToString();
+            }
+            else
+            {
+                var uploadParams = new ImageUploadParams
+                {
+                    File = new FileDescription(sanitizedName, stream),
+                    Folder = folder,
+                    PublicId = publicId
+                };
+                var uploadResult = await _cloudinary.UploadAsync(uploadParams);
+                if (uploadResult.Error != null)
+                    throw new InvalidOperationException($"Cloudinary upload failed: {uploadResult.Error.Message}");
+                return uploadResult.SecureUrl.ToString();
+            }
         }
     }
 }
