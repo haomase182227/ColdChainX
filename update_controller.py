@@ -1,125 +1,22 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security.Claims;
-using System.Threading.Tasks;
-using ColdChainX.Application.DTOs.Dispatch;
-using ColdChainX.Application.Interfaces;
-using ColdChainX.Core.Entities;
-using ColdChainX.Infrastructure.Persistence;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+import re
 
-namespace ColdChainX.API.Controllers;
+with open('ColdChainX.API/Controllers/DispatchController.cs', 'r') as f:
+    content = f.read()
 
-[ApiController]
-[Route("api/[controller]")]
-[Authorize]
-public class DispatchController : ControllerBase
-{
-    private readonly IDispatchService _dispatchService;
-    private readonly IVehicleService _vehicleService;
-    private readonly IOrderService _orderService;
-    private readonly ApplicationDbContext _db;
+# 1. Add GetCurrentUserId
+if 'GetCurrentUserId' not in content:
+    content = content.replace(
+        '_db = db;\n    }',
+        '_db = db;\n    }\n\n    private Guid GetCurrentUserId()\n    {\n        var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;\n        return Guid.TryParse(idClaim, out var userId) ? userId : Guid.Empty;\n    }'
+    )
 
-    public DispatchController(
-        IDispatchService dispatchService,
-        IVehicleService vehicleService,
-        IOrderService orderService,
-        ApplicationDbContext db)
-    {
-        _dispatchService = dispatchService;
-        _vehicleService = vehicleService;
-        _orderService = orderService;
-        _db = db;
-    }
+# 2. Find the start of plan-load
+start_idx = content.find('    /// <summary>\n    /// Lập kế hoạch lấy hàng từ kho và ghép chuyến.')
+if start_idx != -1:
+    content = content[:start_idx]
 
-    private Guid GetCurrentUserId()
-    {
-        var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        return Guid.TryParse(idClaim, out var userId) ? userId : Guid.Empty;
-    }
-
-    // ── Lookup endpoints (dùng để populate dropdown trong form) ───────────────
-
-    /// <summary>
-    /// [Lookup] Danh sách xe tải đang ACTIVE — dùng để chọn xe cho plan-load.
-    /// </summary>
-    [HttpGet("lookup/vehicles")]
-    [ProducesResponseType(typeof(object), 200)]
-    public async Task<IActionResult> LookupVehicles()
-    {
-        var result = await _vehicleService.GetAllAsync();
-        var items = result.Data?
-            .Where(v => v.Status == "ACTIVE")
-            .Select(v => new
-            {
-                v.VehicleId,
-                Label      = $"{v.TruckPlate} — {v.VehicleType} | tải {v.MaxWeight}kg / {v.MaxCbm}m³",
-                v.TruckPlate,
-                v.VehicleType,
-                v.MaxWeight,
-                v.MaxCbm,
-                v.MinTemp,
-                v.MaxTemp
-            })
-            .ToList();
-        return Ok(new { Success = true, Data = items });
-    }
-
-    /// <summary>
-    /// [Lookup] Danh sách Location đang ACTIVE — dùng để chọn kho xuất phát.
-    /// </summary>
-    [HttpGet("lookup/locations")]
-    [ProducesResponseType(typeof(object), 200)]
-    public async Task<IActionResult> LookupLocations()
-    {
-        var locations = await _db.Locations
-            .Where(l => l.Status == "ACTIVE")
-            .OrderBy(l => l.Address)
-            .Select(l => new
-            {
-                l.LocationId,
-                Label     = l.Address,
-                l.Address,
-                l.Latitude,
-                l.Longitude
-            })
-            .ToListAsync();
-
-        return Ok(new { Success = true, Data = locations });
-    }
-
-    /// <summary>
-    /// [Lookup] Danh sách đơn hàng đang ở trạng thái IN_WAREHOUSE — dùng để chọn đơn cho plan-load.
-    /// </summary>
-    [HttpGet("lookup/orders-ready")]
-    [ProducesResponseType(typeof(object), 200)]
-    public async Task<IActionResult> LookupOrdersReady()
-    {
-        var orders = await _db.TransportOrders
-            .Where(o => o.Status == "IN_WAREHOUSE")
-            .OrderByDescending(o => o.CreatedAt)
-            .Select(o => new
-            {
-                o.OrderId,
-                Label         = $"{o.TrackingCode} — {o.ItemName} | {o.ExpectedWeightKg}kg / {o.ExpectedCbm}m³ ({o.TempCondition})",
-                o.TrackingCode,
-                o.ItemName,
-                o.Category,
-                o.TempCondition,
-                o.ExpectedWeightKg,
-                o.ExpectedCbm,
-                o.Status,
-                o.CreatedAt
-            })
-            .ToListAsync();
-
-        return Ok(new { Success = true, Count = orders.Count, Data = orders });
-    }
-
-
+# 3. Append the new APIs
+new_apis = """
     // ═══════════════════════════════════════════════════════════════════════
     //  API 1: AUTO-DISPATCH — Tự động ghép chuyến
     // ═══════════════════════════════════════════════════════════════════════
@@ -335,3 +232,9 @@ public class DispatchController : ControllerBase
         return parts[0].Trim();
     }
 }
+"""
+
+content += new_apis
+
+with open('ColdChainX.API/Controllers/DispatchController.cs', 'w') as f:
+    f.write(content)
