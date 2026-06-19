@@ -7,6 +7,7 @@ using ColdChainX.Application.DTOs.Dispatch;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
 using ColdChainX.Infrastructure.Persistence;
+using ColdChainX.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -22,17 +23,23 @@ public class DispatchController : ControllerBase
     private readonly IVehicleService _vehicleService;
     private readonly IOrderService _orderService;
     private readonly ApplicationDbContext _db;
+    private readonly IPdfService _pdfService;
+    private readonly ILocationService _locationService;
 
     public DispatchController(
         IDispatchService dispatchService,
         IVehicleService vehicleService,
         IOrderService orderService,
-        ApplicationDbContext db)
+        ApplicationDbContext db,
+        IPdfService pdfService,
+        ILocationService locationService)
     {
         _dispatchService = dispatchService;
         _vehicleService = vehicleService;
         _orderService = orderService;
         _db = db;
+        _pdfService = pdfService;
+        _locationService = locationService;
     }
 
     private Guid GetCurrentUserId()
@@ -188,6 +195,14 @@ public class DispatchController : ControllerBase
         try
         {
             var result = await _dispatchService.ManualDispatchAsync(request);
+
+            // Sinh file PDF Lệnh điều động + Load Plan
+            var goongKey = Environment.GetEnvironmentVariable("key") ?? "xV6YBygCVRIQYybUrDAfaqYuuVfO9qvQBqQSA7uK";
+            var html = ManifestTemplateBuilder.BuildHtml(result, goongKey);
+            var pdfUrl = await _pdfService.SaveWaybillPdfAsync(html, result.TripId.ToString());
+            
+            result.LifoPdfUrl = pdfUrl;
+
             return Ok(new { Success = true, Data = result });
         }
         catch (InvalidOperationException ex)
@@ -197,6 +212,91 @@ public class DispatchController : ControllerBase
         catch (Exception ex)
         {
             return StatusCode(500, new { Success = false, Error = "Lỗi hệ thống khi manual-dispatch.", Detail = ex.Message });
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  API 1.1: LẤY LẠI LINK SƠ ĐỒ LIFO PDF BẰNG TRIP ID
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [HttpGet("trip/{tripId}/lifo-url")]
+    [ProducesResponseType(typeof(object), 200)]
+    [ProducesResponseType(typeof(object), 404)]
+    public async Task<IActionResult> GetLifoUrl(string tripId)
+    {
+        var rawId = ExtractGuid(tripId);
+        if (!Guid.TryParse(rawId, out var id))
+            return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
+
+        var url = $"https://res.cloudinary.com/dbt5zpage/image/upload/coldchainx/waybill_{id}.pdf";
+        
+        // Kiểm tra xem file có thực sự tồn tại trên Cloudinary hay không
+        try
+        {
+            using var httpClient = new HttpClient();
+            var response = await httpClient.SendAsync(new HttpRequestMessage(HttpMethod.Head, url));
+            if (!response.IsSuccessStatusCode)
+            {
+                return NotFound(new { Success = false, Error = "Chuyến đi này chưa có sơ đồ LIFO (chưa được tạo hoặc đã bị xóa)." });
+            }
+        }
+        catch
+        {
+            // Bỏ qua lỗi mạng
+        }
+
+        return Ok(new { Success = true, LifoPdfUrl = url });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  API 1.2: LẤY LẠI BẢN ĐỒ DẪN ĐƯỜNG (GOONG) THEO TRIP ID
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [HttpGet("trip/{tripId}/route")]
+    [ProducesResponseType(typeof(GoongDirectionsResult), 200)]
+    [ProducesResponseType(typeof(object), 404)]
+    public async Task<IActionResult> GetTripRoute(string tripId)
+    {
+        var rawId = ExtractGuid(tripId);
+        if (!Guid.TryParse(rawId, out var id))
+            return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
+
+        var trip = await _db.MasterTrips
+            .Include(t => t.OriginLocation)
+            .Include(t => t.DestinationLocation)
+            .Include(t => t.TripStops)
+                .ThenInclude(ts => ts.Location)
+            .FirstOrDefaultAsync(t => t.TripId == id);
+
+        if (trip == null)
+            return NotFound(new { Success = false, Error = "Không tìm thấy chuyến đi." });
+
+        var waypoints = new List<(decimal Lat, decimal Lon, string Address)>
+        {
+            (trip.OriginLocation.Latitude, trip.OriginLocation.Longitude, trip.OriginLocation.Address)
+        };
+
+        foreach (var stop in trip.TripStops.OrderBy(s => s.StopSequence))
+        {
+            if (stop.Location != null)
+                waypoints.Add((stop.Location.Latitude, stop.Location.Longitude, stop.Location.Address));
+        }
+
+        // Điểm cuối cùng (DestLocation có thể đã nằm trong TripStops, nhưng cứ thêm cho chắc nếu thiếu)
+        var lastStop = waypoints.LastOrDefault();
+        if (lastStop.Lat != trip.DestinationLocation.Latitude || lastStop.Lon != trip.DestinationLocation.Longitude)
+        {
+            waypoints.Add((trip.DestinationLocation.Latitude, trip.DestinationLocation.Longitude, trip.DestinationLocation.Address));
+        }
+
+        try
+        {
+            var directions = await _locationService.GetDirectionsAsync(waypoints);
+            return Ok(new { Success = true, Data = directions });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { Success = false, Error = "Lỗi khi gọi Goong API.", Detail = ex.Message });
         }
     }
 

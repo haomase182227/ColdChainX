@@ -12,18 +12,42 @@ namespace ColdChainX.Infrastructure.Services
             // Lấy overview path từ GoongDirectionsResult
             var encPath = result.Navigation?.GoongRouteOverview ?? "";
             
-            // Generate Map Image URL using Static Map API
-            // Goong Static Map Path style: weight:3|color:blue|enc:xxx
-            var mapUrl = string.IsNullOrEmpty(encPath) 
-                ? "" 
-                : $"https://rsapi.goong.io/staticmap/route?api_key={goongApiKey}&path=weight:5|color:blue|enc:{encPath}&size=800x400";
+            // Không dùng Static Map API nữa, thay bằng CSS Timeline
+            var timelineHtml = new StringBuilder();
+            timelineHtml.Append("<div class='timeline'>");
+            
+            var originAddress = result.Navigation?.Legs?.FirstOrDefault()?.FromAddress ?? "Kho trung tâm";
+            timelineHtml.Append($@"
+                <div class='timeline-item'>
+                    <div class='timeline-point origin'></div>
+                    <div class='timeline-content'>
+                        <strong>Kho Xuất Phát</strong><br/>
+                        <small>{originAddress}</small>
+                    </div>
+                </div>");
+
+            if (result.Route?.Stops != null)
+            {
+                foreach (var stop in result.Route.Stops.OrderBy(s => s.Sequence))
+                {
+                    timelineHtml.Append($@"
+                <div class='timeline-item'>
+                    <div class='timeline-point stop'></div>
+                    <div class='timeline-content'>
+                        <strong>Trạm {stop.Sequence}</strong> ({stop.DistanceFromPreviousKm:F1} km)<br/>
+                        <small>{stop.Address}</small>
+                    </div>
+                </div>");
+                }
+            }
+            timelineHtml.Append("</div>");
 
             sb.Append($@"
 <!DOCTYPE html>
 <html lang='vi'>
 <head>
     <meta charset='UTF-8'>
-    <title>Dispatch Manifest</title>
+    <title>Sơ đồ LIFO</title>
     <style>
         body {{
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -53,16 +77,55 @@ namespace ColdChainX.Infrastructure.Services
         .trip-info div {{ flex: 1; }}
         h2 {{ border-bottom: 1px solid #ccc; padding-bottom: 5px; color: #444; }}
         
-        .map-container {{
-            text-align: center;
+        /* Timeline CSS */
+        .timeline {{
+            position: relative;
+            margin: 20px 0 30px 10px;
+            padding-left: 30px;
+        }}
+        .timeline::before {{
+            content: '';
+            position: absolute;
+            left: 5px;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background: #0056b3;
+            border-radius: 2px;
+        }}
+        .timeline-item {{
+            position: relative;
             margin-bottom: 20px;
         }}
-        .map-container img {{
-            max-width: 100%;
-            height: auto;
-            border: 1px solid #ddd;
-            border-radius: 5px;
+        .timeline-item:last-child {{
+            margin-bottom: 0;
         }}
+        .timeline-point {{
+            position: absolute;
+            left: -32px;
+            top: 2px;
+            width: 14px;
+            height: 14px;
+            background: #fff;
+            border: 3px solid #0056b3;
+            border-radius: 50%;
+        }}
+        .timeline-point.origin {{
+            border-color: #cc0000;
+            background: #ffeeee;
+        }}
+        .timeline-point.stop {{
+            border-color: #0056b3;
+        }}
+        .timeline-content {{
+            background: #f8f9fa;
+            padding: 10px 15px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }}
+        .timeline-content strong {{ color: #0056b3; font-size: 15px; }}
+        .timeline-item:first-child .timeline-content strong {{ color: #cc0000; }}
         
         table {{
             width: 100%;
@@ -158,9 +221,7 @@ namespace ColdChainX.Infrastructure.Services
     </div>
 
     <h2>1. Bản đồ Lộ trình Tuyến đường</h2>
-    <div class='map-container'>
-        {(string.IsNullOrEmpty(mapUrl) ? "<p><i>Không có dữ liệu bản đồ</i></p>" : $"<img src='{mapUrl}' alt='Route Map' />")}
-    </div>
+    {timelineHtml.ToString()}
 
     <h2>2. Bảng Danh Sách Trạm Dừng (Itinerary)</h2>
     <table>

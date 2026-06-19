@@ -64,11 +64,17 @@ namespace ColdChainX.Infrastructure.Services
             var cleanFileName = Path.GetFileNameWithoutExtension(fileName);
             var sanitizedName = string.Concat(cleanFileName.Split(Path.GetInvalidFileNameChars()));
             
+            // Nếu là file lifo, không thêm Guid để URL luôn cố định theo tên file (TripId)
+            var folder = "coldchainx";
+            var isLifo = fileName.StartsWith("lifo_", StringComparison.OrdinalIgnoreCase) || 
+                            (fileName.EndsWith(".pdf") && fileName.Contains("-"));
+            var publicId = isLifo ? sanitizedName : $"{sanitizedName}_{Guid.NewGuid():N}";
+
             var uploadParams = new ImageUploadParams
             {
                 File = new FileDescription(sanitizedName, stream),
-                Folder = "coldchainx",
-                PublicId = $"{sanitizedName}_{Guid.NewGuid():N}"
+                Folder = folder,
+                PublicId = publicId
             };
 
             var uploadResult = await _cloudinary.UploadAsync(uploadParams);

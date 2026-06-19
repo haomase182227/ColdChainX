@@ -31,16 +31,18 @@ namespace ColdChainX.Infrastructure.Services
         public async Task<string> SaveWarehouseReceiptPdfAsync(string htmlContent, string receiptCode)
             => await SavePdfAsync(htmlContent, "receipts", receiptCode);
 
-        public async Task<string> SaveWaybillPdfAsync(string htmlContent, string tripId)
-            => await SavePdfAsync(htmlContent, "waybills", tripId);
+        public async Task<string> SaveWaybillPdfAsync(string htmlContent, string fileCode)
+        {
+            return await SavePdfAsync(htmlContent, "waybills", fileCode, "lifo");
+        }
 
         public async Task<string> SaveLoadPlanPdfAsync(string htmlContent, string tripId)
             => await SavePdfAsync(htmlContent, "loadplans", tripId);
 
-        private async Task<string> SavePdfAsync(string htmlContent, string folderName, string fileCode)
+        private async Task<string> SavePdfAsync(string htmlContent, string folderName, string fileCode, string prefix = "waybill")
         {
             var root = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot");
-            var fileName = $"{SanitizeFileName(fileCode)}.pdf";
+            var fileName = $"{prefix}_{SanitizeFileName(fileCode)}.pdf";
             var normalizedHtml = NormalizeHtmlForLocalAssets(htmlContent, root);
 
             await using var browser = await LaunchBrowserAsync();

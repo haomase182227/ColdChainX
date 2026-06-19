@@ -71,6 +71,11 @@ public class RouteInfo
 {
     public decimal TotalDistanceKm { get; set; }
     public int TotalStops { get; set; }
+    
+    // Lưu tọa độ kho xuất phát để vẽ bản đồ
+    public decimal OriginLat { get; set; }
+    public decimal OriginLng { get; set; }
+    
     public List<RouteStop> Stops { get; set; } = new();
 }
 
@@ -146,8 +151,6 @@ public class DispatchInstruction
 // ═══════════════════════════════════════════════════════════════════════
 
 /// <summary>
-/// Request cho auto-dispatch. Hệ thống tự quét đơn hàng IN_WAREHOUSE,
-/// <summary>
 /// Request cho API manual-dispatch.
 /// Thay thế hoàn toàn auto-dispatch. Người dùng tự chọn đơn hàng và xe.
 /// </summary>
@@ -203,7 +206,7 @@ public class ManualDispatchResult
     public int NotifiedCoordinators { get; set; }
 
     /// <summary>URL đến file PDF Sơ đồ gộp chuyến (Lệnh điều động + LIFO Load Plan)</summary>
-    public string? ManifestPdfUrl { get; set; }
+    public string? LifoPdfUrl { get; set; }
 }
 
 /// <summary>Thông tin tài xế được chọn cho chuyến.</summary>
