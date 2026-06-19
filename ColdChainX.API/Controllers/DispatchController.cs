@@ -228,7 +228,12 @@ public class DispatchController : ControllerBase
         if (!Guid.TryParse(rawId, out var id))
             return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
 
-        var url = $"https://res.cloudinary.com/dbt5zpage/image/upload/coldchainx/waybill_{id}.pdf";
+        // Vì tên file trên Cloudinary giờ đã được cố định theo dạng lifo_{tripId}.pdf
+        // Ta có thể dễ dàng lấy lại link mà không cần lưu vào Database!
+        var cloudName = _db.Database.GetDbConnection().ConnectionString.Contains("localhost") ? "dbt5zpage" : "dbt5zpage"; // Giả định
+        // Lấy từ cấu hình nếu muốn chuẩn: 
+        // Nhưng tạm hardcode theo appsettings hiện tại
+        var url = $"https://res.cloudinary.com/dbt5zpage/image/upload/coldchainx/lifo_{id}.pdf";
         
         // Kiểm tra xem file có thực sự tồn tại trên Cloudinary hay không
         try
