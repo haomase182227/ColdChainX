@@ -233,23 +233,9 @@ public class DispatchController : ControllerBase
         var cloudName = _db.Database.GetDbConnection().ConnectionString.Contains("localhost") ? "dbt5zpage" : "dbt5zpage"; // Giả định
         // Lấy từ cấu hình nếu muốn chuẩn: 
         // Nhưng tạm hardcode theo appsettings hiện tại
-        var url = $"https://res.cloudinary.com/dbt5zpage/image/upload/coldchainx/lifo_{id}.pdf";
+        var url = $"https://res.cloudinary.com/dbt5zpage/raw/upload/coldchainx/lifo_{id}.pdf";
         
-        // Kiểm tra xem file có thực sự tồn tại trên Cloudinary hay không
-        try
-        {
-            using var httpClient = new HttpClient();
-            var response = await httpClient.SendAsync(new HttpRequestMessage(HttpMethod.Head, url));
-            if (!response.IsSuccessStatusCode)
-            {
-                return NotFound(new { Success = false, Error = "Chuyến đi này chưa có sơ đồ LIFO (chưa được tạo hoặc đã bị xóa)." });
-            }
-        }
-        catch
-        {
-            // Bỏ qua lỗi mạng
-        }
-
+        // Trả về luôn URL mà không cần kiểm tra HEAD vì Cloudinary có thể chặn HEAD request (trả về 401)
         return Ok(new { Success = true, LifoPdfUrl = url });
     }
 
