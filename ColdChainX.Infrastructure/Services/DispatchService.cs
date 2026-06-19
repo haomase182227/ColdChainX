@@ -979,4 +979,91 @@ public class DispatchService : IDispatchService
 
         return documents;
     }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  Loader Notifications — Gửi thông báo cho Loader khi LIFO sẵn sàng
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private const string LoaderRoleName = "Loader";
+    private const string LoaderNotificationTemplateId = "DISPATCH_LOADER_READY";
+
+    public async Task NotifyLoadersAsync(Guid tripId)
+    {
+        var trip = await _context.MasterTrips
+            .Include(t => t.Vehicle)
+            .Include(t => t.TransportOrders)
+            .FirstOrDefaultAsync(t => t.TripId == tripId)
+            ?? throw new KeyNotFoundException("Không tìm thấy chuyến đi.");
+
+        // Tìm tất cả users có role Loader
+        var loaderUserIds = await _context.Users
+            .Include(u => u.Role)
+            .Where(u => u.Role != null
+                     && u.Role.RoleName == LoaderRoleName
+                     && (u.Status == null || u.Status == "ACTIVE"))
+            .Select(u => u.UserId)
+            .ToListAsync();
+
+        if (loaderUserIds.Count == 0) return;
+
+        // Tạo template nếu chưa có
+        var templateExists = await _context.NotificationTemplates
+            .AnyAsync(t => t.TemplateId == LoaderNotificationTemplateId);
+
+        if (!templateExists)
+        {
+            // Tìm MessageType bất kỳ để gắn vào template
+            var msgType = await _context.Messagetypes.FirstOrDefaultAsync();
+            if (msgType != null)
+            {
+                _context.NotificationTemplates.Add(new NotificationTemplate
+                {
+                    TemplateId = LoaderNotificationTemplateId,
+                    TypeId = msgType.TypeId,
+                    TitleTemplate = "Sơ đồ LIFO sẵn sàng — Xe {vehicle}",
+                    BodyTemplate = "Chuyến hàng {tripId} đã có sơ đồ xếp hàng LIFO. " +
+                                   "Vui lòng xếp {orderCount} đơn hàng lên xe theo thứ tự LIFO, " +
+                                   "tổng trọng lượng {totalWeight}kg. Sau khi xếp xong, thực hiện kẹp chì.",
+                    Channel = "IN_APP",
+                    Status = "ACTIVE"
+                });
+                await _context.SaveChangesAsync();
+            }
+        }
+
+        // Kiểm tra template tồn tại
+        var actualTemplateId = await _context.NotificationTemplates
+            .AnyAsync(t => t.TemplateId == LoaderNotificationTemplateId
+                        && (t.Status == null || t.Status == "ACTIVE"))
+            ? LoaderNotificationTemplateId
+            : await GetFallbackTemplateIdAsync();
+
+        if (actualTemplateId == null) return;
+
+        foreach (var userId in loaderUserIds)
+        {
+            var notifParams = JsonSerializer.Serialize(new Dictionary<string, string>
+            {
+                { "tripId",      trip.TripId.ToString() },
+                { "vehicle",     trip.Vehicle?.TruckPlate ?? "N/A" },
+                { "orderCount",  trip.TransportOrders.Count.ToString() },
+                { "totalWeight", trip.TransportOrders.Sum(o => o.ExpectedWeightKg).ToString("F1") },
+                { "action",      "Xem sơ đồ LIFO và xếp hàng lên container, sau đó kẹp chì" }
+            });
+
+            _context.Notifications.Add(new Notification
+            {
+                NotiId     = Guid.NewGuid(),
+                UserId     = userId,
+                SenderId   = null,
+                TemplateId = actualTemplateId,
+                Params     = notifParams,
+                OrderId    = null,
+                IsRead     = false,
+                CreatedAt  = DateTime.UtcNow
+            });
+        }
+
+        await _context.SaveChangesAsync();
+    }
 }
