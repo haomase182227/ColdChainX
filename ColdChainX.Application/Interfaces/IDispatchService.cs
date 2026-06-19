@@ -10,14 +10,15 @@ public interface IDispatchService
 {
     // ═══════════════════════════════════════════════════════════════════════
     //  API 1: AUTO-DISPATCH — Tự động ghép chuyến
+    //  API 1: MANUAL-DISPATCH — Ghép chuyến thủ công
     // ═══════════════════════════════════════════════════════════════════════
 
     /// <summary>
-    /// Tự động quét đơn hàng IN_WAREHOUSE (ưu tiên lâu nhất),
+    /// Thủ công chọn đơn hàng IN_WAREHOUSE,
     /// nhóm theo nhiệt độ + điểm đến, chọn xe/tài xế (giấy tờ còn hạn),
     /// tính lộ trình TSP + Goong, sinh LIFO load plan, sinh hướng dẫn navigation.
     /// </summary>
-    Task<AutoDispatchResult> AutoDispatchAsync(AutoDispatchRequest request);
+    Task<ManualDispatchResult> ManualDispatchAsync(ManualDispatchRequest request);
 
     // ═══════════════════════════════════════════════════════════════════════
     //  API 2: WAREHOUSE ORDER — Lệnh bốc xếp cho kho

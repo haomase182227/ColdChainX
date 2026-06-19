@@ -147,10 +147,18 @@ public class DispatchInstruction
 
 /// <summary>
 /// Request cho auto-dispatch. Hệ thống tự quét đơn hàng IN_WAREHOUSE,
-/// tự nhóm theo nhiệt độ + điểm đến, tự chọn xe + tài xế.
+/// <summary>
+/// Request cho API manual-dispatch.
+/// Thay thế hoàn toàn auto-dispatch. Người dùng tự chọn đơn hàng và xe.
 /// </summary>
-public class AutoDispatchRequest
+public class ManualDispatchRequest
 {
+    /// <summary>Danh sách OrderId do người dùng chọn (IN_WAREHOUSE).</summary>
+    public List<Guid> OrderIds { get; set; } = new();
+
+    /// <summary>VehicleId do người dùng chọn.</summary>
+    public Guid VehicleId { get; set; }
+
     /// <summary>LocationId kho xuất phát.</summary>
     public Guid OriginWarehouseLocationId { get; set; }
 
@@ -159,32 +167,25 @@ public class AutoDispatchRequest
 
     /// <summary>Thời gian dự kiến hoàn thành chuyến.</summary>
     public DateTime PlannedEndTime { get; set; }
-
-    /// <summary>Lọc theo điều kiện nhiệt độ (optional, VD: "FROZEN", "CHILLED", "AMBIENT"). Nếu null → lấy tất cả.</summary>
-    public string? TempConditionFilter { get; set; }
-
-    /// <summary>Giới hạn số đơn hàng tối đa cho 1 chuyến. Default = 50.</summary>
-    public int MaxOrdersPerTrip { get; set; } = 50;
 }
 
-/// <summary>Form request cho auto-dispatch endpoint (multipart/form-data).</summary>
-public class AutoDispatchFormRequest
+/// <summary>Form request cho manual-dispatch endpoint (multipart/form-data).</summary>
+public class ManualDispatchFormRequest
 {
-    public string OriginWarehouseLocationId { get; set; } = null!;
+    public string VehicleId { get; set; } = string.Empty;
+    public string OriginWarehouseLocationId { get; set; } = string.Empty;
     public DateTime PlannedStartTime { get; set; }
     public DateTime PlannedEndTime { get; set; }
-    public string? TempConditionFilter { get; set; }
-    public int MaxOrdersPerTrip { get; set; } = 50;
 }
 
-/// <summary>Kết quả auto-dispatch — mở rộng từ PlanLoadResult.</summary>
-public class AutoDispatchResult
+/// <summary>Kết quả manual-dispatch — mở rộng từ PlanLoadResult.</summary>
+public class ManualDispatchResult
 {
     public Guid TripId { get; set; }
     public VehicleInfo Vehicle { get; set; } = null!;
     public DriverInfo Driver { get; set; } = null!;
 
-    /// <summary>Danh sách đơn hàng được chọn tự động (ưu tiên lâu nhất).</summary>
+    /// <summary>Danh sách đơn hàng được chọn.</summary>
     public List<OrderSummary> SelectedOrders { get; set; } = new();
 
     /// <summary>Lộ trình tối ưu.</summary>
@@ -198,8 +199,11 @@ public class AutoDispatchResult
 
     /// <summary>Lệnh điều động.</summary>
     public List<DispatchInstruction> DispatchInstructions { get; set; } = new();
-
+    
     public int NotifiedCoordinators { get; set; }
+
+    /// <summary>URL đến file PDF Sơ đồ gộp chuyến (Lệnh điều động + LIFO Load Plan)</summary>
+    public string? ManifestPdfUrl { get; set; }
 }
 
 /// <summary>Thông tin tài xế được chọn cho chuyến.</summary>

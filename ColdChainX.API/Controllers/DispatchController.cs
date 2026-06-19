@@ -121,19 +121,53 @@ public class DispatchController : ControllerBase
 
 
     // ═══════════════════════════════════════════════════════════════════════
-    //  API 1: AUTO-DISPATCH — Tự động ghép chuyến
+    //  API 1: MANUAL-DISPATCH — Ghép chuyến thủ công
     // ═══════════════════════════════════════════════════════════════════════
 
     /// <summary>
-    /// Tự động quét đơn hàng IN_WAREHOUSE (ưu tiên lâu nhất), nhóm theo nhiệt độ + điểm đến,
-    /// chọn xe/tài xế (giấy tờ còn hạn), tính lộ trình TSP + Goong, sinh LIFO, sinh navigation.
+    /// Thủ công chọn đơn hàng IN_WAREHOUSE và gán vào một xe tải khả dụng.
+    /// Hệ thống sẽ kiểm tra nhiệt độ, tải trọng, bằng lái tài xế trước khi sinh lộ trình.
     /// </summary>
-    [HttpPost("auto-dispatch")]
+    [AllowAnonymous]
+    [HttpPost("seed-orders")]
+    public async Task<IActionResult> SeedOrders()
+    {
+        var defaultDest = _db.Locations.FirstOrDefault()?.LocationId;
+
+        // Cập nhật các đơn hàng cũ bị thiếu DestLocation
+        var oldOrders = await _db.TransportOrders.Where(o => o.DestLocation == null).ToListAsync();
+        foreach(var old in oldOrders)
+        {
+            old.DestLocation = defaultDest;
+            // Cũng fix luôn Quantity bị null/0 cho mấy cái cũ
+            if (old.Quantity == 0) old.Quantity = 1;
+        }
+
+        var r = new Random().Next(1000, 9999);
+        var orders = new List<TransportOrder>
+        {
+            new TransportOrder { OrderId = Guid.NewGuid(), TrackingCode = $"ORD-{r}-001", ItemName = "Thịt bò Úc đông lạnh", Category = "Thực phẩm", TempCondition = "FROZEN", ExpectedWeightKg = 500, Quantity = 10, Status = "IN_WAREHOUSE", PackingType = "Thùng carton", DestLocation = defaultDest, CreatedAt = DateTime.UtcNow },
+            new TransportOrder { OrderId = Guid.NewGuid(), TrackingCode = $"ORD-{r}-002", ItemName = "Cá hồi Na Uy", Category = "Thủy hải sản", TempCondition = "CHILLED", ExpectedWeightKg = 300, Quantity = 5, Status = "IN_WAREHOUSE", PackingType = "Thùng xốp", DestLocation = defaultDest, CreatedAt = DateTime.UtcNow },
+            new TransportOrder { OrderId = Guid.NewGuid(), TrackingCode = $"ORD-{r}-003", ItemName = "Sữa tươi TH True Milk", Category = "Sữa", TempCondition = "2 to 8", ExpectedWeightKg = 1200, Quantity = 100, Status = "IN_WAREHOUSE", PackingType = "Thùng carton", DestLocation = defaultDest, CreatedAt = DateTime.UtcNow },
+            new TransportOrder { OrderId = Guid.NewGuid(), TrackingCode = $"ORD-{r}-004", ItemName = "Kem Merino", Category = "Thực phẩm", TempCondition = "-25 to -15", ExpectedWeightKg = 150, Quantity = 20, Status = "IN_WAREHOUSE", PackingType = "Thùng carton", DestLocation = defaultDest, CreatedAt = DateTime.UtcNow },
+            new TransportOrder { OrderId = Guid.NewGuid(), TrackingCode = $"ORD-{r}-005", ItemName = "Vắc-xin AstraZeneca", Category = "Y tế", TempCondition = "2 to 8", ExpectedWeightKg = 50, Quantity = 2, Status = "IN_WAREHOUSE", PackingType = "Kiện y tế chuyên dụng", DestLocation = defaultDest, CreatedAt = DateTime.UtcNow },
+            new TransportOrder { OrderId = Guid.NewGuid(), TrackingCode = $"ORD-{r}-006", ItemName = "Rau sạch Đà Lạt", Category = "Nông sản", TempCondition = "AMBIENT", ExpectedWeightKg = 800, Quantity = 50, Status = "IN_WAREHOUSE", PackingType = "Sọt nhựa", DestLocation = defaultDest, CreatedAt = DateTime.UtcNow }
+        };
+
+        _db.TransportOrders.AddRange(orders);
+        await _db.SaveChangesAsync();
+        
+        return Ok(new { Success = true, Message = $"Đã cập nhật {oldOrders.Count} đơn cũ và tạo thêm {orders.Count} đơn mới." });
+    }
+
+    [HttpPost("manual-dispatch")]
     [Consumes("multipart/form-data")]
-    [ProducesResponseType(typeof(AutoDispatchResult), 200)]
+    [ProducesResponseType(typeof(ManualDispatchResult), 200)]
     [ProducesResponseType(typeof(object), 400)]
     [ProducesResponseType(typeof(object), 500)]
-    public async Task<IActionResult> AutoDispatch([FromForm] AutoDispatchFormRequest form)
+    public async Task<IActionResult> ManualDispatch(
+        [FromQuery] List<string> orderIds,
+        [FromForm] ManualDispatchFormRequest form)
     {
         var rawOriginLocId = ExtractGuid(form.OriginWarehouseLocationId);
         if (!Guid.TryParse(rawOriginLocId, out var originLocId))
@@ -142,18 +176,18 @@ public class DispatchController : ControllerBase
         if (form.PlannedStartTime >= form.PlannedEndTime)
             return BadRequest(new { Success = false, Error = "PlannedStartTime phải nhỏ hơn PlannedEndTime." });
 
-        var request = new AutoDispatchRequest
+        var request = new ManualDispatchRequest
         {
+            OrderIds = orderIds.Select(id => Guid.Parse(ExtractGuid(id))).ToList(),
+            VehicleId = Guid.Parse(ExtractGuid(form.VehicleId)),
             OriginWarehouseLocationId = originLocId,
             PlannedStartTime          = form.PlannedStartTime,
-            PlannedEndTime            = form.PlannedEndTime,
-            TempConditionFilter       = form.TempConditionFilter,
-            MaxOrdersPerTrip          = form.MaxOrdersPerTrip > 0 ? form.MaxOrdersPerTrip : 50
+            PlannedEndTime            = form.PlannedEndTime
         };
 
         try
         {
-            var result = await _dispatchService.AutoDispatchAsync(request);
+            var result = await _dispatchService.ManualDispatchAsync(request);
             return Ok(new { Success = true, Data = result });
         }
         catch (InvalidOperationException ex)
@@ -162,7 +196,7 @@ public class DispatchController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { Success = false, Error = "Lỗi hệ thống khi auto-dispatch.", Detail = ex.Message });
+            return StatusCode(500, new { Success = false, Error = "Lỗi hệ thống khi manual-dispatch.", Detail = ex.Message });
         }
     }
 

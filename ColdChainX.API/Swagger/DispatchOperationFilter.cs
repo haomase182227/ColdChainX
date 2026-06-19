@@ -46,9 +46,22 @@ namespace ColdChainX.API.Swagger
                             ApplyEnum(mediaType.Schema, "OriginWarehouseLocationId", locations);
                             ApplyEnum(mediaType.Schema, "originWarehouseLocationId", locations);
 
-                            var temps = new List<string> { "", "2 to 8", "-20 to -10", "-25 to -15", "15 to 25" };
-                            ApplyEnum(mediaType.Schema, "TempConditionFilter", temps);
-                            ApplyEnum(mediaType.Schema, "tempConditionFilter", temps);
+                            var orders = db.TransportOrders
+                                .Where(o => o.Status == "IN_WAREHOUSE")
+                                .OrderBy(o => o.CreatedAt)
+                                .Select(o => $"{o.OrderId}: {o.TrackingCode} - {o.ItemName} ({o.ExpectedWeightKg}kg, {o.TempCondition})")
+                                .ToList();
+
+                            ApplyArrayEnum(mediaType.Schema, "OrderIds", orders);
+                            ApplyArrayEnum(mediaType.Schema, "orderIds", orders);
+
+                            var vehicles = db.Vehicles
+                                .Where(v => v.Status == "ACTIVE")
+                                .Select(v => $"{v.VehicleId}: {v.TruckPlate} — {v.VehicleType}")
+                                .ToList();
+
+                            ApplyEnum(mediaType.Schema, "VehicleId", vehicles);
+                            ApplyEnum(mediaType.Schema, "vehicleId", vehicles);
 
                             ApplyDateTimeExample(mediaType.Schema, "PlannedStartTime", DateTime.Now.AddHours(2).ToString("yyyy-MM-ddTHH:mm:ss"));
                             ApplyDateTimeExample(mediaType.Schema, "plannedStartTime", DateTime.Now.AddHours(2).ToString("yyyy-MM-ddTHH:mm:ss"));
@@ -104,6 +117,32 @@ namespace ColdChainX.API.Swagger
                     }
                     catch (Exception) { /* Silence */ }
                 }
+
+                var orderIdsParam = operation.Parameters?.FirstOrDefault(p => string.Equals(p.Name, "orderIds", StringComparison.OrdinalIgnoreCase));
+                if (orderIdsParam != null)
+                {
+                    try
+                    {
+                        using (var scope = _serviceProvider.CreateScope())
+                        {
+                            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                            var orders = db.TransportOrders
+                                .Where(o => o.Status == "IN_WAREHOUSE")
+                                .OrderBy(o => o.CreatedAt)
+                                .Select(o => $"{o.OrderId}: {o.TrackingCode} - {o.ItemName} ({o.ExpectedWeightKg}kg, {o.TempCondition})")
+                                .ToList();
+
+                            if (!orders.Any())
+                            {
+                                orders.Add("EMPTY: Không có đơn hàng nào đang IN_WAREHOUSE");
+                            }
+
+                            orderIdsParam.Schema.Items.Type = "string";
+                            orderIdsParam.Schema.Items.Enum = orders.Select(v => (IOpenApiAny)new OpenApiString(v)).ToList();
+                        }
+                    }
+                    catch { }
+                }
             }
         }
 
@@ -113,6 +152,16 @@ namespace ColdChainX.API.Swagger
             if (property == null) return;
             property.Type = "string";
             property.Enum = values.Select(value => (IOpenApiAny)new OpenApiString(value)).ToList();
+        }
+
+        private static void ApplyArrayEnum(OpenApiSchema schema, string propertyName, IEnumerable<string> values)
+        {
+            var property = FindProperty(schema, propertyName);
+            if (property == null) return;
+            property.Type = "array";
+            if (property.Items == null) property.Items = new OpenApiSchema();
+            property.Items.Type = "string";
+            property.Items.Enum = values.Select(value => (IOpenApiAny)new OpenApiString(value)).ToList();
         }
 
         private static void ApplyDateTimeExample(OpenApiSchema schema, string propertyName, string exampleValue)

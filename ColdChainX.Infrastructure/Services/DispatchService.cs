@@ -577,120 +577,84 @@ public class DispatchService : IDispatchService
         public decimal DistanceFromPreviousKm { get; set; }
     }
     // ═══════════════════════════════════════════════════════════════════════
-    //  API 1: AUTO-DISPATCH — Tự động ghép chuyến
+    //  API 1: MANUAL DISPATCH — Ghép chuyến thủ công
     // ═══════════════════════════════════════════════════════════════════════
 
-    public async Task<AutoDispatchResult> AutoDispatchAsync(AutoDispatchRequest request)
+    public async Task<ManualDispatchResult> ManualDispatchAsync(ManualDispatchRequest request)
     {
-        // ── STEP 1: Validate kho xuất phát ───────────────────────────────
+        // 1. Validate kho xuất phát
         var originLocation = await _context.Locations.FindAsync(request.OriginWarehouseLocationId)
             ?? throw new InvalidOperationException("LocationId kho xuất phát không tồn tại.");
 
-        // ── STEP 2: Quét đơn hàng IN_WAREHOUSE, ưu tiên lâu nhất (CreatedAt ASC) ──
-        var ordersQuery = _context.TransportOrders
+        // 2. Validate đơn hàng
+        var orders = await _context.TransportOrders
             .Include(o => o.DestLocationNavigation)
-            .Where(o => o.Status == "IN_WAREHOUSE");
-
-        // Optional: filter theo nhiệt độ
-        if (!string.IsNullOrWhiteSpace(request.TempConditionFilter))
-        {
-            var filter = request.TempConditionFilter.ToUpperInvariant();
-            ordersQuery = ordersQuery.Where(o =>
-                o.TempCondition.ToUpper().Contains(filter));
-        }
-
-        var allOrders = await ordersQuery
-            .OrderBy(o => o.CreatedAt) // lâu nhất trước
+            .Where(o => request.OrderIds.Contains(o.OrderId))
             .ToListAsync();
 
-        if (allOrders.Count == 0)
-            throw new InvalidOperationException("Không có đơn hàng IN_WAREHOUSE nào để ghép chuyến.");
+        if (orders.Count == 0)
+            throw new InvalidOperationException("Không tìm thấy đơn hàng nào khớp với danh sách đã chọn.");
 
-        // ── STEP 3: Nhóm theo TempCondition (normalized) + DestLocation ─
-        // Ưu tiên batch lớn nhất (nhiều đơn nhất)
-        var tempGroups = allOrders
-            .Where(o => o.DestLocation.HasValue && o.DestLocationNavigation != null)
-            .GroupBy(o => NormalizeTempGroup(o.TempCondition))
-            .OrderByDescending(g => g.Count())
-            .ToList();
+        if (orders.Any(o => o.Status != "IN_WAREHOUSE"))
+            throw new InvalidOperationException("Chỉ được ghép chuyến các đơn hàng có trạng thái IN_WAREHOUSE.");
 
-        if (tempGroups.Count == 0)
-            throw new InvalidOperationException(
-                "Không có đơn hàng nào có tọa độ điểm giao hợp lệ (DestLocation).");
+        var missingOrders = request.OrderIds.Except(orders.Select(o => o.OrderId)).ToList();
+        if (missingOrders.Any())
+            throw new InvalidOperationException($"Không tìm thấy các đơn hàng sau: {string.Join(", ", missingOrders)}");
 
-        // Lấy batch lớn nhất (cùng nhóm nhiệt độ)
-        var selectedBatch = tempGroups.First().ToList();
+        // 3. Check nhiệt độ
+        var firstTemp = NormalizeTempGroup(orders.First().TempCondition);
+        if (orders.Any(o => NormalizeTempGroup(o.TempCondition) != firstTemp))
+            throw new InvalidOperationException("Tất cả các đơn hàng phải có cùng yêu cầu nhiệt độ (TempCondition).");
 
-        // Giới hạn số đơn
-        if (selectedBatch.Count > request.MaxOrdersPerTrip)
-            selectedBatch = selectedBatch.Take(request.MaxOrdersPerTrip).ToList();
-
-        // ── STEP 4: Chọn xe + tài xế ────────────────────────────────────
-        // Điều kiện:
-        //  - Vehicle ACTIVE, có DriverId (tài xế gắn trong DB)
-        //  - Driver có DriverLicense còn hạn (ExpiryDate > today)
-        //  - Xe không đang có trip PLANNED/LOADING/SEALED/DISPATCHED
-        //  - Dải nhiệt xe phù hợp với batch TempCondition
-
-        var totalWeight = selectedBatch.Sum(o => o.ExpectedWeightKg);
-        var totalCbm = selectedBatch.Sum(o => o.ExpectedCbm);
-        var requiredMinTemp = GetTargetTemperature(selectedBatch);
-
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-
-        // Lấy danh sách TripId đang active
-        var busyVehicleIds = await _context.MasterTrips
-            .Where(t => t.Status == "PLANNED" || t.Status == "LOADING"
-                     || t.Status == "SEALED" || t.Status == "DISPATCHED"
-                     || t.Status == "PENDING_WH_APPROVAL")
-            .Where(t => t.VehicleId.HasValue)
-            .Select(t => t.VehicleId!.Value)
-            .Distinct()
-            .ToListAsync();
-
-        var candidateVehicles = await _context.Vehicles
+        // 4. Validate xe + tài xế
+        var vehicle = await _context.Vehicles
             .Include(v => v.Driver)
                 .ThenInclude(d => d!.DriverLicenses)
-            .Where(v => v.Status == "ACTIVE"
-                     && v.DriverId != null
-                     && v.MaxWeight >= totalWeight
-                     && v.MaxCbm >= totalCbm
-                     && v.MinTemp <= requiredMinTemp)
-            .ToListAsync();
+            .FirstOrDefaultAsync(v => v.VehicleId == request.VehicleId)
+            ?? throw new InvalidOperationException("Không tìm thấy xe (Vehicle) đã chọn.");
 
-        // Lọc thêm: không busy + tài xế có giấy phép còn hạn
-        var eligibleVehicle = candidateVehicles
-            .Where(v => !busyVehicleIds.Contains(v.VehicleId))
-            .Where(v => v.Driver != null
-                     && v.Driver.DriverLicenses.Any(l =>
-                         l.ExpiryDate >= today
-                         && (l.Status == null || l.Status == "ACTIVE")))
-            .OrderBy(v => v.MaxWeight) // chọn xe nhỏ nhất phù hợp (tối ưu chi phí)
-            .FirstOrDefault();
+        if (vehicle.Status != "ACTIVE")
+            throw new InvalidOperationException($"Xe {vehicle.TruckPlate} không ở trạng thái ACTIVE.");
 
-        if (eligibleVehicle == null)
-            throw new InvalidOperationException(
-                $"Không tìm thấy xe phù hợp (cần ≥ {totalWeight:F0}kg, ≥ {totalCbm:F1}m³, " +
-                $"nhiệt ≤ {requiredMinTemp}°C, tài xế có bằng lái còn hạn, xe không bận).");
+        if (vehicle.DriverId == null || vehicle.Driver == null)
+            throw new InvalidOperationException($"Xe {vehicle.TruckPlate} chưa được gán tài xế.");
 
-        var driver = eligibleVehicle.Driver!;
-        var bestLicense = driver.DriverLicenses
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var activeLicense = vehicle.Driver.DriverLicenses
             .Where(l => l.ExpiryDate >= today && (l.Status == null || l.Status == "ACTIVE"))
             .OrderByDescending(l => l.ExpiryDate)
-            .First();
+            .FirstOrDefault();
 
-        // Determine license status
-        var daysToExpiry = bestLicense.ExpiryDate.DayNumber - today.DayNumber;
-        var licenseStatus = daysToExpiry <= 30 ? "EXPIRING_SOON" : "VALID";
+        if (activeLicense == null)
+            throw new InvalidOperationException($"Tài xế {vehicle.Driver.FullName} không có bằng lái còn hạn.");
 
-        // ── STEP 5: Tính lộ trình (TSP + Goong Distance Matrix) ─────────
-        var routeResult = await BuildOptimalRouteAsync(
-            originLocation, selectedBatch, eligibleVehicle);
+        // Lấy danh sách TripId đang active để check xe bận
+        var isBusy = await _context.MasterTrips
+            .AnyAsync(t => t.VehicleId == request.VehicleId
+                        && (t.Status == "PLANNED" || t.Status == "LOADING"
+                         || t.Status == "SEALED" || t.Status == "DISPATCHED"
+                         || t.Status == "PENDING_WH_APPROVAL"));
 
-        // ── STEP 6: Sinh LIFO load plan ─────────────────────────────────
-        var loadPlan = BuildLIFOLoadPlan(selectedBatch, routeResult.StopSequence);
+        if (isBusy)
+            throw new InvalidOperationException($"Xe {vehicle.TruckPlate} hiện đang bận một chuyến khác.");
 
-        // ── STEP 7: Sinh Navigation (Goong Directions API) ──────────────
+        // 5. Kiểm tra tải trọng
+        var totalWeight = orders.Sum(o => o.ExpectedWeightKg);
+        var totalCbm = orders.Sum(o => o.ExpectedCbm);
+        var requiredMinTemp = GetTargetTemperature(orders);
+
+        if (totalWeight > vehicle.MaxWeight || totalCbm > vehicle.MaxCbm)
+            throw new InvalidOperationException(
+                $"Quá tải: Tổng hàng hóa (Weight: {totalWeight:F1}kg, CBM: {totalCbm:F1}m³) vượt quá sức chứa của xe (MaxWeight: {vehicle.MaxWeight}kg, MaxCbm: {vehicle.MaxCbm}m³).");
+
+        // 6. Tính lộ trình (TSP + Goong)
+        var routeResult = await BuildOptimalRouteAsync(originLocation, orders, vehicle);
+
+        // 7. LIFO load plan
+        var loadPlan = BuildLIFOLoadPlan(orders, routeResult.StopSequence);
+
+        // 8. Navigation (Goong)
         var navigationWaypoints = new List<(decimal Lat, decimal Lon, string Address)>
         {
             (originLocation.Latitude, originLocation.Longitude, originLocation.Address)
@@ -707,7 +671,6 @@ public class DispatchService : IDispatchService
         }
         catch
         {
-            // Fallback: tạo directions đơn giản từ route data
             directionsResult = new GoongDirectionsResult
             {
                 TotalDistanceKm = routeResult.TotalDistanceKm,
@@ -716,15 +679,14 @@ public class DispatchService : IDispatchService
             };
         }
 
-        // ── STEP 8: Tạo MasterTrip ──────────────────────────────────────
-        var lastDestId = routeResult.StopSequence.Last().LocationId;
+        // 9. Tạo Trip
         var masterTrip = new MasterTrip
         {
             TripId              = Guid.NewGuid(),
-            VehicleId           = eligibleVehicle.VehicleId,
-            DriverId            = driver.DriverId,
+            VehicleId           = vehicle.VehicleId,
+            DriverId            = vehicle.DriverId,
             OriginLocationId    = originLocation.LocationId,
-            DestinationLocationId = lastDestId,
+            DestinationLocationId = routeResult.StopSequence.Last().LocationId,
             TotalDistanceKm     = routeResult.TotalDistanceKm,
             TargetTemperature   = requiredMinTemp,
             PlannedStartTime    = request.PlannedStartTime,
@@ -734,15 +696,12 @@ public class DispatchService : IDispatchService
         };
         _context.MasterTrips.Add(masterTrip);
 
-        // ── STEP 9: Tạo TripStops ───────────────────────────────────────
+        // TripStops
         var stopGapHours = (request.PlannedEndTime - request.PlannedStartTime).TotalHours
                            / Math.Max(routeResult.StopSequence.Count, 1);
-
         foreach (var stop in routeResult.StopSequence)
         {
-            var plannedArrival = request.PlannedStartTime
-                .AddHours(stopGapHours * stop.Sequence);
-
+            var plannedArrival = request.PlannedStartTime.AddHours(stopGapHours * stop.Sequence);
             _context.TripStops.Add(new TripStop
             {
                 StopId               = Guid.NewGuid(),
@@ -757,138 +716,50 @@ public class DispatchService : IDispatchService
             });
         }
 
-        // ── STEP 10: Cập nhật trạng thái đơn hàng ──────────────────────
-        foreach (var order in selectedBatch)
+        foreach (var order in orders)
         {
             order.Status       = "DISPATCHED_PENDING";
             order.MasterTripId = masterTrip.TripId;
         }
 
-        // ── STEP 11: Gửi thông báo Dispatcher ──────────────────────────
-        var notifiedCount = await SendLoadingNotificationsAsync(
-            masterTrip, selectedBatch, eligibleVehicle, loadPlan, null);
-
+        var notifiedCount = await SendLoadingNotificationsAsync(masterTrip, orders, vehicle, loadPlan, null);
         await _context.SaveChangesAsync();
 
-        // ── STEP 12: Build response ─────────────────────────────────────
-        var routeStops = routeResult.StopSequence.Select(s =>
+        // 10. Build response
+        var routeStops = routeResult.StopSequence.Select(s => new RouteStop
         {
-            var stopOrders = selectedBatch
-                .Where(o => o.DestLocation == s.LocationId)
-                .Select(o => new OrderSummary
-                {
-                    OrderId       = o.OrderId,
-                    TrackingCode  = o.TrackingCode,
-                    ItemName      = o.ItemName,
-                    Quantity      = o.Quantity,
-                    WeightKg      = o.ExpectedWeightKg,
-                    Cbm           = o.ExpectedCbm,
-                    TempCondition = o.TempCondition
-                }).ToList();
-
-            return new RouteStop
-            {
-                Sequence               = s.Sequence,
-                LocationId             = s.LocationId,
-                Address                = s.Address,
-                Latitude               = s.Latitude,
-                Longitude              = s.Longitude,
-                DistanceFromPreviousKm = s.DistanceFromPreviousKm,
-                OrdersToUnload         = stopOrders
-            };
+            Sequence = s.Sequence, LocationId = s.LocationId, Address = s.Address,
+            Latitude = s.Latitude, Longitude = s.Longitude, DistanceFromPreviousKm = s.DistanceFromPreviousKm,
+            OrdersToUnload = orders.Where(o => o.DestLocation == s.LocationId).Select(o => new OrderSummary
+            { OrderId = o.OrderId, TrackingCode = o.TrackingCode, ItemName = o.ItemName, Quantity = o.Quantity, WeightKg = o.ExpectedWeightKg, Cbm = o.ExpectedCbm, TempCondition = o.TempCondition }).ToList()
         }).ToList();
 
         var dispatchInstructions = loadPlan.Select(li => new DispatchInstruction
-        {
-            OrderId        = li.OrderId,
-            TrackingCode   = li.TrackingCode,
-            ItemName       = li.ItemName,
-            Action         = "LOAD",
-            PreviousStatus = "IN_WAREHOUSE",
-            TargetStatus   = "DISPATCHED_PENDING",
-            LoadOrder      = li.LoadOrder,
-            Zone           = li.Zone
-        }).OrderBy(d => d.LoadOrder).ToList();
+        { OrderId = li.OrderId, TrackingCode = li.TrackingCode, ItemName = li.ItemName, Action = "LOAD", PreviousStatus = "IN_WAREHOUSE", TargetStatus = "DISPATCHED_PENDING", LoadOrder = li.LoadOrder, Zone = li.Zone }).OrderBy(d => d.LoadOrder).ToList();
 
-        // Build navigation info
-        var navigationInfo = new NavigationInfo
-        {
-            TotalDistanceKm = directionsResult.TotalDistanceKm,
-            TotalDurationMinutes = directionsResult.TotalDurationSeconds / 60,
-            GoongRouteOverview = directionsResult.OverviewPolyline ?? "",
-            Legs = directionsResult.Legs.Select((leg, idx) => new NavigationLeg
-            {
-                LegIndex = idx + 1,
-                FromAddress = leg.StartAddress ?? "N/A",
-                ToAddress = leg.EndAddress ?? "N/A",
-                DistanceKm = leg.DistanceKm,
-                DurationMinutes = leg.DurationSeconds / 60,
-                Steps = leg.Steps.Select((step, sIdx) => new NavigationStep
-                {
-                    StepIndex = sIdx + 1,
-                    Instruction = step.Instruction,
-                    DistanceKm = step.DistanceKm,
-                    DurationSeconds = step.DurationSeconds,
-                    Maneuver = step.Maneuver
-                }).ToList()
-            }).ToList()
-        };
+        var daysToExpiry = activeLicense.ExpiryDate.DayNumber - today.DayNumber;
+        var licenseStatus = daysToExpiry <= 30 ? "EXPIRING_SOON" : "VALID";
 
-        return new AutoDispatchResult
+        return new ManualDispatchResult
         {
             TripId = masterTrip.TripId,
-            Vehicle = new VehicleInfo
-            {
-                VehicleId            = eligibleVehicle.VehicleId,
-                TruckPlate           = eligibleVehicle.TruckPlate,
-                MaxWeightKg          = eligibleVehicle.MaxWeight,
-                MaxCbm               = eligibleVehicle.MaxCbm,
-                TotalOrderWeightKg   = totalWeight,
-                TotalOrderCbm        = totalCbm,
-                WeightUtilizationPct = Math.Round(totalWeight / eligibleVehicle.MaxWeight * 100, 1),
-                CbmUtilizationPct    = Math.Round(totalCbm / eligibleVehicle.MaxCbm * 100, 1)
-            },
-            Driver = new DriverInfo
-            {
-                DriverId       = driver.DriverId,
-                FullName       = driver.FullName,
-                PhoneNumber    = driver.PhoneNumber,
-                IdentityNumber = driver.IdentityNumber,
-                LicenseClass   = bestLicense.LicenseClass,
-                LicenseExpiry  = bestLicense.ExpiryDate,
-                LicenseStatus  = licenseStatus
-            },
-            SelectedOrders = selectedBatch.Select(o => new OrderSummary
-            {
-                OrderId       = o.OrderId,
-                TrackingCode  = o.TrackingCode,
-                ItemName      = o.ItemName,
-                Quantity      = o.Quantity,
-                WeightKg      = o.ExpectedWeightKg,
-                Cbm           = o.ExpectedCbm,
-                TempCondition = o.TempCondition
-            }).ToList(),
-            Route = new RouteInfo
-            {
-                TotalDistanceKm = routeResult.TotalDistanceKm,
-                TotalStops      = routeStops.Count,
-                Stops           = routeStops
-            },
-            Navigation           = navigationInfo,
-            LoadPlan             = loadPlan,
+            Vehicle = new VehicleInfo { VehicleId = vehicle.VehicleId, TruckPlate = vehicle.TruckPlate, MaxWeightKg = vehicle.MaxWeight, MaxCbm = vehicle.MaxCbm, TotalOrderWeightKg = totalWeight, TotalOrderCbm = totalCbm, WeightUtilizationPct = Math.Round(totalWeight / vehicle.MaxWeight * 100, 1), CbmUtilizationPct = Math.Round(totalCbm / vehicle.MaxCbm * 100, 1) },
+            Driver = new DriverInfo { DriverId = vehicle.Driver.DriverId, FullName = vehicle.Driver.FullName, PhoneNumber = vehicle.Driver.PhoneNumber, IdentityNumber = vehicle.Driver.IdentityNumber, LicenseClass = activeLicense.LicenseClass, LicenseExpiry = activeLicense.ExpiryDate, LicenseStatus = licenseStatus },
+            SelectedOrders = orders.Select(o => new OrderSummary { OrderId = o.OrderId, TrackingCode = o.TrackingCode, ItemName = o.ItemName, Quantity = o.Quantity, WeightKg = o.ExpectedWeightKg, Cbm = o.ExpectedCbm, TempCondition = o.TempCondition }).ToList(),
+            Route = new RouteInfo { TotalDistanceKm = routeResult.TotalDistanceKm, TotalStops = routeStops.Count, Stops = routeStops },
+            Navigation = new NavigationInfo { TotalDistanceKm = directionsResult.TotalDistanceKm, TotalDurationMinutes = directionsResult.TotalDurationSeconds / 60, GoongRouteOverview = directionsResult.OverviewPolyline ?? "", Legs = directionsResult.Legs.Select((leg, idx) => new NavigationLeg { LegIndex = idx + 1, FromAddress = leg.StartAddress ?? "N/A", ToAddress = leg.EndAddress ?? "N/A", DistanceKm = leg.DistanceKm, DurationMinutes = leg.DurationSeconds / 60, Steps = leg.Steps.Select((step, sIdx) => new NavigationStep { StepIndex = sIdx + 1, Instruction = step.Instruction, DistanceKm = step.DistanceKm, DurationSeconds = step.DurationSeconds, Maneuver = step.Maneuver }).ToList() }).ToList() },
+            LoadPlan = loadPlan,
             DispatchInstructions = dispatchInstructions,
             NotifiedCoordinators = notifiedCount
         };
     }
 
-    /// <summary>Normalize TempCondition thành nhóm chung (FROZEN / CHILLED / AMBIENT).</summary>
-    private static string NormalizeTempGroup(string tempCondition)
+    private string NormalizeTempGroup(string tempCondition)
     {
-        var t = (tempCondition ?? "").ToUpperInvariant().Trim();
-        if (t.Contains("FROZEN") || t.StartsWith("-") || t.Contains("-18"))
-            return "FROZEN";
-        if (t.Contains("CHILLED") || t.Contains("2-8") || t.Contains("0-4"))
-            return "CHILLED";
+        if (string.IsNullOrWhiteSpace(tempCondition)) return "AMBIENT";
+        var t = tempCondition.ToUpperInvariant();
+        if (t.Contains("FROZEN") || t.Contains("-20")) return "FROZEN";
+        if (t.Contains("CHILLED") || t.Contains("2 TO 8")) return "CHILLED";
         return "AMBIENT";
     }
 
