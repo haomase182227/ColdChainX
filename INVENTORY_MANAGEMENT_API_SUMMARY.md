@@ -247,3 +247,43 @@ Phát hiện các lô hàng có dải nhiệt độ yêu cầu (`RequiredTempMin
 Báo cáo động tỷ lệ lấp đầy tổng kho và chi tiết của từng phân khu Zone bên trong dựa trên số pallet hiện tại (`CurrentPallets`) so với giới hạn tối đa (`MaxPallets` / `MaxCapacityPallets`).
 *   **API Endpoint:** `GET /api/v1/warehouses/{id}/utilization`
 *   **Controller:** [WarehouseUtilizationController.cs](file:///c:/Users/tranl/OneDrive/Desktop/6-11-2026/ColdChainX/ColdChainX.API/Controllers/WarehouseUtilizationController.cs)
+
+---
+
+### Nhóm 7: Thiết Lập Cấu Trúc Kho (Warehouse Setup & Layout Master Data)
+
+Nhóm API quản trị cấu hình thông số vật lý của kho chứa, phân vùng dải nhiệt độ vận hành và toạ độ kệ lưu trữ chi tiết.
+
+#### 1. Quản lý thông tin nhà kho (Warehouses)
+Cấu hình danh mục kho bãi chính thức trong chuỗi cung ứng lạnh.
+*   **API Endpoints:**
+    *   **Tạo mới kho:** `POST /api/v1/warehouses`
+    *   **Cập nhật kho:** `PUT /api/v1/warehouses/{id}`
+    *   **Xoá mềm kho:** `DELETE /api/v1/warehouses/{id}`
+    *   **Xem chi tiết kho:** `GET /api/v1/warehouses/{id}`
+    *   **Xem danh sách kho phân trang:** `GET /api/v1/warehouses`
+*   **Controller:** [WarehouseController.cs](file:///c:/Users/tranl/OneDrive/Desktop/6-11-2026/ColdChainX/ColdChainX.API/Controllers/WarehouseController.cs)
+*   **Quyền hạn (Role):** Khởi tạo, cập nhật, xoá chỉ dành cho `Admin`, `Manager`. Xem danh sách mở cho mọi tài khoản đã đăng nhập.
+
+#### 2. Phân chia phân khu dải nhiệt độ (Warehouse Zones)
+Chia nhỏ mặt bằng nhà kho thành các vùng kiểm soát nhiệt độ riêng biệt (ví dụ: Deep Freeze cho đồ đông lạnh, Chilled cho rau củ quả).
+*   **API Endpoints:**
+    *   **Tạo mới zone:** `POST /api/v1/warehouses/{warehouseId}/zones`
+    *   **Cập nhật cấu hình zone:** `PUT /api/v1/zones/{id}`
+    *   **Xoá mềm zone:** `DELETE /api/v1/zones/{id}`
+    *   **Xem chi tiết zone:** `GET /api/v1/zones/{id}`
+    *   **Xem danh sách zone thuộc kho:** `GET /api/v1/warehouses/{warehouseId}/zones`
+*   **Controller:** [WarehouseZonesController.cs](file:///c:/Users/tranl/OneDrive/Desktop/6-11-2026/ColdChainX/ColdChainX.API/Controllers/WarehouseZonesController.cs)
+*   **Cấu hình nhiệt độ:** Thuật toán gợi ý cất hàng sẽ dựa trên `TemperatureMin` và `TemperatureMax` của zone để đối chiếu với yêu cầu bảo quản của sản phẩm.
+
+#### 3. Thiết lập tọa độ kệ chi tiết (Warehouse Locations)
+Định nghĩa chi tiết từng ô/kệ lưu trữ (bao gồm mã dãy Rack, khoang Bay, tầng Level) thuộc một zone cụ thể.
+*   **API Endpoints:**
+    *   **Tạo mới vị trí kệ:** `POST /api/v1/zones/{zoneId}/locations`
+    *   **Cập nhật vị trí kệ:** `PUT /api/v1/locations/{id}`
+    *   **Xoá mềm vị trí kệ:** `DELETE /api/v1/locations/{id}`
+    *   **Xem chi tiết vị trí kệ:** `GET /api/v1/locations/{id}`
+    *   **Xem danh sách kệ thuộc zone:** `GET /api/v1/zones/{zoneId}/locations`
+*   **Controller:** [WarehouseLocationsController.cs](file:///c:/Users/tranl/OneDrive/Desktop/6-11-2026/ColdChainX/ColdChainX.API/Controllers/WarehouseLocationsController.cs)
+*   **Trạng thái bảo trì:** Khi một kệ bị hư hỏng vật lý hoặc bảo trì đột xuất, cấp quản lý có thể cập nhật `Status = "INACTIVE"` hoặc `"DAMAGED"`. Hệ thống sẽ tự động loại bỏ vị trí này ra khỏi danh sách gợi ý cất hàng tự động để đảm bảo an toàn vận hành.
+
