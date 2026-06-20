@@ -140,7 +140,9 @@ FROM (
         ('Customer', 'Customer account'),
         ('Driver', 'Driver account'),
         ('Dispatcher', 'Container dispatcher'),
-        ('Sales', 'Sales staff')
+        ('Sales', 'Sales staff'),
+        ('Manager', 'Warehouse manager'),
+        ('WarehouseOperator', 'Warehouse operator')
 ) AS v(role_name, description)
 WHERE NOT EXISTS (
     SELECT 1
