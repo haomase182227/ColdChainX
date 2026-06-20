@@ -546,6 +546,7 @@ namespace ColdChainX.UnitTests
         public Task<string> SaveWarehouseReceiptPdfAsync(string htmlContent, string receiptCode) => Task.FromResult("http://test.com/receipt.pdf");
         public Task<string> SaveWaybillPdfAsync(string htmlContent, string tripId) => Task.FromResult("http://test.com/waybill.pdf");
         public Task<string> SaveLoadPlanPdfAsync(string htmlContent, string tripId) => Task.FromResult("http://test.com/loadplan.pdf");
+        public Task<string> SaveInvoicePdfAsync(string htmlContent, string invoiceCode) => Task.FromResult("http://test.com/invoice.pdf");
     }
 
     public class MockWebHostEnvironment : IWebHostEnvironment

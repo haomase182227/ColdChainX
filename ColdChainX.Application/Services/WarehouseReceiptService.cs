@@ -410,8 +410,11 @@ namespace ColdChainX.Application.Services
                                     TaxRate = VatRate
                                 };
 
-                                _db.Invoices.Add(adjustmentInvoice);
-                                _db.InvoiceLines.Add(adjustmentLine);
+                                 // Generate PDF for the adjustment invoice
+                                 adjustmentInvoice.PdfUrl = await GenerateInvoicePdfAsync(order, adjustmentInvoice, adjustmentLine, warehouseName);
+
+                                 _db.Invoices.Add(adjustmentInvoice);
+                                 _db.InvoiceLines.Add(adjustmentLine);
                             }
                         }
                     }
@@ -714,6 +717,50 @@ namespace ColdChainX.Application.Services
                 html = html.Replace($"{{{{{replacement.Key}}}}}", replacement.Value ?? string.Empty);
 
             return await _pdfService.SaveWarehouseReceiptPdfAsync(html, receipt.ReceiptCode);
+        }
+
+        private async Task<string> GenerateInvoicePdfAsync(
+            TransportOrder order,
+            Invoice invoice,
+            InvoiceLine line,
+            string warehouseName)
+        {
+            var templatePath = Path.Combine(_environment.ContentRootPath, "Templates", "InvoiceTemplate.html");
+            if (!File.Exists(templatePath))
+                throw new InvalidOperationException("InvoiceTemplate.html template was not found");
+
+            var html = await File.ReadAllTextAsync(templatePath);
+
+            var linesRows = $@"
+            <tr>
+                 <td>{line.ChargeType}</td>
+                 <td>{line.Description}</td>
+                 <td>{line.Quantity:0.##}</td>
+                 <td>{line.UnitPrice.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)}</td>
+                 <td>{line.Amount.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)}</td>
+            </tr>";
+
+            var replacements = new Dictionary<string, string?>
+            {
+                ["Invoice_Code"] = invoice.InvoiceCode,
+                ["Issued_Date"] = invoice.IssuedDate.ToString("dd/MM/yyyy"),
+                ["Due_Date"] = invoice.DueDate.ToString("dd/MM/yyyy"),
+                ["Customer_Name"] = order.Customer?.CompanyName ?? "Khách hàng vãng lai",
+                ["Order_Tracking_Code"] = order.TrackingCode,
+                ["Warehouse_Name"] = warehouseName,
+                ["Status"] = invoice.Status == "UNPAID" ? "Chưa thanh toán" : "Đã thanh toán",
+                ["Status_Class"] = invoice.Status == "UNPAID" ? "status-unpaid" : "status-paid",
+                ["Sub_Total"] = invoice.SubTotal.ToString("N0", System.Globalization.CultureInfo.InvariantCulture),
+                ["Tax_Rate"] = ((invoice.TaxRate ?? 0) * 100).ToString("0"),
+                ["Tax_Amount"] = invoice.TaxAmount.ToString("N0", System.Globalization.CultureInfo.InvariantCulture),
+                ["Grand_Total"] = invoice.GrandTotal.ToString("N0", System.Globalization.CultureInfo.InvariantCulture),
+                ["Invoice_Lines_Table_Rows"] = linesRows
+            };
+
+            foreach (var replacement in replacements)
+                html = html.Replace($"{{{{{replacement.Key}}}}}", replacement.Value ?? string.Empty);
+
+            return await _pdfService.SaveInvoicePdfAsync(html, invoice.InvoiceCode);
         }
 
         private async Task<RoutePricing?> ResolvePricingAsync(TransportOrder order)
