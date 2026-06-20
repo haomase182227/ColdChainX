@@ -17,6 +17,7 @@ namespace ColdChainX.Application.Interfaces
             DateTime? dateTo,
             string? searchQuery,
             Guid? warehouseId,
+            Guid? orderId,
             int pageNumber,
             int pageSize);
     }

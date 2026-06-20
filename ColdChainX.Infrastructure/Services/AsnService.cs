@@ -28,6 +28,7 @@ namespace ColdChainX.Infrastructure.Services
             DateTime? dateTo,
             string? searchQuery,
             Guid? warehouseId,
+            Guid? orderId,
             int pageNumber,
             int pageSize)
         {
@@ -39,6 +40,12 @@ namespace ColdChainX.Infrastructure.Services
                 .Include(a => a.Order)
                     .ThenInclude(o => o.WarehouseReceipts)
                 .AsNoTracking();
+
+            // Filter by Order ID
+            if (orderId.HasValue)
+            {
+                query = query.Where(a => a.OrderId == orderId.Value);
+            }
 
             // Filter by Customer
             if (customerId.HasValue)

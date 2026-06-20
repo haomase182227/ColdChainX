@@ -61,6 +61,7 @@ Tra cứu danh sách lịch nhập hàng dự kiến của khách hàng hoặc k
   * `dateFrom` & `dateTo`: Lọc theo khoảng thời gian giao hàng dự kiến (`RequestedDropoffTime`).
   * `searchQuery`: Tìm kiếm nhanh theo mã ASN, mã vận đơn, tên sản phẩm, tên khách hàng hoặc địa chỉ giao hàng.
   * `warehouseId`: Lọc theo kho. Hệ thống tự động đối chiếu thông tin địa chỉ giao hàng (`DestAddress`) với thông tin Kho tương ứng.
+  * `orderId`: Lọc chính xác theo ID đơn hàng vận chuyển (`transport_orders.order_id`).
   * `pageNumber` & `pageSize`: Phân trang dữ liệu (mặc định trang 1, 10 bản ghi/trang).
 * **Định dạng dữ liệu trả về (Response JSON):**
   ```json

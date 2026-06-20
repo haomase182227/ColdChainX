@@ -80,6 +80,7 @@ namespace ColdChainX.UnitTests
                 dateTo: null,
                 searchQuery: null,
                 warehouseId: null,
+                orderId: null,
                 pageNumber: 1,
                 pageSize: 10);
 
@@ -118,6 +119,7 @@ namespace ColdChainX.UnitTests
                 dateTo: null,
                 searchQuery: null,
                 warehouseId: null,
+                orderId: null,
                 pageNumber: 1,
                 pageSize: 10);
 
@@ -147,6 +149,7 @@ namespace ColdChainX.UnitTests
                 dateTo: null,
                 searchQuery: null,
                 warehouseId: null,
+                orderId: null,
                 pageNumber: 1,
                 pageSize: 10);
 
@@ -177,6 +180,7 @@ namespace ColdChainX.UnitTests
                 dateTo: baseTime.AddDays(4),
                 searchQuery: null,
                 warehouseId: null,
+                orderId: null,
                 pageNumber: 1,
                 pageSize: 10);
 
@@ -223,6 +227,7 @@ namespace ColdChainX.UnitTests
                 dateTo: null,
                 searchQuery: null,
                 warehouseId: warehouseId,
+                orderId: null,
                 pageNumber: 1,
                 pageSize: 10);
 
@@ -233,6 +238,40 @@ namespace ColdChainX.UnitTests
             Assert.Equal("ASN-01", item.AsnCode);
             Assert.Equal(warehouseId, item.WarehouseId);
             Assert.Equal("HCM Central Warehouse", item.WarehouseName);
+        }
+
+        [Fact]
+        public async Task GetInboundSchedules_WithOrderIdFilter_ReturnsOnlyMatchedOrderASN()
+        {
+            // Arrange
+            var orderId1 = Guid.NewGuid();
+            var orderId2 = Guid.NewGuid();
+            var order1 = new TransportOrder { OrderId = orderId1, TrackingCode = "TRK-01", ItemName = "Item 1", Category = "FOOD", PackingType = "BOX", TempCondition = "COLD", Status = "ASSIGNED" };
+            var order2 = new TransportOrder { OrderId = orderId2, TrackingCode = "TRK-02", ItemName = "Item 2", Category = "FOOD", PackingType = "BOX", TempCondition = "COLD", Status = "ASSIGNED" };
+            _db.TransportOrders.AddRange(order1, order2);
+
+            var asn1 = new InboundAsn { AsnId = Guid.NewGuid(), AsnCode = "ASN-01", OrderId = orderId1, RequestedDropoffTime = DateTime.UtcNow.AddDays(1), QrCodeValue = "QR1", Status = "SCHEDULED" };
+            var asn2 = new InboundAsn { AsnId = Guid.NewGuid(), AsnCode = "ASN-02", OrderId = orderId2, RequestedDropoffTime = DateTime.UtcNow.AddDays(2), QrCodeValue = "QR2", Status = "SCHEDULED" };
+            _db.InboundAsns.AddRange(asn1, asn2);
+            await _db.SaveChangesAsync();
+
+            // Act
+            var result = await _service.GetInboundSchedulesAsync(
+                customerId: null,
+                status: null,
+                dateFrom: null,
+                dateTo: null,
+                searchQuery: null,
+                warehouseId: null,
+                orderId: orderId1,
+                pageNumber: 1,
+                pageSize: 10);
+
+            // Assert
+            Assert.True(result.Success);
+            Assert.Equal(1, result.Data.TotalRecords);
+            Assert.Equal("ASN-01", result.Data.Data.First().AsnCode);
+            Assert.Equal(orderId1, result.Data.Data.First().OrderId);
         }
     }
 }

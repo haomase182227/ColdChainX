@@ -34,6 +34,7 @@ namespace ColdChainX.API.Controllers
         /// <param name="dateTo">Optional end date range for requested drop-off time.</param>
         /// <param name="searchQuery">Optional search term matching code, tracking code, item name, customer name, or address.</param>
         /// <param name="warehouseId">Optional warehouse filter matching link or destination address.</param>
+        /// <param name="orderId">Optional order filter.</param>
         /// <param name="customerId">Optional customer filter (available only to Admin/Manager/Operator).</param>
         /// <param name="pageNumber">Page index (1-based).</param>
         /// <param name="pageSize">Size of each page.</param>
@@ -48,6 +49,7 @@ namespace ColdChainX.API.Controllers
             [FromQuery] DateTime? dateTo,
             [FromQuery] string? searchQuery,
             [FromQuery] Guid? warehouseId,
+            [FromQuery] Guid? orderId,
             [FromQuery] Guid? customerId,
             [FromQuery] int pageNumber = 1,
             [FromQuery] int pageSize = 10)
@@ -77,6 +79,7 @@ namespace ColdChainX.API.Controllers
                 dateTo,
                 searchQuery,
                 warehouseId,
+                orderId,
                 pageNumber,
                 pageSize);
 
