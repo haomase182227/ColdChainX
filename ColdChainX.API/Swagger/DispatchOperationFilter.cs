@@ -49,7 +49,7 @@ namespace ColdChainX.API.Swagger
                             var orders = db.TransportOrders
                                 .Where(o => o.Status == "IN_WAREHOUSE")
                                 .OrderBy(o => o.CreatedAt)
-                                .Select(o => $"{o.OrderId}: {o.TrackingCode} - {o.ItemName} ({o.ExpectedWeightKg}kg, {o.TempCondition})")
+                                .Select(o => $"{o.OrderId}: {o.TrackingCode} - {o.ItemName} ({o.ExpectedWeightKg}kg, {o.TempCondition}) | Kho: {o.PickupLocationNavigation.Address ?? "N/A"} -> Đến: {o.DestLocationNavigation.Address ?? "N/A"}")
                                 .ToList();
 
                             ApplyArrayEnum(mediaType.Schema, "OrderIds", orders);
@@ -129,7 +129,7 @@ namespace ColdChainX.API.Swagger
                             var orders = db.TransportOrders
                                 .Where(o => o.Status == "IN_WAREHOUSE")
                                 .OrderBy(o => o.CreatedAt)
-                                .Select(o => $"{o.OrderId}: {o.TrackingCode} - {o.ItemName} ({o.ExpectedWeightKg}kg, {o.TempCondition})")
+                                .Select(o => $"{o.OrderId}: {o.TrackingCode} - {o.ItemName} ({o.ExpectedWeightKg}kg, {o.TempCondition}) | Kho: {o.PickupLocationNavigation.Address ?? "N/A"} -> Đến: {o.DestLocationNavigation.Address ?? "N/A"}")
                                 .ToList();
 
                             if (!orders.Any())
