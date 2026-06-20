@@ -499,6 +499,124 @@ namespace ColdChainX.UnitTests
             Assert.Equal("Norway", storedItem.CountryOfOrigin);
             Assert.Equal(ProductCategory.SEAFOOD, storedItem.ProductCategory);
         }
+
+        [Fact]
+        public async Task CompleteInbound_StagingCapacityExceeded_BlocksCompletion()
+        {
+            // Arrange
+            var (orderId, warehouseId, _, _, receipt, _) = await SeedBaseDataAsync(ProductCategory.SEAFOOD);
+
+            var att = new WarehouseEvidenceAttachment
+            {
+                AttachmentId = Guid.NewGuid(),
+                WarehouseReceiptId = receipt.ReceiptId,
+                FileName = "quarantine.pdf",
+                FilePath = "/uploads/quarantine.pdf",
+                Category = AttachmentCategory.COMPLIANCE,
+                SubCategory = AttachmentSubCategory.QUARANTINE_CERTIFICATE,
+                Status = DocumentStatus.VERIFIED
+            };
+            await _attachmentRepository.AddAttachmentAsync(att);
+
+            // Pre-seed a RECEIVING zone and RCV-STAGE-01 location that is already at max capacity
+            var receivingZone = new WarehouseZone
+            {
+                ZoneId = Guid.NewGuid(),
+                WarehouseId = warehouseId,
+                ZoneCode = "RECEIVING",
+                ZoneName = "Receiving Stage Zone",
+                ZoneType = "RECEIVING",
+                StorageType = "FLOOR",
+                MaxCapacityPallets = 1,
+                CurrentPallets = 1,
+                Status = "ACTIVE"
+            };
+            _db.WarehouseZones.Add(receivingZone);
+
+            var receivingLocation = new WarehouseLocation
+            {
+                LocationId = Guid.NewGuid(),
+                ZoneId = receivingZone.ZoneId,
+                LocationCode = "RCV-STAGE-01",
+                MaxCapacityPallets = 1,
+                CurrentPallets = 1,
+                Status = "ACTIVE"
+            };
+            _db.WarehouseLocations.Add(receivingLocation);
+            await _db.SaveChangesAsync();
+
+            // Act
+            var result = await _service.CompleteInboundAsync(orderId);
+
+            // Assert
+            Assert.False(result.Success);
+            Assert.Contains("Capacity exceeded in Receiving Staging Location", result.Message);
+        }
+
+        [Fact]
+        public async Task CompleteInbound_PdfGenerationFails_AllowsCompletionWithWarning()
+        {
+            // Arrange
+            var (orderId, warehouseId, receiverId, customerId, receipt, item) = await SeedBaseDataAsync(ProductCategory.SEAFOOD);
+
+            var att = new WarehouseEvidenceAttachment
+            {
+                AttachmentId = Guid.NewGuid(),
+                WarehouseReceiptId = receipt.ReceiptId,
+                FileName = "quarantine.pdf",
+                FilePath = "/uploads/quarantine.pdf",
+                Category = AttachmentCategory.COMPLIANCE,
+                SubCategory = AttachmentSubCategory.QUARANTINE_CERTIFICATE,
+                Status = DocumentStatus.VERIFIED
+            };
+            await _attachmentRepository.AddAttachmentAsync(att);
+
+            // Set up a failing pdf service
+            var failingPdfService = new MockFailingPdfService();
+            var serviceWithFailingPdf = new WarehouseReceiptService(
+                _db,
+                _receiptRepository,
+                _locationService,
+                failingPdfService,
+                _environment,
+                _attachmentRepository,
+                _complianceEngine
+            );
+
+            // Act
+            var result = await serviceWithFailingPdf.CompleteInboundAsync(orderId);
+
+            // Assert
+            Assert.True(result.Success);
+            Assert.Contains("[PDF ERROR]", result.Data.WarningMessage);
+            Assert.Contains("Simulated PDF generation error", result.Data.WarningMessage);
+        }
+
+        [Fact]
+        public async Task CompleteInbound_MissingQuotation_AllowsCompletionWithBillingWarning()
+        {
+            // Arrange
+            var (orderId, _, _, _, receipt, _) = await SeedBaseDataAsync(ProductCategory.SEAFOOD);
+
+            var att = new WarehouseEvidenceAttachment
+            {
+                AttachmentId = Guid.NewGuid(),
+                WarehouseReceiptId = receipt.ReceiptId,
+                FileName = "quarantine.pdf",
+                FilePath = "/uploads/quarantine.pdf",
+                Category = AttachmentCategory.COMPLIANCE,
+                SubCategory = AttachmentSubCategory.QUARANTINE_CERTIFICATE,
+                Status = DocumentStatus.VERIFIED
+            };
+            await _attachmentRepository.AddAttachmentAsync(att);
+
+            // Act
+            var result = await _service.CompleteInboundAsync(orderId);
+
+            // Assert
+            Assert.True(result.Success);
+            Assert.Contains("[BILLING WARNING] Original quotation not found", result.Data.WarningMessage);
+        }
     }
 
     #region Mock Classes
@@ -618,6 +736,16 @@ namespace ColdChainX.UnitTests
         public Task AddComplianceZoningRuleAsync(ComplianceZoningRule rule) => Task.CompletedTask;
         public Task UpdateComplianceZoningRuleAsync(ComplianceZoningRule rule) => Task.CompletedTask;
         public Task SaveChangesAsync() => Task.CompletedTask;
+    }
+
+    public class MockFailingPdfService : IPdfService
+    {
+        public Task<string> SaveContractPdfAsync(string htmlContent, string contractNumber) => throw new NotImplementedException();
+        public Task<string> SaveQuotationPdfAsync(string htmlContent, string quoteNumber) => throw new NotImplementedException();
+        public Task<string> SaveWarehouseReceiptPdfAsync(string htmlContent, string receiptCode) => Task.FromException<string>(new Exception("Simulated PDF generation error"));
+        public Task<string> SaveWaybillPdfAsync(string htmlContent, string tripId) => throw new NotImplementedException();
+        public Task<string> SaveLoadPlanPdfAsync(string htmlContent, string tripId) => throw new NotImplementedException();
+        public Task<string> SaveInvoicePdfAsync(string htmlContent, string invoiceCode) => Task.FromException<string>(new Exception("Simulated PDF invoice error"));
     }
 
     #endregion

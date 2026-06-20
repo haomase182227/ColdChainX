@@ -352,6 +352,8 @@ namespace ColdChainX.Application.Services
                         .OrderByDescending(q => q.CreatedAt)
                         .FirstOrDefaultAsync();
 
+                    string? billingWarning = null;
+
                     if (originalQuotation != null && order.DestLocationNavigation != null)
                     {
                         var pricing = await ResolvePricingAsync(order);
@@ -411,11 +413,33 @@ namespace ColdChainX.Application.Services
                                 };
 
                                  // Generate PDF for the adjustment invoice
-                                 adjustmentInvoice.PdfUrl = await GenerateInvoicePdfAsync(order, adjustmentInvoice, adjustmentLine, warehouseName);
+                                 try
+                                 {
+                                     adjustmentInvoice.PdfUrl = await GenerateInvoicePdfAsync(order, adjustmentInvoice, adjustmentLine, warehouseName);
+                                 }
+                                 catch (Exception pdfEx)
+                                 {
+                                     billingWarning = $"[PDF ERROR] Failed to generate adjustment invoice PDF: {pdfEx.Message}";
+                                 }
 
                                  _db.Invoices.Add(adjustmentInvoice);
                                  _db.InvoiceLines.Add(adjustmentLine);
                             }
+                        }
+                        else
+                        {
+                            billingWarning = $"[BILLING WARNING] Route pricing not found from '{DefaultOriginCity}' to '{order.DestLocationNavigation.Address ?? "Unknown Address"}'. Pricing recalculation skipped.";
+                        }
+                    }
+                    else
+                    {
+                        if (originalQuotation == null)
+                        {
+                            billingWarning = "[BILLING WARNING] Original quotation not found. Pricing recalculation skipped.";
+                        }
+                        else if (order.DestLocationNavigation == null)
+                        {
+                            billingWarning = "[BILLING WARNING] Destination location not found. Pricing recalculation skipped.";
                         }
                     }
 
@@ -475,6 +499,17 @@ namespace ColdChainX.Application.Services
                         receivingLocation = await _db.WarehouseLocations
                             .FromSqlRaw("SELECT * FROM warehouse_locations WHERE location_id = {0} FOR UPDATE", receivingLocation.LocationId)
                             .FirstOrDefaultAsync();
+                    }
+
+                    // Validate capacity of staging location and staging zone
+                    int newPalletsCount = receipt.WarehouseReceiptItems.Count;
+                    if (receivingLocation!.CurrentPallets + newPalletsCount > receivingLocation.MaxCapacityPallets)
+                    {
+                        return ApiResponse<WarehouseReceiptResponse>.Failure($"Capacity exceeded in Receiving Staging Location '{receivingLocation.LocationCode}'. Max capacity: {receivingLocation.MaxCapacityPallets}, Current: {receivingLocation.CurrentPallets}, Requested: {newPalletsCount}. Please relocate existing staging items first.");
+                    }
+                    if (receivingZone!.CurrentPallets + newPalletsCount > receivingZone.MaxCapacityPallets)
+                    {
+                        return ApiResponse<WarehouseReceiptResponse>.Failure($"Capacity exceeded in Receiving Staging Zone '{receivingZone.ZoneCode}'. Max capacity: {receivingZone.MaxCapacityPallets}, Current: {receivingZone.CurrentPallets}, Requested: {newPalletsCount}. Please relocate existing staging items first.");
                     }
 
                     // Perform core temperature QC check again for stock hold determination
@@ -639,13 +674,22 @@ namespace ColdChainX.Application.Services
                     }
 
                     // Generate HTML and PDF Receipt
-                    receipt.PdfUrl = await GenerateReceiptPdfAsync(order, receipt, warehouseName, clerkName);
+                    try
+                    {
+                        receipt.PdfUrl = await GenerateReceiptPdfAsync(order, receipt, warehouseName, clerkName);
+                    }
+                    catch (Exception pdfEx)
+                    {
+                        billingWarning = billingWarning == null 
+                            ? $"[PDF ERROR] Failed to generate e-receipt PDF: {pdfEx.Message}"
+                            : $"{billingWarning} [PDF ERROR] Failed to generate e-receipt PDF: {pdfEx.Message}";
+                    }
                     receipt.ReferenceDocNo = "COMPLETED";
 
                     await _db.SaveChangesAsync();
                     await transaction.CommitAsync();
 
-                    var response = MapToResponse(receipt, order.TrackingCode, warehouseName, null);
+                    var response = MapToResponse(receipt, order.TrackingCode, warehouseName, billingWarning);
                     return ApiResponse<WarehouseReceiptResponse>.SuccessResponse(response, "Inbound completed and e-Warehouse Receipt PDF generated successfully");
                 }
                 catch (Exception ex)
