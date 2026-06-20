@@ -274,7 +274,14 @@ END $$;";
                 logger.LogInformation("Seeding demo data for warehouse receipt testing...");
                 await db.Database.ExecuteSqlRawAsync(sqlSeedDemoData);
                 logger.LogInformation("Demo data seeded.");
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Database compatibility patch or demo data seeding skipped/failed.");
+            }
 
+            try
+            {
                 // Seed Users using EF Core
                 var hasAnyUser = await db.Users.AnyAsync();
                 if (!hasAnyUser)
@@ -357,7 +364,7 @@ END $$;";
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Database compatibility patch skipped or failed.");
+                logger.LogError(ex, "Failed to seed default users.");
             }
         }
     }

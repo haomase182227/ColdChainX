@@ -64,7 +64,16 @@ namespace ColdChainX.Infrastructure.Services
                 }
             });
 
-            // Upload directly to Cloudinary via IFileService
+            // 1. Lưu xuống local wwwroot/{folderName}/{fileName} để backup/check
+            var targetFolder = Path.Combine(root, folderName);
+            if (!Directory.Exists(targetFolder))
+            {
+                Directory.CreateDirectory(targetFolder);
+            }
+            var localPath = Path.Combine(targetFolder, fileName);
+            await File.WriteAllBytesAsync(localPath, pdfBytes);
+
+            // 2. Upload lên Cloudinary và trả về link Cloudinary chuẩn để FE gọi được trên cả Production
             return await _fileService.UploadFileAsync(pdfBytes, fileName);
         }
 

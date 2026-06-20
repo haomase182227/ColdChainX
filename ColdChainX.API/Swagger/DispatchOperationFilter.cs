@@ -43,8 +43,7 @@ namespace ColdChainX.API.Swagger
                                 .Select(l => $"{l.LocationId}: {l.Address}")
                                 .ToList();
 
-                            ApplyEnum(mediaType.Schema, "OriginWarehouseLocationId", locations);
-                            ApplyEnum(mediaType.Schema, "originWarehouseLocationId", locations);
+
 
                             var orders = db.TransportOrders
                                 .Where(o => o.Status == "IN_WAREHOUSE")
@@ -57,7 +56,7 @@ namespace ColdChainX.API.Swagger
 
                             var vehicles = db.Vehicles
                                 .Where(v => v.Status == "ACTIVE")
-                                .Select(v => $"{v.VehicleId}: {v.TruckPlate} — {v.VehicleType}")
+                                .Select(v => $"{v.VehicleId}: {v.TruckPlate} — {v.VehicleType} | Tải: {v.MaxWeight}kg | Temp: {v.MinTemp}°C đến {v.MaxTemp}°C | Tài xế: {v.Driver.FullName ?? "Chưa gán"}")
                                 .ToList();
 
                             ApplyEnum(mediaType.Schema, "VehicleId", vehicles);
@@ -108,7 +107,7 @@ namespace ColdChainX.API.Swagger
                             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
                             var vehicles = db.Vehicles
                                 .Where(v => v.Status == "ACTIVE")
-                                .Select(v => $"{v.VehicleId}: {v.TruckPlate} — {v.VehicleType}")
+                                .Select(v => $"{v.VehicleId}: {v.TruckPlate} — {v.VehicleType} | Tải: {v.MaxWeight}kg | Temp: {v.MinTemp}°C đến {v.MaxTemp}°C | Tài xế: {v.Driver.FullName ?? "Chưa gán"}")
                                 .ToList();
 
                             vehicleIdParam.Schema.Type = "string";

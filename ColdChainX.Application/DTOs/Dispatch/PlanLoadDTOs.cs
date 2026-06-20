@@ -176,7 +176,6 @@ public class ManualDispatchRequest
 public class ManualDispatchFormRequest
 {
     public string VehicleId { get; set; } = string.Empty;
-    public string OriginWarehouseLocationId { get; set; } = string.Empty;
     public DateTime PlannedStartTime { get; set; }
     public DateTime PlannedEndTime { get; set; }
 }

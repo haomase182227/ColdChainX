@@ -775,6 +775,11 @@ namespace ColdChainX.UnitTests
         {
             return Task.FromResult($"/uploads/{fileName}");
         }
+
+        public string GetSignedUrl(string publicId)
+        {
+            return $"https://res.cloudinary.com/mock/image/upload/s--mock--/{publicId}.pdf";
+        }
     }
 
     #endregion

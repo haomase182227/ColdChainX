@@ -64,34 +64,35 @@ namespace ColdChainX.Infrastructure.Services
             var isPdf = fileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase);
             var folder = "coldchainx";
             
-            var cleanFileName = isPdf ? fileName : Path.GetFileNameWithoutExtension(fileName);
-            var sanitizedName = string.Concat(cleanFileName.Split(Path.GetInvalidFileNameChars()));
-            
             var isLifo = fileName.StartsWith("lifo_", StringComparison.OrdinalIgnoreCase) || 
                             (fileName.EndsWith(".pdf") && fileName.Contains("-"));
-            
-            var publicId = isLifo ? sanitizedName : (isPdf 
-                ? $"{Path.GetFileNameWithoutExtension(sanitizedName)}_{Guid.NewGuid():N}.pdf" 
-                : $"{sanitizedName}_{Guid.NewGuid():N}");
+
+            // Strip invalid characters from fileName for safety
+            var sanitizedFileName = string.Concat(fileName.Split(Path.GetInvalidFileNameChars()));
+            var cleanFileName = Path.GetFileNameWithoutExtension(sanitizedFileName);
+
+            var publicId = isLifo ? cleanFileName : $"{cleanFileName}_{Guid.NewGuid():N}";
 
             if (isPdf)
             {
-                var uploadParams = new RawUploadParams
+                var uploadParams = new ImageUploadParams
                 {
-                    File = new FileDescription(sanitizedName, stream),
+                    File = new FileDescription(sanitizedFileName, stream),
                     Folder = folder,
                     PublicId = publicId
                 };
                 var uploadResult = await _cloudinary.UploadAsync(uploadParams);
                 if (uploadResult.Error != null)
                     throw new InvalidOperationException($"Cloudinary upload failed: {uploadResult.Error.Message}");
-                return uploadResult.SecureUrl.ToString();
+                
+                // Trả về Signed URL cho file PDF để bypass lỗi 401
+                return GetSignedUrl($"{folder}/{publicId}");
             }
             else
             {
                 var uploadParams = new ImageUploadParams
                 {
-                    File = new FileDescription(sanitizedName, stream),
+                    File = new FileDescription(sanitizedFileName, stream),
                     Folder = folder,
                     PublicId = publicId
                 };
@@ -100,6 +101,16 @@ namespace ColdChainX.Infrastructure.Services
                     throw new InvalidOperationException($"Cloudinary upload failed: {uploadResult.Error.Message}");
                 return uploadResult.SecureUrl.ToString();
             }
+        }
+
+        public string GetSignedUrl(string publicId)
+        {
+            // publicId dạng: "coldchainx/lifo_123"
+            return _cloudinary.Api.UrlImgUp
+                .Secure(true)
+                .Signed(true)
+                .Format("pdf")
+                .BuildUrl(publicId);
         }
     }
 }

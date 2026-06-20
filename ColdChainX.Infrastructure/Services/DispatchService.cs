@@ -602,6 +602,9 @@ public class DispatchService : IDispatchService
         if (missingOrders.Any())
             throw new InvalidOperationException($"Không tìm thấy các đơn hàng sau: {string.Join(", ", missingOrders)}");
 
+        if (orders.Any(o => o.PickupLocation != request.OriginWarehouseLocationId))
+            throw new InvalidOperationException("Tất cả các đơn hàng được chọn phải cùng thuộc một kho xuất phát.");
+
         // 3. Check nhiệt độ
         var firstTemp = NormalizeTempGroup(orders.First().TempCondition);
         if (orders.Any(o => NormalizeTempGroup(o.TempCondition) != firstTemp))
@@ -629,10 +632,10 @@ public class DispatchService : IDispatchService
         if (activeLicense == null)
             throw new InvalidOperationException($"Tài xế {vehicle.Driver.FullName} không có bằng lái còn hạn.");
 
-        // Lấy danh sách TripId đang active để check xe bận
+        // Lấy danh sách TripId đang active để check xe bận (không coi trạng thái PLANNED là bận)
         var isBusy = await _context.MasterTrips
             .AnyAsync(t => t.VehicleId == request.VehicleId
-                        && (t.Status == "PLANNED" || t.Status == "LOADING"
+                        && (t.Status == "LOADING"
                          || t.Status == "SEALED" || t.Status == "DISPATCHED"
                          || t.Status == "PENDING_WH_APPROVAL"));
 
@@ -679,7 +682,7 @@ public class DispatchService : IDispatchService
             };
         }
 
-        // 9. Tạo Trip
+        // 9. Tạo Trip và lưu DB
         var masterTrip = new MasterTrip
         {
             TripId              = Guid.NewGuid(),
@@ -716,13 +719,13 @@ public class DispatchService : IDispatchService
             });
         }
 
+        // Liên kết đơn hàng với chuyến đi nhưng giữ nguyên trạng thái IN_WAREHOUSE
         foreach (var order in orders)
         {
-            order.Status       = "DISPATCHED_PENDING";
             order.MasterTripId = masterTrip.TripId;
         }
 
-        var notifiedCount = await SendLoadingNotificationsAsync(masterTrip, orders, vehicle, loadPlan, null);
+        var notifiedCount = 0;
         await _context.SaveChangesAsync();
 
         // 10. Build response
@@ -744,7 +747,7 @@ public class DispatchService : IDispatchService
         };
 
         var dispatchInstructions = loadPlan.Select(li => new DispatchInstruction
-        { OrderId = li.OrderId, TrackingCode = li.TrackingCode, ItemName = li.ItemName, Action = "LOAD", PreviousStatus = "IN_WAREHOUSE", TargetStatus = "DISPATCHED_PENDING", LoadOrder = li.LoadOrder, Zone = li.Zone }).OrderBy(d => d.LoadOrder).ToList();
+        { OrderId = li.OrderId, TrackingCode = li.TrackingCode, ItemName = li.ItemName, Action = "LOAD", PreviousStatus = "IN_WAREHOUSE", TargetStatus = "IN_WAREHOUSE", LoadOrder = li.LoadOrder, Zone = li.Zone }).OrderBy(d => d.LoadOrder).ToList();
 
         var daysToExpiry = activeLicense.ExpiryDate.DayNumber - today.DayNumber;
         var licenseStatus = daysToExpiry <= 30 ? "EXPIRING_SOON" : "VALID";
