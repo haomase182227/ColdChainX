@@ -59,6 +59,7 @@ builder.Services.AddSwaggerGen(c =>
     c.OperationFilter<CreateDriverOperationFilter>();
     c.OperationFilter<RemoveAuthFromCreateAccountsFilter>();
     c.OperationFilter<DispatchOperationFilter>();
+    c.OperationFilter<WarehouseReceiptOperationFilter>();
     c.UseInlineDefinitionsForEnums();
     c.OperationFilter<UpdateContractDraftOperationFilter>();
 
