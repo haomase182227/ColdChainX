@@ -113,7 +113,7 @@ public class DispatchController : ControllerBase
     public async Task<IActionResult> LookupOrdersReady()
     {
         var orders = await _db.TransportOrders
-            .Where(o => o.Status == "IN_WAREHOUSE")
+            .Where(o => o.Status == "IN_WAREHOUSE" && o.WarehouseReceipts.Any())
             .OrderByDescending(o => o.CreatedAt)
             .Select(o => new
             {

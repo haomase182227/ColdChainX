@@ -66,12 +66,22 @@ public class DispatchService : IDispatchService
         var orders = await _context.TransportOrders
             .Include(o => o.DestLocationNavigation)
             .Where(o => request.OrderIds.Contains(o.OrderId)
-                        && o.Status == "IN_WAREHOUSE")
+                        && o.Status == "IN_WAREHOUSE"
+                        && o.WarehouseReceipts.Any())
             .ToListAsync();
 
         if (orders.Count == 0)
             throw new InvalidOperationException(
                 "Không tìm thấy đơn hàng nào ở trạng thái IN_WAREHOUSE với các OrderId đã cung cấp.");
+
+        var warehouseIds = orders
+            .SelectMany(o => o.WarehouseReceipts)
+            .Select(w => w.WarehouseId)
+            .Distinct()
+            .ToList();
+
+        if (warehouseIds.Count > 1)
+            throw new InvalidOperationException("Tất cả các đơn hàng được chọn phải cùng thuộc một kho lưu trữ (WarehouseId).");
 
         var missingOrderIds = request.OrderIds
             .Except(orders.Select(o => o.OrderId))
@@ -594,14 +604,24 @@ public class DispatchService : IDispatchService
         // 2. Validate đơn hàng
         var orders = await _context.TransportOrders
             .Include(o => o.DestLocationNavigation)
+            .Include(o => o.WarehouseReceipts)
             .Where(o => request.OrderIds.Contains(o.OrderId))
             .ToListAsync();
 
         if (orders.Count == 0)
             throw new InvalidOperationException("Không tìm thấy đơn hàng nào khớp với danh sách đã chọn.");
 
-        if (orders.Any(o => o.Status != "IN_WAREHOUSE"))
-            throw new InvalidOperationException("Chỉ được ghép chuyến các đơn hàng có trạng thái IN_WAREHOUSE.");
+        if (orders.Any(o => o.Status != "IN_WAREHOUSE" || !o.WarehouseReceipts.Any()))
+            throw new InvalidOperationException("Chỉ được ghép chuyến các đơn hàng có trạng thái IN_WAREHOUSE và đã có phiếu nhập kho.");
+
+        var warehouseIds = orders
+            .SelectMany(o => o.WarehouseReceipts)
+            .Select(w => w.WarehouseId)
+            .Distinct()
+            .ToList();
+
+        if (warehouseIds.Count > 1)
+            throw new InvalidOperationException("Tất cả các đơn hàng được chọn phải cùng thuộc một kho lưu trữ (WarehouseId).");
 
         var missingOrders = request.OrderIds.Except(orders.Select(o => o.OrderId)).ToList();
         if (missingOrders.Any())
@@ -1147,6 +1167,33 @@ public class DispatchService : IDispatchService
         foreach (var order in trip.TransportOrders)
         {
             order.Status = "SEALED";
+
+            // Tạo OutboundOrder và OutboundOrderItem
+            var outboundOrder = new OutboundOrder
+            {
+                OutboundOrderId = Guid.NewGuid(),
+                OrderCode = $"OUT-{DateTime.UtcNow:yyyyMMddHHmmss}-{order.TrackingCode}",
+                CustomerId = order.CustomerId ?? Guid.Empty,
+                ReceiverName = "Default Receiver",
+                ReceiverPhone = "0000000000",
+                DestinationAddress = order.DestLocationNavigation?.Address ?? "Unknown Address",
+                Status = ColdChainX.Core.Enums.OutboundOrderStatus.SHIPPED,
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = sealedBy
+            };
+
+            var outboundItem = new OutboundOrderItem
+            {
+                OutboundOrderItemId = Guid.NewGuid(),
+                OutboundOrderId = outboundOrder.OutboundOrderId,
+                ItemCode = order.TrackingCode,
+                ItemName = order.ItemName,
+                Unit = order.PackingType,
+                Quantity = order.Quantity
+            };
+
+            _context.OutboundOrders.Add(outboundOrder);
+            _context.OutboundOrderItems.Add(outboundItem);
         }
 
         // Issue E-Waybill
@@ -1207,6 +1254,7 @@ public class DispatchService : IDispatchService
         var backlogOrders = await _context.TransportOrders
             .Include(o => o.DestLocationNavigation)
             .Where(o => o.Status == "IN_WAREHOUSE"
+                     && o.WarehouseReceipts.Any()
                      && o.CreatedAt.HasValue
                      && o.CreatedAt.Value < cutoffDate)
             .OrderBy(o => o.CreatedAt)
