@@ -28,12 +28,16 @@ namespace ColdChainX.Application.Interfaces
         DbSet<CycleCountEntry> CycleCountEntries { get; }
         DbSet<TransportOrder> TransportOrders { get; }
         DbSet<Customer> Customers { get; }
+        DbSet<MasterTrip> MasterTrips { get; }
         DbSet<Invoice> Invoices { get; }
         DbSet<InvoiceLine> InvoiceLines { get; }
         DbSet<Quotation> Quotations { get; }
         DbSet<ComplianceZoningRule> ComplianceZoningRules { get; }
         DbSet<AttachmentAuditHistory> AttachmentAuditHistories { get; }
         DbSet<PricingMatrix> PricingMatrices { get; }
+        DbSet<IncidentReport> IncidentReports { get; }
+        DbSet<Claim> Claims { get; }
+        DbSet<ClaimEvidence> ClaimEvidences { get; }
 
         DatabaseFacade Database { get; }
         Microsoft.EntityFrameworkCore.ChangeTracking.ChangeTracker ChangeTracker { get; }

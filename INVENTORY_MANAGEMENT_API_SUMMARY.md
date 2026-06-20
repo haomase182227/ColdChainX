@@ -287,3 +287,134 @@ Chia nhỏ mặt bằng nhà kho thành các vùng kiểm soát nhiệt độ ri
 *   **Controller:** [WarehouseLocationsController.cs](file:///c:/Users/tranl/OneDrive/Desktop/6-11-2026/ColdChainX/ColdChainX.API/Controllers/WarehouseLocationsController.cs)
 *   **Trạng thái bảo trì:** Khi một kệ bị hư hỏng vật lý hoặc bảo trì đột xuất, cấp quản lý có thể cập nhật `Status = "INACTIVE"` hoặc `"DAMAGED"`. Hệ thống sẽ tự động loại bỏ vị trí này ra khỏi danh sách gợi ý cất hàng tự động để đảm bảo an toàn vận hành.
 
+---
+
+### Nhóm 8: Quản Lý Sự Cố & Khiếu Nại Đền Bù (Incidents & Claims)
+
+Nhóm API này quản trị toàn bộ các sự cố vận hành phát sinh trong quá trình vận chuyển hoặc lưu trữ (trong kho), cùng các hồ sơ khiếu nại đền bù thiệt hại từ phía khách hàng/chủ hàng.
+
+#### 1. Báo cáo sự cố phát sinh (Report Incident)
+Ghi nhận sự cố vận chuyển hoặc vận hành kho (ví dụ: va chạm xe, mất nhiệt độ công ten nơ, đổ vỡ pallet hàng).
+*   **API Endpoint:** `POST /api/v1/incidents`
+*   **Controller:** [IncidentReportsController.cs](file:///c:/Users/tranl/OneDrive/Desktop/6-11-2026/ColdChainX/ColdChainX.API/Controllers/IncidentReportsController.cs#L32-L48)
+*   **Quyền hạn (Role):** `Admin`, `Manager`, `Driver`, `WarehouseOperator`
+*   **Tham số yêu cầu (Request Body):**
+    ```json
+    {
+      "tripId": "guid-chuyến-đi-nếu-bị-sự-cố-khi-vận-chuyển",
+      "incidentType": "DAMAGE_CARGO", // ACCIDENT, VEHICLE_BREAKDOWN, TEMP_EXCURSION, DAMAGE_CARGO, DELAY
+      "severity": "HIGH", // LOW, MEDIUM, HIGH, CRITICAL
+      "description": "Bể vỡ 5 thùng carton do va quệt xe cẩu",
+      "currentLatitude": 10.762622,
+      "currentLongitude": 106.660172
+    }
+    ```
+*   **Phản hồi thành công (Response):** Chi tiết sự cố kèm mã người báo cáo, trạng thái mặc định ban đầu là `REPORTED`.
+
+#### 2. Giải quyết đóng sự cố (Resolve Incident)
+Xác nhận đã xử lý xong sự cố thực địa (ví dụ: dọn dẹp hiện trường đổ vỡ, sửa xe xong, hạ nhiệt độ về mức an toàn).
+*   **API Endpoint:** `POST /api/v1/incidents/{id}/resolve`
+*   **Controller:** [IncidentReportsController.cs](file:///c:/Users/tranl/OneDrive/Desktop/6-11-2026/ColdChainX/ColdChainX.API/Controllers/IncidentReportsController.cs#L53-L70)
+*   **Quyền hạn (Role):** `Admin`, `Manager`
+*   **Tham số yêu cầu (Request Body):**
+    ```json
+    {
+      "resolutionNote": "Đã điều xe cứu hộ kéo xe về và dọn dẹp vệ sinh xong"
+    }
+    ```
+*   **Quy chế:** Trạng thái sự cố chuyển sang `RESOLVED`.
+
+#### 3. Tạo hồ sơ khiếu nại đền bù (Lodge Claim)
+Khách hàng hoặc nhân viên đại diện tạo hồ sơ khiếu nại đền bù hàng hóa bị hư hỏng, thất thoát, hoặc giao trễ.
+*   **API Endpoint:** `POST /api/v1/claims`
+*   **Controller:** [ClaimsController.cs](file:///c:/Users/tranl/OneDrive/Desktop/6-11-2026/ColdChainX/ColdChainX.API/Controllers/ClaimsController.cs#L32-L48)
+*   **Quyền hạn (Role):** `Admin`, `Manager`, `Customer`, `WarehouseOperator`
+*   **Tham số yêu cầu (Request Body):**
+    ```json
+    {
+      "orderId": "guid-đơn-hàng-bị-ảnh-hưởng",
+      "claimType": "DAMAGE", // DAMAGE, LOSS, TEMP_VIOLATION, DELAY
+      "description": "Yêu cầu đền bù 5 thùng thịt bò bị rã đông do xe mất nhiệt",
+      "evidenceImages": [
+        "https://cloudinary.com/evidence1.jpg",
+        "https://cloudinary.com/evidence2.jpg"
+      ]
+    }
+    ```
+*   **Quy chế:** Hệ thống tự động sinh mã khiếu nại dạng `CLM-YYYYMMDD-XXXX` và lưu trữ các đường dẫn hình ảnh bằng chứng vào bảng tài liệu minh chứng (`ClaimEvidences`) với trạng thái ban đầu là `OPEN`.
+
+#### 4. Phê duyệt/Giải quyết khiếu nại (Resolve Claim)
+Ban quản lý xác minh trách nhiệm lỗi và đưa ra phương án xử lý đền bù cuối cùng.
+*   **API Endpoint:** `POST /api/v1/claims/{id}/resolve`
+*   **Controller:** [ClaimsController.cs](file:///c:/Users/tranl/OneDrive/Desktop/6-11-2026/ColdChainX/ColdChainX.API/Controllers/ClaimsController.cs#L53-L70)
+*   **Quyền hạn (Role):** `Admin`, `Manager`
+*   **Tham số yêu cầu (Request Body):**
+    ```json
+    {
+      "status": "RESOLVED", // RESOLVED (chấp nhận đền bù) hoặc REJECTED (từ chối)
+      "faultOwner": "CARRIER", // CARRIER (nhà vận chuyển), WAREHOUSE (nhà kho), CUSTOMER (khách hàng), FORCE_MAJEURE (bất khả kháng)
+      "resolutionNote": "Duyệt bồi thường 100% giá trị hàng hóa bị hỏng. Phạt trừ lương lái xe do tự ý tắt máy lạnh."
+    }
+    ```
+*   **Quy chế:** Hồ sơ được đóng vĩnh viễn ở trạng thái kết quả mong muốn (`RESOLVED` / `REJECTED`).
+
+---
+
+## 3. Quy Trình Vận Hành & Xử Lý Các Sự Cố Phát Sinh (Incident Handling Workflows)
+
+Dưới đây là các kịch bản chi tiết xử lý sự cố từ lúc phát sinh đến lúc giải quyết đền bù và ghi nhận kế toán/kho bãi:
+
+### Sơ đồ quy trình tổng quan:
+```mermaid
+flowchart TD
+    subgraph "1. Khai báo & Phát hiện"
+        A1[Sự cố ngoài đường / trong kho] -->|POST /api/v1/incidents| A2(Incident: REPORTED)
+    end
+    
+    subgraph "2. Cách ly & Kiểm soát"
+        A2 -->|Hàng hỏng ở kho| B1[Tạo lệnh Hold hàng<br>POST /api/v1/inventory-holds]
+        B1 --> B2(Trạng thái: HOLD tại kệ cách ly)
+    end
+    
+    subgraph "3. Khiếu nại từ khách hàng"
+        B2 -->|Chủ hàng gửi yêu cầu đền bù| C1[Tạo hồ sơ khiếu nại<br>POST /api/v1/claims]
+        C1 --> C2(Claim: OPEN kèm Evidence)
+    end
+    
+    subgraph "4. Điều tra & Xử lý"
+        C2 -->|Xác minh & Phân định lỗi| D1[Resolve Claim<br>POST /api/v1/claims/{id}/resolve]
+        D1 -->|1. Trả lời khiếu nại| D2(Status: RESOLVED/REJECTED + FaultOwner)
+        D1 -->|2. Tiêu huỷ hàng hỏng| D3[Adjust Out Hold<br>POST /api/v1/inventory-holds/{holdId}/adjust-out]
+        D1 -->|3. Đóng sự cố thực địa| D4[Resolve Incident<br>POST /api/v1/incidents/{incidentId}/resolve]
+    end
+```
+
+### Chi Tiết Xử Lý Theo Từng Case Phát Sinh:
+
+#### Case 1: Đổ vỡ / Hư hỏng hàng hóa trong kho (Warehouse Spillage/Damage)
+*   **Hiện tượng:** Thủ kho phát hiện pallet hàng bị đổ vỡ hoặc rách bao bì trong lúc xe nâng di chuyển hàng lên kệ.
+*   **Cách giải quyết:**
+    1.  **Ghi nhận sự cố:** Thủ kho gọi API `POST /api/v1/incidents` với `incidentType: "DAMAGE_CARGO"` và `severity: "LOW"` hoặc `"MEDIUM"`.
+    2.  **Khóa giữ hàng lỗi:** Để tránh hàng hỏng này bị xuất nhầm cho khách, thủ kho lập tức gọi API `POST /api/v1/inventory-holds` để khoá số tồn kho bị ảnh hưởng, di chuyển chúng sang vị trí cách ly (`targetQuarantineLocationId`). Trạng thái tồn kho lúc này là `HOLD`.
+    3.  **Xử lý hiện trường:** Thủ kho dọn dẹp vệ sinh khu vực kệ bị đổ vỡ, sửa sang lại bao bì. Gọi API `POST /api/v1/incidents/{id}/resolve` để đóng sự cố.
+    4.  **Xử lý hàng hóa:**
+        *   *Nếu phục hồi được:* Gọi API `POST /api/v1/inventory-holds/{holdId}/release` để đưa hàng trở lại kệ thường ở trạng thái `AVAILABLE`.
+        *   *Nếu hỏng hoàn toàn:* Quản lý gọi API `POST /api/v1/inventory-holds/{holdId}/adjust-out` để huỷ bỏ/tiêu huỷ vĩnh viễn hàng lỗi ra khỏi kho, hệ thống tự động ghi giảm tồn kho.
+
+#### Case 2: Đổ vỡ / Hỏng hóc hàng hóa trong quá trình vận chuyển (Transit Damage/Incident)
+*   **Hiện tượng:** Xe tải gặp sự cố giữa đường (tai nạn giao thông hoặc thùng lạnh bị hỏng máy phát làm nhiệt độ tăng cao vượt mức bảo quản cho phép).
+*   **Cách giải quyết:**
+    1.  **Báo cáo khẩn cấp:** Tài xế gọi API `POST /api/v1/incidents` đính kèm `tripId`, chọn `incidentType: "TEMP_EXCURSION"` hoặc `"ACCIDENT"`, và điền toạ độ GPS xảy ra sự cố. Trạng thái sự cố là `REPORTED`.
+    2.  **Khắc phục sự cố:** Điều phối viên gửi xe cứu hộ hoặc thợ đến sửa chữa. Sau khi khắc phục xong, gọi API `POST /api/v1/incidents/{id}/resolve` với note ghi rõ nguyên nhân và cách xử lý.
+    3.  **Nhận hàng & Cách ly:** Khi xe về đến kho đích, bộ phận QA đo đạc nhiệt độ và phát hiện hàng có dấu hiệu suy giảm chất lượng. Thủ kho thực hiện nhập kho nhưng đưa thẳng số lượng hàng này vào khu cách ly ở trạng thái `HOLD` (gọi `POST /api/v1/inventory-holds`).
+    4.  **Khách hàng khiếu nại:** Chủ hàng nhận được thông tin hàng hỏng, gửi đơn khiếu nại thông qua API `POST /api/v1/claims` đính kèm ảnh chụp hàng móp méo/chảy nước làm bằng chứng, liên kết với mã đơn `orderId`.
+    5.  **Duyệt đền bù:** Ban quản lý điều tra chéo log nhiệt độ của xe tải. Xác định lỗi do lái xe tắt máy lạnh tiết kiệm dầu (`FaultOwner: "CARRIER"`). Gọi API `POST /api/v1/claims/{claimId}/resolve` chuyển trạng thái sang `RESOLVED` và phê duyệt số tiền bồi thường.
+    6.  **Tiêu huỷ hàng hoá:** Gọi API `POST /api/v1/inventory-holds/{holdId}/adjust-out` để xoá số hàng hỏng này khỏi kho lưu trữ.
+
+#### Case 3: Thất thoát / Lệch hàng khi kiểm kê định kỳ (Inventory Discrepancy)
+*   **Hiện tượng:** Khi thực hiện kiểm kê (Cycle Count) phát hiện số lượng thực tế đếm được ít hơn số lượng ghi nhận trên sổ sách hệ thống (nghi ngờ mất cắp hoặc đếm sót trước đó).
+*   **Cách giải quyết:**
+    1.  **Gửi dữ liệu kiểm kê:** Thủ kho gửi số lượng thực tế đếm được qua API `POST /api/v1/cycle-counts/{planId}/submit`.
+    2.  **Tự động tạo lệnh điều chỉnh:** Hệ thống phát hiện chênh lệch và tự động tạo một yêu cầu điều chỉnh tồn kho ở trạng thái chờ duyệt.
+    3.  **Duyệt chênh lệch:** Quản lý xem xét lý do hao hụt và gọi API `POST /api/v1/inventory-adjustments/{id}/approve`. Tồn kho trên hệ thống lập tức được cập nhật giảm xuống trùng khớp với thực tế.
+    4.  **Khiếu nại bồi thường (nếu có):** Nếu số lượng thất thoát quá lớn và do lỗi bảo vệ hoặc vận hành kho làm mất mát, chủ hàng có thể gửi khiếu nại đền bù qua API `POST /api/v1/claims` với loại `LOSS` để yêu cầu đơn vị vận hành kho bồi thường thiệt hại.

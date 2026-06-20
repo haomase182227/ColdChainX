@@ -1,0 +1,103 @@
+using System;
+using System.Security.Claims;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using ColdChainX.Application.DTOs.Common;
+using ColdChainX.Application.DTOs.Incident;
+using ColdChainX.Application.Interfaces;
+using ColdChainX.Shared.Responses;
+
+namespace ColdChainX.API.Controllers
+{
+    /// <summary>
+    /// Manages transport and warehouse operational incident reports (e.g. breakdown, spillage, cargo damage).
+    /// </summary>
+    [ApiController]
+    [Route("api/v1/incidents")]
+    [Authorize]
+    public class IncidentReportsController : ControllerBase
+    {
+        private readonly IIncidentReportService _incidentService;
+
+        public IncidentReportsController(IIncidentReportService incidentService)
+        {
+            _incidentService = incidentService;
+        }
+
+        /// <summary>
+        /// Log/Report a new operational or transport incident.
+        /// </summary>
+        [HttpPost]
+        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Driver,DRIVER,WarehouseOperator")]
+        [ProducesResponseType(typeof(ApiResponse<IncidentResponse>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> ReportIncident([FromBody] CreateIncidentRequest request)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var userId))
+                return Unauthorized(ApiResponse<object>.Failure("User ID claim is missing or invalid in the token."));
+
+            var result = await _incidentService.ReportIncidentAsync(request, userId);
+            if (!result.Success)
+                return BadRequest(result);
+
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Resolve a reported incident (mark as RESOLVED).
+        /// </summary>
+        [HttpPost("{id:guid}/resolve")]
+        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER")]
+        [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
+        public async Task<IActionResult> ResolveIncident([FromRoute] Guid id, [FromBody] ResolveIncidentRequest request)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var userId))
+                return Unauthorized(ApiResponse<object>.Failure("User ID claim is missing or invalid in the token."));
+
+            var result = await _incidentService.ResolveIncidentAsync(id, request.ResolutionNote, userId);
+            if (!result.Success)
+                return BadRequest(result);
+
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Get details of a specific incident.
+        /// </summary>
+        [HttpGet("{id:guid}")]
+        [ProducesResponseType(typeof(ApiResponse<IncidentResponse>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetById([FromRoute] Guid id)
+        {
+            var result = await _incidentService.GetIncidentByIdAsync(id);
+            if (!result.Success)
+                return NotFound(result);
+
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Get a paginated list of operational incidents.
+        /// </summary>
+        [HttpGet]
+        [ProducesResponseType(typeof(ApiResponse<PagedResult<IncidentResponse>>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> GetList(
+            [FromQuery] Guid? tripId = null,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10)
+        {
+            var result = await _incidentService.GetPagedIncidentsAsync(tripId, pageNumber, pageSize);
+            return Ok(result);
+        }
+    }
+}
