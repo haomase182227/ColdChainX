@@ -45,11 +45,36 @@ namespace ColdChainX.API.Swagger
 
 
 
-                            var orders = db.TransportOrders
-                                .Where(o => o.Status == "IN_WAREHOUSE")
-                                .OrderBy(o => o.CreatedAt)
-                                .Select(o => $"{o.OrderId}: {o.TrackingCode} - {o.ItemName} ({o.ExpectedWeightKg}kg, {o.TempCondition}) | Kho: {o.PickupLocationNavigation.Address ?? "N/A"} -> Đến: {o.DestLocationNavigation.Address ?? "N/A"}")
+                            var activeStocks = db.InventoryStocks
+                                .Include(s => s.Location)
+                                .Where(s => s.QuantityOnHand > 0)
+                                .Select(s => new { s.CustomerId, s.ItemName, s.Location.LocationCode })
                                 .ToList();
+
+                            var rawOrders = (from r in db.WarehouseReceipts
+                                             join o in db.TransportOrders on r.OrderId equals o.OrderId
+                                             join w in db.Warehouses on r.WarehouseId equals w.WarehouseId
+                                             join c in db.Customers on o.CustomerId equals c.CustomerId into cg
+                                             from cust in cg.DefaultIfEmpty()
+                                             select new {
+                                                 o.OrderId,
+                                                 o.TrackingCode,
+                                                 o.ItemName,
+                                                 o.CustomerId,
+                                                 Weight = o.ActualWeightKg > 0 ? o.ActualWeightKg : o.ExpectedWeightKg,
+                                                 o.TempCondition,
+                                                 CustomerName = cust != null ? cust.CompanyName : "N/A",
+                                                 WarehouseName = w.WarehouseName
+                                             })
+                                             .ToList();
+
+                            var orders = rawOrders.Select(x => {
+                                var locCode = activeStocks
+                                    .Where(s => s.CustomerId == x.CustomerId && s.ItemName == x.ItemName)
+                                    .Select(s => s.LocationCode)
+                                    .FirstOrDefault() ?? "RCV-STAGE-01";
+                                return $"{x.OrderId}: {x.TrackingCode} - {x.ItemName} ({x.Weight}kg, {x.TempCondition}) | Khách: {x.CustomerName} | Kho: {x.WarehouseName} (Vị trí: {locCode})";
+                            }).ToList();
 
                             ApplyArrayEnum(mediaType.Schema, "OrderIds", orders);
                             ApplyArrayEnum(mediaType.Schema, "orderIds", orders);
@@ -125,16 +150,42 @@ namespace ColdChainX.API.Swagger
                         using (var scope = _serviceProvider.CreateScope())
                         {
                             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-                            var orders = db.TransportOrders
-                                .Where(o => o.Status == "IN_WAREHOUSE")
-                                .OrderBy(o => o.CreatedAt)
-                                .Select(o => $"{o.OrderId}: {o.TrackingCode} - {o.ItemName} ({o.ExpectedWeightKg}kg, {o.TempCondition}) | Kho: {o.PickupLocationNavigation.Address ?? "N/A"} -> Đến: {o.DestLocationNavigation.Address ?? "N/A"}")
+                            
+                            var activeStocks = db.InventoryStocks
+                                .Include(s => s.Location)
+                                .Where(s => s.QuantityOnHand > 0)
+                                .Select(s => new { s.CustomerId, s.ItemName, s.Location.LocationCode })
                                 .ToList();
 
-                            if (!orders.Any())
-                            {
-                                orders.Add("EMPTY: Không có đơn hàng nào đang IN_WAREHOUSE");
-                            }
+                             var rawOrders = (from r in db.WarehouseReceipts
+                                              join o in db.TransportOrders on r.OrderId equals o.OrderId
+                                              join w in db.Warehouses on r.WarehouseId equals w.WarehouseId
+                                              join c in db.Customers on o.CustomerId equals c.CustomerId into cg
+                                              from cust in cg.DefaultIfEmpty()
+                                              select new {
+                                                  o.OrderId,
+                                                  o.TrackingCode,
+                                                  o.ItemName,
+                                                  o.CustomerId,
+                                                  Weight = o.ActualWeightKg > 0 ? o.ActualWeightKg : o.ExpectedWeightKg,
+                                                  o.TempCondition,
+                                                  CustomerName = cust != null ? cust.CompanyName : "N/A",
+                                                  WarehouseName = w.WarehouseName
+                                              })
+                                              .ToList();
+
+                             var orders = rawOrders.Select(x => {
+                                 var locCode = activeStocks
+                                     .Where(s => s.CustomerId == x.CustomerId && s.ItemName == x.ItemName)
+                                     .Select(s => s.LocationCode)
+                                     .FirstOrDefault() ?? "RCV-STAGE-01";
+                                 return $"{x.OrderId}: {x.TrackingCode} - {x.ItemName} ({x.Weight}kg, {x.TempCondition}) | Khách: {x.CustomerName} | Kho: {x.WarehouseName} (Vị trí: {locCode})";
+                             }).ToList();
+
+                             if (!orders.Any())
+                             {
+                                 orders.Add("EMPTY: Không có đơn hàng nào trong WarehouseReceipts");
+                             }
 
                             orderIdsParam.Schema.Items.Type = "string";
                             orderIdsParam.Schema.Items.Enum = orders.Select(v => (IOpenApiAny)new OpenApiString(v)).ToList();

@@ -112,23 +112,53 @@ public class DispatchController : ControllerBase
     [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> LookupOrdersReady()
     {
-        var orders = await _db.TransportOrders
-            .Where(o => o.Status == "IN_WAREHOUSE" && o.WarehouseReceipts.Any())
-            .OrderByDescending(o => o.CreatedAt)
-            .Select(o => new
-            {
-                o.OrderId,
-                Label         = $"{o.TrackingCode} — {o.ItemName} | {o.ExpectedWeightKg}kg / {o.ExpectedCbm}m³ ({o.TempCondition})",
-                o.TrackingCode,
-                o.ItemName,
-                o.Category,
-                o.TempCondition,
-                o.ExpectedWeightKg,
-                o.ExpectedCbm,
-                o.Status,
-                o.CreatedAt
-            })
+        var activeStocks = await _db.InventoryStocks
+            .Include(s => s.Location)
+            .Where(s => s.QuantityOnHand > 0)
+            .Select(s => new { s.CustomerId, s.ItemName, s.Location.LocationCode })
             .ToListAsync();
+
+        var rawOrders = await (from r in _db.WarehouseReceipts
+                               join o in _db.TransportOrders on r.OrderId equals o.OrderId
+                               join w in _db.Warehouses on r.WarehouseId equals w.WarehouseId
+                               join c in _db.Customers on o.CustomerId equals c.CustomerId into cg
+                               from cust in cg.DefaultIfEmpty()
+                               select new
+                               {
+                                   o.OrderId,
+                                   o.TrackingCode,
+                                   o.ItemName,
+                                   o.CustomerId,
+                                   o.Category,
+                                   o.TempCondition,
+                                   Weight = o.ActualWeightKg > 0 ? o.ActualWeightKg : o.ExpectedWeightKg,
+                                   Cbm = o.ActualCbm > 0 ? o.ActualCbm : o.ExpectedCbm,
+                                   CustomerName = cust != null ? cust.CompanyName : "N/A",
+                                   WarehouseName = w.WarehouseName,
+                                   o.CreatedAt
+                               })
+                               .OrderByDescending(x => x.CreatedAt)
+                               .ToListAsync();
+
+        var orders = rawOrders.Select(x => {
+            var locCode = activeStocks
+                .Where(s => s.CustomerId == x.CustomerId && s.ItemName == x.ItemName)
+                .Select(s => s.LocationCode)
+                .FirstOrDefault() ?? "RCV-STAGE-01";
+            return new
+            {
+                x.OrderId,
+                Label = $"{x.TrackingCode} — {x.ItemName} | {x.Weight}kg / {x.Cbm}m³ ({x.TempCondition}) | Khách: {x.CustomerName} | Kho: {x.WarehouseName} (Vị trí: {locCode})",
+                x.TrackingCode,
+                x.ItemName,
+                x.Category,
+                x.TempCondition,
+                ExpectedWeightKg = x.Weight,
+                ExpectedCbm = x.Cbm,
+                Status = "IN_WAREHOUSE",
+                x.CreatedAt
+            };
+        }).ToList();
 
         return Ok(new { Success = true, Count = orders.Count, Data = orders });
     }
