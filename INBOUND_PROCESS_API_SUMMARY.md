@@ -173,6 +173,23 @@ Tra cứu vị trí lưu trữ kệ hàng tốt nhất dựa trên sức chứa 
 
 ---
 
+### Bước 8: Truy vấn hóa đơn chênh lệch (Invoices API)
+Sau khi hoàn tất nhập kho (Bước 6), nếu kích thước/trọng lượng thực tế đo đạc ở Bước 3 có chênh lệch so với kỳ vọng ban đầu, hệ thống sẽ tự động tạo hóa đơn điều chỉnh chênh lệch (`INV-ADJ-...`). Kế toán hoặc khách hàng có thể gọi các API sau để kiểm tra:
+* **API Endpoints:**
+  * **Tra cứu danh sách hóa đơn:** `GET /api/v1/invoices`
+    * *Query Params:* `status` (UNPAID/PAID), `pageNumber`, `pageSize`.
+    * *Cơ chế hoạt động:* Khách hàng chỉ xem được hóa đơn của mình, Admin/Manager xem được toàn bộ.
+  * **Xem chi tiết một hóa đơn và các dòng phí:** `GET /api/v1/invoices/{invoiceId}`
+    * *Cơ chế hoạt động:* Trả về chi tiết các dòng phí (`InvoiceLines`) mô tả rõ nội dung điều chỉnh chênh lệch.
+  * **Xem hóa đơn theo đơn hàng:** `GET /api/v1/orders/{orderId}/invoices` (RESTful Shopify Style)
+    * *Cơ chế hoạt động:* Trả về toàn bộ hóa đơn (bao gồm cả hóa đơn gốc và hóa đơn điều chỉnh chênh lệch) liên kết với Đơn hàng.
+* **Controller:** [InvoicesController.cs](file:///c:/Users/tranl/OneDrive/Desktop/6-11-2026/ColdChainX/ColdChainX.API/Controllers/InvoicesController.cs)
+* **Quyền hạn (Role):** Mọi người dùng đã xác thực (Tự động lọc theo sở hữu cho `Customer`).
+* **Kết quả:** Trả về dữ liệu chi tiết số tiền và lý do chênh lệch hóa đơn.
+
+
+---
+
 ## 3. Cách Xử Lý Chi Tiết Cho Các Tình Huống Phát Sinh (Arising Scenarios)
 
 ### Tình huống A: Lỗi kiểm tra nhiệt độ khi giao hàng (Recorded Temp vi phạm quy chuẩn)
@@ -198,11 +215,31 @@ Tra cứu vị trí lưu trữ kệ hàng tốt nhất dựa trên sức chứa 
   
   > [!IMPORTANT]
   > **API để kiểm tra chi tiết hóa đơn chênh lệch này:**
-  > Hiện tại, hệ thống mới chỉ **LƯU** hóa đơn điều chỉnh vào DB khi hoàn tất nhập kho, **CHƯA có API Endpoint truy xuất (đọc) hóa đơn**.
-  > 
-  > **Hướng xử lý tiếp theo:** Cần tạo thêm `InvoicesController` với các API:
-  > * `GET /api/v1/invoices` — Tra cứu toàn bộ hóa đơn của khách hàng.
-  > * `GET /api/v1/invoices/order/{orderId}` — Xem hóa đơn chênh lệch phát sinh theo mã đơn hàng.
+  > Hệ thống hỗ trợ tra cứu hóa đơn điều chỉnh thông qua bộ API quản lý hóa đơn mới:
+  > * `GET /api/v1/invoices` — Xem danh sách hóa đơn.
+  > * `GET /api/v1/invoices/{invoiceId}` — Xem chi tiết hóa đơn và lý do chênh lệch.
+  > * `GET /api/v1/orders/{orderId}/invoices` — Tra cứu nhanh hóa đơn điều chỉnh của một đơn hàng cụ thể.
+  >
+  > **Mối liên kết trong Cơ sở dữ liệu:**
+  > * Một đơn hàng có thể có nhiều hóa đơn (Hóa đơn gốc từ Báo giá ban đầu + Hóa đơn điều chỉnh chênh lệch thực tế).
+  > * Mối liên kết được thực hiện thông qua bảng `invoice_lines`:
+    * Trường `invoice_lines.order_id` liên kết ngoại đến `transport_orders.order_id`.
+    * Trường `invoice_lines.invoice_id` liên kết ngoại đến `invoices.invoice_id`.
+  > * Khi gọi API `GET /api/v1/orders/{orderId}/invoices`, hệ thống sẽ dựa vào `OrderId` để quét tất cả các dòng chi tiết `invoice_lines` liên quan, sau đó gộp và trả về danh sách các `invoices` đầy đủ.
+  >
+  > **Công thức & Logic tính toán số tiền chênh lệch:**
+  > 1. Tổng trọng lượng thực tế ($W_{\text{act}}$) và thể tích thực tế ($V_{\text{act}}$ - tính bằng CBM) được tính toán từ đo đạc ở Bước 3.
+  > 2. Tính lại cước vận chuyển cơ bản thực tế:
+  >    $$baseFreight = \max(W_{\text{act}} \times Price_{\text{Kg}}, V_{\text{act}} \times Price_{\text{CBM}})$$
+  >    *(Nếu $baseFreight$ < 300,000 VND thì lấy 300,000 VND)*
+  > 3. Tính phụ phí last-mile thực tế ($lastMileSurcharge$): Nếu quãng đường giao hàng lớn hơn 10km, phần km vượt tính 15,000 VND/km.
+  > 4. Tính tổng tiền thực tế gồm thuế VAT:
+  >    $$Total_{\text{act}} = (baseFreight + lastMileSurcharge + VasAmount) \times 1.08$$
+  > 5. Số tiền chênh lệch ghi nhận vào hóa đơn điều chỉnh:
+  >    $$GrandTotal_{\text{ADJ}} = Total_{\text{act}} - GrandTotal_{\text{ban đầu}}$$
+  >    * Nếu $GrandTotal_{\text{ADJ}} > 0$: Tạo hóa đơn `UNPAID` yêu cầu khách hàng đóng thêm.
+  >    * Nếu $GrandTotal_{\text{ADJ}} < 0$: Tạo hóa đơn âm tiền ghi nhận giảm trừ/hoàn tiền.
+
 
 ---
 
