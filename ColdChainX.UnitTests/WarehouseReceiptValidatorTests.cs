@@ -3,134 +3,95 @@ using ColdChainX.Application.Validators;
 using ColdChainX.Application.DTOs.WarehouseReceipt;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using ColdChainX.Core.Enums;
 
 namespace ColdChainX.UnitTests
 {
     public class WarehouseReceiptValidatorTests
     {
-        private readonly ProcessInboundQCPayloadValidator _qcValidator;
-        private readonly UpdateMeasurementsPayloadValidator _measurementsValidator;
+        private readonly InboundQCRequestValidator _qcValidator;
+        private readonly UpdateMeasurementsRequestValidator _measurementsValidator;
 
         public WarehouseReceiptValidatorTests()
         {
-            _qcValidator = new ProcessInboundQCPayloadValidator();
-            _measurementsValidator = new UpdateMeasurementsPayloadValidator();
+            _qcValidator = new InboundQCRequestValidator();
+            _measurementsValidator = new UpdateMeasurementsRequestValidator();
         }
 
         [Fact]
-        public void ProcessInboundQC_WithValidData_ShouldPass()
+        public void InboundQCRequest_WithValidData_ShouldPass()
         {
-            var payload = new ProcessInboundQCPayload
+            var request = new InboundQCRequest
             {
-                WarehouseReceipt = new InboundQCBlock
-                {
-                    OrderId = Guid.NewGuid(),
-                    WarehouseId = Guid.NewGuid(),
-                    RecordedTemperature = -15.5m,
-                    DelivererName = "Driver Name",
-                    Note = "Some note"
-                }
+                OrderId = Guid.NewGuid(),
+                WarehouseId = Guid.NewGuid(),
+                RecordedTemperature = -15.5m,
+                DelivererName = "Driver Name",
+                Note = "Some note"
             };
 
-            var result = _qcValidator.Validate(payload);
+            var result = _qcValidator.Validate(request);
             Assert.True(result.IsValid);
         }
 
         [Fact]
-        public void ProcessInboundQC_WithNullBlock_ShouldFail()
+        public void InboundQCRequest_WithEmptyFields_ShouldFail()
         {
-            var payload = new ProcessInboundQCPayload
+            var request = new InboundQCRequest
             {
-                WarehouseReceipt = null!
+                OrderId = Guid.Empty,
+                WarehouseId = Guid.Empty,
+                RecordedTemperature = 0,
+                DelivererName = "",
+                Note = null
             };
 
-            var result = _qcValidator.Validate(payload);
+            var result = _qcValidator.Validate(request);
             Assert.False(result.IsValid);
-            Assert.Contains(result.Errors, e => e.PropertyName == "WarehouseReceipt" && e.ErrorMessage.Contains("required"));
+            Assert.Contains(result.Errors, e => e.PropertyName == "OrderId");
+            Assert.Contains(result.Errors, e => e.PropertyName == "WarehouseId");
+            Assert.Contains(result.Errors, e => e.PropertyName == "DelivererName");
         }
 
         [Fact]
-        public void ProcessInboundQC_WithEmptyFields_ShouldFail()
+        public void UpdateMeasurementsRequest_WithValidData_ShouldPass()
         {
-            var payload = new ProcessInboundQCPayload
+            var request = new UpdateMeasurementsRequest
             {
-                WarehouseReceipt = new InboundQCBlock
+                Items = new List<InboundItemMeasurement>
                 {
-                    OrderId = Guid.Empty,
-                    WarehouseId = Guid.Empty,
-                    RecordedTemperature = 0,
-                    DelivererName = "",
-                    Note = null
-                }
-            };
-
-            var result = _qcValidator.Validate(payload);
-            Assert.False(result.IsValid);
-            Assert.Contains(result.Errors, e => e.PropertyName == "WarehouseReceipt.OrderId");
-            Assert.Contains(result.Errors, e => e.PropertyName == "WarehouseReceipt.WarehouseId");
-            Assert.Contains(result.Errors, e => e.PropertyName == "WarehouseReceipt.DelivererName");
-        }
-
-        [Fact]
-        public void UpdateMeasurements_WithValidData_ShouldPass()
-        {
-            var payload = new UpdateMeasurementsPayload
-            {
-                WarehouseReceipt = new UpdateMeasurementsBlock
-                {
-                    Items = new List<InboundItemMeasurement>
+                    new InboundItemMeasurement
                     {
-                        new InboundItemMeasurement
-                        {
-                            ItemName = "Fish",
-                            ActualQty = 10,
-                            CountryOfOrigin = "Vietnam",
-                            ProductCategory = ProductCategory.SEAFOOD
-                        }
+                        ItemName = "Fish",
+                        ActualQty = 10,
+                        CountryOfOrigin = "Vietnam",
+                        ProductCategory = ProductCategory.SEAFOOD
                     }
                 }
             };
 
-            var result = _measurementsValidator.Validate(payload);
+            var result = _measurementsValidator.Validate(request);
             Assert.True(result.IsValid);
         }
 
         [Fact]
-        public void UpdateMeasurements_WithNullBlock_ShouldFail()
+        public void UpdateMeasurementsRequest_WithInvalidItem_ShouldFail()
         {
-            var payload = new UpdateMeasurementsPayload
+            var request = new UpdateMeasurementsRequest
             {
-                WarehouseReceipt = null!
-            };
-
-            var result = _measurementsValidator.Validate(payload);
-            Assert.False(result.IsValid);
-            Assert.Contains(result.Errors, e => e.PropertyName == "WarehouseReceipt" && e.ErrorMessage.Contains("required"));
-        }
-
-        [Fact]
-        public void UpdateMeasurements_WithInvalidItem_ShouldFail()
-        {
-            var payload = new UpdateMeasurementsPayload
-            {
-                WarehouseReceipt = new UpdateMeasurementsBlock
+                Items = new List<InboundItemMeasurement>
                 {
-                    Items = new List<InboundItemMeasurement>
+                    new InboundItemMeasurement
                     {
-                        new InboundItemMeasurement
-                        {
-                            ItemName = "",
-                            ActualQty = 0,
-                            CountryOfOrigin = "",
-                            ProductCategory = (ProductCategory)999
-                        }
+                        ItemName = "",
+                        ActualQty = 0,
+                        CountryOfOrigin = "",
+                        ProductCategory = (ProductCategory)999
                     }
                 }
             };
 
-            var result = _measurementsValidator.Validate(payload);
+            var result = _measurementsValidator.Validate(request);
             Assert.False(result.IsValid);
             Assert.Contains(result.Errors, e => e.PropertyName.Contains("Items[0].ItemName"));
             Assert.Contains(result.Errors, e => e.PropertyName.Contains("Items[0].ActualQty"));
