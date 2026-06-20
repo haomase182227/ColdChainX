@@ -20,7 +20,9 @@ public sealed class RedisService : IAsyncDisposable
     public RedisService(IConfiguration configuration, ILogger<RedisService> logger)
     {
         var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__Redis")
-            ?? Environment.GetEnvironmentVariable("REDIS_CONNECTION_STRING");
+            ?? Environment.GetEnvironmentVariable("REDIS_CONNECTION_STRING")
+            ?? configuration.GetConnectionString("Redis")
+            ?? configuration["REDIS_CONNECTION_STRING"];
 
         if (string.IsNullOrWhiteSpace(connectionString))
         {
