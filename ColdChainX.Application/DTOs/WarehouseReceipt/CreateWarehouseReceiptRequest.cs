@@ -4,9 +4,9 @@ namespace ColdChainX.Application.DTOs.WarehouseReceipt
 {
     /// <summary>
     /// Request payload for processing inbound Quality Control (QC) check at receiving.
-    /// All fields are submitted as a flat JSON body.
+    /// All fields are submitted as a flat JSON body — no nested wrapper required.
     /// </summary>
-    public class InboundQCRequest
+    public class CreateWarehouseReceiptRequest
     {
         /// <summary>
         /// The unique identifier of the transport order being received.

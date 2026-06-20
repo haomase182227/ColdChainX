@@ -105,18 +105,16 @@ Tra cứu danh sách lịch nhập hàng dự kiến của khách hàng hoặc k
 ### Bước 2: Kiểm tra QC đầu vào khi hàng đến cửa kho (Inbound QC)
 Đo nhiệt độ thực tế của xe tải/thùng hàng khi tài xế giao hàng đến và ghi nhận thông tin bàn giao ban đầu.
 * **API Endpoint:** `POST /api/v1/warehouse-receipts`
-* **Controller:** [WarehouseReceiptController.cs](file:///c:/Users/tranl/OneDrive/Desktop/6-11-2026/ColdChainX/ColdChainX.API/Controllers/WarehouseReceiptController.cs#L49-L77)
+* **Controller:** [WarehouseReceiptController.cs](file:///c:/Users/tranl/OneDrive/Desktop/6-11-2026/ColdChainX/ColdChainX.API/Controllers/WarehouseReceiptController.cs#L49-L68)
 * **Quyền hạn (Role):** `WarehouseOperator`, `Manager`, `Admin`
-* **Các trường dữ liệu chính (Shopify-style wrapped body payload):**
+* **Các trường dữ liệu chính (flat JSON body — điền từng field riêng lẻ):**
   ```json
   {
-    "warehouse_receipt": {
-      "orderId": "guid-don-hang",
-      "warehouseId": "guid-kho-den",
-      "recordedTemperature": -18.5,
-      "delivererName": "Nguyễn Văn Tài Xế",
-      "note": "Thông tin tình trạng xe/thùng hàng"
-    }
+    "orderId": "guid-don-hang",
+    "warehouseId": "guid-kho-den",
+    "recordedTemperature": -18.5,
+    "delivererName": "Nguyễn Văn Tài Xế",
+    "note": "Thông tin tình trạng xe/thùng hàng"
   }
   ```
 * **Quy tắc kiểm tra tự động (Temperature Check):**
@@ -132,31 +130,29 @@ Tra cứu danh sách lịch nhập hàng dự kiến của khách hàng hoặc k
 ### Bước 3: Đo đạc và Cập nhật kích thước thực tế (Update Measurements)
 Đo đạc kích thước (Dài - Rộng - Cao), cân nặng, kiểm đếm số lượng thực tế và khai báo thông tin FEFO (Số lô, ngày sản xuất, hạn sử dụng).
 * **API Endpoint:** `PUT /api/v1/warehouse-receipts/orders/{orderId}/measurements`
-* **Controller:** [WarehouseReceiptController.cs](file:///c:/Users/tranl/OneDrive/Desktop/6-11-2026/ColdChainX/ColdChainX.API/Controllers/WarehouseReceiptController.cs#L97-L121)
+* **Controller:** [WarehouseReceiptController.cs](file:///c:/Users/tranl/OneDrive/Desktop/6-11-2026/ColdChainX/ColdChainX.API/Controllers/WarehouseReceiptController.cs#L88-L104)
 * **Quyền hạn (Role):** `WarehouseOperator`, `Manager`, `Admin`
-* **Các trường dữ liệu chính (Shopify-style wrapped body payload):**
+* **Các trường dữ liệu chính (flat JSON body — điền từng field riêng lẻ):**
   ```json
   {
-    "warehouse_receipt": {
-      "items": [
-        {
-          "itemName": "Thịt bò Mỹ",
-          "itemCode": "BEEF-01",
-          "unit": "BOX",
-          "actualQty": 98,          // Số lượng thực tế kiểm đếm được
-          "weightKg": 25.5,          // Cân nặng thực tế của mỗi thùng
-          "lengthCm": 40,            // Chiều dài
-          "widthCm": 30,             // Chiều rộng
-          "heightCm": 20,            // Chiều cao
-          "conditionStatus": "GOOD", // Trạng thái cảm quan hàng hóa (GOOD / DAMAGED)
-          "batchNumber": "LOT202606",// Số lô sản xuất (Bắt buộc với một số ngành hàng)
-          "manufacturedDate": "2026-05-01",
-          "expiryDate": "2026-11-01",
-          "countryOfOrigin": "USA",  // Quốc gia xuất xứ (Dùng để xác định hàng nhập khẩu)
-          "productCategory": "SEAFOOD" // Danh mục sản phẩm (FOOD, SEAFOOD, PHARMA, VACCINE, AGRICULTURE, etc.)
-        }
-      ]
-    }
+    "items": [
+      {
+        "itemName": "Thịt bò Mỹ",
+        "itemCode": "BEEF-01",
+        "unit": "BOX",
+        "actualQty": 98,
+        "weightKg": 25.5,
+        "lengthCm": 40,
+        "widthCm": 30,
+        "heightCm": 20,
+        "conditionStatus": "GOOD",
+        "batchNumber": "LOT202606",
+        "manufacturedDate": "2026-05-01",
+        "expiryDate": "2026-11-01",
+        "countryOfOrigin": "USA",
+        "productCategory": "SEAFOOD"
+      }
+    ]
   }
   ```
 * **Kết quả:** Lưu thông tin các mặt hàng thực tế nhận được (`WarehouseReceiptItem`), tự động sinh mã vạch (`Barcode`) và mã QR (`QrCode`) cho từng dòng hàng. Trạng thái phiếu nhập chuyển thành `PENDING_COMPLETE`.
