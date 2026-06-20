@@ -49,6 +49,56 @@ Khách hàng thông báo trước cho kho về thông tin chuyến hàng sắp t
   ```
 * **Kết quả:** Tạo bản ghi ASN trong hệ thống để kho chuẩn bị mặt bằng đón hàng.
 
+#### API Tra cứu Lịch Nhập Kho (Inbound Delivery Schedule)
+Tra cứu danh sách lịch nhập hàng dự kiến của khách hàng hoặc kho để hiển thị lên lịch trình/calendar.
+* **API Endpoint:** `GET /api/v1/asns`
+* **Controller:** [AsnController.cs](file:///c:/Users/tranl/OneDrive/Desktop/6-11-2026/ColdChainX/ColdChainX.API/Controllers/AsnController.cs)
+* **Quyền hạn (Role):** Mọi người dùng đã đăng nhập.
+  * Với `Customer`: Hệ thống tự động lọc chỉ trả về danh sách lịch nhập của chính khách hàng đó.
+  * Với `Admin`, `Manager`, `WarehouseOperator`: Có thể tra cứu lịch nhập của tất cả các khách hàng hoặc lọc theo `warehouseId` / `customerId` cụ thể.
+* **Query Parameters:**
+  * `status`: Lọc trạng thái đăng ký (e.g. `SCHEDULED`, `ARRIVED`, `CANCELLED`).
+  * `dateFrom` & `dateTo`: Lọc theo khoảng thời gian giao hàng dự kiến (`RequestedDropoffTime`).
+  * `searchQuery`: Tìm kiếm nhanh theo mã ASN, mã vận đơn, tên sản phẩm, tên khách hàng hoặc địa chỉ giao hàng.
+  * `warehouseId`: Lọc theo kho. Hệ thống tự động đối chiếu thông tin địa chỉ giao hàng (`DestAddress`) với thông tin Kho tương ứng.
+  * `pageNumber` & `pageSize`: Phân trang dữ liệu (mặc định trang 1, 10 bản ghi/trang).
+* **Định dạng dữ liệu trả về (Response JSON):**
+  ```json
+  {
+    "success": true,
+    "message": "Inbound schedules retrieved successfully.",
+    "data": {
+      "totalRecords": 1,
+      "totalPages": 1,
+      "currentPage": 1,
+      "pageSize": 10,
+      "data": [
+        {
+          "asnId": "guid-asn",
+          "asnCode": "ASN-20260620120000-1234",
+          "orderId": "guid-don-hang",
+          "trackingCode": "TRK-XYZ123",
+          "customerId": "guid-khach-hang",
+          "customerName": "Tên công ty khách hàng",
+          "itemName": "Thịt bò Mỹ",
+          "category": "FOOD",
+          "quantity": 100,
+          "tempCondition": "frozen",
+          "expectedWeightKg": 1200.0,
+          "expectedCbm": 3.5,
+          "destAddress": "Địa chỉ Kho HCM Central",
+          "requestedDropoffTime": "2026-06-25T10:00:00Z",
+          "status": "SCHEDULED",
+          "qrCodeValue": "ASN|ASN-20260620120000-1234|ORDER|...",
+          "createdAt": "2026-06-20T12:00:00Z",
+          "warehouseId": "guid-kho-hcm",
+          "warehouseName": "HCM Central Warehouse"
+        }
+      ]
+    }
+  }
+  ```
+
 ---
 
 ### Bước 2: Kiểm tra QC đầu vào khi hàng đến cửa kho (Inbound QC)
