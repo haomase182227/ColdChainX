@@ -34,8 +34,15 @@ public sealed class RedisService : IAsyncDisposable
             () => ConnectionMultiplexer.Connect(connectionString),
             LazyThreadSafetyMode.ExecutionAndPublication);
 
-        var ping = _redis.Value.GetDatabase().Ping();
-        logger.LogInformation("Redis connected successfully. Ping={PingMs}ms", ping.TotalMilliseconds);
+        try
+        {
+            var ping = _redis.Value.GetDatabase().Ping();
+            logger.LogInformation("Redis connected successfully. Ping={PingMs}ms", ping.TotalMilliseconds);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to connect to Redis on startup. Redis features will not be available or will throw errors during operation.");
+        }
     }
 
     public async Task<long> AddTelemetryAndTrimAsync(string deviceId, TelemetryData data)
