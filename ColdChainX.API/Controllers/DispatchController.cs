@@ -273,6 +273,196 @@ public class DispatchController : ControllerBase
         }
     }
 
+    // ── Loader endpoints (Người vận chuyển hàng lên container) ─────────────
+
+    /// <summary>
+    /// [Loader] Lấy danh sách chuyến hàng đang ở trạng thái PLANNED/LOADING
+    /// cần Loader xếp hàng lên xe.
+    /// </summary>
+    [HttpGet("loader/my-trips")]
+    [Authorize(Roles = "Loader,Admin,ADMIN,Dispatcher")]
+    [ProducesResponseType(typeof(object), 200)]
+    public async Task<IActionResult> LoaderGetAssignedTrips()
+    {
+        try
+        {
+            var trips = await _db.MasterTrips
+                .Include(t => t.Vehicle)
+                .Include(t => t.OriginLocation)
+                .Include(t => t.DestinationLocation)
+                .Include(t => t.TransportOrders)
+                .Include(t => t.Seals)
+                .Where(t => t.Status == "PLANNED" || t.Status == "LOADING")
+                .OrderByDescending(t => t.CreatedAt)
+                .Select(t => new
+                {
+                    t.TripId,
+                    t.Status,
+                    Vehicle = t.Vehicle == null ? null : new { t.Vehicle.TruckPlate, t.Vehicle.VehicleType },
+                    Origin = t.OriginLocation == null ? null : new { t.OriginLocation.Address },
+                    Destination = t.DestinationLocation == null ? null : new { t.DestinationLocation.Address },
+                    OrderCount = t.TransportOrders.Count,
+                    TotalWeightKg = t.TransportOrders.Sum(o => o.ExpectedWeightKg),
+                    TotalCbm = t.TransportOrders.Sum(o => o.ExpectedCbm),
+                    IsSealed = t.Seals.Any(s => s.Status == "APPLIED"),
+                    t.PlannedStartTime,
+                    t.PlannedEndTime,
+                    t.CreatedAt
+                })
+                .ToListAsync();
+
+            return Ok(new { Success = true, Count = trips.Count, Data = trips });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { Success = false, Error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// [Loader] Xem sơ đồ và thứ tự bốc xếp LIFO để xếp hàng lên container.
+    /// Loader dùng endpoint này để biết thứ tự xếp hàng theo nguyên tắc LIFO.
+    /// </summary>
+    [HttpGet("loader/load-plan/{tripId}")]
+    [Authorize(Roles = "Loader,Admin,ADMIN,Dispatcher")]
+    [ProducesResponseType(typeof(List<LoadInstruction>), 200)]
+    [ProducesResponseType(typeof(object), 400)]
+    [ProducesResponseType(typeof(object), 404)]
+    public async Task<IActionResult> LoaderGetLoadPlan(string tripId)
+    {
+        try
+        {
+            var rawTripId = ExtractGuid(tripId);
+            if (!Guid.TryParse(rawTripId, out var parsedTripId))
+                return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
+
+            var loadPlan = await _dispatchService.GetLoadPlanAsync(parsedTripId);
+
+            // Lấy thông tin trip kèm theo để Loader có đầy đủ context
+            var trip = await _db.MasterTrips
+                .Include(t => t.Vehicle)
+                .Include(t => t.Seals)
+                .FirstOrDefaultAsync(t => t.TripId == parsedTripId);
+
+            return Ok(new
+            {
+                Success = true,
+                TripId = parsedTripId,
+                TripStatus = trip?.Status,
+                Vehicle = trip?.Vehicle == null ? null : new { trip.Vehicle.TruckPlate, trip.Vehicle.VehicleType, trip.Vehicle.MaxWeight, trip.Vehicle.MaxCbm },
+                IsSealed = trip?.Seals?.Any(s => s.Status == "APPLIED") ?? false,
+                TotalItems = loadPlan.Count,
+                TotalWeightKg = loadPlan.Sum(l => l.WeightKg),
+                TotalCbm = loadPlan.Sum(l => l.Cbm),
+                LoadPlan = loadPlan,
+                Message = "Xếp hàng theo thứ tự LoadOrder từ 1 trở đi. " +
+                          "LoadOrder=1 xếp VÀO TRƯỚC NHẤT (nằm sâu trong xe). " +
+                          "Sau khi xếp xong, thực hiện kẹp chì bằng endpoint POST /api/dispatch/loader/seal/{tripId}."
+            });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { Success = false, Error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { Success = false, Error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// [Loader] Tải PDF sơ đồ xếp hàng LIFO để in và đối chiếu khi xếp hàng lên xe.
+    /// </summary>
+    [HttpGet("loader/load-plan/{tripId}/pdf")]
+    [Authorize(Roles = "Loader,Admin,ADMIN,Dispatcher")]
+    [ProducesResponseType(typeof(object), 200)]
+    [ProducesResponseType(typeof(object), 400)]
+    [ProducesResponseType(typeof(object), 404)]
+    public async Task<IActionResult> LoaderGetLoadPlanPdf(string tripId)
+    {
+        try
+        {
+            var rawTripId = ExtractGuid(tripId);
+            if (!Guid.TryParse(rawTripId, out var parsedTripId))
+                return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
+
+            var pdfUrl = await _dispatchService.GenerateLoadPlanPdfAsync(parsedTripId);
+            return Ok(new
+            {
+                Success = true,
+                Message = "PDF sơ đồ xếp hàng LIFO cho Loader đã được sinh thành công.",
+                PdfUrl = pdfUrl
+            });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { Success = false, Error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { Success = false, Error = "Lỗi khi sinh PDF.", Details = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// [Loader] Xác nhận đã xếp hàng xong và thực hiện kẹp chì niêm phong container.
+    /// Loader gọi endpoint này sau khi đã xếp hàng theo sơ đồ LIFO.
+    /// Hệ thống sẽ tạo Seal record, cập nhật trạng thái Trip → SEALED.
+    /// </summary>
+    [HttpPost("loader/seal/{tripId}")]
+    [Authorize(Roles = "Loader,Admin,ADMIN")]
+    [ProducesResponseType(typeof(object), 200)]
+    [ProducesResponseType(typeof(object), 400)]
+    public async Task<IActionResult> LoaderSealTruck(string tripId, [FromBody] SealRequest request)
+    {
+        try
+        {
+            var rawTripId = ExtractGuid(tripId);
+            if (!Guid.TryParse(rawTripId, out var parsedTripId))
+                return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
+
+            // Kiểm tra trip tồn tại và đang ở trạng thái có thể kẹp chì
+            var trip = await _db.MasterTrips
+                .Include(t => t.Seals)
+                .FirstOrDefaultAsync(t => t.TripId == parsedTripId);
+
+            if (trip == null)
+                return NotFound(new { Success = false, Error = "Không tìm thấy chuyến hàng." });
+
+            if (trip.Status == "SEALED")
+                return BadRequest(new { Success = false, Error = "Chuyến hàng đã được kẹp chì trước đó." });
+
+            if (trip.Status != "PLANNED" && trip.Status != "LOADING")
+                return BadRequest(new
+                {
+                    Success = false,
+                    Error = $"Không thể kẹp chì khi chuyến hàng đang ở trạng thái '{trip.Status}'. " +
+                            $"Chỉ có thể kẹp chì khi trạng thái là PLANNED hoặc LOADING."
+                });
+
+            // Lấy Loader userId từ JWT claim
+            var loaderIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var loaderId = loaderIdClaim != null ? Guid.Parse(loaderIdClaim) : Guid.NewGuid();
+
+            await _dispatchService.SealTruckAsync(parsedTripId, request.SealCode, loaderId);
+
+            return Ok(new
+            {
+                Success = true,
+                Message = $"Kẹp chì thành công! Mã chì: {request.SealCode}. " +
+                          $"Chuyến hàng {parsedTripId} đã chuyển sang trạng thái SEALED.",
+                TripId = parsedTripId,
+                SealCode = request.SealCode,
+                SealedBy = loaderId,
+                SealedAt = DateTime.UtcNow
+            });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { Success = false, Error = ex.Message });
+        }
+    }
+
     /// <summary>Cấp giấy đi đường / E-Waybill cho chuyến.</summary>
     [HttpPost("issue-documents/{tripId}")]
     public async Task<IActionResult> IssueDocuments(string tripId)
@@ -318,6 +508,42 @@ public class DispatchController : ControllerBase
         catch (Exception ex)
         {
             return BadRequest(new { Success = false, Error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Sinh PDF sơ đồ xếp hàng LIFO cho nhân viên kho.
+    /// PDF bao gồm: sơ đồ container theo ngăn nhiệt độ (ĐÔNG/MÁT/THƯỜNG),
+    /// bảng thứ tự bốc xếp và lý do, upload lên Cloudinary và trả về URL tải về.
+    /// </summary>
+    [HttpGet("load-plan/{tripId}/pdf")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(object), 200)]
+    [ProducesResponseType(typeof(object), 400)]
+    [ProducesResponseType(typeof(object), 404)]
+    public async Task<IActionResult> GetLoadPlanPdf(string tripId)
+    {
+        try
+        {
+            var rawTripId = ExtractGuid(tripId);
+            if (!Guid.TryParse(rawTripId, out var parsedTripId))
+                return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
+
+            var pdfUrl = await _dispatchService.GenerateLoadPlanPdfAsync(parsedTripId);
+            return Ok(new
+            {
+                Success = true,
+                Message = "PDF sơ đồ xếp hàng LIFO đã được sinh thành công.",
+                PdfUrl = pdfUrl
+            });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { Success = false, Error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { Success = false, Error = "Lỗi khi sinh PDF.", Details = ex.Message });
         }
     }
 
@@ -454,6 +680,20 @@ public class DispatchController : ControllerBase
                 await dbContext.SaveChangesAsync();
             }
 
+            // 2.1. Tạo hoặc lấy Role Loader (Người vận chuyển hàng lên container)
+            var loaderRole = await dbContext.Roles.FirstOrDefaultAsync(r => r.RoleName == "Loader");
+            if (loaderRole == null)
+            {
+                loaderRole = new Role
+                {
+                    RoleId = Guid.NewGuid(),
+                    RoleName = "Loader",
+                    Description = "Người vận chuyển hàng lên container — xem sơ đồ LIFO và kẹp chì"
+                };
+                dbContext.Roles.Add(loaderRole);
+                await dbContext.SaveChangesAsync();
+            }
+
             // 3. Tạo hoặc lấy User Dispatcher
             var dispatcherUser = await dbContext.Users.FirstOrDefaultAsync(u => u.Username == "testdispatcher");
             if (dispatcherUser == null)
@@ -470,6 +710,25 @@ public class DispatchController : ControllerBase
                     CreatedAt = DateTime.UtcNow
                 };
                 dbContext.Users.Add(dispatcherUser);
+                await dbContext.SaveChangesAsync();
+            }
+
+            // 3.0.1. Tạo hoặc lấy User Loader (Người bốc xếp)
+            var loaderUser = await dbContext.Users.FirstOrDefaultAsync(u => u.Username == "testloader");
+            if (loaderUser == null)
+            {
+                loaderUser = new User
+                {
+                    UserId = Guid.NewGuid(),
+                    Username = "testloader",
+                    PasswordHash = "hashedpassword",
+                    Email = "loader@coldchainx.com",
+                    FullName = "Trần Văn Bốc Xếp",
+                    RoleId = loaderRole.RoleId,
+                    Status = "ACTIVE",
+                    CreatedAt = DateTime.UtcNow
+                };
+                dbContext.Users.Add(loaderUser);
                 await dbContext.SaveChangesAsync();
             }
 
@@ -666,9 +925,12 @@ public class DispatchController : ControllerBase
                 await dbContext.SaveChangesAsync();
             }
 
-            // 8. Thực hiện kẹp chì niêm phong xe (Seal Truck)
+            // 7.1. Gửi thông báo cho Loader khi sơ đồ LIFO đã sẵn sàng
+            await _dispatchService.NotifyLoadersAsync(tripId);
+
+            // 8. Thực hiện kẹp chì niêm phong xe (Seal Truck) — bởi Loader
             var sealCode = $"SEAL-{Guid.NewGuid().ToString()[..6].ToUpper()}";
-            await _dispatchService.SealTruckAsync(tripId, sealCode, dispatcherUser.UserId);
+            await _dispatchService.SealTruckAsync(tripId, sealCode, loaderUser.UserId);
 
             // 9. Thực hiện cấp giấy đi đường / E-Waybill
             await _dispatchService.IssueDispatchDocumentsAsync(tripId);

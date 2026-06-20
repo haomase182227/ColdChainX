@@ -20,5 +20,11 @@ public interface IDispatchService
     Task SealTruckAsync(Guid tripId, string sealCode, Guid warehouseKeeperId);
     Task IssueDispatchDocumentsAsync(Guid tripId, Guid? issuerId = null);
     Task<List<LoadInstruction>> GetLoadPlanAsync(Guid tripId);
+    Task<string> GenerateLoadPlanPdfAsync(Guid tripId);
     Task<List<TransportDocument>> GetIssuedDocumentsAsync(Guid tripId);
+
+    /// <summary>
+    /// Gửi thông báo cho tất cả Loader khi sơ đồ LIFO đã sẵn sàng để xếp hàng lên container.
+    /// </summary>
+    Task NotifyLoadersAsync(Guid tripId);
 }

@@ -758,6 +758,214 @@ public class DispatchService : IDispatchService
         return loadPlan;
     }
 
+    public async Task<string> GenerateLoadPlanPdfAsync(Guid tripId)
+    {
+        var trip = await _context.MasterTrips
+            .Include(t => t.Vehicle)
+            .Include(t => t.Driver)
+            .Include(t => t.OriginLocation)
+            .Include(t => t.DestinationLocation)
+            .Include(t => t.TransportOrders)
+            .FirstOrDefaultAsync(t => t.TripId == tripId)
+            ?? throw new KeyNotFoundException("Không tìm thấy chuyến đi.");
+
+        var stops = await _context.TripStops
+            .Where(ts => ts.TripId == tripId)
+            .OrderBy(ts => ts.StopSequence)
+            .Include(ts => ts.Location)
+            .ToListAsync();
+
+        var stopInfos = stops.Select(s => new StopInfo
+        {
+            LocationId = s.LocationId ?? Guid.Empty,
+            Sequence = s.StopSequence
+        }).ToList();
+
+        var loadPlan = BuildLIFOLoadPlan(trip.TransportOrders.ToList(), stopInfos);
+
+        // Build stop address mapping
+        var stopAddresses = stops.ToDictionary(s => s.LocationId ?? Guid.Empty, s => s.Location?.Address ?? "N/A");
+
+        var html = GenerateLoadPlanHtml(trip, loadPlan, stopAddresses);
+        return await _pdfService.SaveLoadPlanPdfAsync(html, tripId.ToString());
+    }
+
+    private static string GenerateLoadPlanHtml(MasterTrip trip, List<LoadInstruction> loadPlan, Dictionary<Guid, string> stopAddresses)
+    {
+        static string TempColor(string? zone) => zone switch
+        {
+            "REAR"  => "#1e40af",   // xanh đậm – đông lạnh
+            "MID"   => "#0891b2",   // xanh biển – mát
+            "FRONT" => "#16a34a",   // xanh lá – nhiệt độ thường
+            _       => "#6b7280"
+        };
+
+        static string TempBg(string? zone) => zone switch
+        {
+            "REAR"  => "#dbeafe",
+            "MID"   => "#cffafe",
+            "FRONT" => "#dcfce7",
+            _       => "#f3f4f6"
+        };
+
+        static string ZoneLabel(string? zone) => zone switch
+        {
+            "REAR"  => "🔵 Ngăn ĐÔNG (Đuôi xe)",
+            "MID"   => "🩵 Ngăn MÁT (Giữa xe)",
+            "FRONT" => "🟢 Ngăn THƯỜNG (Đầu xe)",
+            _       => zone ?? "—"
+        };
+
+        var totalWeight = loadPlan.Sum(l => l.WeightKg);
+        var totalCbm    = loadPlan.Sum(l => l.Cbm);
+        var issueDate   = DateTime.UtcNow.AddHours(7).ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+
+        // Build container visual (3 rows: REAR | MID | FRONT)
+        var grouped = loadPlan.GroupBy(l => l.Zone ?? "FRONT").ToDictionary(g => g.Key, g => g.ToList());
+        var zones = new[] { "REAR", "MID", "FRONT" };
+
+        var containerRows = "";
+        foreach (var zone in zones)
+        {
+            if (!grouped.TryGetValue(zone, out var zoneItems) || zoneItems.Count == 0) continue;
+            var color = TempColor(zone);
+            var bg    = TempBg(zone);
+            var label = ZoneLabel(zone);
+            var cells = "";
+            foreach (var item in zoneItems)
+            {
+                cells += $@"<div style='background:{bg};border:2px solid {color};border-radius:8px;padding:10px 8px;margin:4px;min-width:130px;text-align:center;'>
+                    <div style='font-size:11px;font-weight:700;color:{color};'>#{item.LoadOrder} XẾP VÀO</div>
+                    <div style='font-size:12px;font-weight:600;margin:4px 0;color:#1e293b;'>{System.Net.WebUtility.HtmlEncode(item.ItemName)}</div>
+                    <div style='font-size:10px;color:#475569;'>{item.TrackingCode}</div>
+                    <div style='font-size:10px;color:#475569;'>{item.WeightKg:0.##} kg / {item.Cbm:0.##} m³</div>
+                </div>";
+            }
+            containerRows += $@"<tr>
+                <td style='padding:8px 12px;font-size:12px;font-weight:700;color:{color};background:{bg};border:1px solid #e2e8f0;white-space:nowrap;vertical-align:middle;'>{label}</td>
+                <td style='padding:8px;border:1px solid #e2e8f0;'>
+                    <div style='display:flex;flex-wrap:wrap;align-items:center;'>{cells}</div>
+                </td>
+            </tr>";
+        }
+
+        // Door indicator
+        var doorRow = @"<tr>
+            <td colspan='2' style='background:#fef3c7;border:2px dashed #f59e0b;padding:10px;text-align:center;font-size:13px;font-weight:700;color:#92400e;border-radius:0 0 8px 8px;'>
+                🚪 CỬA XE — HÀNG XẾP SAU CÙNG SẼ ĐƯỢC DỠ TRƯỚC TIÊN
+            </td>
+        </tr>";
+
+        // Build instruction rows
+        var instructionRows = "";
+        foreach (var item in loadPlan)
+        {
+            var color  = TempColor(item.Zone);
+            var bg     = TempBg(item.Zone);
+            var stopAddr = item.DeliveryLocationId != Guid.Empty && stopAddresses.TryGetValue(item.DeliveryLocationId, out var addr) ? addr : "—";
+            instructionRows += $@"<tr>
+                <td style='text-align:center;font-weight:700;font-size:14px;color:{color};padding:8px;border:1px solid #e2e8f0;'>{item.LoadOrder}</td>
+                <td style='padding:8px;border:1px solid #e2e8f0;font-size:11px;color:#6b7280;'>{item.TrackingCode}</td>
+                <td style='padding:8px;border:1px solid #e2e8f0;font-size:12px;font-weight:600;'>{System.Net.WebUtility.HtmlEncode(item.ItemName)}</td>
+                <td style='padding:8px;border:1px solid #e2e8f0;text-align:center;'><span style='background:{bg};color:{color};padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700;'>{item.Zone}</span></td>
+                <td style='padding:8px;border:1px solid #e2e8f0;text-align:center;font-size:11px;'>{item.TempCondition}</td>
+                <td style='padding:8px;border:1px solid #e2e8f0;text-align:right;font-size:12px;'>{item.WeightKg:0.##} kg</td>
+                <td style='padding:8px;border:1px solid #e2e8f0;text-align:right;font-size:12px;'>{item.Cbm:0.##} m³</td>
+                <td style='padding:8px;border:1px solid #e2e8f0;font-size:11px;color:#475569;'>Stop #{item.DeliveryStopSequence}: {System.Net.WebUtility.HtmlEncode(stopAddr)}</td>
+                <td style='padding:8px;border:1px solid #e2e8f0;font-size:10px;color:#64748b;'>{System.Net.WebUtility.HtmlEncode(item.Reason ?? "")}</td>
+            </tr>";
+        }
+
+        return $@"<!DOCTYPE html>
+<html lang='vi'>
+<head>
+<meta charset='UTF-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1.0'>
+<title>Sơ Đồ Xếp Hàng LIFO — {trip.TripId}</title>
+<style>
+  * {{ margin:0; padding:0; box-sizing:border-box; }}
+  body {{ font-family:'Segoe UI',Arial,sans-serif; background:#f8fafc; color:#1e293b; padding:20px; }}
+  .header {{ background:linear-gradient(135deg,#1e3a5f,#2563eb); color:#fff; border-radius:12px; padding:24px 30px; margin-bottom:20px; }}
+  .header h1 {{ font-size:22px; font-weight:700; margin-bottom:6px; }}
+  .header .sub {{ font-size:13px; opacity:.85; }}
+  .info-grid {{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px; }}
+  .info-card {{ background:#fff; border-radius:10px; padding:14px 18px; border:1px solid #e2e8f0; box-shadow:0 1px 3px rgba(0,0,0,.06); }}
+  .info-card .label {{ font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:#94a3b8; margin-bottom:4px; }}
+  .info-card .value {{ font-size:14px; font-weight:600; color:#1e293b; }}
+  .section-title {{ font-size:15px; font-weight:700; color:#1e293b; margin-bottom:10px; padding-bottom:6px; border-bottom:2px solid #2563eb; }}
+  .container-diagram {{ background:#fff; border-radius:12px; padding:20px; margin-bottom:20px; border:1px solid #e2e8f0; box-shadow:0 1px 3px rgba(0,0,0,.06); }}
+  .truck-header {{ background:#1e3a5f; color:#fff; padding:10px 16px; border-radius:8px 8px 0 0; text-align:center; font-weight:700; font-size:13px; margin-bottom:0; }}
+  table.diagram-table {{ width:100%; border-collapse:collapse; }}
+  table.diagram-table td {{ vertical-align:middle; }}
+  .instruction-table {{ width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.06); }}
+  .instruction-table th {{ background:#1e3a5f; color:#fff; padding:10px 8px; font-size:11px; text-align:left; border:1px solid #334155; }}
+  .instruction-table tr:nth-child(even) {{ background:#f8fafc; }}
+  .legend {{ display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px; }}
+  .legend-item {{ display:flex; align-items:center; gap:6px; font-size:11px; }}
+  .legend-dot {{ width:14px; height:14px; border-radius:4px; }}
+  .footer {{ margin-top:20px; text-align:center; font-size:10px; color:#94a3b8; }}
+  @media print {{ body {{ padding:10px; }} }}
+</style>
+</head>
+<body>
+
+<div class='header'>
+  <h1>📦 SƠ ĐỒ XẾP HÀNG LIFO — LỆNH BỐC XẾP KHO</h1>
+  <div class='sub'>Chuyến #{trip.TripId} &nbsp;|&nbsp; Ngày lập: {issueDate} (GMT+7) &nbsp;|&nbsp; Xe: {System.Net.WebUtility.HtmlEncode(trip.Vehicle?.TruckPlate ?? "N/A")}</div>
+</div>
+
+<div class='info-grid'>
+  <div class='info-card'><div class='label'>🚛 Phương tiện</div><div class='value'>{System.Net.WebUtility.HtmlEncode(trip.Vehicle?.TruckPlate ?? "N/A")} — {System.Net.WebUtility.HtmlEncode(trip.Vehicle?.VehicleType ?? "N/A")}</div></div>
+  <div class='info-card'><div class='label'>👤 Tài xế</div><div class='value'>{System.Net.WebUtility.HtmlEncode(trip.Driver?.FullName ?? "N/A")}</div></div>
+  <div class='info-card'><div class='label'>📅 Xuất phát dự kiến</div><div class='value'>{trip.PlannedStartTime.AddHours(7).ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)}</div></div>
+  <div class='info-card'><div class='label'>📍 Kho xuất phát</div><div class='value'>{System.Net.WebUtility.HtmlEncode(trip.OriginLocation?.Address ?? "N/A")}</div></div>
+  <div class='info-card'><div class='label'>⚖️ Tổng trọng lượng</div><div class='value'>{totalWeight:0.##} kg</div></div>
+  <div class='info-card'><div class='label'>📐 Tổng thể tích</div><div class='value'>{totalCbm:0.##} m³</div></div>
+</div>
+
+<div class='legend'>
+  <div class='legend-item'><div class='legend-dot' style='background:#dbeafe;border:2px solid #1e40af;'></div>Ngăn ĐÔNG (REAR) — Đuôi xe</div>
+  <div class='legend-item'><div class='legend-dot' style='background:#cffafe;border:2px solid #0891b2;'></div>Ngăn MÁT (MID) — Giữa xe</div>
+  <div class='legend-item'><div class='legend-dot' style='background:#dcfce7;border:2px solid #16a34a;'></div>Ngăn THƯỜNG (FRONT) — Đầu xe</div>
+</div>
+
+<div class='container-diagram'>
+  <p class='section-title'>🏗️ Sơ đồ Container — Nhìn từ trên xuống (Đầu xe → Đuôi xe)</p>
+  <div class='truck-header'>⬆️ ĐẦU XE (CAB)</div>
+  <table class='diagram-table'>
+    {containerRows}
+    {doorRow}
+  </table>
+</div>
+
+<p class='section-title'>📋 Bảng Lệnh Xếp Hàng (thứ tự từ xếp VÀO đến xếp SAU)</p>
+<table class='instruction-table'>
+  <thead>
+    <tr>
+      <th style='width:40px;text-align:center;'>Thứ tự XẾP VÀO</th>
+      <th>Mã đơn</th>
+      <th>Tên hàng</th>
+      <th>Ngăn</th>
+      <th>Nhiệt độ</th>
+      <th>Trọng lượng</th>
+      <th>Thể tích</th>
+      <th>Điểm giao</th>
+      <th>Lý do</th>
+    </tr>
+  </thead>
+  <tbody>
+    {instructionRows}
+  </tbody>
+</table>
+
+<div class='footer'>
+  ColdChainX — Tài liệu nội bộ — In lúc {issueDate} (GMT+7) — Trip ID: {trip.TripId}
+</div>
+
+</body>
+</html>";
+    }
+
     public async Task<List<TransportDocument>> GetIssuedDocumentsAsync(Guid tripId)
     {
         var tripExists = await _context.MasterTrips.AnyAsync(t => t.TripId == tripId);
@@ -770,5 +978,92 @@ public class DispatchService : IDispatchService
             .ToListAsync();
 
         return documents;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  Loader Notifications — Gửi thông báo cho Loader khi LIFO sẵn sàng
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private const string LoaderRoleName = "Loader";
+    private const string LoaderNotificationTemplateId = "DISPATCH_LOADER_READY";
+
+    public async Task NotifyLoadersAsync(Guid tripId)
+    {
+        var trip = await _context.MasterTrips
+            .Include(t => t.Vehicle)
+            .Include(t => t.TransportOrders)
+            .FirstOrDefaultAsync(t => t.TripId == tripId)
+            ?? throw new KeyNotFoundException("Không tìm thấy chuyến đi.");
+
+        // Tìm tất cả users có role Loader
+        var loaderUserIds = await _context.Users
+            .Include(u => u.Role)
+            .Where(u => u.Role != null
+                     && u.Role.RoleName == LoaderRoleName
+                     && (u.Status == null || u.Status == "ACTIVE"))
+            .Select(u => u.UserId)
+            .ToListAsync();
+
+        if (loaderUserIds.Count == 0) return;
+
+        // Tạo template nếu chưa có
+        var templateExists = await _context.NotificationTemplates
+            .AnyAsync(t => t.TemplateId == LoaderNotificationTemplateId);
+
+        if (!templateExists)
+        {
+            // Tìm MessageType bất kỳ để gắn vào template
+            var msgType = await _context.Messagetypes.FirstOrDefaultAsync();
+            if (msgType != null)
+            {
+                _context.NotificationTemplates.Add(new NotificationTemplate
+                {
+                    TemplateId = LoaderNotificationTemplateId,
+                    TypeId = msgType.TypeId,
+                    TitleTemplate = "Sơ đồ LIFO sẵn sàng — Xe {vehicle}",
+                    BodyTemplate = "Chuyến hàng {tripId} đã có sơ đồ xếp hàng LIFO. " +
+                                   "Vui lòng xếp {orderCount} đơn hàng lên xe theo thứ tự LIFO, " +
+                                   "tổng trọng lượng {totalWeight}kg. Sau khi xếp xong, thực hiện kẹp chì.",
+                    Channel = "IN_APP",
+                    Status = "ACTIVE"
+                });
+                await _context.SaveChangesAsync();
+            }
+        }
+
+        // Kiểm tra template tồn tại
+        var actualTemplateId = await _context.NotificationTemplates
+            .AnyAsync(t => t.TemplateId == LoaderNotificationTemplateId
+                        && (t.Status == null || t.Status == "ACTIVE"))
+            ? LoaderNotificationTemplateId
+            : await GetFallbackTemplateIdAsync();
+
+        if (actualTemplateId == null) return;
+
+        foreach (var userId in loaderUserIds)
+        {
+            var notifParams = JsonSerializer.Serialize(new Dictionary<string, string>
+            {
+                { "tripId",      trip.TripId.ToString() },
+                { "vehicle",     trip.Vehicle?.TruckPlate ?? "N/A" },
+                { "orderCount",  trip.TransportOrders.Count.ToString() },
+                { "totalWeight", trip.TransportOrders.Sum(o => o.ExpectedWeightKg).ToString("F1") },
+                { "action",      "Xem sơ đồ LIFO và xếp hàng lên container, sau đó kẹp chì" }
+            });
+
+            _context.Notifications.Add(new Notification
+            {
+                NotiId     = Guid.NewGuid(),
+                UserId     = userId,
+                SenderId   = null,
+                TemplateId = actualTemplateId,
+                Params     = notifParams,
+                OrderId    = null,
+                IsRead     = false,
+                CreatedAt  = DateTime.UtcNow
+            });
+        }
+
+        await _context.SaveChangesAsync();
     }
 }
