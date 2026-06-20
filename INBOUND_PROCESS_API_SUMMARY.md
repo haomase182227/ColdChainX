@@ -212,13 +212,14 @@ Sau khi hoàn tất nhập kho (Bước 6), nếu kích thước/trọng lượn
        * **Nếu thừa kích thước/tiền tăng:** Hóa đơn điều chỉnh mang giá trị **Dương (+)** và ở trạng thái **`UNPAID`** (Khách hàng phải trả thêm tiền).
        * **Nếu hụt kích thước/tiền giảm:** Hóa đơn điều chỉnh mang giá trị **Âm (-)** (Ghi nhận giảm trừ công nợ/hoàn tiền cho khách hàng).
      * Dòng chi tiết hóa đơn (`InvoiceLine`) được gắn mã lý do chênh lệch là: `INBOUND_MEASUREMENT_ADJUSTMENT`.
+     * **Tự động sinh hóa đơn PDF:** Song song với việc tạo bản ghi hóa đơn, hệ thống sẽ tự động tạo một tệp PDF hóa đơn điện tử dựa trên mẫu giao diện HTML chuyên nghiệp tại [InvoiceTemplate.html](file:///c:/Users/tranl/OneDrive/Desktop/6-11-2026/ColdChainX/ColdChainX.API/Templates/InvoiceTemplate.html). Tệp PDF được kết xuất thông qua thư viện PuppeteerSharp (`SimplePdfService`), lưu trữ trên máy chủ và đường dẫn URL của PDF được cập nhật trực tiếp vào trường `PdfUrl` của hóa đơn (`invoices.pdf_url`). Khách hàng có thể tải và xem bản in PDF trực tiếp từ liên kết này.
   
   > [!IMPORTANT]
-  > **API để kiểm tra chi tiết hóa đơn chênh lệch này:**
+  > **API để kiểm tra chi tiết hóa đơn chênh lệch và xuất PDF:**
   > Hệ thống hỗ trợ tra cứu hóa đơn điều chỉnh thông qua bộ API quản lý hóa đơn mới:
-  > * `GET /api/v1/invoices` — Xem danh sách hóa đơn.
-  > * `GET /api/v1/invoices/{invoiceId}` — Xem chi tiết hóa đơn và lý do chênh lệch.
-  > * `GET /api/v1/orders/{orderId}/invoices` — Tra cứu nhanh hóa đơn điều chỉnh của một đơn hàng cụ thể.
+  > * `GET /api/v1/invoices` — Xem danh sách hóa đơn (trả về trường `pdfUrl`).
+  > * `GET /api/v1/invoices/{invoiceId}` — Xem chi tiết hóa đơn, các dòng phí chênh lệch và liên kết PDF (`pdfUrl`).
+  > * `GET /api/v1/orders/{orderId}/invoices` — Tra cứu nhanh danh sách hóa đơn và liên kết PDF đi kèm của một đơn hàng cụ thể.
   >
   > **Mối liên kết trong Cơ sở dữ liệu:**
   > * Một đơn hàng có thể có nhiều hóa đơn (Hóa đơn gốc từ Báo giá ban đầu + Hóa đơn điều chỉnh chênh lệch thực tế).
