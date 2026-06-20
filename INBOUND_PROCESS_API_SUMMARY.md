@@ -10,7 +10,7 @@ Dưới đây là luồng đi của hàng hóa từ lúc khách hàng đăng ký
 
 ```mermaid
 flowchart TD
-    A[B1: Khách hàng tạo ASN<br>POST /api/v1/asns] -->|Hàng đến kho| B[B2: Kiểm tra QC & Nhận hàng đầu vào<br>POST /api/v1/warehouse-receipts/orders/{id}/qc]
+    A[B1: Khách hàng tạo ASN<br>POST /api/v1/asns] -->|Hàng đến kho| B[B2: Kiểm tra QC & Nhận hàng đầu vào<br>POST /api/v1/warehouse-receipts]
     B -->|Phiếu nhập: PENDING_MEASUREMENT| C[B3: Đo đạc kích thước thực tế<br>PUT /api/v1/warehouse-receipts/orders/{id}/measurements]
     C -->|Phiếu nhập: PENDING_COMPLETE| D[B4: Tải chứng từ bắt buộc<br>POST /api/v1/attachments]
     D -->|Tài liệu: PENDING| E[B5: Manager duyệt chứng từ<br>PATCH /api/v1/attachments/{id}/verify]
@@ -104,16 +104,19 @@ Tra cứu danh sách lịch nhập hàng dự kiến của khách hàng hoặc k
 
 ### Bước 2: Kiểm tra QC đầu vào khi hàng đến cửa kho (Inbound QC)
 Đo nhiệt độ thực tế của xe tải/thùng hàng khi tài xế giao hàng đến và ghi nhận thông tin bàn giao ban đầu.
-* **API Endpoint:** `POST /api/v1/warehouse-receipts/orders/{orderId}/qc`
-* **Query Params:** `warehouseId` (Guid của kho nhận hàng)
-* **Controller:** [WarehouseReceiptController.cs](file:///c:/Users/tranl/OneDrive/Desktop/6-11-2026/ColdChainX/ColdChainX.API/Controllers/WarehouseReceiptController.cs#L56-L70)
+* **API Endpoint:** `POST /api/v1/warehouse-receipts`
+* **Controller:** [WarehouseReceiptController.cs](file:///c:/Users/tranl/OneDrive/Desktop/6-11-2026/ColdChainX/ColdChainX.API/Controllers/WarehouseReceiptController.cs#L49-L77)
 * **Quyền hạn (Role):** `WarehouseOperator`, `Manager`, `Admin`
-* **Các trường dữ liệu chính:**
+* **Các trường dữ liệu chính (Shopify-style wrapped body payload):**
   ```json
   {
-    "recordedTemperature": -18.5,
-    "delivererName": "Nguyễn Văn Tài Xế",
-    "note": "Thông tin tình trạng xe/thùng hàng"
+    "warehouse_receipt": {
+      "orderId": "guid-don-hang",
+      "warehouseId": "guid-kho-den",
+      "recordedTemperature": -18.5,
+      "delivererName": "Nguyễn Văn Tài Xế",
+      "note": "Thông tin tình trạng xe/thùng hàng"
+    }
   }
   ```
 * **Quy tắc kiểm tra tự động (Temperature Check):**
@@ -129,29 +132,31 @@ Tra cứu danh sách lịch nhập hàng dự kiến của khách hàng hoặc k
 ### Bước 3: Đo đạc và Cập nhật kích thước thực tế (Update Measurements)
 Đo đạc kích thước (Dài - Rộng - Cao), cân nặng, kiểm đếm số lượng thực tế và khai báo thông tin FEFO (Số lô, ngày sản xuất, hạn sử dụng).
 * **API Endpoint:** `PUT /api/v1/warehouse-receipts/orders/{orderId}/measurements`
-* **Controller:** [WarehouseReceiptController.cs](file:///c:/Users/tranl/OneDrive/Desktop/6-11-2026/ColdChainX/ColdChainX.API/Controllers/WarehouseReceiptController.cs#L95-L104)
+* **Controller:** [WarehouseReceiptController.cs](file:///c:/Users/tranl/OneDrive/Desktop/6-11-2026/ColdChainX/ColdChainX.API/Controllers/WarehouseReceiptController.cs#L97-L121)
 * **Quyền hạn (Role):** `WarehouseOperator`, `Manager`, `Admin`
-* **Các trường dữ liệu chính:**
+* **Các trường dữ liệu chính (Shopify-style wrapped body payload):**
   ```json
   {
-    "items": [
-      {
-        "itemName": "Thịt bò Mỹ",
-        "itemCode": "BEEF-01",
-        "unit": "BOX",
-        "actualQty": 98,          // Số lượng thực tế kiểm đếm được
-        "weightKg": 25.5,          // Cân nặng thực tế của mỗi thùng
-        "lengthCm": 40,            // Chiều dài
-        "widthCm": 30,             // Chiều rộng
-        "heightCm": 20,            // Chiều cao
-        "conditionStatus": "GOOD", // Trạng thái cảm quan hàng hóa (GOOD / DAMAGED)
-        "batchNumber": "LOT202606",// Số lô sản xuất (Bắt buộc với một số ngành hàng)
-        "manufacturedDate": "2026-05-01",
-        "expiryDate": "2026-11-01",
-        "countryOfOrigin": "USA",  // Quốc gia xuất xứ (Dùng để xác định hàng nhập khẩu)
-        "productCategory": "SEAFOOD" // Danh mục sản phẩm (FOOD, SEAFOOD, PHARMA, VACCINE, AGRICULTURE, etc.)
-      }
-    ]
+    "warehouse_receipt": {
+      "items": [
+        {
+          "itemName": "Thịt bò Mỹ",
+          "itemCode": "BEEF-01",
+          "unit": "BOX",
+          "actualQty": 98,          // Số lượng thực tế kiểm đếm được
+          "weightKg": 25.5,          // Cân nặng thực tế của mỗi thùng
+          "lengthCm": 40,            // Chiều dài
+          "widthCm": 30,             // Chiều rộng
+          "heightCm": 20,            // Chiều cao
+          "conditionStatus": "GOOD", // Trạng thái cảm quan hàng hóa (GOOD / DAMAGED)
+          "batchNumber": "LOT202606",// Số lô sản xuất (Bắt buộc với một số ngành hàng)
+          "manufacturedDate": "2026-05-01",
+          "expiryDate": "2026-11-01",
+          "countryOfOrigin": "USA",  // Quốc gia xuất xứ (Dùng để xác định hàng nhập khẩu)
+          "productCategory": "SEAFOOD" // Danh mục sản phẩm (FOOD, SEAFOOD, PHARMA, VACCINE, AGRICULTURE, etc.)
+        }
+      ]
+    }
   }
   ```
 * **Kết quả:** Lưu thông tin các mặt hàng thực tế nhận được (`WarehouseReceiptItem`), tự động sinh mã vạch (`Barcode`) và mã QR (`QrCode`) cho từng dòng hàng. Trạng thái phiếu nhập chuyển thành `PENDING_COMPLETE`.

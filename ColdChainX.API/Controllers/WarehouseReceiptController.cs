@@ -44,25 +44,32 @@ namespace ColdChainX.API.Controllers
         /// Workflow impact:
         /// Creates a Warehouse Receipt record in DRAFT status, initiating the inbound flow.
         /// </remarks>
-        /// <param name="orderId">The unique identifier of the transport order.</param>
-        /// <param name="warehouseId">The unique identifier of the warehouse where cargo is dropped off.</param>
-        /// <param name="request">The QC details including deliverer name, temperature, and quality notes.</param>
+        /// <param name="payload">The QC details wrapped in a warehouse_receipt block.</param>
         /// <returns>The newly created warehouse receipt details.</returns>
-        [HttpPost("orders/{orderId:guid}/qc")]
+        [HttpPost]
         [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,WarehouseOperator")]
         [ProducesResponseType(typeof(ApiResponse<WarehouseReceiptResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
-        public async Task<IActionResult> ProcessInboundQC(
-            [FromRoute] Guid orderId,
-            [FromQuery] Guid warehouseId,
-            [FromBody] InboundQCRequest request)
+        public async Task<IActionResult> ProcessInboundQC([FromBody] ProcessInboundQCPayload payload)
         {
+            if (payload == null || payload.WarehouseReceipt == null)
+                return BadRequest(ApiResponse<object>.Failure("Request body must contain 'warehouse_receipt' block"));
+
+            var wr = payload.WarehouseReceipt;
+
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (!Guid.TryParse(userIdClaim, out var receiverId))
                 return Unauthorized(ApiResponse<object>.Failure("User ID claim is missing or invalid in the token"));
 
-            var result = await _receiptService.ProcessInboundQCAsync(orderId, warehouseId, request, receiverId);
+            var qcRequest = new InboundQCRequest
+            {
+                RecordedTemperature = wr.RecordedTemperature,
+                DelivererName = wr.DelivererName,
+                Note = wr.Note
+            };
+
+            var result = await _receiptService.ProcessInboundQCAsync(wr.OrderId, wr.WarehouseId, qcRequest, receiverId);
             if (!result.Success)
                 return BadRequest(result);
 
@@ -85,7 +92,7 @@ namespace ColdChainX.API.Controllers
         /// Populates receipt item records, which will determine storage space allocation.
         /// </remarks>
         /// <param name="orderId">The unique identifier of the transport order.</param>
-        /// <param name="request">The actual physical measurements of all items.</param>
+        /// <param name="payload">The actual physical measurements wrapped in a warehouse_receipt block.</param>
         /// <returns>The updated warehouse receipt details.</returns>
         [HttpPut("orders/{orderId:guid}/measurements")]
         [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,WarehouseOperator")]
@@ -94,8 +101,18 @@ namespace ColdChainX.API.Controllers
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> UpdateMeasurements(
             [FromRoute] Guid orderId,
-            [FromBody] UpdateMeasurementsRequest request)
+            [FromBody] UpdateMeasurementsPayload payload)
         {
+            if (payload == null || payload.WarehouseReceipt == null)
+                return BadRequest(ApiResponse<object>.Failure("Request body must contain 'warehouse_receipt' block"));
+
+            var wr = payload.WarehouseReceipt;
+
+            var request = new UpdateMeasurementsRequest
+            {
+                Items = wr.Items
+            };
+
             var result = await _receiptService.UpdateMeasurementsAsync(orderId, request);
             if (!result.Success)
                 return BadRequest(result);
