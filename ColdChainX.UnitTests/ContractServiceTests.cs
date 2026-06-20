@@ -109,6 +109,7 @@ namespace ColdChainX.UnitTests
             public Task<string> UploadFileAsync(System.IO.Stream stream, string fileName) => Task.FromResult($"/uploads/{fileName}");
             public Task<string> UploadFileAsync(byte[] fileBytes, string fileName) => Task.FromResult($"/uploads/{fileName}");
             public Task DeleteFileAsync(string fileUrl) => Task.CompletedTask;
+            public string GetSignedUrl(string publicId) => $"http://test.com/{publicId}";
         }
 
         private class MockPdfService : IPdfService
@@ -117,6 +118,7 @@ namespace ColdChainX.UnitTests
             public Task<string> SaveQuotationPdfAsync(string htmlContent, string quoteNumber) => Task.FromResult("http://test.com/quote.pdf");
             public Task<string> SaveWarehouseReceiptPdfAsync(string htmlContent, string receiptCode) => Task.FromResult("http://test.com/receipt.pdf");
             public Task<string> SaveWaybillPdfAsync(string htmlContent, string tripId) => Task.FromResult("http://test.com/waybill.pdf");
+            public Task<string> SaveLoadPlanPdfAsync(string htmlContent, string tripId) => Task.FromResult("http://test.com/loadplan.pdf");
         }
 
         private class MockWebHostEnvironment : IWebHostEnvironment

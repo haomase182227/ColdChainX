@@ -29,18 +29,20 @@ namespace ColdChainX.Infrastructure.Services
             => await SavePdfAsync(htmlContent, "quotations", quoteNumber);
 
         public async Task<string> SaveWarehouseReceiptPdfAsync(string htmlContent, string receiptCode)
-            => await SavePdfAsync(htmlContent, "receipts", receiptCode);
+            => await SavePdfAsync(htmlContent, "receipts", receiptCode, "receipt");
 
-        public async Task<string> SaveWaybillPdfAsync(string htmlContent, string tripId)
-            => await SavePdfAsync(htmlContent, "waybills", tripId);
+        public async Task<string> SaveWaybillPdfAsync(string htmlContent, string fileCode)
+        {
+            return await SavePdfAsync(htmlContent, "waybills", fileCode, "lifo");
+        }
 
         public async Task<string> SaveLoadPlanPdfAsync(string htmlContent, string tripId)
-            => await SavePdfAsync(htmlContent, "loadplans", tripId);
+            => await SavePdfAsync(htmlContent, "loadplans", tripId, "loadplan");
 
-        private async Task<string> SavePdfAsync(string htmlContent, string folderName, string fileCode)
+        private async Task<string> SavePdfAsync(string htmlContent, string folderName, string fileCode, string prefix = "waybill")
         {
             var root = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot");
-            var fileName = $"{SanitizeFileName(fileCode)}.pdf";
+            var fileName = $"{prefix}_{SanitizeFileName(fileCode)}.pdf";
             var normalizedHtml = NormalizeHtmlForLocalAssets(htmlContent, root);
 
             await using var browser = await LaunchBrowserAsync();
@@ -62,7 +64,16 @@ namespace ColdChainX.Infrastructure.Services
                 }
             });
 
-            // Upload directly to Cloudinary via IFileService
+            // 1. Lưu xuống local wwwroot/{folderName}/{fileName} để backup/check
+            var targetFolder = Path.Combine(root, folderName);
+            if (!Directory.Exists(targetFolder))
+            {
+                Directory.CreateDirectory(targetFolder);
+            }
+            var localPath = Path.Combine(targetFolder, fileName);
+            await File.WriteAllBytesAsync(localPath, pdfBytes);
+
+            // 2. Upload lên Cloudinary và trả về link Cloudinary chuẩn để FE gọi được trên cả Production
             return await _fileService.UploadFileAsync(pdfBytes, fileName);
         }
 

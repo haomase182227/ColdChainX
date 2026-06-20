@@ -13,6 +13,8 @@ using ColdChainX.Core.Entities;
 using ColdChainX.Core.Enums;
 using ColdChainX.Core.Interfaces;
 using ColdChainX.Infrastructure.Persistence;
+using ColdChainX.Infrastructure.Services;
+using ColdChainX.Application.DTOs.Dispatch;
 using ColdChainX.Application.DTOs.WarehouseReceipt;
 using Xunit;
 
@@ -537,6 +539,7 @@ namespace ColdChainX.UnitTests
     {
         public Task<(decimal Latitude, decimal Longitude)> GetCoordinatesAsync(string addressText) => Task.FromResult((0.0m, 0.0m));
         public Task<decimal> GetDistanceKmAsync(decimal originLat, decimal originLon, decimal destinationLat, decimal destinationLon) => Task.FromResult(0.0m);
+        public Task<GoongDirectionsResult> GetDirectionsAsync(List<(decimal Lat, decimal Lon, string Address)> waypoints) => Task.FromResult(new GoongDirectionsResult());
     }
 
     public class MockPdfService : IPdfService
@@ -545,6 +548,7 @@ namespace ColdChainX.UnitTests
         public Task<string> SaveQuotationPdfAsync(string htmlContent, string quoteNumber) => Task.FromResult("http://test.com/quote.pdf");
         public Task<string> SaveWarehouseReceiptPdfAsync(string htmlContent, string receiptCode) => Task.FromResult("http://test.com/receipt.pdf");
         public Task<string> SaveWaybillPdfAsync(string htmlContent, string tripId) => Task.FromResult("http://test.com/waybill.pdf");
+        public Task<string> SaveLoadPlanPdfAsync(string htmlContent, string tripId) => Task.FromResult("http://test.com/loadplan.pdf");
     }
 
     public class MockWebHostEnvironment : IWebHostEnvironment

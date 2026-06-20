@@ -8,5 +8,6 @@ namespace ColdChainX.Application.Interfaces
         Task<string> UploadFileAsync(IFormFile file);
         Task<string> UploadFileAsync(Stream stream, string fileName);
         Task<string> UploadFileAsync(byte[] fileBytes, string fileName);
+        string GetSignedUrl(string publicId);
     }
 }
