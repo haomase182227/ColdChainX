@@ -12,6 +12,8 @@ using ColdChainX.Infrastructure.Integration;
 using ColdChainX.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.SignalR;
+using ColdChainX.Infrastructure.Hubs;
 
 namespace ColdChainX.Infrastructure.Services;
 
@@ -22,6 +24,7 @@ public class DispatchService : IDispatchService
     private readonly ILocationService _locationService;
     private readonly IPdfService _pdfService;
     private readonly IWebHostEnvironment _environment;
+    private readonly IHubContext<NotificationHub> _hubContext;
 
     // Tên role điều phối viên
     private const string CoordinatorRoleName = "Dispatcher";
@@ -34,13 +37,15 @@ public class DispatchService : IDispatchService
         GeminiLoadOptimizerClient geminiClient,
         ILocationService locationService,
         IPdfService pdfService,
-        IWebHostEnvironment environment)
+        IWebHostEnvironment environment,
+        IHubContext<NotificationHub> hubContext)
     {
         _context = context;
         _geminiClient = geminiClient;
         _locationService = locationService;
         _pdfService = pdfService;
         _environment = environment;
+        _hubContext = hubContext;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -848,6 +853,23 @@ public class DispatchService : IDispatchService
 
         await _context.SaveChangesAsync();
 
+        try
+        {
+            await _hubContext.Clients.Groups("Group_WarehouseMonitor", "Group_Admin")
+                .SendAsync("WarehouseOrderCreated", new
+                {
+                    TripId = tripId,
+                    Status = "PENDING_WH_APPROVAL",
+                    Vehicle = trip.Vehicle?.TruckPlate ?? "N/A",
+                    OrderCount = trip.TransportOrders.Count,
+                    TotalWeight = trip.TransportOrders.Sum(o => o.ExpectedWeightKg)
+                });
+        }
+        catch (Exception)
+        {
+            // Fail-safe to avoid blocking API if SignalR fails
+        }
+
         return new WarehouseOrderResult
         {
             TripId = tripId,
@@ -901,6 +923,21 @@ public class DispatchService : IDispatchService
 
         await _context.SaveChangesAsync();
 
+        try
+        {
+            await _hubContext.Clients.Groups("Group_Dispatcher", "Group_Admin")
+                .SendAsync("WarehouseOrderApproved", new
+                {
+                    TripId = tripId,
+                    Status = "LOADING",
+                    ApprovedBy = approvedBy
+                });
+        }
+        catch (Exception)
+        {
+            // Fail-safe to avoid blocking API if SignalR fails
+        }
+
         return new WarehouseOrderResult
         {
             TripId = tripId,
@@ -942,6 +979,21 @@ public class DispatchService : IDispatchService
         }
 
         await _context.SaveChangesAsync();
+
+        try
+        {
+            await _hubContext.Clients.Groups("Group_Dispatcher", "Group_Admin")
+                .SendAsync("WarehouseOrderRejected", new
+                {
+                    TripId = tripId,
+                    Status = "WH_REJECTED",
+                    RejectionReason = reason
+                });
+        }
+        catch (Exception)
+        {
+            // Fail-safe to avoid blocking API if SignalR fails
+        }
 
         return new WarehouseOrderResult
         {
@@ -1832,5 +1884,22 @@ public class DispatchService : IDispatchService
         }
 
         await _context.SaveChangesAsync();
+
+        try
+        {
+            await _hubContext.Clients.Groups("Group_Loader", "Group_Admin")
+                .SendAsync("WarehouseOrderApproved", new
+                {
+                    TripId = tripId,
+                    Status = "LOADING",
+                    Vehicle = trip.Vehicle?.TruckPlate ?? "N/A",
+                    OrderCount = trip.TransportOrders.Count,
+                    TotalWeight = trip.TransportOrders.Sum(o => o.ExpectedWeightKg)
+                });
+        }
+        catch (Exception)
+        {
+            // Fail-safe to avoid blocking API if SignalR fails
+        }
     }
 }
