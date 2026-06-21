@@ -28,5 +28,14 @@ namespace ColdChainX.API.Controllers
             if (!result.Success) return BadRequest(result);
             return Ok(result);
         }
+
+        [HttpGet("schedule")]
+        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,WarehouseOperator,Loader")]
+        public async Task<IActionResult> GetSchedule([FromQuery] DateOnly? date = null, [FromQuery] string? status = null)
+        {
+            var targetDate = date ?? DateOnly.FromDateTime(DateTime.Today);
+            var result = await _asnService.GetScheduleAsync(targetDate, status);
+            return Ok(result);
+        }
     }
 }

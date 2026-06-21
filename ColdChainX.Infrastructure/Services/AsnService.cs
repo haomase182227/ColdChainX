@@ -78,6 +78,73 @@ namespace ColdChainX.Infrastructure.Services
             }, "ASN created successfully");
         }
 
+        public async Task<ApiResponse<List<AsnScheduleResponse>>> GetScheduleAsync(DateOnly date, string? status)
+        {
+            var from = date.ToDateTime(TimeOnly.MinValue);
+            var to = date.ToDateTime(TimeOnly.MaxValue);
+
+            var query = _db.InboundAsns
+                .AsNoTracking()
+                .Include(a => a.Order)
+                    .ThenInclude(o => o.Customer)
+                .Include(a => a.Order)
+                    .ThenInclude(o => o.Route)
+                .Where(a => a.RequestedDropoffTime >= from && a.RequestedDropoffTime <= to);
+
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                var normalizedStatus = status.Trim();
+                query = query.Where(a => a.Status == normalizedStatus);
+            }
+
+            var items = await query
+                .OrderBy(a => a.RequestedDropoffTime)
+                .ToListAsync();
+
+            var customerEmails = items
+                .Select(a => a.Order.Customer?.Email)
+                .Where(email => !string.IsNullOrWhiteSpace(email))
+                .Select(email => email!.ToLower())
+                .Distinct()
+                .ToList();
+
+            var customerUsers = await _db.Users
+                .AsNoTracking()
+                .Where(u => u.Email != null && customerEmails.Contains(u.Email.ToLower()))
+                .Select(u => new { Email = u.Email!.ToLower(), u.UserId })
+                .ToListAsync();
+
+            var userByEmail = customerUsers
+                .GroupBy(u => u.Email)
+                .ToDictionary(g => g.Key, g => g.First().UserId);
+
+            var result = items.Select(a =>
+            {
+                var customerEmail = a.Order.Customer?.Email?.ToLower();
+                userByEmail.TryGetValue(customerEmail ?? string.Empty, out var customerUserId);
+
+                return new AsnScheduleResponse
+                {
+                    AsnId = a.AsnId,
+                    AsnCode = a.AsnCode,
+                    OrderId = a.OrderId,
+                    TrackingCode = a.Order.TrackingCode,
+                    CustomerId = a.Order.CustomerId,
+                    CustomerName = a.Order.Customer?.CompanyName,
+                    CustomerEmail = a.Order.Customer?.Email,
+                    CustomerUserId = customerUserId == Guid.Empty ? null : customerUserId,
+                    RouteId = a.Order.RouteId,
+                    RouteCode = a.Order.Route?.RouteCode,
+                    RequestedDropoffTime = a.RequestedDropoffTime,
+                    CutOffTime = a.Order.Route?.CutOffTime,
+                    Status = a.Status,
+                    QrCodeValue = a.QrCodeValue
+                };
+            }).ToList();
+
+            return ApiResponse<List<AsnScheduleResponse>>.SuccessResponse(result, "ASN schedule retrieved successfully");
+        }
+
         private async Task<string> GenerateUniqueAsnCodeAsync()
         {
             for (var attempt = 0; attempt < 10; attempt++)
