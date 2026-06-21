@@ -7,7 +7,9 @@ using ColdChainX.Application.DTOs.Dispatch;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
 using ColdChainX.Infrastructure.Persistence;
+using ColdChainX.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -22,17 +24,35 @@ public class DispatchController : ControllerBase
     private readonly IVehicleService _vehicleService;
     private readonly IOrderService _orderService;
     private readonly ApplicationDbContext _db;
+    private readonly IPdfService _pdfService;
+    private readonly ILocationService _locationService;
+    private readonly IWebHostEnvironment _env;
+    private readonly IFileService _fileService;
 
     public DispatchController(
         IDispatchService dispatchService,
         IVehicleService vehicleService,
         IOrderService orderService,
-        ApplicationDbContext db)
+        ApplicationDbContext db,
+        IPdfService pdfService,
+        ILocationService locationService,
+        IWebHostEnvironment env,
+        IFileService fileService)
     {
         _dispatchService = dispatchService;
         _vehicleService = vehicleService;
         _orderService = orderService;
         _db = db;
+        _pdfService = pdfService;
+        _locationService = locationService;
+        _env = env;
+        _fileService = fileService;
+    }
+
+    private Guid GetCurrentUserId()
+    {
+        var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        return Guid.TryParse(idClaim, out var userId) ? userId : Guid.Empty;
     }
 
     // ── Lookup endpoints (dùng để populate dropdown trong form) ───────────────
@@ -92,1021 +112,606 @@ public class DispatchController : ControllerBase
     [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> LookupOrdersReady()
     {
-        var orders = await _db.TransportOrders
-            .Where(o => o.Status == "IN_WAREHOUSE")
-            .OrderByDescending(o => o.CreatedAt)
-            .Select(o => new
-            {
-                o.OrderId,
-                Label         = $"{o.TrackingCode} — {o.ItemName} | {o.ExpectedWeightKg}kg / {o.ExpectedCbm}m³ ({o.TempCondition})",
-                o.TrackingCode,
-                o.ItemName,
-                o.Category,
-                o.TempCondition,
-                o.ExpectedWeightKg,
-                o.ExpectedCbm,
-                o.Status,
-                o.CreatedAt
-            })
+        var activeStocks = await _db.InventoryStocks
+            .Include(s => s.Location)
+            .Where(s => s.QuantityOnHand > 0)
+            .Select(s => new { s.CustomerId, s.ItemName, s.Location.LocationCode })
             .ToListAsync();
+
+        var rawOrders = await (from r in _db.WarehouseReceipts
+                               join o in _db.TransportOrders on r.OrderId equals o.OrderId
+                               join w in _db.Warehouses on r.WarehouseId equals w.WarehouseId
+                               join c in _db.Customers on o.CustomerId equals c.CustomerId into cg
+                               from cust in cg.DefaultIfEmpty()
+                               select new
+                               {
+                                   o.OrderId,
+                                   o.TrackingCode,
+                                   o.ItemName,
+                                   o.CustomerId,
+                                   o.Category,
+                                   o.TempCondition,
+                                   Weight = o.ActualWeightKg > 0 ? o.ActualWeightKg : o.ExpectedWeightKg,
+                                   Cbm = o.ActualCbm > 0 ? o.ActualCbm : o.ExpectedCbm,
+                                   CustomerName = cust != null ? cust.CompanyName : "N/A",
+                                   WarehouseName = w.WarehouseName,
+                                   o.CreatedAt
+                               })
+                               .OrderByDescending(x => x.CreatedAt)
+                               .ToListAsync();
+
+        var orders = rawOrders.Select(x => {
+            var locCode = activeStocks
+                .Where(s => s.CustomerId == x.CustomerId && s.ItemName == x.ItemName)
+                .Select(s => s.LocationCode)
+                .FirstOrDefault() ?? "RCV-STAGE-01";
+            return new
+            {
+                x.OrderId,
+                Label = $"{x.TrackingCode} — {x.ItemName} | {x.Weight}kg / {x.Cbm}m³ ({x.TempCondition}) | Khách: {x.CustomerName} | Kho: {x.WarehouseName} (Vị trí: {locCode})",
+                x.TrackingCode,
+                x.ItemName,
+                x.Category,
+                x.TempCondition,
+                ExpectedWeightKg = x.Weight,
+                ExpectedCbm = x.Cbm,
+                Status = "IN_WAREHOUSE",
+                x.CreatedAt
+            };
+        }).ToList();
 
         return Ok(new { Success = true, Count = orders.Count, Data = orders });
     }
 
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  API 1: MANUAL-DISPATCH — Ghép chuyến thủ công
+    // ═══════════════════════════════════════════════════════════════════════
+
     /// <summary>
-    /// Lập kế hoạch lấy hàng từ kho và ghép chuyến.
-    ///
-    /// Workflow:
-    /// 1. Validate hàng IN_WAREHOUSE + kiểm tra tải trọng/CBM xe
-    /// 2. Tính lộ trình tối ưu qua các điểm giao (Goong API + Nearest Neighbor TSP)
-    /// 3. Gợi ý xếp hàng theo thuật toán LIFO nội bộ (điểm giao cuối → xếp trước)
-    /// 4. Tạo MasterTrip + TripStops
-    /// 5. Cập nhật trạng thái đơn hàng → LOADING (sinh lệnh điều động)
-    /// 6. Gửi thông báo cho Điều phối viên (Dispatcher)
-    ///
-    /// Dùng GET /api/dispatch/lookup/vehicles, /lookup/locations, /lookup/orders-ready
-    /// để lấy danh sách ID hợp lệ trước khi gọi endpoint này.
+    /// Thủ công chọn đơn hàng IN_WAREHOUSE và gán vào một xe tải khả dụng.
+    /// Hệ thống sẽ kiểm tra nhiệt độ, tải trọng, bằng lái tài xế trước khi sinh lộ trình.
     /// </summary>
-    [HttpPost("plan-load")]
+    [AllowAnonymous]
+    [HttpPost("seed-orders")]
+    public async Task<IActionResult> SeedOrders()
+    {
+        // 1. Seed Customer
+        var customer = await _db.Customers.FirstOrDefaultAsync(c => c.TaxCode == "0102030405");
+        if (customer == null)
+        {
+            customer = new Customer
+            {
+                CustomerId = Guid.NewGuid(),
+                CompanyName = "CleanFood Vietnam Ltd",
+                TaxCode = "0102030405",
+                Address = "KCN Tân Bình, Tân Phú, TP. HCM",
+                Email = "contact@cleanfood.vn",
+                PaymentTerm = 30,
+                Status = "ACTIVE",
+                CreatedAt = DateTime.UtcNow
+            };
+            _db.Customers.Add(customer);
+        }
+
+        // 2. Seed Warehouse Location
+        var originWarehouse = await _db.Locations.FirstOrDefaultAsync(l => l.Address.Contains("Kho Trung Chuyển Sóng Thần"));
+        if (originWarehouse == null)
+        {
+            originWarehouse = new Location
+            {
+                LocationId = Guid.NewGuid(),
+                Address = "Kho Trung Chuyển Sóng Thần - Dĩ An, Bình Dương",
+                Latitude = 10.9012m,
+                Longitude = 106.7589m,
+                Status = "ACTIVE",
+                CreatedAt = DateTime.UtcNow
+            };
+            _db.Locations.Add(originWarehouse);
+        }
+
+        // 3. Seed Destination Locations
+        var destA = await _db.Locations.FirstOrDefaultAsync(l => l.Address.Contains("Lotte Mart Nam Sài Gòn"));
+        if (destA == null)
+        {
+            destA = new Location
+            {
+                LocationId = Guid.NewGuid(),
+                Address = "Lotte Mart Nam Sài Gòn, Quận 7, TP. HCM",
+                Latitude = 10.7324m,
+                Longitude = 106.7021m,
+                Status = "ACTIVE",
+                CreatedAt = DateTime.UtcNow
+            };
+            _db.Locations.Add(destA);
+        }
+
+        var destB = await _db.Locations.FirstOrDefaultAsync(l => l.Address.Contains("Aeon Mall Tân Phú"));
+        if (destB == null)
+        {
+            destB = new Location
+            {
+                LocationId = Guid.NewGuid(),
+                Address = "Aeon Mall Tân Phú, Tân Phú, TP. HCM",
+                Latitude = 10.7915m,
+                Longitude = 106.6124m,
+                Status = "ACTIVE",
+                CreatedAt = DateTime.UtcNow
+            };
+            _db.Locations.Add(destB);
+        }
+
+        // 4. Seed Driver
+        var driver = await _db.Drivers.FirstOrDefaultAsync(d => d.IdentityNumber == "079090123456");
+        if (driver == null)
+        {
+            driver = new Driver
+            {
+                DriverId = Guid.NewGuid(),
+                FullName = "Lê Hoàng Long",
+                IdentityNumber = "079090123456",
+                PhoneNumber = "0987654321",
+                DateOfBirth = new DateOnly(1990, 5, 20),
+                JoinDate = new DateOnly(2024, 1, 1),
+                Status = "ACTIVE",
+                CreatedAt = DateTime.UtcNow
+            };
+            _db.Drivers.Add(driver);
+
+            // Seed DriverLicense
+            var license = new DriverLicense
+            {
+                LicenseId = Guid.NewGuid(),
+                DriverId = driver.DriverId,
+                LicenseNumber = "GPLX-12345",
+                LicenseClass = "FC",
+                IssueDate = new DateOnly(2023, 1, 1),
+                ExpiryDate = new DateOnly(2028, 1, 1),
+                Status = "ACTIVE",
+                CreatedAt = DateTime.UtcNow
+            };
+            _db.DriverLicenses.Add(license);
+        }
+
+        // 5. Seed Vehicle (assigned to driver)
+        var vehicle = await _db.Vehicles.FirstOrDefaultAsync(v => v.TruckPlate == "51D-888.88");
+        if (vehicle == null)
+        {
+            vehicle = new Vehicle
+            {
+                VehicleId = Guid.NewGuid(),
+                DriverId = driver.DriverId,
+                TruckPlate = "51D-888.88",
+                Brand = "Hino",
+                ManufactureYear = 2023,
+                VehicleType = "Reefer Truck 5 Tons",
+                MaxWeight = 5000,
+                MaxCbm = 20,
+                MinTemp = -20,
+                MaxTemp = 20,
+                Status = "ACTIVE",
+                CreatedAt = DateTime.UtcNow
+            };
+            _db.Vehicles.Add(vehicle);
+        }
+
+        await _db.SaveChangesAsync(); // Lưu trước các IDs để tạo orders & contracts
+
+        // Giải phóng xe 51D-888.88 khỏi các chuyến đi đang hoạt động để sẵn sàng test
+        var activeTrips = await _db.MasterTrips
+            .Where(t => t.VehicleId == vehicle.VehicleId && t.Status != "COMPLETED" && t.Status != "CANCELLED")
+            .ToListAsync();
+        foreach (var trip in activeTrips)
+        {
+            trip.Status = "CANCELLED";
+        }
+        await _db.SaveChangesAsync();
+
+        // Clear old test data first if it exists
+        var testOrders = await _db.TransportOrders.Where(o => o.TrackingCode.StartsWith("ORD-TEST-")).ToListAsync();
+        if (testOrders.Any())
+        {
+            var testOrderIds = testOrders.Select(o => o.OrderId).ToList();
+            var testContracts = await _db.CustomerContracts.Where(c => testOrderIds.Contains(c.OrderId ?? Guid.Empty)).ToListAsync();
+            _db.CustomerContracts.RemoveRange(testContracts);
+            _db.TransportOrders.RemoveRange(testOrders);
+            await _db.SaveChangesAsync();
+        }
+
+        // 6. Seed TransportOrders
+        var ordersToSeed = new List<(string Code, string Name, string Temp, decimal Weight, decimal Cbm, Guid Dest, int Qty, string Pack)>
+        {
+            ("ORD-TEST-001", "Thịt bò Kobe nhập khẩu", "FROZEN", 1500, 6, destA.LocationId, 15, "Thùng carton"),
+            ("ORD-TEST-002", "Sữa chua Vinamilk", "2 to 8", 2000, 8, destA.LocationId, 100, "Thùng carton"),
+            ("ORD-TEST-003", "Trái cây tươi nhập khẩu", "2 to 8", 1200, 5, destB.LocationId, 50, "Sọt nhựa")
+        };
+
+        var createdOrdersCount = 0;
+        var createdContractsCount = 0;
+
+        foreach (var info in ordersToSeed)
+        {
+            var existingOrder = await _db.TransportOrders.FirstOrDefaultAsync(o => o.TrackingCode == info.Code);
+            if (existingOrder == null)
+            {
+                var newOrder = new TransportOrder
+                {
+                    OrderId = Guid.NewGuid(),
+                    TrackingCode = info.Code,
+                    ItemName = info.Name,
+                    Category = "Thực phẩm",
+                    TempCondition = info.Temp,
+                    ExpectedWeightKg = info.Weight,
+                    ExpectedCbm = info.Cbm,
+                    PickupLocation = originWarehouse.LocationId,
+                    DestLocation = info.Dest,
+                    CustomerId = customer.CustomerId,
+                    Quantity = info.Qty,
+                    PackingType = info.Pack,
+                    Status = "IN_WAREHOUSE",
+                    CargoValue = info.Weight * 200000,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _db.TransportOrders.Add(newOrder);
+                createdOrdersCount++;
+
+                // Seed Contract
+                var contract = new CustomerContract
+                {
+                    ContractId = Guid.NewGuid(),
+                    CustomerId = customer.CustomerId,
+                    OrderId = newOrder.OrderId,
+                    ContractNumber = $"HD-2026-{info.Code.Replace("ORD-TEST-", "")}",
+                    SignedDate = new DateOnly(2026, 6, 1),
+                    ExpiredDate = new DateOnly(2027, 12, 31),
+                    FileUrl = $"https://res.cloudinary.com/dbt5zpage/image/upload/coldchainx/contract_{info.Code}.pdf",
+                    SignedFileUrl = $"https://res.cloudinary.com/dbt5zpage/image/upload/coldchainx/contract_{info.Code}.pdf",
+                    SentAt = DateTime.UtcNow.AddDays(-2),
+                    UploadedSignedAt = DateTime.UtcNow.AddDays(-1),
+                    VerifiedAt = DateTime.UtcNow.AddMinutes(-30),
+                    Status = "SIGNED",
+                    CreatedAt = DateTime.UtcNow
+                };
+                _db.CustomerContracts.Add(contract);
+                createdContractsCount++;
+            }
+        }
+
+        await _db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            Success = true,
+            Message = "Đã nạp dữ liệu chuẩn thành công.",
+            Data = new
+            {
+                Customer = customer.CompanyName,
+                Warehouse = originWarehouse.Address,
+                Destinations = new[] { destA.Address, destB.Address },
+                Driver = driver.FullName,
+                Vehicle = $"{vehicle.TruckPlate} (Tải: {vehicle.MaxWeight}kg, Temp: {vehicle.MinTemp}°C đến {vehicle.MaxTemp}°C)",
+                NewOrdersCreated = createdOrdersCount,
+                NewContractsCreated = createdContractsCount
+            }
+        });
+    }
+
+    [HttpPost("manual-dispatch")]
     [Consumes("multipart/form-data")]
-    [ProducesResponseType(typeof(PlanLoadResult), 200)]
+    [ProducesResponseType(typeof(ManualDispatchResult), 200)]
     [ProducesResponseType(typeof(object), 400)]
     [ProducesResponseType(typeof(object), 500)]
-    public async Task<IActionResult> PlanLoad([FromForm] PlanLoadFormRequest form)
+    public async Task<IActionResult> ManualDispatch(
+        [FromQuery] List<string> orderIds,
+        [FromForm] ManualDispatchFormRequest form)
     {
-        // Chuyển đổi từ form sang PlanLoadRequest
-        var rawVehicleId = ExtractGuid(form.VehicleId);
-        if (!Guid.TryParse(rawVehicleId, out var vehicleId))
-            return BadRequest(new { Success = false, Error = "VehicleId không hợp lệ." });
+        if (orderIds == null || !orderIds.Any())
+            return BadRequest(new { Success = false, Error = "Vui lòng chọn ít nhất một đơn hàng." });
 
-        var rawOriginWarehouseLocationId = ExtractGuid(form.OriginWarehouseLocationId);
-        if (!Guid.TryParse(rawOriginWarehouseLocationId, out var originLocId))
-            return BadRequest(new { Success = false, Error = "OriginWarehouseLocationId không hợp lệ." });
+        if (form.PlannedStartTime >= form.PlannedEndTime)
+            return BadRequest(new { Success = false, Error = "PlannedStartTime phải nhỏ hơn PlannedEndTime." });
 
-        if (form.OrderIds == null || form.OrderIds.Length == 0)
-            return BadRequest(new { Success = false, Error = "Phải chọn ít nhất 1 đơn hàng." });
+        var parsedOrderIds = orderIds.Select(id => Guid.Parse(ExtractGuid(id))).ToList();
 
-        var orderIds = new List<Guid>();
-        foreach (var raw in form.OrderIds)
+        // Tự động tìm kho xuất phát từ đơn hàng đầu tiên
+        var firstOrderId = parsedOrderIds.First();
+        var firstOrder = await _db.TransportOrders.FindAsync(firstOrderId);
+        if (firstOrder == null)
+            return BadRequest(new { Success = false, Error = $"Không tìm thấy đơn hàng {firstOrderId}." });
+
+        if (!firstOrder.PickupLocation.HasValue)
+            return BadRequest(new { Success = false, Error = $"Đơn hàng {firstOrder.TrackingCode} chưa được nhập kho (thiếu vị trí kho)." });
+
+        var originLocId = firstOrder.PickupLocation.Value;
+
+        var request = new ManualDispatchRequest
         {
-            var rawOrderId = ExtractGuid(raw);
-            if (!Guid.TryParse(rawOrderId, out var oid))
-                return BadRequest(new { Success = false, Error = $"OrderId không hợp lệ: {raw}" });
-            orderIds.Add(oid);
-        }
-
-        Guid? coordinatorId = null;
-        var dispatcherIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (!string.IsNullOrEmpty(dispatcherIdClaim) && Guid.TryParse(dispatcherIdClaim, out var parsedId))
-        {
-            coordinatorId = parsedId;
-        }
-
-        var request = new PlanLoadRequest
-        {
-            OrderIds                  = orderIds,
-            VehicleId                 = vehicleId,
+            OrderIds = parsedOrderIds,
+            VehicleId = Guid.Parse(ExtractGuid(form.VehicleId)),
             OriginWarehouseLocationId = originLocId,
             PlannedStartTime          = form.PlannedStartTime,
-            PlannedEndTime            = form.PlannedEndTime,
-            DispatchCoordinatorId     = coordinatorId
+            PlannedEndTime            = form.PlannedEndTime
         };
 
         try
         {
-            var result = await _dispatchService.PlanLoadFromWarehouseAsync(request);
-            return Ok(new
-            {
-                Success = true,
-                Message = $"Đã lập kế hoạch chuyến hàng thành công. " +
-                          $"Trip: {result.TripId}, " +
-                          $"Lộ trình: {result.Route.TotalStops} điểm dừng / {result.Route.TotalDistanceKm}km, " +
-                          $"Đã thông báo {result.NotifiedCoordinators} điều phối viên.",
-                Data = result
-            });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { Success = false, Error = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { Success = false, Error = "Lỗi hệ thống.", Details = ex.Message });
-        }
-    }
+            var result = await _dispatchService.ManualDispatchAsync(request);
 
-    // ── Legacy endpoints ───────────────────────────────────────────────────
-
-    /// <summary>[Legacy] Gợi ý xếp hàng bằng Gemini AI (không dùng Goong, không tạo Trip).</summary>
-    [HttpPost("suggest-load")]
-    [ProducesResponseType(typeof(object), 200)]
-    [ProducesResponseType(typeof(object), 400)]
-    public async Task<IActionResult> SuggestLoad([FromBody] SuggestLoadRequest request)
-    {
-        try
-        {
-            var rawVehicleId = ExtractGuid(request.VehicleId);
-            if (!Guid.TryParse(rawVehicleId, out var vehicleId))
-                return BadRequest(new { Success = false, Error = "VehicleId không hợp lệ." });
-
-            var orderIds = new List<Guid>();
-            foreach (var raw in request.OrderIds)
-            {
-                var rawOrderId = ExtractGuid(raw);
-                if (!Guid.TryParse(rawOrderId, out var oid))
-                    return BadRequest(new { Success = false, Error = $"OrderId không hợp lệ: {raw}" });
-                orderIds.Add(oid);
-            }
-
-            var plan = await _dispatchService.SuggestLoadPlanAsync(orderIds, vehicleId);
-            return Ok(new { Success = true, Plan = plan });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { Success = false, Error = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { Success = false, Error = "Internal server error.", Details = ex.Message });
-        }
-    }
-
-    /// <summary>[Legacy] Tính route và LIFO cho Trip đã tạo sẵn.</summary>
-    [HttpPost("route-lifo/{tripId}")]
-    public async Task<IActionResult> CalculateRouteAndLIFO(string tripId)
-    {
-        try
-        {
-            var rawTripId = ExtractGuid(tripId);
-            if (!Guid.TryParse(rawTripId, out var parsedTripId))
-                return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
-
-            await _dispatchService.CalculateRouteAndLIFOAsync(parsedTripId);
-            return Ok(new { Success = true, Message = "Route calculated and LIFO stops planned." });
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { Success = false, Error = ex.Message });
-        }
-    }
-
-    /// <summary>Đóng hàng và kẹp chì niêm phong.</summary>
-    [HttpPost("seal/{tripId}")]
-    public async Task<IActionResult> SealTruck(string tripId, [FromBody] SealRequest request)
-    {
-        try
-        {
-            var rawTripId = ExtractGuid(tripId);
-            if (!Guid.TryParse(rawTripId, out var parsedTripId))
-                return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
-
-            // Lấy userId từ JWT claim
-            var keeperIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var keeperId = keeperIdClaim != null ? Guid.Parse(keeperIdClaim) : Guid.NewGuid();
-
-            await _dispatchService.SealTruckAsync(parsedTripId, request.SealCode, keeperId);
-            return Ok(new { Success = true, Message = "Truck sealed successfully." });
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { Success = false, Error = ex.Message });
-        }
-    }
-
-    // ── Loader endpoints (Người vận chuyển hàng lên container) ─────────────
-
-    /// <summary>
-    /// [Loader] Lấy danh sách chuyến hàng đang ở trạng thái PLANNED/LOADING
-    /// cần Loader xếp hàng lên xe.
-    /// </summary>
-    [HttpGet("loader/my-trips")]
-    [Authorize(Roles = "Loader,Admin,ADMIN,Dispatcher")]
-    [ProducesResponseType(typeof(object), 200)]
-    public async Task<IActionResult> LoaderGetAssignedTrips()
-    {
-        try
-        {
-            var trips = await _db.MasterTrips
-                .Include(t => t.Vehicle)
-                .Include(t => t.OriginLocation)
-                .Include(t => t.DestinationLocation)
-                .Include(t => t.TransportOrders)
-                .Include(t => t.Seals)
-                .Where(t => t.Status == "PLANNED" || t.Status == "LOADING")
-                .OrderByDescending(t => t.CreatedAt)
-                .Select(t => new
-                {
-                    t.TripId,
-                    t.Status,
-                    Vehicle = t.Vehicle == null ? null : new { t.Vehicle.TruckPlate, t.Vehicle.VehicleType },
-                    Origin = t.OriginLocation == null ? null : new { t.OriginLocation.Address },
-                    Destination = t.DestinationLocation == null ? null : new { t.DestinationLocation.Address },
-                    OrderCount = t.TransportOrders.Count,
-                    TotalWeightKg = t.TransportOrders.Sum(o => o.ExpectedWeightKg),
-                    TotalCbm = t.TransportOrders.Sum(o => o.ExpectedCbm),
-                    IsSealed = t.Seals.Any(s => s.Status == "APPLIED"),
-                    t.PlannedStartTime,
-                    t.PlannedEndTime,
-                    t.CreatedAt
-                })
-                .ToListAsync();
-
-            return Ok(new { Success = true, Count = trips.Count, Data = trips });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { Success = false, Error = ex.Message });
-        }
-    }
-
-    /// <summary>
-    /// [Loader] Xem sơ đồ và thứ tự bốc xếp LIFO để xếp hàng lên container.
-    /// Loader dùng endpoint này để biết thứ tự xếp hàng theo nguyên tắc LIFO.
-    /// </summary>
-    [HttpGet("loader/load-plan/{tripId}")]
-    [Authorize(Roles = "Loader,Admin,ADMIN,Dispatcher")]
-    [ProducesResponseType(typeof(List<LoadInstruction>), 200)]
-    [ProducesResponseType(typeof(object), 400)]
-    [ProducesResponseType(typeof(object), 404)]
-    public async Task<IActionResult> LoaderGetLoadPlan(string tripId)
-    {
-        try
-        {
-            var rawTripId = ExtractGuid(tripId);
-            if (!Guid.TryParse(rawTripId, out var parsedTripId))
-                return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
-
-            var loadPlan = await _dispatchService.GetLoadPlanAsync(parsedTripId);
-
-            // Lấy thông tin trip kèm theo để Loader có đầy đủ context
-            var trip = await _db.MasterTrips
-                .Include(t => t.Vehicle)
-                .Include(t => t.Seals)
-                .FirstOrDefaultAsync(t => t.TripId == parsedTripId);
-
-            return Ok(new
-            {
-                Success = true,
-                TripId = parsedTripId,
-                TripStatus = trip?.Status,
-                Vehicle = trip?.Vehicle == null ? null : new { trip.Vehicle.TruckPlate, trip.Vehicle.VehicleType, trip.Vehicle.MaxWeight, trip.Vehicle.MaxCbm },
-                IsSealed = trip?.Seals?.Any(s => s.Status == "APPLIED") ?? false,
-                TotalItems = loadPlan.Count,
-                TotalWeightKg = loadPlan.Sum(l => l.WeightKg),
-                TotalCbm = loadPlan.Sum(l => l.Cbm),
-                LoadPlan = loadPlan,
-                Message = "Xếp hàng theo thứ tự LoadOrder từ 1 trở đi. " +
-                          "LoadOrder=1 xếp VÀO TRƯỚC NHẤT (nằm sâu trong xe). " +
-                          "Sau khi xếp xong, thực hiện kẹp chì bằng endpoint POST /api/dispatch/loader/seal/{tripId}."
-            });
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { Success = false, Error = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { Success = false, Error = ex.Message });
-        }
-    }
-
-    /// <summary>
-    /// [Loader] Tải PDF sơ đồ xếp hàng LIFO để in và đối chiếu khi xếp hàng lên xe.
-    /// </summary>
-    [HttpGet("loader/load-plan/{tripId}/pdf")]
-    [Authorize(Roles = "Loader,Admin,ADMIN,Dispatcher")]
-    [ProducesResponseType(typeof(object), 200)]
-    [ProducesResponseType(typeof(object), 400)]
-    [ProducesResponseType(typeof(object), 404)]
-    public async Task<IActionResult> LoaderGetLoadPlanPdf(string tripId)
-    {
-        try
-        {
-            var rawTripId = ExtractGuid(tripId);
-            if (!Guid.TryParse(rawTripId, out var parsedTripId))
-                return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
-
-            var pdfUrl = await _dispatchService.GenerateLoadPlanPdfAsync(parsedTripId);
-            return Ok(new
-            {
-                Success = true,
-                Message = "PDF sơ đồ xếp hàng LIFO cho Loader đã được sinh thành công.",
-                PdfUrl = pdfUrl
-            });
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { Success = false, Error = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { Success = false, Error = "Lỗi khi sinh PDF.", Details = ex.Message });
-        }
-    }
-
-    /// <summary>
-    /// [Loader] Xác nhận đã xếp hàng xong và thực hiện kẹp chì niêm phong container.
-    /// Loader gọi endpoint này sau khi đã xếp hàng theo sơ đồ LIFO.
-    /// Hệ thống sẽ tạo Seal record, cập nhật trạng thái Trip → SEALED.
-    /// </summary>
-    [HttpPost("loader/seal/{tripId}")]
-    [Authorize(Roles = "Loader,Admin,ADMIN")]
-    [ProducesResponseType(typeof(object), 200)]
-    [ProducesResponseType(typeof(object), 400)]
-    public async Task<IActionResult> LoaderSealTruck(string tripId, [FromBody] SealRequest request)
-    {
-        try
-        {
-            var rawTripId = ExtractGuid(tripId);
-            if (!Guid.TryParse(rawTripId, out var parsedTripId))
-                return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
-
-            // Kiểm tra trip tồn tại và đang ở trạng thái có thể kẹp chì
-            var trip = await _db.MasterTrips
-                .Include(t => t.Seals)
-                .FirstOrDefaultAsync(t => t.TripId == parsedTripId);
-
-            if (trip == null)
-                return NotFound(new { Success = false, Error = "Không tìm thấy chuyến hàng." });
-
-            if (trip.Status == "SEALED")
-                return BadRequest(new { Success = false, Error = "Chuyến hàng đã được kẹp chì trước đó." });
-
-            if (trip.Status != "PLANNED" && trip.Status != "LOADING")
-                return BadRequest(new
-                {
-                    Success = false,
-                    Error = $"Không thể kẹp chì khi chuyến hàng đang ở trạng thái '{trip.Status}'. " +
-                            $"Chỉ có thể kẹp chì khi trạng thái là PLANNED hoặc LOADING."
-                });
-
-            // Lấy Loader userId từ JWT claim
-            var loaderIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var loaderId = loaderIdClaim != null ? Guid.Parse(loaderIdClaim) : Guid.NewGuid();
-
-            await _dispatchService.SealTruckAsync(parsedTripId, request.SealCode, loaderId);
-
-            return Ok(new
-            {
-                Success = true,
-                Message = $"Kẹp chì thành công! Mã chì: {request.SealCode}. " +
-                          $"Chuyến hàng {parsedTripId} đã chuyển sang trạng thái SEALED.",
-                TripId = parsedTripId,
-                SealCode = request.SealCode,
-                SealedBy = loaderId,
-                SealedAt = DateTime.UtcNow
-            });
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { Success = false, Error = ex.Message });
-        }
-    }
-
-    /// <summary>Cấp giấy đi đường / E-Waybill cho chuyến.</summary>
-    [HttpPost("issue-documents/{tripId}")]
-    public async Task<IActionResult> IssueDocuments(string tripId)
-    {
-        try
-        {
-            var rawTripId = ExtractGuid(tripId);
-            if (!Guid.TryParse(rawTripId, out var parsedTripId))
-                return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
-
-            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var userId = userIdClaim != null ? Guid.Parse(userIdClaim) : Guid.NewGuid();
-
-            await _dispatchService.IssueDispatchDocumentsAsync(parsedTripId, userId);
-            return Ok(new { Success = true, Message = "Dispatch documents issued." });
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { Success = false, Error = ex.Message });
-        }
-    }
-
-    /// <summary>Lấy sơ đồ và thứ tự bốc xếp LIFO của chuyến đi cho nhân viên kho.</summary>
-    [HttpGet("load-plan/{tripId}")]
-    [AllowAnonymous]
-    [ProducesResponseType(typeof(List<LoadInstruction>), 200)]
-    [ProducesResponseType(typeof(object), 400)]
-    public async Task<IActionResult> GetLoadPlan(string tripId)
-    {
-        try
-        {
-            var rawTripId = ExtractGuid(tripId);
-            if (!Guid.TryParse(rawTripId, out var parsedTripId))
-                return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
-
-            var loadPlan = await _dispatchService.GetLoadPlanAsync(parsedTripId);
-            return Ok(new { Success = true, Data = loadPlan });
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { Success = false, Error = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { Success = false, Error = ex.Message });
-        }
-    }
-
-    /// <summary>
-    /// Sinh PDF sơ đồ xếp hàng LIFO cho nhân viên kho.
-    /// PDF bao gồm: sơ đồ container theo ngăn nhiệt độ (ĐÔNG/MÁT/THƯỜNG),
-    /// bảng thứ tự bốc xếp và lý do, upload lên Cloudinary và trả về URL tải về.
-    /// </summary>
-    [HttpGet("load-plan/{tripId}/pdf")]
-    [AllowAnonymous]
-    [ProducesResponseType(typeof(object), 200)]
-    [ProducesResponseType(typeof(object), 400)]
-    [ProducesResponseType(typeof(object), 404)]
-    public async Task<IActionResult> GetLoadPlanPdf(string tripId)
-    {
-        try
-        {
-            var rawTripId = ExtractGuid(tripId);
-            if (!Guid.TryParse(rawTripId, out var parsedTripId))
-                return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
-
-            var pdfUrl = await _dispatchService.GenerateLoadPlanPdfAsync(parsedTripId);
-            return Ok(new
-            {
-                Success = true,
-                Message = "PDF sơ đồ xếp hàng LIFO đã được sinh thành công.",
-                PdfUrl = pdfUrl
-            });
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { Success = false, Error = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { Success = false, Error = "Lỗi khi sinh PDF.", Details = ex.Message });
-        }
-    }
-
-    /// <summary>Lấy danh sách giấy đi đường / E-Waybill đã phát hành cho chuyến.</summary>
-    [HttpGet("issue-documents/{tripId}")]
-    [AllowAnonymous]
-    [ProducesResponseType(typeof(List<TransportDocument>), 200)]
-    [ProducesResponseType(typeof(object), 400)]
-    public async Task<IActionResult> GetIssuedDocuments(string tripId)
-    {
-        try
-        {
-            var rawTripId = ExtractGuid(tripId);
-            if (!Guid.TryParse(rawTripId, out var parsedTripId))
-                return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
-
-            var documents = await _dispatchService.GetIssuedDocumentsAsync(parsedTripId);
-            return Ok(new { Success = true, Data = documents });
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { Success = false, Error = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { Success = false, Error = ex.Message });
-        }
-    }
-
-    /// <summary>[Test Only] Test kết nối Gemini API.</summary>
-    [AllowAnonymous]
-    [HttpGet("test-gemini")]
-    public async Task<IActionResult> TestGemini(
-        [FromServices] ColdChainX.Infrastructure.Integration.GeminiLoadOptimizerClient geminiClient)
-    {
-        try
-        {
-            var mockVehicle = new ColdChainX.Core.Entities.Vehicle
-            {
-                VehicleId = Guid.NewGuid(),
-                MaxCbm    = 10.26m,
-                MaxWeight = 5000m
-            };
-
-            var mockOrders = new List<ColdChainX.Core.Entities.TransportOrder>
-            {
-                new()
-                {
-                    OrderId          = Guid.NewGuid(),
-                    ItemName         = "Frozen Fish",
-                    Quantity         = 50,
-                    ExpectedCbm      = 2.5m,
-                    ExpectedWeightKg = 1000m,
-                    DestLocation     = Guid.NewGuid()
-                },
-                new()
-                {
-                    OrderId          = Guid.NewGuid(),
-                    ItemName         = "Ice Cream",
-                    Quantity         = 100,
-                    ExpectedCbm      = 1.0m,
-                    ExpectedWeightKg = 500m,
-                    DestLocation     = Guid.NewGuid()
-                }
-            };
-
-            var routeSequence = new List<Guid>
-            {
-                mockOrders[1].DestLocation!.Value,
-                mockOrders[0].DestLocation!.Value
-            };
-
-            var plan = await geminiClient.OptimizeLoadPlanAsync(mockVehicle, mockOrders, routeSequence);
-            return Ok(new { Message = "Gemini API Test Success", Plan = plan });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { Error = ex.Message });
-        }
-    }
-
-    /// <summary>
-    /// Giả lập nạp dữ liệu test và chạy toàn bộ luồng Dispatch.
-    /// </summary>
-    [AllowAnonymous]
-    [HttpPost("seed-and-test-dispatch")]
-    public async Task<IActionResult> SeedAndTestDispatch(
-        [FromServices] ColdChainX.Infrastructure.Persistence.ApplicationDbContext dbContext)
-    {
-        AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
-        try
-        {
-            // 1. Tạo MessageType và NotificationTemplate nếu chưa có
-            var msgType = await dbContext.Messagetypes.FirstOrDefaultAsync();
-            if (msgType == null)
-            {
-                msgType = new Messagetype
-                {
-                    TypeId = Guid.NewGuid(),
-                    TypeName = "System Alert",
-                    Description = "System generated alert notifications"
-                };
-                dbContext.Messagetypes.Add(msgType);
-                await dbContext.SaveChangesAsync();
-            }
-
-            var template = await dbContext.NotificationTemplates.FindAsync("DISPATCH_LOADING_ORDER");
-            if (template == null)
-            {
-                template = new NotificationTemplate
-                {
-                    TemplateId = "DISPATCH_LOADING_ORDER",
-                    TypeId = msgType.TypeId,
-                    TitleTemplate = "Lệnh điều động bốc xếp xe {vehicle}",
-                    BodyTemplate = "Chuyến hàng {tripId} cần xếp {orderCount} đơn hàng, tổng trọng lượng {totalWeight}kg. Dự kiến khởi hành: {startTime}.",
-                    Channel = "IN_APP",
-                    Status = "ACTIVE"
-                };
-                dbContext.NotificationTemplates.Add(template);
-                await dbContext.SaveChangesAsync();
-            }
-
-            // 2. Tạo hoặc lấy Role Dispatcher
-            var dispatcherRole = await dbContext.Roles.FirstOrDefaultAsync(r => r.RoleName == "Dispatcher");
-            if (dispatcherRole == null)
-            {
-                dispatcherRole = new Role
-                {
-                    RoleId = Guid.NewGuid(),
-                    RoleName = "Dispatcher",
-                    Description = "Container dispatcher role"
-                };
-                dbContext.Roles.Add(dispatcherRole);
-                await dbContext.SaveChangesAsync();
-            }
-
-            // 2.1. Tạo hoặc lấy Role Loader (Người vận chuyển hàng lên container)
-            var loaderRole = await dbContext.Roles.FirstOrDefaultAsync(r => r.RoleName == "Loader");
-            if (loaderRole == null)
-            {
-                loaderRole = new Role
-                {
-                    RoleId = Guid.NewGuid(),
-                    RoleName = "Loader",
-                    Description = "Người vận chuyển hàng lên container — xem sơ đồ LIFO và kẹp chì"
-                };
-                dbContext.Roles.Add(loaderRole);
-                await dbContext.SaveChangesAsync();
-            }
-
-            // 3. Tạo hoặc lấy User Dispatcher
-            var dispatcherUser = await dbContext.Users.FirstOrDefaultAsync(u => u.Username == "testdispatcher");
-            if (dispatcherUser == null)
-            {
-                dispatcherUser = new User
-                {
-                    UserId = Guid.NewGuid(),
-                    Username = "testdispatcher",
-                    PasswordHash = "hashedpassword",
-                    Email = "dispatcher@coldchainx.com",
-                    FullName = "Test Dispatcher Coordinator",
-                    RoleId = dispatcherRole.RoleId,
-                    Status = "ACTIVE",
-                    CreatedAt = DateTime.UtcNow
-                };
-                dbContext.Users.Add(dispatcherUser);
-                await dbContext.SaveChangesAsync();
-            }
-
-            // 3.0.1. Tạo hoặc lấy User Loader (Người bốc xếp)
-            var loaderUser = await dbContext.Users.FirstOrDefaultAsync(u => u.Username == "testloader");
-            if (loaderUser == null)
-            {
-                loaderUser = new User
-                {
-                    UserId = Guid.NewGuid(),
-                    Username = "testloader",
-                    PasswordHash = "hashedpassword",
-                    Email = "loader@coldchainx.com",
-                    FullName = "Trần Văn Bốc Xếp",
-                    RoleId = loaderRole.RoleId,
-                    Status = "ACTIVE",
-                    CreatedAt = DateTime.UtcNow
-                };
-                dbContext.Users.Add(loaderUser);
-                await dbContext.SaveChangesAsync();
-            }
-
-            // 3.1. Tạo hoặc lấy Role Driver
-            var driverRole = await dbContext.Roles.FirstOrDefaultAsync(r => r.RoleName == "Driver");
-            if (driverRole == null)
-            {
-                driverRole = new Role
-                {
-                    RoleId = Guid.NewGuid(),
-                    RoleName = "Driver",
-                    Description = "Driver role"
-                };
-                dbContext.Roles.Add(driverRole);
-                await dbContext.SaveChangesAsync();
-            }
-
-            // 3.2. Tạo hoặc lấy User Driver
-            var testDriverUser = await dbContext.Users.FirstOrDefaultAsync(u => u.Username == "testdriver");
-            Guid driverUserId = testDriverUser?.UserId ?? Guid.NewGuid();
-            if (testDriverUser == null)
-            {
-                testDriverUser = new User
-                {
-                    UserId = driverUserId,
-                    Username = "testdriver",
-                    PasswordHash = "hashedpassword",
-                    Email = "driver@coldchainx.com",
-                    FullName = "Test Driver",
-                    RoleId = driverRole.RoleId,
-                    Status = "ACTIVE",
-                    CreatedAt = DateTime.UtcNow
-                };
-                dbContext.Users.Add(testDriverUser);
-                await dbContext.SaveChangesAsync();
-            }
-
-            // 3.3. Tạo hoặc lấy Driver Entity liên kết
-            var testDriver = await dbContext.Drivers.FirstOrDefaultAsync(d => d.UserId == driverUserId);
-            if (testDriver == null)
-            {
-                testDriver = new Driver
-                {
-                    DriverId = driverUserId, // DriverId trùng với UserId để tránh lỗi khóa ngoại UploadedBy khi tạo E-Waybill
-                    UserId = driverUserId,
-                    FullName = "Nguyễn Văn Tải",
-                    IdentityNumber = "037095000123",
-                    PhoneNumber = "0912345678",
-                    DateOfBirth = new DateOnly(1990, 1, 1),
-                    JoinDate = DateOnly.FromDateTime(DateTime.UtcNow),
-                    Status = "AVAILABLE",
-                    CreatedAt = DateTime.UtcNow
-                };
-                dbContext.Drivers.Add(testDriver);
-                await dbContext.SaveChangesAsync();
-            }
-
-            // 4. Tạo các Locations test (Hà Nội)
-            var originLocation = new Location
-            {
-                LocationId = Guid.NewGuid(),
-                Address = "Kho Tổng ColdChainX Hà Nội (Cầu Giấy)",
-                Latitude = 21.028511m,
-                Longitude = 105.804817m,
-                Status = "ACTIVE",
-                CreatedAt = DateTime.UtcNow
-            };
+            // Sinh file PDF Lệnh điều động + Load Plan
+            var goongKey = Environment.GetEnvironmentVariable("key") ?? "xV6YBygCVRIQYybUrDAfaqYuuVfO9qvQBqQSA7uK";
+            var html = ManifestTemplateBuilder.BuildHtml(result, goongKey);
+            var pdfUrl = await _pdfService.SaveWaybillPdfAsync(html, result.TripId.ToString());
             
-            var destLocation1 = new Location
-            {
-                LocationId = Guid.NewGuid(),
-                Address = "Đại siêu thị BigC Thăng Long",
-                Latitude = 21.009088m,
-                Longitude = 105.798687m,
-                Status = "ACTIVE",
-                CreatedAt = DateTime.UtcNow
-            };
+            result.LifoPdfUrl = pdfUrl;
 
-            var destLocation2 = new Location
-            {
-                LocationId = Guid.NewGuid(),
-                Address = "Cửa hàng tiện lợi WinMart+ Hoàn Kiếm",
-                Latitude = 21.028092m,
-                Longitude = 105.852332m,
-                Status = "ACTIVE",
-                CreatedAt = DateTime.UtcNow
-            };
-
-            dbContext.Locations.AddRange(originLocation, destLocation1, destLocation2);
-            await dbContext.SaveChangesAsync();
-
-            // 5. Tạo Vehicle test
-            var randSuffix = new Random().Next(1000, 9999);
-            var vehicle = new Vehicle
-            {
-                VehicleId = Guid.NewGuid(),
-                TruckPlate = $"29C-{randSuffix}",
-                Brand = "Hino",
-                ManufactureYear = 2024,
-                VehicleType = "Reefer Truck 5 Tons",
-                MaxWeight = 5000m,
-                MaxCbm = 25m,
-                MinTemp = -20m,
-                MaxTemp = 20m,
-                Status = "ACTIVE",
-                CreatedAt = DateTime.UtcNow
-            };
-            dbContext.Vehicles.Add(vehicle);
-            await dbContext.SaveChangesAsync();
-
-            // 6. Tạo TransportOrders ở trạng thái IN_WAREHOUSE
-            var order1 = new TransportOrder
-            {
-                OrderId = Guid.NewGuid(),
-                TrackingCode = $"ORD-{Guid.NewGuid().ToString()[..8].ToUpper()}",
-                ItemName = "Hải sản đông lạnh xuất khẩu (Cá hồi)",
-                Category = "Frozen Food",
-                Quantity = 150,
-                PackingType = "Thùng Carton",
-                TempCondition = "FROZEN (-18C)",
-                ExpectedWeightKg = 1200m,
-                ActualWeightKg = 1200m,
-                ExpectedCbm = 4.5m,
-                ActualCbm = 4.5m,
-                Status = "IN_WAREHOUSE",
-                PickupLocation = originLocation.LocationId,
-                DestLocation = destLocation1.LocationId,
-                CargoValue = 150000000m,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            var order2 = new TransportOrder
-            {
-                OrderId = Guid.NewGuid(),
-                TrackingCode = $"ORD-{Guid.NewGuid().ToString()[..8].ToUpper()}",
-                ItemName = "Sữa chua và phô mai Đà Lạt",
-                Category = "Chilled Dairy",
-                Quantity = 300,
-                PackingType = "Khay nhựa",
-                TempCondition = "CHILLED (2-8C)",
-                ExpectedWeightKg = 900m,
-                ActualWeightKg = 900m,
-                ExpectedCbm = 3.0m,
-                ActualCbm = 3.0m,
-                Status = "IN_WAREHOUSE",
-                PickupLocation = originLocation.LocationId,
-                DestLocation = destLocation2.LocationId,
-                CargoValue = 60000000m,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            var order3 = new TransportOrder
-            {
-                OrderId = Guid.NewGuid(),
-                TrackingCode = $"ORD-{Guid.NewGuid().ToString()[..8].ToUpper()}",
-                ItemName = "Trái cây tươi (Táo Mỹ)",
-                Category = "Fresh Produce",
-                Quantity = 200,
-                PackingType = "Thùng gỗ",
-                TempCondition = "AMBIENT (15-20C)",
-                ExpectedWeightKg = 1500m,
-                ActualWeightKg = 1500m,
-                ExpectedCbm = 5.2m,
-                ActualCbm = 5.2m,
-                Status = "IN_WAREHOUSE",
-                PickupLocation = originLocation.LocationId,
-                DestLocation = destLocation1.LocationId,
-                CargoValue = 90000000m,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            dbContext.TransportOrders.AddRange(order1, order2, order3);
-            await dbContext.SaveChangesAsync();
-
-            // 7. Thực hiện luồng chính: Lập kế hoạch bốc xếp ghép chuyến (PlanLoad)
-            var planRequest = new PlanLoadRequest
-            {
-                OrderIds = new List<Guid> { order1.OrderId, order2.OrderId, order3.OrderId },
-                VehicleId = vehicle.VehicleId,
-                OriginWarehouseLocationId = originLocation.LocationId,
-                PlannedStartTime = DateTime.UtcNow.AddHours(2),
-                PlannedEndTime = DateTime.UtcNow.AddHours(6),
-                DispatchCoordinatorId = dispatcherUser.UserId
-            };
-
-            var planResult = await _dispatchService.PlanLoadFromWarehouseAsync(planRequest);
-            var tripId = planResult.TripId;
-
-            // Gán Driver cho chuyến đi vừa tạo (tránh lỗi khóa ngoại khi phát hành tài liệu)
-            var tripEntity = await dbContext.MasterTrips.FindAsync(tripId);
-            if (tripEntity != null)
-            {
-                tripEntity.DriverId = driverUserId;
-                await dbContext.SaveChangesAsync();
-            }
-
-            // 7.1. Gửi thông báo cho Loader khi sơ đồ LIFO đã sẵn sàng
-            await _dispatchService.NotifyLoadersAsync(tripId);
-
-            // 8. Thực hiện kẹp chì niêm phong xe (Seal Truck) — bởi Loader
-            var sealCode = $"SEAL-{Guid.NewGuid().ToString()[..6].ToUpper()}";
-            await _dispatchService.SealTruckAsync(tripId, sealCode, loaderUser.UserId);
-
-            // 9. Thực hiện cấp giấy đi đường / E-Waybill
-            await _dispatchService.IssueDispatchDocumentsAsync(tripId);
-
-            // 10. Lấy dữ liệu thực tế đã lưu xuống cơ sở dữ liệu để kiểm chứng
-            var savedTrip = await dbContext.MasterTrips
-                .AsNoTracking()
-                .FirstOrDefaultAsync(t => t.TripId == tripId);
-
-            var savedStops = await dbContext.TripStops
-                .AsNoTracking()
-                .Where(ts => ts.TripId == tripId)
-                .OrderBy(ts => ts.StopSequence)
-                .ToListAsync();
-
-            var savedOrders = await dbContext.TransportOrders
-                .AsNoTracking()
-                .Where(o => o.MasterTripId == tripId)
-                .ToListAsync();
-
-            var savedSeal = await dbContext.Seals
-                .AsNoTracking()
-                .FirstOrDefaultAsync(s => s.TripId == tripId);
-
-            var savedDocs = await dbContext.TransportDocuments
-                .AsNoTracking()
-                .Where(d => d.ImageUrl.Contains(tripId.ToString()))
-                .ToListAsync();
-
-            var savedNotifications = await dbContext.Notifications
-                .AsNoTracking()
-                .Where(n => n.UserId == dispatcherUser.UserId)
-                .OrderByDescending(n => n.CreatedAt)
-                .ToListAsync();
-
-            return Ok(new
-            {
-                Success = true,
-                Message = "Simulated Dispatch workflow successfully completed.",
-                SimulationData = new
-                {
-                    WarehouseLocation = new { originLocation.LocationId, originLocation.Address, originLocation.Latitude, originLocation.Longitude },
-                    DeliveryLocations = new[]
-                    {
-                        new { destLocation1.LocationId, destLocation1.Address, destLocation1.Latitude, destLocation1.Longitude },
-                        new { destLocation2.LocationId, destLocation2.Address, destLocation2.Latitude, destLocation2.Longitude }
-                    },
-                    Vehicle = new { vehicle.VehicleId, vehicle.TruckPlate, vehicle.Brand, vehicle.MaxWeight, vehicle.MaxCbm, vehicle.Status },
-                    InitialOrders = new[]
-                    {
-                        new { order1.OrderId, order1.TrackingCode, order1.ItemName, order1.ExpectedWeightKg, order1.ExpectedCbm, order1.Status, order1.TempCondition },
-                        new { order2.OrderId, order2.TrackingCode, order2.ItemName, order2.ExpectedWeightKg, order2.ExpectedCbm, order2.Status, order2.TempCondition },
-                        new { order3.OrderId, order3.TrackingCode, order3.ItemName, order3.ExpectedWeightKg, order3.ExpectedCbm, order3.Status, order3.TempCondition }
-                    }
-                },
-                PlanResult = planResult,
-                DatabaseState = new
-                {
-                    MasterTrip = savedTrip == null ? null : new
-                    {
-                        savedTrip.TripId,
-                        savedTrip.VehicleId,
-                        savedTrip.OriginLocationId,
-                        savedTrip.DestinationLocationId,
-                        savedTrip.TotalDistanceKm,
-                        savedTrip.TargetTemperature,
-                        savedTrip.PlannedStartTime,
-                        savedTrip.PlannedEndTime,
-                        savedTrip.Status,
-                        savedTrip.CreatedAt
-                    },
-                    TripStops = savedStops.Select(ts => new
-                    {
-                        ts.StopId,
-                        ts.TripId,
-                        ts.LocationId,
-                        ts.StopSequence,
-                        ts.StopType,
-                        ts.Status,
-                        ts.PlannedArrivalTime,
-                        ts.PlannedDepartureTime
-                    }).ToList(),
-                    TransportOrders = savedOrders.Select(o => new
-                    {
-                        o.OrderId,
-                        o.TrackingCode,
-                        o.ItemName,
-                        o.Status,
-                        o.MasterTripId,
-                        o.ExpectedWeightKg,
-                        o.ExpectedCbm
-                    }).ToList(),
-                    Seal = savedSeal == null ? null : new
-                    {
-                        savedSeal.SealId,
-                        savedSeal.TripId,
-                        savedSeal.SealCode,
-                        savedSeal.AppliedAt,
-                        savedSeal.Status
-                    },
-                    TransportDocuments = savedDocs.Select(d => new
-                    {
-                        d.DocId,
-                        d.DocType,
-                        d.ImageUrl,
-                        d.Status,
-                        d.CreatedAt
-                    }).ToList(),
-                    Notifications = savedNotifications.Select(n => new
-                    {
-                        n.NotiId,
-                        n.UserId,
-                        n.TemplateId,
-                        n.Params,
-                        n.IsRead,
-                        n.CreatedAt
-                    }).ToList()
-                }
-            });
+            return Ok(new { Success = true, Data = result });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Success = false, Error = ex.Message });
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { Success = false, Error = ex.Message, Details = ex.InnerException?.Message ?? ex.StackTrace });
+            return StatusCode(500, new { Success = false, Error = "Lỗi hệ thống khi manual-dispatch.", Detail = ex.Message });
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  API 1.1: LẤY LẠI LINK SƠ ĐỒ LIFO PDF BẰNG TRIP ID
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [HttpGet("trip/{tripId}/lifo-url")]
+    [ProducesResponseType(typeof(object), 200)]
+    [ProducesResponseType(typeof(object), 404)]
+    public async Task<IActionResult> GetLifoUrl(string tripId)
+    {
+        var rawId = ExtractGuid(tripId);
+        if (!Guid.TryParse(rawId, out var id))
+            return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
+
+        // Trả về trực tiếp link Cloudinary có chữ ký (Signed URL) để bypass lỗi 401
+        var url = _fileService.GetSignedUrl($"coldchainx/lifo_{id}");
+        return Ok(new { Success = true, LifoPdfUrl = url });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  API 1.2: LẤY LẠI BẢN ĐỒ DẪN ĐƯỜNG (GOONG) THEO TRIP ID
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [HttpGet("trip/{tripId}/route")]
+    [ProducesResponseType(typeof(GoongDirectionsResult), 200)]
+    [ProducesResponseType(typeof(object), 404)]
+    public async Task<IActionResult> GetTripRoute(string tripId)
+    {
+        var rawId = ExtractGuid(tripId);
+        if (!Guid.TryParse(rawId, out var id))
+            return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
+
+        var trip = await _db.MasterTrips
+            .Include(t => t.OriginLocation)
+            .Include(t => t.DestinationLocation)
+            .Include(t => t.TripStops)
+                .ThenInclude(ts => ts.Location)
+            .FirstOrDefaultAsync(t => t.TripId == id);
+
+        if (trip == null)
+            return NotFound(new { Success = false, Error = "Không tìm thấy chuyến đi." });
+
+        var waypoints = new List<(decimal Lat, decimal Lon, string Address)>
+        {
+            (trip.OriginLocation.Latitude, trip.OriginLocation.Longitude, trip.OriginLocation.Address)
+        };
+
+        foreach (var stop in trip.TripStops.OrderBy(s => s.StopSequence))
+        {
+            if (stop.Location != null)
+                waypoints.Add((stop.Location.Latitude, stop.Location.Longitude, stop.Location.Address));
+        }
+
+        // Điểm cuối cùng (DestLocation có thể đã nằm trong TripStops, nhưng cứ thêm cho chắc nếu thiếu)
+        var lastStop = waypoints.LastOrDefault();
+        if (lastStop.Lat != trip.DestinationLocation.Latitude || lastStop.Lon != trip.DestinationLocation.Longitude)
+        {
+            waypoints.Add((trip.DestinationLocation.Latitude, trip.DestinationLocation.Longitude, trip.DestinationLocation.Address));
+        }
+
+        try
+        {
+            var directions = await _locationService.GetDirectionsAsync(waypoints);
+            return Ok(new { Success = true, Data = directions });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { Success = false, Error = "Lỗi khi gọi Goong API.", Detail = ex.Message });
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  API 2: WAREHOUSE ORDER — Lệnh bốc xếp cho kho
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Tạo lệnh bốc xếp cho kho (sau khi đã dispatch). Trip chuyển sang PENDING_WH_APPROVAL.
+    /// Gửi thông báo cho WarehouseMonitor để duyệt.
+    /// </summary>
+    [HttpPost("warehouse-order/{tripId}")]
+    [ProducesResponseType(typeof(WarehouseOrderResult), 200)]
+    public async Task<IActionResult> CreateWarehouseOrder(string tripId)
+    {
+        var rawId = ExtractGuid(tripId);
+        if (!Guid.TryParse(rawId, out var parsedTripId))
+            return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
+
+        var currentUserId = GetCurrentUserId();
+        if (currentUserId == Guid.Empty) return Unauthorized();
+
+        try
+        {
+            var result = await _dispatchService.CreateWarehouseOrderAsync(parsedTripId, currentUserId);
+            return Ok(new { Success = true, Data = result });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { Success = false, Error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// WH Monitor duyệt lệnh bốc xếp. Trip và Orders chuyển sang LOADING.
+    /// Gửi thông báo cho Loader.
+    /// </summary>
+    [HttpPost("warehouse-order/{tripId}/approve")]
+    [ProducesResponseType(typeof(WarehouseOrderResult), 200)]
+    public async Task<IActionResult> ApproveWarehouseOrder(string tripId)
+    {
+        var rawId = ExtractGuid(tripId);
+        if (!Guid.TryParse(rawId, out var parsedTripId))
+            return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
+
+        var currentUserId = GetCurrentUserId();
+        if (currentUserId == Guid.Empty) return Unauthorized();
+
+        try
+        {
+            var result = await _dispatchService.ApproveWarehouseOrderAsync(parsedTripId, currentUserId);
+            return Ok(new { Success = true, Data = result });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { Success = false, Error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// WH Monitor từ chối lệnh bốc xếp. Trip chuyển sang WH_REJECTED, Orders về IN_WAREHOUSE.
+    /// </summary>
+    [HttpPost("warehouse-order/{tripId}/reject")]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType(typeof(WarehouseOrderResult), 200)]
+    public async Task<IActionResult> RejectWarehouseOrder(string tripId, [FromForm] RejectWarehouseOrderRequest request)
+    {
+        var rawId = ExtractGuid(tripId);
+        if (!Guid.TryParse(rawId, out var parsedTripId))
+            return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
+
+        var currentUserId = GetCurrentUserId();
+        if (currentUserId == Guid.Empty) return Unauthorized();
+
+        if (string.IsNullOrWhiteSpace(request.Reason))
+            return BadRequest(new { Success = false, Error = "Vui lòng nhập lý do từ chối." });
+
+        try
+        {
+            var result = await _dispatchService.RejectWarehouseOrderAsync(parsedTripId, currentUserId, request.Reason);
+            return Ok(new { Success = true, Data = result });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { Success = false, Error = ex.Message });
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  API 3: IOT CHECK — Kiểm tra tín hiệu IoT xe
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Kiểm tra trạng thái kết nối, GPS, nhiệt độ, pin của các thiết bị IoT gắn trên xe.
+    /// </summary>
+    [HttpGet("vehicle-iot-check/{vehicleId}")]
+    [ProducesResponseType(typeof(VehicleIoTStatus), 200)]
+    public async Task<IActionResult> CheckVehicleIoT(string vehicleId)
+    {
+        var rawId = ExtractGuid(vehicleId);
+        if (!Guid.TryParse(rawId, out var parsedVehicleId))
+            return BadRequest(new { Success = false, Error = "VehicleId không hợp lệ." });
+
+        try
+        {
+            var result = await _dispatchService.CheckVehicleIoTAsync(parsedVehicleId);
+            return Ok(new { Success = true, Data = result });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { Success = false, Error = ex.Message });
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  API 4: SEAL & DISPATCH — Kẹp chì + kiểm tra chất hàng
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Kiểm tra tất cả đơn hàng đã được xếp lên xe chưa. Nếu đủ → kẹp chì → cấp E-Waybill.
+    /// Chuyển Trip sang SEALED / DISPATCHED.
+    /// </summary>
+    [HttpPost("seal-and-dispatch/{tripId}")]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType(typeof(SealAndDispatchResult), 200)]
+    public async Task<IActionResult> SealAndDispatch(string tripId, [FromForm] SealAndDispatchRequest request)
+    {
+        var rawId = ExtractGuid(tripId);
+        if (!Guid.TryParse(rawId, out var parsedTripId))
+            return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
+
+        var currentUserId = GetCurrentUserId();
+        if (currentUserId == Guid.Empty) return Unauthorized();
+
+        if (string.IsNullOrWhiteSpace(request.SealCode))
+            return BadRequest(new { Success = false, Error = "SealCode là bắt buộc." });
+
+        try
+        {
+            var result = await _dispatchService.SealAndDispatchAsync(parsedTripId, request.SealCode, currentUserId);
+            return Ok(new { Success = true, Data = result });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Success = false, Error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { Success = false, Error = "Lỗi hệ thống khi kẹp chì.", Detail = ex.Message });
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  BACKLOG — Xử lý hàng tồn
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Quét các đơn hàng IN_WAREHOUSE tồn lâu hơn số ngày chỉ định, ghép vào các xe nhỏ (≤ 2000kg).
+    /// </summary>
+    [HttpPost("process-backlog")]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType(typeof(BacklogDispatchResult), 200)]
+    public async Task<IActionResult> ProcessBacklog([FromForm] ProcessBacklogRequest request)
+    {
+        var rawOriginLocId = ExtractGuid(request.OriginWarehouseLocationId);
+        if (!Guid.TryParse(rawOriginLocId, out var originLocId))
+            return BadRequest(new { Success = false, Error = "OriginWarehouseLocationId không hợp lệ." });
+
+        if (request.PlannedStartTime >= request.PlannedEndTime)
+            return BadRequest(new { Success = false, Error = "PlannedStartTime phải nhỏ hơn PlannedEndTime." });
+
+        var backlogDays = request.BacklogDays > 0 ? request.BacklogDays : 1;
+
+        try
+        {
+            var result = await _dispatchService.ProcessBacklogOrdersAsync(
+                originLocId, request.PlannedStartTime, request.PlannedEndTime, backlogDays);
+            return Ok(new { Success = true, Data = result });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { Success = false, Error = ex.Message });
         }
     }
 
     private static string ExtractGuid(string input)
     {
         if (string.IsNullOrWhiteSpace(input)) return input;
-        var parts = input.Split(':');
+        var parts = input.Split(new[] { ':', '|' });
         return parts[0].Trim();
     }
-}
-
-// ── Request/Response models ──────────────────────────────────────────────────
-
-/// <summary>Request cho endpoint legacy suggest-load (chỉ dùng Gemini).</summary>
-public class SuggestLoadRequest
-{
-    public List<string> OrderIds { get; set; } = new();
-    public string VehicleId { get; set; } = null!;
-}
-
-public class SealRequest
-{
-    public string SealCode { get; set; } = null!;
-}
-
-/// <summary>
-/// Form request cho POST /api/dispatch/plan-load (multipart/form-data).
-/// Dùng string thay vì Guid vì HTML form / Swagger chỉ gửi được text.
-/// OrderIds được gửi nhiều lần cùng tên field để chọn nhiều đơn hàng.
-/// </summary>
-public class PlanLoadFormRequest
-{
-    /// <summary>
-    /// Danh sách OrderId (IN_WAREHOUSE). Gửi nhiều lần cùng tên field.
-    /// Dùng GET /api/dispatch/lookup/orders-ready để lấy danh sách.
-    /// </summary>
-    public string[] OrderIds { get; set; } = Array.Empty<string>();
-
-    /// <summary>
-    /// VehicleId xe tải được chỉ định.
-    /// Dùng GET /api/dispatch/lookup/vehicles để lấy danh sách.
-    /// </summary>
-    public string VehicleId { get; set; } = null!;
-
-    /// <summary>
-    /// LocationId kho xuất phát (điểm đầu lộ trình).
-    /// Dùng GET /api/dispatch/lookup/locations để lấy danh sách.
-    /// </summary>
-    public string OriginWarehouseLocationId { get; set; } = null!;
-
-    /// <summary>Thời gian dự kiến xuất phát (ISO 8601, VD: 2026-06-18T06:00:00).</summary>
-    public DateTime PlannedStartTime { get; set; }
-
-    /// <summary>Thời gian dự kiến hoàn thành chuyến (ISO 8601, VD: 2026-06-18T18:00:00).</summary>
-    public DateTime PlannedEndTime { get; set; }
 }

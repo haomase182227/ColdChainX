@@ -156,6 +156,7 @@ namespace ColdChainX.UnitTests
         {
             public Task<(decimal Latitude, decimal Longitude)> GetCoordinatesAsync(string addressText) => Task.FromResult((0m, 0m));
             public Task<decimal> GetDistanceKmAsync(decimal originLat, decimal originLon, decimal destinationLat, decimal destinationLon) => Task.FromResult(0m);
+            public Task<ColdChainX.Application.DTOs.Dispatch.GoongDirectionsResult> GetDirectionsAsync(List<(decimal Lat, decimal Lon, string Address)> waypoints) => Task.FromResult(new ColdChainX.Application.DTOs.Dispatch.GoongDirectionsResult());
         }
 
         private class MockFileService : IFileService
@@ -164,6 +165,7 @@ namespace ColdChainX.UnitTests
             public Task<string> UploadFileAsync(System.IO.Stream stream, string fileName) => Task.FromResult($"/uploads/{fileName}");
             public Task<string> UploadFileAsync(byte[] fileBytes, string fileName) => Task.FromResult($"/uploads/{fileName}");
             public Task DeleteFileAsync(string fileUrl) => Task.CompletedTask;
+            public string GetSignedUrl(string publicId) => $"http://test.com/{publicId}";
         }
 
         private class MockPdfService : IPdfService

@@ -71,6 +71,11 @@ public class RouteInfo
 {
     public decimal TotalDistanceKm { get; set; }
     public int TotalStops { get; set; }
+    
+    // Lưu tọa độ kho xuất phát để vẽ bản đồ
+    public decimal OriginLat { get; set; }
+    public decimal OriginLng { get; set; }
+    
     public List<RouteStop> Stops { get; set; } = new();
 }
 
@@ -139,4 +144,275 @@ public class DispatchInstruction
     public string TargetStatus { get; set; } = "LOADING";
     public int LoadOrder { get; set; }
     public string Zone { get; set; } = null!;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  API 1: AUTO-DISPATCH — Tự động ghép chuyến
+// ═══════════════════════════════════════════════════════════════════════
+
+/// <summary>
+/// Request cho API manual-dispatch.
+/// Thay thế hoàn toàn auto-dispatch. Người dùng tự chọn đơn hàng và xe.
+/// </summary>
+public class ManualDispatchRequest
+{
+    /// <summary>Danh sách OrderId do người dùng chọn (IN_WAREHOUSE).</summary>
+    public List<Guid> OrderIds { get; set; } = new();
+
+    /// <summary>VehicleId do người dùng chọn.</summary>
+    public Guid VehicleId { get; set; }
+
+    /// <summary>LocationId kho xuất phát.</summary>
+    public Guid OriginWarehouseLocationId { get; set; }
+
+    /// <summary>Thời gian dự kiến xuất phát.</summary>
+    public DateTime PlannedStartTime { get; set; }
+
+    /// <summary>Thời gian dự kiến hoàn thành chuyến.</summary>
+    public DateTime PlannedEndTime { get; set; }
+}
+
+/// <summary>Form request cho manual-dispatch endpoint (multipart/form-data).</summary>
+public class ManualDispatchFormRequest
+{
+    public string VehicleId { get; set; } = string.Empty;
+    public DateTime PlannedStartTime { get; set; }
+    public DateTime PlannedEndTime { get; set; }
+}
+
+/// <summary>Kết quả manual-dispatch — mở rộng từ PlanLoadResult.</summary>
+public class ManualDispatchResult
+{
+    public Guid TripId { get; set; }
+    public VehicleInfo Vehicle { get; set; } = null!;
+    public DriverInfo Driver { get; set; } = null!;
+
+    /// <summary>Danh sách đơn hàng được chọn.</summary>
+    public List<OrderSummary> SelectedOrders { get; set; } = new();
+
+    /// <summary>Lộ trình tối ưu.</summary>
+    public RouteInfo Route { get; set; } = null!;
+
+    /// <summary>Hướng dẫn đường đi từ Goong Directions API.</summary>
+    public NavigationInfo Navigation { get; set; } = null!;
+
+    /// <summary>Kế hoạch xếp hàng LIFO.</summary>
+    public List<LoadInstruction> LoadPlan { get; set; } = new();
+
+    /// <summary>Lệnh điều động.</summary>
+    public List<DispatchInstruction> DispatchInstructions { get; set; } = new();
+    
+    public int NotifiedCoordinators { get; set; }
+
+    /// <summary>URL đến file PDF Sơ đồ gộp chuyến (Lệnh điều động + LIFO Load Plan)</summary>
+    public string? LifoPdfUrl { get; set; }
+}
+
+/// <summary>Thông tin tài xế được chọn cho chuyến.</summary>
+public class DriverInfo
+{
+    public Guid DriverId { get; set; }
+    public string FullName { get; set; } = null!;
+    public string PhoneNumber { get; set; } = null!;
+    public string? IdentityNumber { get; set; }
+    public string? LicenseClass { get; set; }
+    public DateOnly? LicenseExpiry { get; set; }
+    public string LicenseStatus { get; set; } = null!; // VALID, EXPIRING_SOON, EXPIRED
+}
+
+/// <summary>Hướng dẫn đường đi (Goong Directions API).</summary>
+public class NavigationInfo
+{
+    public decimal TotalDistanceKm { get; set; }
+    public int TotalDurationMinutes { get; set; }
+    public string GoongRouteOverview { get; set; } = null!; // Encoded polyline overview
+
+    /// <summary>Danh sách các bước di chuyển theo thứ tự.</summary>
+    public List<NavigationLeg> Legs { get; set; } = new();
+}
+
+/// <summary>Một đoạn đường (leg) giữa 2 điểm dừng.</summary>
+public class NavigationLeg
+{
+    public int LegIndex { get; set; }
+    public string FromAddress { get; set; } = null!;
+    public string ToAddress { get; set; } = null!;
+    public decimal DistanceKm { get; set; }
+    public int DurationMinutes { get; set; }
+
+    /// <summary>Các bước rẽ/chỉ dẫn chi tiết trong đoạn đường này.</summary>
+    public List<NavigationStep> Steps { get; set; } = new();
+}
+
+/// <summary>Một bước chỉ dẫn trong navigation (turn-by-turn).</summary>
+public class NavigationStep
+{
+    public int StepIndex { get; set; }
+    public string Instruction { get; set; } = null!; // "Rẽ phải vào đường X"
+    public decimal DistanceKm { get; set; }
+    public int DurationSeconds { get; set; }
+    public string? Maneuver { get; set; } // "turn-right", "turn-left", "straight", etc.
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  API 2: WAREHOUSE ORDER — Lệnh bốc xếp cho kho
+// ═══════════════════════════════════════════════════════════════════════
+
+/// <summary>Kết quả tạo/duyệt/từ chối lệnh kho.</summary>
+public class WarehouseOrderResult
+{
+    public Guid TripId { get; set; }
+    public string Status { get; set; } = null!; // PENDING_WH_APPROVAL, APPROVED, WH_REJECTED
+    public string? RejectionReason { get; set; }
+    public Guid? ApprovedBy { get; set; }
+    public DateTime? ApprovedAt { get; set; }
+    public VehicleInfo? Vehicle { get; set; }
+
+    /// <summary>Danh sách đơn hàng trong chuyến.</summary>
+    public List<OrderSummary> Orders { get; set; } = new();
+
+    /// <summary>Kế hoạch xếp hàng LIFO (gửi kèm cho kho).</summary>
+    public List<LoadInstruction>? LoadPlan { get; set; }
+
+    public int NotifiedUsers { get; set; }
+}
+
+/// <summary>Request từ chối lệnh kho.</summary>
+public class RejectWarehouseOrderRequest
+{
+    public string Reason { get; set; } = null!;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  API 3: IOT CHECK — Kiểm tra tín hiệu IoT xe
+// ═══════════════════════════════════════════════════════════════════════
+
+/// <summary>Trạng thái tổng hợp IoT của xe.</summary>
+public class VehicleIoTStatus
+{
+    public Guid VehicleId { get; set; }
+    public string TruckPlate { get; set; } = null!;
+    public bool HasIoTDevices { get; set; }
+    public string OverallStatus { get; set; } = null!; // ONLINE, OFFLINE, PARTIAL, NO_DEVICE
+
+    /// <summary>Danh sách thiết bị IoT gắn trên xe.</summary>
+    public List<IoTDeviceStatus> Devices { get; set; } = new();
+}
+
+/// <summary>Trạng thái chi tiết 1 thiết bị IoT.</summary>
+public class IoTDeviceStatus
+{
+    public Guid DeviceId { get; set; }
+    public int? BatteryLevel { get; set; }
+    public DateTime? LastPingTime { get; set; }
+    public string? Status { get; set; }
+    public bool IsOnline { get; set; } // LastPingTime < 10 phút trước
+
+    /// <summary>Dữ liệu telemetry gần nhất.</summary>
+    public LatestTelemetry? LatestTelemetry { get; set; }
+}
+
+/// <summary>Dữ liệu telemetry gần nhất từ thiết bị.</summary>
+public class LatestTelemetry
+{
+    public decimal Temperature { get; set; }
+    public decimal Latitude { get; set; }
+    public decimal Longitude { get; set; }
+    public DateTime Timestamp { get; set; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  API 4: SEAL & DISPATCH — Kẹp chì + kiểm tra chất hàng
+// ═══════════════════════════════════════════════════════════════════════
+
+/// <summary>Request kẹp chì và dispatch.</summary>
+public class SealAndDispatchRequest
+{
+    public string SealCode { get; set; } = null!;
+}
+
+/// <summary>Kết quả kẹp chì và dispatch.</summary>
+public class SealAndDispatchResult
+{
+    public Guid TripId { get; set; }
+    public string SealCode { get; set; } = null!;
+    public bool AllOrdersLoaded { get; set; }
+    public int TotalOrders { get; set; }
+    public int LoadedOrders { get; set; }
+    public DateTime SealedAt { get; set; }
+    public Guid SealedBy { get; set; }
+    public string TripStatus { get; set; } = null!;
+
+    /// <summary>URL tài liệu E-Waybill đã phát hành.</summary>
+    public string? WaybillUrl { get; set; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  BACKLOG — Xử lý hàng tồn
+// ═══════════════════════════════════════════════════════════════════════
+
+/// <summary>Request xử lý hàng tồn.</summary>
+public class ProcessBacklogRequest
+{
+    public string OriginWarehouseLocationId { get; set; } = null!;
+
+    /// <summary>Số ngày tồn kho tối thiểu để được xử lý. Default = 1.</summary>
+    public int BacklogDays { get; set; } = 1;
+
+    public DateTime PlannedStartTime { get; set; }
+    public DateTime PlannedEndTime { get; set; }
+}
+
+/// <summary>Kết quả xử lý hàng tồn.</summary>
+public class BacklogDispatchResult
+{
+    /// <summary>Các chuyến đã tạo cho hàng tồn.</summary>
+    public List<BacklogTripSummary> DispatchedTrips { get; set; } = new();
+
+    /// <summary>Đơn hàng không ghép được (không có xe phù hợp).</summary>
+    public List<OrderSummary> SkippedOrders { get; set; } = new();
+
+    public int TotalProcessed { get; set; }
+    public int TotalSkipped { get; set; }
+}
+
+/// <summary>Tóm tắt 1 chuyến hàng tồn đã tạo.</summary>
+public class BacklogTripSummary
+{
+    public Guid TripId { get; set; }
+    public string TruckPlate { get; set; } = null!;
+    public string DriverName { get; set; } = null!;
+    public int OrderCount { get; set; }
+    public decimal TotalWeightKg { get; set; }
+    public string TempCondition { get; set; } = null!;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  GOONG DIRECTIONS — Dữ liệu navigation nội bộ
+// ═══════════════════════════════════════════════════════════════════════
+
+/// <summary>Kết quả nội bộ từ Goong Directions API.</summary>
+public class GoongDirectionsResult
+{
+    public decimal TotalDistanceKm { get; set; }
+    public int TotalDurationSeconds { get; set; }
+    public string? OverviewPolyline { get; set; }
+    public List<GoongLeg> Legs { get; set; } = new();
+}
+
+public class GoongLeg
+{
+    public decimal DistanceKm { get; set; }
+    public int DurationSeconds { get; set; }
+    public string? StartAddress { get; set; }
+    public string? EndAddress { get; set; }
+    public List<GoongStep> Steps { get; set; } = new();
+}
+
+public class GoongStep
+{
+    public string Instruction { get; set; } = null!;
+    public decimal DistanceKm { get; set; }
+    public int DurationSeconds { get; set; }
+    public string? Maneuver { get; set; }
 }

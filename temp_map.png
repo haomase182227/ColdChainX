@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "API_KEY_UNAUTHORIZED",
+    "message": "The api_key supplied is not authorized to access the given service. Contact us at https://goong.io for assistance"
+  }
+}

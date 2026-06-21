@@ -53,13 +53,13 @@ builder.Services.AddSwaggerGen(c =>
     c.CustomSchemaIds(type => (type.FullName ?? type.Name).Replace("+", "."));
     c.SchemaFilter<CreateOrderRequestSchemaFilter>();
     c.SchemaFilter<EnumSchemaFilter>();
-    c.SchemaFilter<SuggestLoadRequestSchemaFilter>();
     c.OperationFilter<CreateOrderFormOperationFilter>();
     c.OperationFilter<RegisterOperationFilter>();
     c.OperationFilter<CreateCustomerOperationFilter>();
     c.OperationFilter<CreateDriverOperationFilter>();
     c.OperationFilter<RemoveAuthFromCreateAccountsFilter>();
-    c.OperationFilter<PlanLoadFormOperationFilter>();
+    c.OperationFilter<DispatchOperationFilter>();
+    c.OperationFilter<WarehouseReceiptOperationFilter>();
     c.UseInlineDefinitionsForEnums();
     c.OperationFilter<UpdateContractDraftOperationFilter>();
 

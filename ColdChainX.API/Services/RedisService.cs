@@ -15,53 +15,38 @@ public sealed class RedisService : IAsyncDisposable
         PropertyNamingPolicy = null
     };
 
-    private readonly Lazy<ConnectionMultiplexer>? _redis;
-    private readonly ILogger<RedisService> _logger;
-    private readonly bool _isAvailable;
+    private readonly Lazy<ConnectionMultiplexer> _redis;
 
     public RedisService(IConfiguration configuration, ILogger<RedisService> logger)
     {
-        _logger = logger;
-
         var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__Redis")
             ?? Environment.GetEnvironmentVariable("REDIS_CONNECTION_STRING")
-            ?? configuration.GetConnectionString("Redis");
+            ?? configuration.GetConnectionString("Redis")
+            ?? configuration["REDIS_CONNECTION_STRING"];
 
         if (string.IsNullOrWhiteSpace(connectionString))
         {
-            _logger.LogWarning("Redis connection string is missing. Redis features will be disabled.");
-            _isAvailable = false;
-            return;
+            throw new InvalidOperationException(
+                "Redis connection string is missing. Set ConnectionStrings__Redis or REDIS_CONNECTION_STRING in environment variables.");
         }
+
+        _redis = new Lazy<ConnectionMultiplexer>(
+            () => ConnectionMultiplexer.Connect(connectionString),
+            LazyThreadSafetyMode.ExecutionAndPublication);
 
         try
         {
-            _redis = new Lazy<ConnectionMultiplexer>(
-                () => ConnectionMultiplexer.Connect(connectionString),
-                LazyThreadSafetyMode.ExecutionAndPublication);
-
             var ping = _redis.Value.GetDatabase().Ping();
-            _logger.LogInformation("Redis connected successfully. Ping={PingMs}ms", ping.TotalMilliseconds);
-            _isAvailable = true;
+            logger.LogInformation("Redis connected successfully. Ping={PingMs}ms", ping.TotalMilliseconds);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to connect to Redis at '{ConnectionString}'. Redis features will be disabled.", connectionString);
-            _redis = null;
-            _isAvailable = false;
+            logger.LogWarning(ex, "Failed to connect to Redis on startup. Redis features will not be available or will throw errors during operation.");
         }
     }
 
-    public bool IsAvailable => _isAvailable;
-
     public async Task<long> AddTelemetryAndTrimAsync(string deviceId, TelemetryData data)
     {
-        if (!_isAvailable || _redis is null)
-        {
-            _logger.LogDebug("Redis unavailable, skipping telemetry write for device {DeviceId}.", deviceId);
-            return 0;
-        }
-
         var key = BuildHistoryKey(deviceId);
         var database = _redis.Value.GetDatabase();
         var payload = JsonSerializer.Serialize(data, JsonOptions);
@@ -74,12 +59,6 @@ public sealed class RedisService : IAsyncDisposable
 
     public async Task<IReadOnlyList<TelemetryData>> GetHistoryAsync(string deviceId)
     {
-        if (!_isAvailable || _redis is null)
-        {
-            _logger.LogDebug("Redis unavailable, returning empty history for device {DeviceId}.", deviceId);
-            return Array.Empty<TelemetryData>();
-        }
-
         var key = BuildHistoryKey(deviceId);
         var values = await _redis.Value.GetDatabase().ListRangeAsync(key, 0, MaxHistoryLength - 1);
         var history = new List<TelemetryData>(values.Length);
@@ -103,7 +82,7 @@ public sealed class RedisService : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        if (_redis is null || !_redis.IsValueCreated)
+        if (!_redis.IsValueCreated)
         {
             return;
         }

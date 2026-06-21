@@ -109,6 +109,7 @@ namespace ColdChainX.UnitTests
             public Task<string> UploadFileAsync(System.IO.Stream stream, string fileName) => Task.FromResult($"/uploads/{fileName}");
             public Task<string> UploadFileAsync(byte[] fileBytes, string fileName) => Task.FromResult($"/uploads/{fileName}");
             public Task DeleteFileAsync(string fileUrl) => Task.CompletedTask;
+            public string GetSignedUrl(string publicId) => $"http://test.com/{publicId}";
         }
 
         private class MockPdfService : IPdfService

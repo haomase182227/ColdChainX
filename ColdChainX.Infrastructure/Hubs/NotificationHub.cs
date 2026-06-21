@@ -8,7 +8,7 @@ namespace ColdChainX.Infrastructure.Hubs
     public class NotificationHub : Hub
     {
         private const string SalesGroup = "Group_Sales";
-        private static readonly string[] RoleGroups = { "Admin", "Dispatcher", "Driver", "Sales" };
+        private static readonly string[] RoleGroups = { "Admin", "Dispatcher", "Driver", "Sales", "WarehouseMonitor", "WarehouseManager", "Manager", "Loader" };
 
         public override async Task OnConnectedAsync()
         {
