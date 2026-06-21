@@ -6,7 +6,10 @@ namespace ColdChainX.Application.Interfaces
 {
     public interface IChatService
     {
-        Task<ApiResponse<PagedResult<ChatMessageResponse>>> GetMessagesAsync(Guid orderId, int pageNumber, int pageSize);
-        Task<ApiResponse<ChatMessageResponse>> SendMessageAsync(Guid orderId, Guid senderId, SendChatMessageRequest request);
+        Task<ApiResponse<PagedResult<ChatMessageResponse>>> GetMessagesAsync(Guid orderId, Guid requesterId, IEnumerable<string> requesterRoles, Guid? requesterCustomerId, int pageNumber, int pageSize);
+
+        Task<ApiResponse<ChatMessageResponse>> SendMessageAsync(Guid orderId, Guid senderId, IEnumerable<string> senderRoles, Guid? senderCustomerId, SendChatMessageRequest request);
+
+        Task<ApiResponse<ChatParticipantResponse>> GetOrderParticipantsAsync(Guid orderId, Guid requesterId, IEnumerable<string> requesterRoles, Guid? requesterCustomerId);
     }
 }
