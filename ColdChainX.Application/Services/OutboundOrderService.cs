@@ -18,20 +18,17 @@ namespace ColdChainX.Application.Services
     public class OutboundOrderService : IOutboundOrderService
     {
         private readonly IApplicationDbContext _db;
-        private readonly IInventoryService _inventoryService;
         private readonly IWarehouseAttachmentRepository _attachmentRepository;
         private readonly ComplianceRulesEngine _complianceEngine;
         private readonly ILogger<OutboundOrderService> _logger;
 
         public OutboundOrderService(
             IApplicationDbContext db,
-            IInventoryService inventoryService,
             IWarehouseAttachmentRepository attachmentRepository,
             ComplianceRulesEngine complianceEngine,
             ILogger<OutboundOrderService> logger)
         {
             _db = db;
-            _inventoryService = inventoryService;
             _attachmentRepository = attachmentRepository;
             _complianceEngine = complianceEngine;
             _logger = logger;
@@ -232,471 +229,43 @@ namespace ColdChainX.Application.Services
             });
         }
 
-        public async Task<ApiResponse<OutboundOrderResponse>> AllocateOrderAsync(Guid outboundOrderId, Guid userId)
+        public Task<ApiResponse<OutboundOrderResponse>> AllocateOrderAsync(Guid outboundOrderId, Guid userId)
         {
-            var strategy = _db.Database.CreateExecutionStrategy();
-            return await strategy.ExecuteAsync(async () =>
-            {
-                using var transaction = await _db.Database.BeginTransactionAsync();
-                try
-                {
-                    var order = await _db.OutboundOrders
-                        .Include(o => o.OutboundOrderItems)
-                        .FirstOrDefaultAsync(o => o.OutboundOrderId == outboundOrderId);
-
-                    if (order == null)
-                        return ApiResponse<OutboundOrderResponse>.Failure("Outbound order not found.");
-
-                    if (order.Status != OutboundOrderStatus.DRAFT)
-                        return ApiResponse<OutboundOrderResponse>.Failure("Only DRAFT orders can be allocated.");
-
-                    // Construct allocation request
-                    var allocationRequest = new AllocateInventoryRequest
-                    {
-                        ReferenceDocumentId = order.OutboundOrderId,
-                        Items = order.OutboundOrderItems.Select(i => new AllocateInventoryItemRequest
-                        {
-                            ItemCode = i.ItemCode,
-                            Quantity = i.Quantity
-                        }).ToList()
-                    };
-
-                    // Perform allocation
-                    var allocationResult = await _inventoryService.AllocateStockAsync(allocationRequest, userId);
-                    if (!allocationResult.Success)
-                    {
-                        await transaction.RollbackAsync();
-                        return ApiResponse<OutboundOrderResponse>.Failure($"Allocation failed: {allocationResult.Message}");
-                    }
-
-                    order.Status = OutboundOrderStatus.ALLOCATED;
-                    order.AllocatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
-                    order.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
-                    order.UpdatedBy = userId;
-
-                    await _db.SaveChangesAsync();
-                    await transaction.CommitAsync();
-
-                    _logger.LogInformation("Outbound order {OrderCode} allocated successfully.", order.OrderCode);
-                    return await GetByIdAsync(order.OutboundOrderId);
-                }
-                catch (Exception ex)
-                {
-                    await transaction.RollbackAsync();
-                    _logger.LogError(ex, "Transaction failed for allocating order: {Id}", outboundOrderId);
-                    return ApiResponse<OutboundOrderResponse>.Failure($"Allocation transaction failed: {ex.Message}");
-                }
-            });
+            return Task.FromResult(ApiResponse<OutboundOrderResponse>.Failure("Inventory module has been removed."));
         }
 
         public async Task<ApiResponse<bool>> CancelOrderAsync(Guid outboundOrderId, Guid userId)
         {
-            var strategy = _db.Database.CreateExecutionStrategy();
-            return await strategy.ExecuteAsync(async () =>
-            {
-                using var transaction = await _db.Database.BeginTransactionAsync();
-                try
-                {
-                    var order = await _db.OutboundOrders.FindAsync(outboundOrderId);
-                    if (order == null)
-                        return ApiResponse<bool>.Failure("Outbound order not found.");
-
-                    var cancelable = new[] { OutboundOrderStatus.DRAFT, OutboundOrderStatus.ALLOCATED, OutboundOrderStatus.PICKING, OutboundOrderStatus.PICKED };
-                    if (!cancelable.Contains(order.Status))
-                    {
-                        return ApiResponse<bool>.Failure($"Cannot cancel order in status '{order.Status}'.");
-                    }
-
-                    // Auto release allocations if active
-                    if (order.Status == OutboundOrderStatus.ALLOCATED 
-                        || order.Status == OutboundOrderStatus.PICKING 
-                        || order.Status == OutboundOrderStatus.PICKED)
-                    {
-                        var releaseResult = await _inventoryService.ReleaseAllocationAsync(new ReleaseAllocationRequest
-                        {
-                            ReferenceDocumentId = order.OutboundOrderId
-                        }, userId);
-
-                        if (!releaseResult.Success)
-                        {
-                            await transaction.RollbackAsync();
-                            return ApiResponse<bool>.Failure($"Failed to release order allocations: {releaseResult.Message}");
-                        }
-                    }
-
-                    order.Status = OutboundOrderStatus.CANCELLED;
-                    order.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
-                    order.UpdatedBy = userId;
-
-                    await _db.SaveChangesAsync();
-                    await transaction.CommitAsync();
-
-                    _logger.LogInformation("Outbound order {OrderCode} cancelled successfully.", order.OrderCode);
-                    return ApiResponse<bool>.SuccessResponse(true, "Outbound order cancelled successfully and associated allocations released.");
-                }
-                catch (Exception ex)
-                {
-                    await transaction.RollbackAsync();
-                    _logger.LogError(ex, "Transaction failed for cancelling order: {Id}", outboundOrderId);
-                    return ApiResponse<bool>.Failure($"Cancellation transaction failed: {ex.Message}");
-                }
-            });
+            var order = await _db.OutboundOrders.FindAsync(outboundOrderId);
+            if (order == null) return ApiResponse<bool>.Failure("Order not found.");
+            order.Status = OutboundOrderStatus.CANCELLED;
+            await _db.SaveChangesAsync();
+            return ApiResponse<bool>.SuccessResponse(true, "Cancelled.");
         }
 
-        public async Task<ApiResponse<OutboundOrderResponse>> StartPickingAsync(Guid outboundOrderId, Guid pickerId, Guid userId)
+        public Task<ApiResponse<OutboundOrderResponse>> StartPickingAsync(Guid outboundOrderId, Guid pickerId, Guid userId)
         {
-            var pickerExists = await _db.Users.AnyAsync(u => u.UserId == pickerId);
-            if (!pickerExists)
-                return ApiResponse<OutboundOrderResponse>.Failure("Picker user not found.");
-
-            var strategy = _db.Database.CreateExecutionStrategy();
-            return await strategy.ExecuteAsync(async () =>
-            {
-                using var transaction = await _db.Database.BeginTransactionAsync();
-                try
-                {
-                    var order = await _db.OutboundOrders.FindAsync(outboundOrderId);
-                    if (order == null)
-                        return ApiResponse<OutboundOrderResponse>.Failure("Outbound order not found.");
-
-                    if (order.Status != OutboundOrderStatus.ALLOCATED)
-                        return ApiResponse<OutboundOrderResponse>.Failure("Picking can only start from ALLOCATED status.");
-
-                    order.Status = OutboundOrderStatus.PICKING;
-                    order.AssignedPickerId = pickerId;
-                    order.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
-                    order.UpdatedBy = userId;
-
-                    await _db.SaveChangesAsync();
-                    await transaction.CommitAsync();
-
-                    return await GetByIdAsync(outboundOrderId);
-                }
-                catch (Exception ex)
-                {
-                    await transaction.RollbackAsync();
-                    return ApiResponse<OutboundOrderResponse>.Failure($"Failed to start picking: {ex.Message}");
-                }
-            });
+            return Task.FromResult(ApiResponse<OutboundOrderResponse>.Failure("Inventory module has been removed."));
         }
 
-        public async Task<ApiResponse<OutboundOrderResponse>> CompletePickingAsync(Guid outboundOrderId, Guid userId)
+        public Task<ApiResponse<OutboundOrderResponse>> CompletePickingAsync(Guid outboundOrderId, Guid userId)
         {
-            var strategy = _db.Database.CreateExecutionStrategy();
-            return await strategy.ExecuteAsync(async () =>
-            {
-                using var transaction = await _db.Database.BeginTransactionAsync();
-                try
-                {
-                    var order = await _db.OutboundOrders.FindAsync(outboundOrderId);
-                    if (order == null)
-                        return ApiResponse<OutboundOrderResponse>.Failure("Outbound order not found.");
-
-                    if (order.Status != OutboundOrderStatus.PICKING)
-                        return ApiResponse<OutboundOrderResponse>.Failure("Picking can only complete from PICKING status.");
-
-                    order.Status = OutboundOrderStatus.PICKED;
-                    order.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
-                    order.UpdatedBy = userId;
-
-                    await _db.SaveChangesAsync();
-                    await transaction.CommitAsync();
-
-                    return await GetByIdAsync(outboundOrderId);
-                }
-                catch (Exception ex)
-                {
-                    await transaction.RollbackAsync();
-                    return ApiResponse<OutboundOrderResponse>.Failure($"Failed to complete picking: {ex.Message}");
-                }
-            });
+            return Task.FromResult(ApiResponse<OutboundOrderResponse>.Failure("Inventory module has been removed."));
         }
 
-        public async Task<ApiResponse<OutboundOrderResponse>> ShipOrderAsync(Guid outboundOrderId, Guid userId)
+        public Task<ApiResponse<OutboundOrderResponse>> ShipOrderAsync(Guid outboundOrderId, Guid userId)
         {
-            var strategy = _db.Database.CreateExecutionStrategy();
-            return await strategy.ExecuteAsync(async () =>
-            {
-                var isOuterTransaction = _db.Database.CurrentTransaction == null;
-                using var transaction = isOuterTransaction ? await _db.Database.BeginTransactionAsync() : null;
-                try
-                {
-                    var order = await _db.OutboundOrders
-                        .Include(o => o.OutboundOrderItems)
-                        .FirstOrDefaultAsync(o => o.OutboundOrderId == outboundOrderId);
-
-                    if (order == null)
-                        return ApiResponse<OutboundOrderResponse>.Failure("Outbound order not found.");
-
-                    if (order.Status != OutboundOrderStatus.PICKED)
-                        return ApiResponse<OutboundOrderResponse>.Failure("Shipping is only allowed from PICKED status.");
-
-                    // Compliance Validation
-                    var attachments = await _attachmentRepository.GetAttachmentsByOutboundOrderIdAsync(outboundOrderId);
-                    var itemCodes = order.OutboundOrderItems.Select(i => i.ItemCode).ToList();
-                    var categories = await _db.WarehouseReceiptItems
-                        .Where(ri => itemCodes.Contains(ri.ItemCode))
-                        .Select(ri => new { ri.ItemCode, ri.ProductCategory })
-                        .Distinct()
-                        .ToListAsync();
-
-                    var itemCategories = categories
-                        .GroupBy(c => c.ItemCode)
-                        .ToDictionary(
-                            g => g.Key,
-                            g => g.Select(x => x.ProductCategory).ToList()
-                        );
-
-                    var complianceResult = _complianceEngine.ValidateOutboundOrder(order, attachments, itemCategories);
-
-                    if (!complianceResult.Passed)
-                    {
-                        var sb = new System.Text.StringBuilder();
-                        sb.AppendLine("Outbound shipment blocked due to compliance validation failure.");
-
-                        if (complianceResult.MissingRequirements.Any())
-                        {
-                            sb.AppendLine();
-                            sb.AppendLine("Missing:");
-                            foreach (var req in complianceResult.MissingRequirements)
-                            {
-                                sb.AppendLine($"* {req}");
-                            }
-                        }
-
-                        if (complianceResult.PendingRequirements.Any())
-                        {
-                            sb.AppendLine();
-                            sb.AppendLine("Pending:");
-                            foreach (var req in complianceResult.PendingRequirements)
-                            {
-                                sb.AppendLine($"* {req}");
-                            }
-                        }
-
-                        if (complianceResult.FailedRequirements.Any())
-                        {
-                            sb.AppendLine();
-                            sb.AppendLine("Failed:");
-                            foreach (var req in complianceResult.FailedRequirements)
-                            {
-                                sb.AppendLine($"* {req}");
-                            }
-                        }
-
-                        return ApiResponse<OutboundOrderResponse>.Failure(sb.ToString().TrimEnd());
-                    }
-
-                    // Lock the allocated stock records pessimistically to prevent lost updates
-                    var stockIds = await _db.InventoryAllocations
-                        .Where(a => a.ReferenceDocumentId == order.OutboundOrderId && a.Status == "ALLOCATED")
-                        .Select(a => a.StockId)
-                        .Distinct()
-                        .ToListAsync();
-
-                    if (_db.Database.ProviderName == "Npgsql.EntityFrameworkCore.PostgreSQL")
-                    {
-                        foreach (var stockId in stockIds)
-                        {
-                            await _db.InventoryStocks
-                                .FromSqlRaw("SELECT * FROM inventory_stocks WHERE stock_id = {0} FOR UPDATE", stockId)
-                                .FirstOrDefaultAsync();
-                        }
-                    }
-
-                    // 1. Fetch all active allocations for the document ID
-                    var allocations = await _db.InventoryAllocations
-                        .Include(a => a.Stock)
-                        .ThenInclude(s => s.Location)
-                        .ThenInclude(l => l.Zone)
-                        .Where(a => a.ReferenceDocumentId == order.OutboundOrderId && a.Status == "ALLOCATED")
-                        .ToListAsync();
-
-                    if (!allocations.Any())
-                    {
-                        return ApiResponse<OutboundOrderResponse>.Failure("No allocations found. Allocations might have been cancelled.");
-                    }
-
-                    // 2. Perform physical deduction of inventory (de-allocation & de-stocking)
-                    foreach (var allocation in allocations)
-                    {
-                        var stock = allocation.Stock;
-                        
-                        // Deduct quantity on hand and quantity allocated
-                        stock.QuantityOnHand -= allocation.AllocatedQuantity;
-                        stock.QuantityAllocated -= allocation.AllocatedQuantity;
-
-                        // Ensure bounds checking
-                        if (stock.QuantityOnHand < 0) stock.QuantityOnHand = 0;
-                        if (stock.QuantityAllocated < 0) stock.QuantityAllocated = 0;
-
-                        stock.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
-                        stock.UpdatedBy = userId;
-
-                        // Update location and zone pallet counts on depletion
-                        if (stock.QuantityOnHand == 0)
-                        {
-                            int prePallets = stock.PalletCount;
-                            stock.Status = "INACTIVE";
-                            stock.PalletCount = 0;
-
-                            if (stock.Location != null)
-                            {
-                                stock.Location.CurrentPallets -= prePallets;
-                                if (stock.Location.CurrentPallets < 0) stock.Location.CurrentPallets = 0;
-
-                                if (stock.Location.Zone != null)
-                                {
-                                    stock.Location.Zone.CurrentPallets -= prePallets;
-                                    if (stock.Location.Zone.CurrentPallets < 0) stock.Location.Zone.CurrentPallets = 0;
-                                }
-                            }
-                        }
-
-                        // Mark allocation as completed
-                        allocation.Status = "COMPLETED";
-
-                        // Log ledger entry
-                        var movement = new InventoryMovement
-                        {
-                            MovementId = Guid.NewGuid(),
-                            StockId = stock.StockId,
-                            ItemCode = stock.ItemCode,
-                            BatchId = stock.BatchId,
-                            MovementType = "OUTBOUND",
-                            Quantity = allocation.AllocatedQuantity,
-                            FromLocationId = stock.LocationId,
-                            ToLocationId = null,
-                            ReferenceDocumentId = order.OutboundOrderId,
-                            CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
-                            CreatedBy = userId
-                        };
-                        _db.InventoryMovements.Add(movement);
-                    }
-
-                    order.Status = OutboundOrderStatus.SHIPPED;
-                    order.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
-                    order.UpdatedBy = userId;
-
-                    await _db.SaveChangesAsync();
-                    if (isOuterTransaction && transaction != null)
-                    {
-                        await transaction.CommitAsync();
-                    }
-
-                    _logger.LogInformation("Outbound order {OrderCode} shipped physically and stock deducted.", order.OrderCode);
-                    return await GetByIdAsync(outboundOrderId);
-                }
-                catch (Exception ex)
-                {
-                    if (isOuterTransaction && transaction != null)
-                    {
-                        await transaction.RollbackAsync();
-                    }
-                    _logger.LogError(ex, "Transaction failed for shipping order: {Id}", outboundOrderId);
-                    return ApiResponse<OutboundOrderResponse>.Failure($"Failed to ship order: {ex.Message}");
-                }
-            });
+            return Task.FromResult(ApiResponse<OutboundOrderResponse>.Failure("Inventory module has been removed."));
         }
 
-        public async Task<ApiResponse<AllocationResponse>> GetAllocationsAsync(Guid outboundOrderId)
+        public Task<ApiResponse<AllocationResponse>> GetAllocationsAsync(Guid outboundOrderId)
         {
-            try
-            {
-                var order = await _db.OutboundOrders.FindAsync(outboundOrderId);
-                if (order == null)
-                    return ApiResponse<AllocationResponse>.Failure("Outbound order not found.");
-
-                var allocations = await _db.InventoryAllocations
-                    .Include(a => a.Stock)
-                        .ThenInclude(s => s.Batch)
-                    .Include(a => a.Stock)
-                        .ThenInclude(s => s.Location)
-                            .ThenInclude(l => l.Zone)
-                    .Where(a => a.ReferenceDocumentId == outboundOrderId)
-                    .ToListAsync();
-
-                var response = new AllocationResponse
-                {
-                    OutboundOrderId = order.OutboundOrderId,
-                    OrderCode = order.OrderCode,
-                    Allocations = allocations.Select(a => new AllocationItemDto
-                    {
-                        AllocationId = a.AllocationId,
-                        StockId = a.StockId,
-                        ItemCode = a.Stock.ItemCode,
-                        ItemName = a.Stock.ItemName,
-                        BatchNumber = a.Stock.Batch.BatchNumber,
-                        ExpiryDate = a.Stock.Batch.ExpiryDate,
-                        LocationCode = a.Stock.Location.LocationCode,
-                        ZoneCode = a.Stock.Location.Zone?.ZoneCode ?? "N/A",
-                        AllocatedQuantity = a.AllocatedQuantity,
-                        AvailableQuantity = a.Stock.QuantityOnHand - a.Stock.QuantityAllocated,
-                        Status = a.Status
-                    }).ToList()
-                };
-
-                return ApiResponse<AllocationResponse>.SuccessResponse(response, "Allocations retrieved successfully.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to retrieve allocations for order: {Id}", outboundOrderId);
-                return ApiResponse<AllocationResponse>.Failure($"Failed to retrieve allocations: {ex.Message}");
-            }
+            return Task.FromResult(ApiResponse<AllocationResponse>.Failure("Inventory module has been removed."));
         }
 
-        public async Task<ApiResponse<PickingListResponse>> GetPickingListAsync(Guid outboundOrderId)
+        public Task<ApiResponse<PickingListResponse>> GetPickingListAsync(Guid outboundOrderId)
         {
-            try
-            {
-                var order = await _db.OutboundOrders
-                    .Include(o => o.AssignedPicker)
-                    .FirstOrDefaultAsync(o => o.OutboundOrderId == outboundOrderId);
-
-                if (order == null)
-                    return ApiResponse<PickingListResponse>.Failure("Outbound order not found.");
-
-                var allocations = await _db.InventoryAllocations
-                    .Include(a => a.Stock)
-                        .ThenInclude(s => s.Batch)
-                    .Include(a => a.Stock)
-                        .ThenInclude(s => s.Location)
-                            .ThenInclude(l => l.Zone)
-                    .Where(a => a.ReferenceDocumentId == outboundOrderId && a.Status == "ALLOCATED")
-                    .ToListAsync();
-
-                // Sort picking list items by LocationCode ascending
-                var pickingItems = allocations
-                    .Select(a => new PickingListItemDto
-                    {
-                        ItemCode = a.Stock.ItemCode,
-                        ItemName = a.Stock.ItemName,
-                        LocationId = a.Stock.LocationId,
-                        LocationCode = a.Stock.Location.LocationCode,
-                        ZoneCode = a.Stock.Location.Zone?.ZoneCode ?? "N/A",
-                        BatchNumber = a.Stock.Batch.BatchNumber,
-                        ExpiryDate = a.Stock.Batch.ExpiryDate,
-                        QuantityToPick = a.AllocatedQuantity
-                    })
-                    .OrderBy(pi => pi.LocationCode)
-                    .ToList();
-
-                var response = new PickingListResponse
-                {
-                    OutboundOrderId = order.OutboundOrderId,
-                    OrderCode = order.OrderCode,
-                    AssignedPickerId = order.AssignedPickerId,
-                    AssignedPickerName = order.AssignedPicker?.FullName,
-                    Items = pickingItems
-                };
-
-                return ApiResponse<PickingListResponse>.SuccessResponse(response, "Picking list retrieved successfully.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to retrieve picking list for order: {Id}", outboundOrderId);
-                return ApiResponse<PickingListResponse>.Failure($"Failed to retrieve picking list: {ex.Message}");
-            }
+            return Task.FromResult(ApiResponse<PickingListResponse>.Failure("Inventory module has been removed."));
         }
 
         private OutboundOrderResponse MapToResponse(OutboundOrder order)
