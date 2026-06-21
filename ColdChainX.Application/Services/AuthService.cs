@@ -32,13 +32,14 @@ namespace ColdChainX.Application.Services
 
         public async Task<ApiResponse<AuthResponseDto>> RegisterAsync(RegisterRequest request)
         {
-            // Validate role - chỉ Admin, Dispatcher, Sales, Loader được tạo qua endpoint này
+            // Validate role - chỉ Admin, Dispatcher, Sales, Loader, WarehouseWorker được tạo qua endpoint này
             if (!string.Equals(request.Role, "Admin", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(request.Role, "Dispatcher", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(request.Role, "Sales", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(request.Role, "Loader", StringComparison.OrdinalIgnoreCase))
+                !string.Equals(request.Role, "Loader", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(request.Role, "WarehouseWorker", StringComparison.OrdinalIgnoreCase))
             {
-                return ApiResponse<AuthResponseDto>.Failure("Only Admin, Dispatcher, Sales, or Loader roles can be created through this endpoint");
+                return ApiResponse<AuthResponseDto>.Failure("Only Admin, Dispatcher, Sales, Loader, or WarehouseWorker roles can be created through this endpoint");
             }
 
             var email = request.Email.Trim().ToLowerInvariant();
