@@ -112,13 +112,7 @@ public class DispatchController : ControllerBase
     [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> LookupOrdersReady()
     {
-        var activeStocks = await _db.InventoryStocks
-            .Include(s => s.Location)
-            .Where(s => s.QuantityOnHand > 0)
-            .Select(s => new { s.CustomerId, s.ItemName, s.Location.LocationCode })
-            .ToListAsync();
-
-        var rawOrders = await (from r in _db.WarehouseReceipts
+var rawOrders = await (from r in _db.WarehouseReceipts
                                join o in _db.TransportOrders on r.OrderId equals o.OrderId
                                join w in _db.Warehouses on r.WarehouseId equals w.WarehouseId
                                join c in _db.Customers on o.CustomerId equals c.CustomerId into cg
@@ -141,10 +135,7 @@ public class DispatchController : ControllerBase
                                .ToListAsync();
 
         var orders = rawOrders.Select(x => {
-            var locCode = activeStocks
-                .Where(s => s.CustomerId == x.CustomerId && s.ItemName == x.ItemName)
-                .Select(s => s.LocationCode)
-                .FirstOrDefault() ?? "RCV-STAGE-01";
+            var locCode = "RCV-STAGE-01";
             return new
             {
                 x.OrderId,
@@ -164,237 +155,7 @@ public class DispatchController : ControllerBase
     }
 
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  API 1: MANUAL-DISPATCH — Ghép chuyến thủ công
-    // ═══════════════════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// Thủ công chọn đơn hàng IN_WAREHOUSE và gán vào một xe tải khả dụng.
-    /// Hệ thống sẽ kiểm tra nhiệt độ, tải trọng, bằng lái tài xế trước khi sinh lộ trình.
-    /// </summary>
-    [AllowAnonymous]
-    [HttpPost("seed-orders")]
-    public async Task<IActionResult> SeedOrders()
-    {
-        // 1. Seed Customer
-        var customer = await _db.Customers.FirstOrDefaultAsync(c => c.TaxCode == "0102030405");
-        if (customer == null)
-        {
-            customer = new Customer
-            {
-                CustomerId = Guid.NewGuid(),
-                CompanyName = "CleanFood Vietnam Ltd",
-                TaxCode = "0102030405",
-                Address = "KCN Tân Bình, Tân Phú, TP. HCM",
-                Email = "contact@cleanfood.vn",
-                PaymentTerm = 30,
-                Status = "ACTIVE",
-                CreatedAt = DateTime.UtcNow
-            };
-            _db.Customers.Add(customer);
-        }
-
-        // 2. Seed Warehouse Location
-        var originWarehouse = await _db.Locations.FirstOrDefaultAsync(l => l.Address.Contains("Kho Trung Chuyển Sóng Thần"));
-        if (originWarehouse == null)
-        {
-            originWarehouse = new Location
-            {
-                LocationId = Guid.NewGuid(),
-                Address = "Kho Trung Chuyển Sóng Thần - Dĩ An, Bình Dương",
-                Latitude = 10.9012m,
-                Longitude = 106.7589m,
-                Status = "ACTIVE",
-                CreatedAt = DateTime.UtcNow
-            };
-            _db.Locations.Add(originWarehouse);
-        }
-
-        // 3. Seed Destination Locations
-        var destA = await _db.Locations.FirstOrDefaultAsync(l => l.Address.Contains("Lotte Mart Nam Sài Gòn"));
-        if (destA == null)
-        {
-            destA = new Location
-            {
-                LocationId = Guid.NewGuid(),
-                Address = "Lotte Mart Nam Sài Gòn, Quận 7, TP. HCM",
-                Latitude = 10.7324m,
-                Longitude = 106.7021m,
-                Status = "ACTIVE",
-                CreatedAt = DateTime.UtcNow
-            };
-            _db.Locations.Add(destA);
-        }
-
-        var destB = await _db.Locations.FirstOrDefaultAsync(l => l.Address.Contains("Aeon Mall Tân Phú"));
-        if (destB == null)
-        {
-            destB = new Location
-            {
-                LocationId = Guid.NewGuid(),
-                Address = "Aeon Mall Tân Phú, Tân Phú, TP. HCM",
-                Latitude = 10.7915m,
-                Longitude = 106.6124m,
-                Status = "ACTIVE",
-                CreatedAt = DateTime.UtcNow
-            };
-            _db.Locations.Add(destB);
-        }
-
-        // 4. Seed Driver
-        var driver = await _db.Drivers.FirstOrDefaultAsync(d => d.IdentityNumber == "079090123456");
-        if (driver == null)
-        {
-            driver = new Driver
-            {
-                DriverId = Guid.NewGuid(),
-                FullName = "Lê Hoàng Long",
-                IdentityNumber = "079090123456",
-                PhoneNumber = "0987654321",
-                DateOfBirth = new DateOnly(1990, 5, 20),
-                JoinDate = new DateOnly(2024, 1, 1),
-                Status = "ACTIVE",
-                CreatedAt = DateTime.UtcNow
-            };
-            _db.Drivers.Add(driver);
-
-            // Seed DriverLicense
-            var license = new DriverLicense
-            {
-                LicenseId = Guid.NewGuid(),
-                DriverId = driver.DriverId,
-                LicenseNumber = "GPLX-12345",
-                LicenseClass = "FC",
-                IssueDate = new DateOnly(2023, 1, 1),
-                ExpiryDate = new DateOnly(2028, 1, 1),
-                Status = "ACTIVE",
-                CreatedAt = DateTime.UtcNow
-            };
-            _db.DriverLicenses.Add(license);
-        }
-
-        // 5. Seed Vehicle (assigned to driver)
-        var vehicle = await _db.Vehicles.FirstOrDefaultAsync(v => v.TruckPlate == "51D-888.88");
-        if (vehicle == null)
-        {
-            vehicle = new Vehicle
-            {
-                VehicleId = Guid.NewGuid(),
-                DriverId = driver.DriverId,
-                TruckPlate = "51D-888.88",
-                Brand = "Hino",
-                ManufactureYear = 2023,
-                VehicleType = "Reefer Truck 5 Tons",
-                MaxWeight = 5000,
-                MaxCbm = 20,
-                MinTemp = -20,
-                MaxTemp = 20,
-                Status = "ACTIVE",
-                CreatedAt = DateTime.UtcNow
-            };
-            _db.Vehicles.Add(vehicle);
-        }
-
-        await _db.SaveChangesAsync(); // Lưu trước các IDs để tạo orders & contracts
-
-        // Giải phóng xe 51D-888.88 khỏi các chuyến đi đang hoạt động để sẵn sàng test
-        var activeTrips = await _db.MasterTrips
-            .Where(t => t.VehicleId == vehicle.VehicleId && t.Status != "COMPLETED" && t.Status != "CANCELLED")
-            .ToListAsync();
-        foreach (var trip in activeTrips)
-        {
-            trip.Status = "CANCELLED";
-        }
-        await _db.SaveChangesAsync();
-
-        // Clear old test data first if it exists
-        var testOrders = await _db.TransportOrders.Where(o => o.TrackingCode.StartsWith("ORD-TEST-")).ToListAsync();
-        if (testOrders.Any())
-        {
-            var testOrderIds = testOrders.Select(o => o.OrderId).ToList();
-            var testContracts = await _db.CustomerContracts.Where(c => testOrderIds.Contains(c.OrderId ?? Guid.Empty)).ToListAsync();
-            _db.CustomerContracts.RemoveRange(testContracts);
-            _db.TransportOrders.RemoveRange(testOrders);
-            await _db.SaveChangesAsync();
-        }
-
-        // 6. Seed TransportOrders
-        var ordersToSeed = new List<(string Code, string Name, string Temp, decimal Weight, decimal Cbm, Guid Dest, int Qty, string Pack)>
-        {
-            ("ORD-TEST-001", "Thịt bò Kobe nhập khẩu", "FROZEN", 1500, 6, destA.LocationId, 15, "Thùng carton"),
-            ("ORD-TEST-002", "Sữa chua Vinamilk", "2 to 8", 2000, 8, destA.LocationId, 100, "Thùng carton"),
-            ("ORD-TEST-003", "Trái cây tươi nhập khẩu", "2 to 8", 1200, 5, destB.LocationId, 50, "Sọt nhựa")
-        };
-
-        var createdOrdersCount = 0;
-        var createdContractsCount = 0;
-
-        foreach (var info in ordersToSeed)
-        {
-            var existingOrder = await _db.TransportOrders.FirstOrDefaultAsync(o => o.TrackingCode == info.Code);
-            if (existingOrder == null)
-            {
-                var newOrder = new TransportOrder
-                {
-                    OrderId = Guid.NewGuid(),
-                    TrackingCode = info.Code,
-                    ItemName = info.Name,
-                    Category = "Thực phẩm",
-                    TempCondition = info.Temp,
-                    ExpectedWeightKg = info.Weight,
-                    ExpectedCbm = info.Cbm,
-                    PickupLocation = originWarehouse.LocationId,
-                    DestLocation = info.Dest,
-                    CustomerId = customer.CustomerId,
-                    Quantity = info.Qty,
-                    PackingType = info.Pack,
-                    Status = "IN_WAREHOUSE",
-                    CargoValue = info.Weight * 200000,
-                    CreatedAt = DateTime.UtcNow
-                };
-                _db.TransportOrders.Add(newOrder);
-                createdOrdersCount++;
-
-                // Seed Contract
-                var contract = new CustomerContract
-                {
-                    ContractId = Guid.NewGuid(),
-                    CustomerId = customer.CustomerId,
-                    OrderId = newOrder.OrderId,
-                    ContractNumber = $"HD-2026-{info.Code.Replace("ORD-TEST-", "")}",
-                    SignedDate = new DateOnly(2026, 6, 1),
-                    ExpiredDate = new DateOnly(2027, 12, 31),
-                    FileUrl = $"https://res.cloudinary.com/dbt5zpage/image/upload/coldchainx/contract_{info.Code}.pdf",
-                    SignedFileUrl = $"https://res.cloudinary.com/dbt5zpage/image/upload/coldchainx/contract_{info.Code}.pdf",
-                    SentAt = DateTime.UtcNow.AddDays(-2),
-                    UploadedSignedAt = DateTime.UtcNow.AddDays(-1),
-                    VerifiedAt = DateTime.UtcNow.AddMinutes(-30),
-                    Status = "SIGNED",
-                    CreatedAt = DateTime.UtcNow
-                };
-                _db.CustomerContracts.Add(contract);
-                createdContractsCount++;
-            }
-        }
-
-        await _db.SaveChangesAsync();
-
-        return Ok(new
-        {
-            Success = true,
-            Message = "Đã nạp dữ liệu chuẩn thành công.",
-            Data = new
-            {
-                Customer = customer.CompanyName,
-                Warehouse = originWarehouse.Address,
-                Destinations = new[] { destA.Address, destB.Address },
-                Driver = driver.FullName,
-                Vehicle = $"{vehicle.TruckPlate} (Tải: {vehicle.MaxWeight}kg, Temp: {vehicle.MinTemp}°C đến {vehicle.MaxTemp}°C)",
-                NewOrdersCreated = createdOrdersCount,
-                NewContractsCreated = createdContractsCount
-            }
-        });
-    }
 
     [HttpPost("manual-dispatch")]
     [Consumes("multipart/form-data")]
@@ -715,3 +476,4 @@ public class DispatchController : ControllerBase
         return parts[0].Trim();
     }
 }
+
