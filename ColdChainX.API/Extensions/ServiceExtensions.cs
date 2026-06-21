@@ -106,12 +106,7 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IChatService, ChatService>();
             services.AddScoped<INotificationService, NotificationService>();
             services.AddScoped<IWarehouseReceiptService, WarehouseReceiptService>();
-            services.AddScoped<IInventoryService, InventoryService>();
             services.AddScoped<IOutboundOrderService, OutboundOrderService>();
-            services.AddScoped<IInventoryHoldRepository, InventoryHoldRepository>();
-            services.AddScoped<IInventoryHoldService, InventoryHoldService>();
-            services.AddScoped<ICycleCountRepository, CycleCountRepository>();
-            services.AddScoped<ICycleCountService, CycleCountService>();
             services.AddScoped<IFleetManagementService, FleetManagementService>();
             services.AddHostedService<FleetComplianceWorker>();
             
@@ -121,6 +116,7 @@ namespace ColdChainX.API.Extensions
 
             services.AddSignalR();
 
+            services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(ColdChainX.Application.Features.Inbound.Commands.ProcessInboundQcCommand).Assembly));
             services.AddAutoMapper(typeof(MappingProfile));
 
             services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();

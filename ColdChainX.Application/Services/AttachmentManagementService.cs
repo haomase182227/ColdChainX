@@ -67,7 +67,6 @@ namespace ColdChainX.Application.Services
                     // Targets
                     WarehouseReceiptId = request.WarehouseReceiptId,
                     WarehouseReceiptItemId = request.WarehouseReceiptItemId,
-                    InventoryAdjustmentId = request.InventoryAdjustmentId,
                     OutboundOrderId = request.OutboundOrderId,
 
                     // Optional metadata
@@ -328,7 +327,6 @@ namespace ColdChainX.Application.Services
                 VerifiedAt = a.VerifiedAt,
                 WarehouseReceiptId = a.WarehouseReceiptId,
                 WarehouseReceiptItemId = a.WarehouseReceiptItemId,
-                InventoryAdjustmentId = a.InventoryAdjustmentId,
                 OutboundOrderId = a.OutboundOrderId,
                 CreatedAt = a.CreatedAt,
                 CreatedBy = a.CreatedBy
