@@ -24,7 +24,6 @@ namespace ColdChainX.Infrastructure.Repositories
             return await _db.WarehouseEvidenceAttachments
                 .Include(a => a.WarehouseReceipt)
                 .Include(a => a.WarehouseReceiptItem)
-                .Include(a => a.InventoryAdjustment)
                 .Include(a => a.OutboundOrder)
                 .FirstOrDefaultAsync(a => a.AttachmentId == attachmentId);
         }
@@ -50,13 +49,6 @@ namespace ColdChainX.Infrastructure.Repositories
 
             return await _db.WarehouseEvidenceAttachments
                 .Where(a => a.WarehouseReceiptItemId.HasValue && receiptItemIds.Contains(a.WarehouseReceiptItemId.Value))
-                .ToListAsync();
-        }
-
-        public async Task<List<WarehouseEvidenceAttachment>> GetAttachmentsByAdjustmentIdAsync(Guid adjustmentId)
-        {
-            return await _db.WarehouseEvidenceAttachments
-                .Where(a => a.InventoryAdjustmentId == adjustmentId)
                 .ToListAsync();
         }
 
