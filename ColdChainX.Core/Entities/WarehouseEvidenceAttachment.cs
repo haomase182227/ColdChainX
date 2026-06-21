@@ -36,7 +36,6 @@ public class WarehouseEvidenceAttachment
     // Relation bindings (Concrete polymorphic FKs)
     public Guid? WarehouseReceiptId { get; set; }
     public Guid? WarehouseReceiptItemId { get; set; }
-    public Guid? InventoryAdjustmentId { get; set; }
     public Guid? OutboundOrderId { get; set; }
 
     // Upload Metadata
@@ -46,6 +45,5 @@ public class WarehouseEvidenceAttachment
     // Navigations
     public virtual WarehouseReceipt? WarehouseReceipt { get; set; }
     public virtual WarehouseReceiptItem? WarehouseReceiptItem { get; set; }
-    public virtual InventoryAdjustment? InventoryAdjustment { get; set; }
     public virtual OutboundOrder? OutboundOrder { get; set; }
 }
