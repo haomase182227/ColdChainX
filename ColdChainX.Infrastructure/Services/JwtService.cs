@@ -52,6 +52,11 @@ namespace ColdChainX.Infrastructure.Services
                 claims.Add(new SecurityClaim("CustomerId", customerId.Value.ToString()));
             }
 
+            if (user.WarehouseId.HasValue)
+            {
+                claims.Add(new SecurityClaim("WarehouseId", user.WarehouseId.Value.ToString()));
+            }
+
             var token = new JwtSecurityToken(
                 issuer: _settings.Issuer,
                 audience: _settings.Audience,
