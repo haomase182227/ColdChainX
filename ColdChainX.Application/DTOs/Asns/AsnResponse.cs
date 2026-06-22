@@ -11,6 +11,10 @@ namespace ColdChainX.Application.DTOs.Asns
         public TimeSpan CutOffTime { get; set; }
         public string QrCodeValue { get; set; } = null!;
         public string Status { get; set; } = null!;
+        public string? Phone { get; set; }
+        public Guid? WarehouseId { get; set; }
+        public Guid? CustomerId { get; set; }
+        public string? FileUrl { get; set; }
         public DateTime? CreatedAt { get; set; }
     }
 }

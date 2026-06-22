@@ -30,11 +30,19 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet("schedule")]
-        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,WarehouseOperator,Loader")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetSchedule([FromQuery] DateOnly? date = null, [FromQuery] string? status = null)
         {
             var targetDate = date ?? DateOnly.FromDateTime(DateTime.Today);
             var result = await _asnService.GetScheduleAsync(targetDate, status);
+            return Ok(result);
+        }
+
+        [HttpGet("customer/{customerId:guid}")]
+        [Authorize]
+        public async Task<IActionResult> GetByCustomer(Guid customerId)
+        {
+            var result = await _asnService.GetAsnsByCustomerIdAsync(customerId);
             return Ok(result);
         }
     }
