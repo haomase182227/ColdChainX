@@ -65,10 +65,14 @@ namespace ColdChainX.API.Extensions
             }
 
             services.AddDbContext<ApplicationDbContext>(options =>
+            {
                 options.UseNpgsql(connectionString, b => b.EnableRetryOnFailure(
                     maxRetryCount: 5,
                     maxRetryDelay: TimeSpan.FromSeconds(10),
-                    errorCodesToAdd: null)));
+                    errorCodesToAdd: null));
+                options.ConfigureWarnings(warnings => 
+                    warnings.Ignore(new Microsoft.Extensions.Logging.EventId(10622)));
+            });
 
             services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<ApplicationDbContext>());
 
@@ -79,7 +83,6 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IWarehouseReceiptRepository, WarehouseReceiptRepository>();
             services.AddScoped<IVehicleRepository, VehicleRepository>();
             services.AddScoped<IDriverRepository, DriverRepository>();
-            services.AddScoped<IWarehouseAttachmentRepository, WarehouseAttachmentRepository>();
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IVehicleService, VehicleService>();
             services.AddScoped<IDriverService, DriverService>();
@@ -95,7 +98,6 @@ namespace ColdChainX.API.Extensions
                 client.Timeout = TimeSpan.FromSeconds(20);
             });
             services.AddScoped<IFileService, FileService>();
-            services.AddScoped<IAttachmentManagementService, AttachmentManagementService>();
             services.AddScoped<ComplianceRulesEngine>();
             services.AddScoped<IOrderService, OrderService>();
             services.AddScoped<IQuotationService, QuotationService>();
@@ -108,6 +110,8 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IWarehouseReceiptService, WarehouseReceiptService>();
             services.AddScoped<IOutboundOrderService, OutboundOrderService>();
             services.AddScoped<IFleetManagementService, FleetManagementService>();
+            services.AddScoped<IPdfGeneratorService, PdfGeneratorService>();
+            services.AddScoped<IWarehouseFlowService, WarehouseFlowService>();
             services.AddHostedService<FleetComplianceWorker>();
             
             // Dispatch and Load Planning

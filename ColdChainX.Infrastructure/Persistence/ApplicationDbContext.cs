@@ -94,8 +94,6 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
 
     public virtual DbSet<WarehouseReceipt> WarehouseReceipts { get; set; }
 
-    public virtual DbSet<WarehouseReceiptItem> WarehouseReceiptItems { get; set; }
-
     public virtual DbSet<WarehouseZone> WarehouseZones { get; set; }
 
     public virtual DbSet<WeightTier> WeightTiers { get; set; }
@@ -110,8 +108,6 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
 
     public virtual DbSet<PenaltyBill> PenaltyBills { get; set; }
 
-    public virtual DbSet<WarehouseEvidenceAttachment> WarehouseEvidenceAttachments { get; set; }
-    public virtual DbSet<AttachmentAuditHistory> AttachmentAuditHistories { get; set; }
     public virtual DbSet<ComplianceZoningRule> ComplianceZoningRules { get; set; }
 
 
@@ -153,6 +149,10 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.AsnId).HasColumnName("asn_id");
             entity.Property(e => e.AsnCode).HasColumnName("asn_code").HasMaxLength(50);
             entity.Property(e => e.OrderId).HasColumnName("order_id");
+            entity.Property(e => e.Phone).HasMaxLength(50).HasColumnName("phone");
+            entity.Property(e => e.WarehouseId).HasColumnName("warehouse_id");
+            entity.Property(e => e.FileUrl).HasMaxLength(500).HasColumnName("file_url");
+            entity.Property(e => e.CustomerId).HasColumnName("customer_id");
             entity.Property(e => e.RequestedDropoffTime).HasColumnType("timestamp without time zone").HasColumnName("requested_dropoff_time");
             entity.Property(e => e.QrCodeValue).HasColumnName("qr_code_value").HasMaxLength(500);
             entity.Property(e => e.Status).HasColumnName("status").HasMaxLength(30);
@@ -1596,6 +1596,9 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasMaxLength(50)
                 .HasColumnName("username");
 
+            entity.Property(e => e.WarehouseId)
+                .HasColumnName("warehouse_id");
+
             entity.Property(e => e.Phone)
                 .HasMaxLength(20)
                 .HasColumnName("phone");
@@ -1827,89 +1830,7 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasConstraintName("fk_wr_wh");
         });
 
-        modelBuilder.Entity<WarehouseReceiptItem>(entity =>
-        {
-            entity.HasKey(e => e.ItemId).HasName("warehouse_receipt_items_pkey");
 
-            entity.ToTable("warehouse_receipt_items");
-
-            entity.HasIndex(e => e.ReceiptId).HasDatabaseName("idx_warehouse_receipt_items_receipt_id");
-            entity.HasIndex(e => e.Barcode).HasDatabaseName("idx_warehouse_receipt_items_barcode");
-            entity.HasIndex(e => e.ItemCode).HasDatabaseName("idx_warehouse_receipt_items_item_code");
-
-            entity.Property(e => e.ItemId)
-                .HasDefaultValueSql("gen_random_uuid()")
-                .HasColumnName("item_id");
-            entity.Property(e => e.ActualQty)
-                .HasPrecision(10, 2)
-                .HasColumnName("actual_qty");
-            entity.Property(e => e.ConditionStatus)
-                .HasMaxLength(50)
-                .HasDefaultValueSql("'GOOD'::character varying")
-                .HasColumnName("condition_status");
-            entity.Property(e => e.ExpectedQty)
-                .HasPrecision(10, 2)
-                .HasColumnName("expected_qty");
-            entity.Property(e => e.ItemCode)
-                .HasMaxLength(50)
-                .HasColumnName("item_code");
-            entity.Property(e => e.ItemName)
-                .HasMaxLength(255)
-                .HasColumnName("item_name");
-            entity.Property(e => e.Note).HasColumnName("note");
-            entity.Property(e => e.ReceiptId).HasColumnName("receipt_id");
-            entity.Property(e => e.Unit)
-                .HasMaxLength(20)
-                .HasColumnName("unit");
-
-            entity.Property(e => e.ActualWeightKg)
-                .HasPrecision(10, 2)
-                .HasColumnName("actual_weight_kg");
-
-            entity.Property(e => e.LengthCm)
-                .HasPrecision(10, 2)
-                .HasColumnName("length_cm");
-
-            entity.Property(e => e.WidthCm)
-                .HasPrecision(10, 2)
-                .HasColumnName("width_cm");
-
-            entity.Property(e => e.HeightCm)
-                .HasPrecision(10, 2)
-                .HasColumnName("height_cm");
-
-            entity.Property(e => e.Barcode)
-                .HasMaxLength(100)
-                .HasColumnName("barcode");
-
-            entity.Property(e => e.QrCode)
-                .HasMaxLength(255)
-                .HasColumnName("qr_code");
-
-            entity.Property(e => e.BatchNumber)
-                .IsRequired()
-                .HasMaxLength(50)
-                .HasColumnName("batch_number");
-
-            entity.Property(e => e.ProductCategory)
-                .HasColumnName("product_category");
-
-            entity.Property(e => e.CountryOfOrigin)
-                .IsRequired()
-                .HasMaxLength(100)
-                .HasColumnName("country_of_origin");
-
-            entity.Property(e => e.ManufacturedDate)
-                .HasColumnName("manufactured_date");
-
-            entity.Property(e => e.ExpiryDate)
-                .HasColumnName("expiry_date");
-
-            entity.HasOne(d => d.Receipt).WithMany(p => p.WarehouseReceiptItems)
-                .HasForeignKey(d => d.ReceiptId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("fk_wri_wr");
-        });
 
         modelBuilder.Entity<WarehouseZone>(entity =>
         {
@@ -2150,162 +2071,7 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasConstraintName("fk_item_outbound_order");
         });
 
-        modelBuilder.Entity<WarehouseEvidenceAttachment>(entity =>
-        {
-            entity.HasKey(e => e.AttachmentId).HasName("warehouse_evidence_attachments_pkey");
-            entity.ToTable("warehouse_evidence_attachments");
 
-            entity.Property(e => e.AttachmentId)
-                .HasDefaultValueSql("gen_random_uuid()")
-                .HasColumnName("attachment_id");
-
-            entity.Property(e => e.FileName)
-                .HasMaxLength(255)
-                .HasColumnName("file_name");
-
-            entity.Property(e => e.FilePath)
-                .HasMaxLength(512)
-                .HasColumnName("file_path");
-
-            entity.Property(e => e.FileUrl)
-                .HasMaxLength(1024)
-                .HasColumnName("file_url");
-
-            entity.Property(e => e.FileSize)
-                .HasColumnName("file_size");
-
-            entity.Property(e => e.ContentType)
-                .HasMaxLength(100)
-                .HasColumnName("content_type");
-
-            entity.Property(e => e.Format)
-                .HasColumnName("format");
-
-            entity.Property(e => e.Category)
-                .HasColumnName("category");
-
-            entity.Property(e => e.SubCategory)
-                .HasColumnName("sub_category");
-
-            entity.Property(e => e.Status)
-                .HasColumnName("status");
-
-            entity.Property(e => e.DocumentNumber)
-                .HasMaxLength(100)
-                .HasColumnName("document_number");
-
-            entity.Property(e => e.Issuer)
-                .HasMaxLength(150)
-                .HasColumnName("issuer");
-
-            entity.Property(e => e.IssueDate)
-                .HasColumnName("issue_date");
-
-            entity.Property(e => e.ExpiryDate)
-                .HasColumnName("expiry_date");
-
-            entity.Property(e => e.CapturedValue)
-                .HasPrecision(18, 4)
-                .HasColumnName("captured_value");
-
-            entity.Property(e => e.SealNumber)
-                .HasMaxLength(100)
-                .HasColumnName("seal_number");
-
-            entity.Property(e => e.RejectionReason)
-                .HasMaxLength(255)
-                .HasColumnName("rejection_reason");
-
-            entity.Property(e => e.VerifiedBy)
-                .HasColumnName("verified_by");
-
-            entity.Property(e => e.VerifiedAt)
-                .HasColumnType("timestamp without time zone")
-                .HasColumnName("verified_at");
-
-            entity.Property(e => e.WarehouseReceiptId)
-                .HasColumnName("warehouse_receipt_id");
-
-            entity.Property(e => e.WarehouseReceiptItemId)
-                .HasColumnName("warehouse_receipt_item_id");
-
-            entity.Property(e => e.OutboundOrderId)
-                .HasColumnName("outbound_order_id");
-
-            entity.Property(e => e.CreatedAt)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP")
-                .HasColumnType("timestamp without time zone")
-                .HasColumnName("created_at");
-
-            entity.Property(e => e.CreatedBy)
-                .HasColumnName("created_by");
-
-            // Relationships
-            entity.HasOne(d => d.WarehouseReceipt).WithMany()
-                .HasForeignKey(d => d.WarehouseReceiptId)
-                .OnDelete(DeleteBehavior.SetNull)
-                .HasConstraintName("fk_att_receipt");
-
-            entity.HasOne(d => d.WarehouseReceiptItem).WithMany()
-                .HasForeignKey(d => d.WarehouseReceiptItemId)
-                .OnDelete(DeleteBehavior.SetNull)
-                .HasConstraintName("fk_att_receipt_item");
-
-            entity.HasOne(d => d.OutboundOrder).WithMany()
-                .HasForeignKey(d => d.OutboundOrderId)
-                .OnDelete(DeleteBehavior.SetNull)
-                .HasConstraintName("fk_att_outbound");
-
-            // Check constraint
-            entity.ToTable(t => t.HasCheckConstraint("chk_attachment_target",
-                "(warehouse_receipt_id IS NOT NULL)::int + " +
-                "(warehouse_receipt_item_id IS NOT NULL)::int + " +
-                "(outbound_order_id IS NOT NULL)::int = 1"));
-
-            // Indexes
-            entity.HasIndex(e => e.WarehouseReceiptId).HasDatabaseName("idx_att_receipt");
-            entity.HasIndex(e => e.WarehouseReceiptItemId).HasDatabaseName("idx_att_receipt_item");
-            entity.HasIndex(e => e.OutboundOrderId).HasDatabaseName("idx_att_outbound");
-        });
-
-        modelBuilder.Entity<AttachmentAuditHistory>(entity =>
-        {
-            entity.HasKey(e => e.HistoryId).HasName("attachment_audit_history_pkey");
-            entity.ToTable("attachment_audit_history");
-
-            entity.Property(e => e.HistoryId)
-                .HasDefaultValueSql("gen_random_uuid()")
-                .HasColumnName("history_id");
-
-            entity.Property(e => e.AttachmentId)
-                .HasColumnName("attachment_id");
-
-            entity.Property(e => e.PreviousStatus)
-                .HasColumnName("previous_status");
-
-            entity.Property(e => e.NewStatus)
-                .HasColumnName("new_status");
-
-            entity.Property(e => e.Reason)
-                .HasMaxLength(255)
-                .HasColumnName("reason");
-
-            entity.Property(e => e.ChangedBy)
-                .HasColumnName("changed_by");
-
-            entity.Property(e => e.ChangedAt)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP")
-                .HasColumnType("timestamp without time zone")
-                .HasColumnName("changed_at");
-
-            // Relationships
-            entity.HasOne(d => d.Attachment).WithMany()
-                .HasForeignKey(d => d.AttachmentId)
-                .OnDelete(DeleteBehavior.Cascade)
-                .HasConstraintName("fk_history_attachment");
-
-            entity.HasIndex(e => e.AttachmentId).HasDatabaseName("idx_history_attachment");
-        });
 
         modelBuilder.Entity<ComplianceZoningRule>(entity =>
         {
@@ -2395,33 +2161,15 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.RouteId).HasColumnName("route_id");
             entity.Property(e => e.TripId).HasColumnName("trip_id");
 
-            entity.Property(e => e.ItemName)
-                .HasMaxLength(200)
-                .HasColumnName("item_name");
-
-            entity.Property(e => e.ItemCode)
-                .HasMaxLength(100)
-                .HasColumnName("item_code");
-
-            entity.Property(e => e.BatchNumber)
-                .HasMaxLength(100)
-                .HasColumnName("batch_number");
-
             entity.Property(e => e.StorageLocation)
                 .HasMaxLength(200)
                 .HasColumnName("storage_location");
 
             entity.Property(e => e.Quantity).HasColumnName("quantity");
-            entity.Property(e => e.ExpectedWeightKg).HasPrecision(18, 2).HasColumnName("expected_weight_kg");
             entity.Property(e => e.ActualWeightKg).HasPrecision(18, 2).HasColumnName("actual_weight_kg");
-            entity.Property(e => e.ExpectedCbm).HasPrecision(18, 4).HasColumnName("expected_cbm");
             entity.Property(e => e.ActualCbm).HasPrecision(18, 4).HasColumnName("actual_cbm");
-            entity.Property(e => e.LengthCm).HasPrecision(18, 2).HasColumnName("length_cm");
-            entity.Property(e => e.WidthCm).HasPrecision(18, 2).HasColumnName("width_cm");
-            entity.Property(e => e.HeightCm).HasPrecision(18, 2).HasColumnName("height_cm");
             entity.Property(e => e.RequiredTemperature).HasPrecision(8, 2).HasColumnName("required_temperature");
             entity.Property(e => e.RecordedTemperature).HasPrecision(8, 2).HasColumnName("recorded_temperature");
-            entity.Property(e => e.MaxDiffPercent).HasPrecision(8, 2).HasColumnName("max_diff_percent");
 
             entity.Property(e => e.State)
                 .HasConversion<string>()
@@ -2429,14 +2177,10 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasColumnName("state");
 
             entity.Property(e => e.DiscrepancyReason).HasColumnName("discrepancy_reason");
-            entity.Property(e => e.GrnPdfUrl).HasMaxLength(500).HasColumnName("grn_pdf_url");
-            entity.Property(e => e.DiscrepancyPdfUrl).HasMaxLength(500).HasColumnName("discrepancy_pdf_url");
-            entity.Property(e => e.ReturnPdfUrl).HasMaxLength(500).HasColumnName("return_pdf_url");
+            entity.Property(e => e.ReceiptId).HasColumnName("receipt_id");
+            entity.Property(e => e.EvidenceImageUrl).HasMaxLength(255).HasColumnName("evidence_image_url");
             entity.Property(e => e.InboundTime).HasColumnType("timestamp without time zone").HasColumnName("inbound_time");
-            entity.Property(e => e.PickedAt).HasColumnType("timestamp without time zone").HasColumnName("picked_at");
             entity.Property(e => e.TripId).HasColumnName("trip_id");
-            entity.Property(e => e.ReceiptItemId).HasColumnName("receipt_item_id");
-            entity.Property(e => e.ShippedAt).HasColumnType("timestamp without time zone").HasColumnName("shipped_at");
             entity.Property(e => e.SlaDeadline).HasColumnType("timestamp without time zone").HasColumnName("sla_deadline");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP").HasColumnType("timestamp without time zone").HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt).HasColumnType("timestamp without time zone").HasColumnName("updated_at");
@@ -2465,11 +2209,6 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasForeignKey(e => e.TripId)
                 .OnDelete(DeleteBehavior.SetNull)
                 .HasConstraintName("fk_lpns_trip");
-
-            entity.HasOne(e => e.ReceiptItem).WithMany()
-                .HasForeignKey(e => e.ReceiptItemId)
-                .OnDelete(DeleteBehavior.SetNull)
-                .HasConstraintName("fk_lpns_receipt_item");
         });
 
         modelBuilder.Entity<PenaltyBill>(entity =>
@@ -2522,29 +2261,6 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasConstraintName("fk_penalty_bills_paid_by");
         });
 
-
-        modelBuilder.Entity<ChatMessage>()
-            .HasQueryFilter(e => e.Sender.DeletedAt == null && e.Receiver.DeletedAt == null);
-        modelBuilder.Entity<ClaimEvidence>()
-            .HasQueryFilter(e => e.UploadedByNavigation.DeletedAt == null);
-
-        modelBuilder.Entity<ExpenseAdvance>()
-            .HasQueryFilter(e => e.ApprovedByNavigation.DeletedAt == null);
-        modelBuilder.Entity<ExpenseReceipt>()
-            .HasQueryFilter(e => e.Advance.ApprovedByNavigation.DeletedAt == null);
-        modelBuilder.Entity<IncidentReport>()
-            .HasQueryFilter(e => e.ReportedByNavigation.DeletedAt == null);
-
-        modelBuilder.Entity<MaintenanceTicket>()
-            .HasQueryFilter(e => e.CreatedByNavigation.DeletedAt == null);
-        modelBuilder.Entity<Notification>()
-            .HasQueryFilter(e => e.User.DeletedAt == null);
-        modelBuilder.Entity<TransportDocument>()
-            .HasQueryFilter(e => e.UploadedByNavigation.DeletedAt == null);
-        modelBuilder.Entity<WarehouseReceipt>()
-            .HasQueryFilter(e => e.Receiver.DeletedAt == null);
-        modelBuilder.Entity<WarehouseReceiptItem>()
-            .HasQueryFilter(e => e.Receipt.Receiver.DeletedAt == null);
 
         OnModelCreatingPartial(modelBuilder);
 

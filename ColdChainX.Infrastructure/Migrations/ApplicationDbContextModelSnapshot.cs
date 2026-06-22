@@ -97,50 +97,6 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.ToTable("alert_logs", "public");
                 });
 
-            modelBuilder.Entity("ColdChainX.Core.Entities.AttachmentAuditHistory", b =>
-                {
-                    b.Property<Guid>("HistoryId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("history_id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<Guid>("AttachmentId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("attachment_id");
-
-                    b.Property<DateTime>("ChangedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("changed_at")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<Guid>("ChangedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("changed_by");
-
-                    b.Property<int>("NewStatus")
-                        .HasColumnType("integer")
-                        .HasColumnName("new_status");
-
-                    b.Property<int?>("PreviousStatus")
-                        .HasColumnType("integer")
-                        .HasColumnName("previous_status");
-
-                    b.Property<string>("Reason")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("reason");
-
-                    b.HasKey("HistoryId")
-                        .HasName("attachment_audit_history_pkey");
-
-                    b.HasIndex("AttachmentId")
-                        .HasDatabaseName("idx_history_attachment");
-
-                    b.ToTable("attachment_audit_history", "public");
-                });
-
             modelBuilder.Entity("ColdChainX.Core.Entities.ChatMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -726,181 +682,6 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.ToTable("customer_contracts", "public");
                 });
 
-            modelBuilder.Entity("ColdChainX.Core.Entities.CycleCountEntry", b =>
-                {
-                    b.Property<Guid>("EntryId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("entry_id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<Guid?>("AdjustmentId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("adjustment_id");
-
-                    b.Property<Guid?>("BatchId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("batch_id");
-
-                    b.Property<DateTime?>("CountedAt")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("counted_at");
-
-                    b.Property<Guid?>("CountedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("counted_by");
-
-                    b.Property<int?>("CountedPallets")
-                        .HasColumnType("integer")
-                        .HasColumnName("counted_pallets");
-
-                    b.Property<decimal?>("CountedQuantity")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("counted_quantity");
-
-                    b.Property<string>("ItemCode")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("item_code");
-
-                    b.Property<Guid>("LocationId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("location_id");
-
-                    b.Property<string>("ManagerNotes")
-                        .HasColumnType("text")
-                        .HasColumnName("manager_notes");
-
-                    b.Property<Guid>("PlanId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("plan_id");
-
-                    b.Property<DateTime?>("ReviewedAt")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("reviewed_at");
-
-                    b.Property<Guid?>("ReviewedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("reviewed_by");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("status");
-
-                    b.Property<Guid?>("StockId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("stock_id");
-
-                    b.Property<int>("SystemPallets")
-                        .HasColumnType("integer")
-                        .HasColumnName("system_pallets");
-
-                    b.Property<decimal>("SystemQuantity")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("system_quantity");
-
-                    b.Property<int?>("VariancePallets")
-                        .HasColumnType("integer")
-                        .HasColumnName("variance_pallets");
-
-                    b.Property<decimal?>("VarianceQuantity")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("variance_quantity");
-
-                    b.HasKey("EntryId")
-                        .HasName("cycle_count_entries_pkey");
-
-                    b.HasIndex("AdjustmentId");
-
-                    b.HasIndex("BatchId");
-
-                    b.HasIndex("CountedBy");
-
-                    b.HasIndex("LocationId");
-
-                    b.HasIndex("PlanId");
-
-                    b.HasIndex("ReviewedBy");
-
-                    b.HasIndex("StockId");
-
-                    b.ToTable("cycle_count_entries", "public");
-                });
-
-            modelBuilder.Entity("ColdChainX.Core.Entities.CycleCountPlan", b =>
-                {
-                    b.Property<Guid>("PlanId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("plan_id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<Guid?>("AssignedToUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("assigned_to_user_id");
-
-                    b.Property<DateTime?>("CompletedAt")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("completed_at");
-
-                    b.Property<Guid?>("CompletedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("completed_by");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<string>("Notes")
-                        .HasColumnType("text")
-                        .HasColumnName("notes");
-
-                    b.Property<string>("PlanCode")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("plan_code");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("status");
-
-                    b.Property<Guid>("WarehouseId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("warehouse_id");
-
-                    b.HasKey("PlanId")
-                        .HasName("cycle_count_plans_pkey");
-
-                    b.HasIndex("AssignedToUserId");
-
-                    b.HasIndex("CompletedBy");
-
-                    b.HasIndex("CreatedBy");
-
-                    b.HasIndex("PlanCode")
-                        .IsUnique()
-                        .HasDatabaseName("uq_cycle_count_plan_code");
-
-                    b.HasIndex("WarehouseId");
-
-                    b.ToTable("cycle_count_plans", "public");
-                });
-
             modelBuilder.Entity("ColdChainX.Core.Entities.DeliveryEpod", b =>
                 {
                     b.Property<Guid>("EpodId")
@@ -1312,9 +1093,23 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("customer_id");
+
+                    b.Property<string>("FileUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("file_url");
+
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uuid")
                         .HasColumnName("order_id");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("phone");
 
                     b.Property<string>("QrCodeValue")
                         .IsRequired()
@@ -1331,6 +1126,10 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)")
                         .HasColumnName("status");
+
+                    b.Property<Guid?>("WarehouseId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("warehouse_id");
 
                     b.HasKey("AsnId")
                         .HasName("inbound_asn_pkey");
@@ -1408,470 +1207,6 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.HasIndex("TripId");
 
                     b.ToTable("incident_reports", "public");
-                });
-
-            modelBuilder.Entity("ColdChainX.Core.Entities.InventoryAdjustment", b =>
-                {
-                    b.Property<Guid>("AdjustmentId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("adjustment_id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<string>("AdjustmentType")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("adjustment_type");
-
-                    b.Property<DateTime?>("ApprovedAt")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("approved_at");
-
-                    b.Property<Guid?>("ApprovedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("approved_by");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<Guid?>("MovementId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("movement_id");
-
-                    b.Property<int>("PalletsAfter")
-                        .HasColumnType("integer")
-                        .HasColumnName("pallets_after");
-
-                    b.Property<int>("PalletsBefore")
-                        .HasColumnType("integer")
-                        .HasColumnName("pallets_before");
-
-                    b.Property<int>("PalletsChanged")
-                        .HasColumnType("integer")
-                        .HasColumnName("pallets_changed");
-
-                    b.Property<decimal>("QuantityAfter")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("quantity_after");
-
-                    b.Property<decimal>("QuantityBefore")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("quantity_before");
-
-                    b.Property<decimal>("QuantityChanged")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("quantity_changed");
-
-                    b.Property<string>("ReasonNotes")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("reason_notes");
-
-                    b.Property<string>("RejectionReason")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("rejection_reason");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasDefaultValue("PENDING_APPROVAL")
-                        .HasColumnName("status");
-
-                    b.Property<Guid>("StockId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("stock_id");
-
-                    b.HasKey("AdjustmentId")
-                        .HasName("inventory_adjustments_pkey");
-
-                    b.HasIndex("MovementId");
-
-                    b.HasIndex("StockId");
-
-                    b.ToTable("inventory_adjustments", "public");
-                });
-
-            modelBuilder.Entity("ColdChainX.Core.Entities.InventoryAllocation", b =>
-                {
-                    b.Property<Guid>("AllocationId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("allocation_id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<decimal>("AllocatedQuantity")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("allocated_quantity");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<Guid>("ReferenceDocumentId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("reference_document_id");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("status")
-                        .HasDefaultValueSql("'ALLOCATED'::character varying");
-
-                    b.Property<Guid>("StockId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("stock_id");
-
-                    b.HasKey("AllocationId")
-                        .HasName("inventory_allocations_pkey");
-
-                    b.HasIndex("StockId");
-
-                    b.ToTable("inventory_allocations", "public");
-                });
-
-            modelBuilder.Entity("ColdChainX.Core.Entities.InventoryBatch", b =>
-                {
-                    b.Property<Guid>("BatchId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("batch_id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<string>("BatchNumber")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("batch_number");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<Guid?>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<DateOnly>("ExpiryDate")
-                        .HasColumnType("date")
-                        .HasColumnName("expiry_date");
-
-                    b.Property<string>("ItemCode")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("item_code");
-
-                    b.Property<DateOnly?>("ManufacturedDate")
-                        .HasColumnType("date")
-                        .HasColumnName("manufactured_date");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("status")
-                        .HasDefaultValueSql("'ACTIVE'::character varying");
-
-                    b.HasKey("BatchId")
-                        .HasName("inventory_batches_pkey");
-
-                    b.HasIndex(new[] { "ItemCode", "BatchNumber" }, "uq_item_batch")
-                        .IsUnique();
-
-                    b.ToTable("inventory_batches", "public");
-                });
-
-            modelBuilder.Entity("ColdChainX.Core.Entities.InventoryHold", b =>
-                {
-                    b.Property<Guid>("HoldId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("hold_id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<Guid?>("AdjustmentId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("adjustment_id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<decimal>("HoldQuantity")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("hold_quantity");
-
-                    b.Property<string>("Notes")
-                        .HasColumnType("text")
-                        .HasColumnName("notes");
-
-                    b.Property<string>("ReasonCode")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("reason_code");
-
-                    b.Property<string>("ReleaseNotes")
-                        .HasColumnType("text")
-                        .HasColumnName("release_notes");
-
-                    b.Property<DateTime?>("ReleasedAt")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("released_at");
-
-                    b.Property<Guid?>("ReleasedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("released_by");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("status")
-                        .HasDefaultValueSql("'HOLD'::character varying");
-
-                    b.Property<Guid>("StockId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("stock_id");
-
-                    b.HasKey("HoldId")
-                        .HasName("inventory_holds_pkey");
-
-                    b.HasIndex("AdjustmentId");
-
-                    b.HasIndex("CreatedBy");
-
-                    b.HasIndex("ReleasedBy");
-
-                    b.HasIndex("StockId");
-
-                    b.ToTable("inventory_holds", "public");
-                });
-
-            modelBuilder.Entity("ColdChainX.Core.Entities.InventoryMovement", b =>
-                {
-                    b.Property<Guid>("MovementId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("movement_id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<Guid>("BatchId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("batch_id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<Guid?>("FromLocationId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("from_location_id");
-
-                    b.Property<string>("ItemCode")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("item_code");
-
-                    b.Property<string>("MovementType")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("movement_type");
-
-                    b.Property<decimal>("Quantity")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("quantity");
-
-                    b.Property<Guid?>("ReferenceDocumentId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("reference_document_id");
-
-                    b.Property<Guid?>("StockId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("stock_id");
-
-                    b.Property<Guid?>("ToLocationId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("to_location_id");
-
-                    b.Property<Guid?>("WarehouseReceiptItemId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("warehouse_receipt_item_id");
-
-                    b.HasKey("MovementId")
-                        .HasName("inventory_movements_pkey");
-
-                    b.HasIndex("BatchId");
-
-                    b.HasIndex("FromLocationId");
-
-                    b.HasIndex("ToLocationId");
-
-                    b.HasIndex("WarehouseReceiptItemId");
-
-                    b.ToTable("inventory_movements", "public");
-                });
-
-            modelBuilder.Entity("ColdChainX.Core.Entities.InventoryStock", b =>
-                {
-                    b.Property<Guid>("StockId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("stock_id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<Guid>("BatchId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("batch_id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<Guid?>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<Guid>("CustomerId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("customer_id");
-
-                    b.Property<DateTime>("InboundDate")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("inbound_date")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<string>("ItemCode")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("item_code");
-
-                    b.Property<string>("ItemName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("item_name");
-
-                    b.Property<Guid>("LocationId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("location_id");
-
-                    b.Property<int>("PalletCount")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(1)
-                        .HasColumnName("pallet_count");
-
-                    b.Property<decimal>("QuantityAllocated")
-                        .ValueGeneratedOnAdd()
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("quantity_allocated")
-                        .HasDefaultValueSql("0.00");
-
-                    b.Property<decimal>("QuantityOnHand")
-                        .ValueGeneratedOnAdd()
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("quantity_on_hand")
-                        .HasDefaultValueSql("0.00");
-
-                    b.Property<decimal?>("RequiredTempMax")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)")
-                        .HasColumnName("required_temp_max");
-
-                    b.Property<decimal?>("RequiredTempMin")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)")
-                        .HasColumnName("required_temp_min");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("status")
-                        .HasDefaultValueSql("'AVAILABLE'::character varying");
-
-                    b.Property<string>("Unit")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("unit");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("updated_at");
-
-                    b.Property<Guid?>("UpdatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("updated_by");
-
-                    b.HasKey("StockId")
-                        .HasName("inventory_stocks_pkey");
-
-                    b.HasIndex("BatchId");
-
-                    b.HasIndex("CustomerId");
-
-                    b.HasIndex(new[] { "LocationId", "CustomerId", "ItemCode", "BatchId" }, "uq_location_customer_item_batch")
-                        .IsUnique();
-
-                    b.ToTable("inventory_stocks", "public", t =>
-                        {
-                            t.HasCheckConstraint("CK_inventory_stocks_quantity_allocated_gte_zero", "quantity_allocated >= 0");
-
-                            t.HasCheckConstraint("CK_inventory_stocks_quantity_on_hand_gte_zero", "quantity_on_hand >= 0");
-                        });
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.Invoice", b =>
@@ -2139,11 +1474,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("numeric(18,2)")
                         .HasColumnName("actual_weight_kg");
 
-                    b.Property<string>("BatchNumber")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("batch_number");
-
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp without time zone")
@@ -2154,54 +1484,18 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("customer_id");
 
-                    b.Property<string>("DiscrepancyPdfUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("discrepancy_pdf_url");
-
                     b.Property<string>("DiscrepancyReason")
                         .HasColumnType("text")
                         .HasColumnName("discrepancy_reason");
 
-                    b.Property<decimal>("ExpectedCbm")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("numeric(18,4)")
-                        .HasColumnName("expected_cbm");
-
-                    b.Property<decimal>("ExpectedWeightKg")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)")
-                        .HasColumnName("expected_weight_kg");
-
-                    b.Property<string>("GrnPdfUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("grn_pdf_url");
-
-                    b.Property<decimal>("HeightCm")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)")
-                        .HasColumnName("height_cm");
+                    b.Property<string>("EvidenceImageUrl")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("evidence_image_url");
 
                     b.Property<DateTime?>("InboundTime")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("inbound_time");
-
-                    b.Property<string>("ItemCode")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("item_code");
-
-                    b.Property<string>("ItemName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("item_name");
-
-                    b.Property<decimal>("LengthCm")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)")
-                        .HasColumnName("length_cm");
 
                     b.Property<string>("LpnCode")
                         .IsRequired()
@@ -2209,22 +1503,17 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("lpn_code");
 
-                    b.Property<decimal>("MaxDiffPercent")
-                        .HasPrecision(8, 2)
-                        .HasColumnType("numeric(8,2)")
-                        .HasColumnName("max_diff_percent");
-
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uuid")
                         .HasColumnName("order_id");
 
-                    b.Property<DateTime?>("PickedAt")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("picked_at");
-
                     b.Property<int>("Quantity")
                         .HasColumnType("integer")
                         .HasColumnName("quantity");
+
+                    b.Property<Guid>("ReceiptId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("receipt_id");
 
                     b.Property<decimal?>("RecordedTemperature")
                         .HasPrecision(8, 2)
@@ -2236,18 +1525,9 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("numeric(8,2)")
                         .HasColumnName("required_temperature");
 
-                    b.Property<string>("ReturnPdfUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("return_pdf_url");
-
                     b.Property<Guid?>("RouteId")
                         .HasColumnType("uuid")
                         .HasColumnName("route_id");
-
-                    b.Property<DateTime?>("ShippedAt")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("shipped_at");
 
                     b.Property<DateTime?>("SlaDeadline")
                         .HasColumnType("timestamp without time zone")
@@ -2272,11 +1552,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("updated_at");
 
-                    b.Property<decimal>("WidthCm")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)")
-                        .HasColumnName("width_cm");
-
                     b.HasKey("LpnId")
                         .HasName("lpns_pkey");
 
@@ -2288,6 +1563,8 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.HasIndex("OrderId")
                         .HasDatabaseName("idx_lpns_order_id");
+
+                    b.HasIndex("ReceiptId");
 
                     b.HasIndex("RouteId");
 
@@ -2423,6 +1700,11 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.Property<DateTime>("PlannedStartTime")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("planned_start_time");
+
+                    b.Property<string>("SealNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("seal_number");
 
                     b.Property<DateTime?>("StartedAt")
                         .HasColumnType("timestamp without time zone")
@@ -3649,6 +2931,10 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("username");
 
+                    b.Property<Guid?>("WarehouseId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("warehouse_id");
+
                     b.HasKey("UserId")
                         .HasName("users_pkey");
 
@@ -3923,145 +3209,6 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.ToTable("warehouses", "public");
                 });
 
-            modelBuilder.Entity("ColdChainX.Core.Entities.WarehouseEvidenceAttachment", b =>
-                {
-                    b.Property<Guid>("AttachmentId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("attachment_id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<decimal?>("CapturedValue")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("numeric(18,4)")
-                        .HasColumnName("captured_value");
-
-                    b.Property<int>("Category")
-                        .HasColumnType("integer")
-                        .HasColumnName("category");
-
-                    b.Property<string>("ContentType")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("content_type");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<string>("DocumentNumber")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("document_number");
-
-                    b.Property<DateOnly?>("ExpiryDate")
-                        .HasColumnType("date")
-                        .HasColumnName("expiry_date");
-
-                    b.Property<string>("FileName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("file_name");
-
-                    b.Property<string>("FilePath")
-                        .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)")
-                        .HasColumnName("file_path");
-
-                    b.Property<long>("FileSize")
-                        .HasColumnType("bigint")
-                        .HasColumnName("file_size");
-
-                    b.Property<string>("FileUrl")
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)")
-                        .HasColumnName("file_url");
-
-                    b.Property<int>("Format")
-                        .HasColumnType("integer")
-                        .HasColumnName("format");
-
-                    b.Property<Guid?>("InventoryAdjustmentId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("inventory_adjustment_id");
-
-                    b.Property<DateOnly?>("IssueDate")
-                        .HasColumnType("date")
-                        .HasColumnName("issue_date");
-
-                    b.Property<string>("Issuer")
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)")
-                        .HasColumnName("issuer");
-
-                    b.Property<Guid?>("OutboundOrderId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("outbound_order_id");
-
-                    b.Property<string>("RejectionReason")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("rejection_reason");
-
-                    b.Property<string>("SealNumber")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("seal_number");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer")
-                        .HasColumnName("status");
-
-                    b.Property<int>("SubCategory")
-                        .HasColumnType("integer")
-                        .HasColumnName("sub_category");
-
-                    b.Property<DateTime?>("VerifiedAt")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("verified_at");
-
-                    b.Property<Guid?>("VerifiedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("verified_by");
-
-                    b.Property<Guid?>("WarehouseReceiptId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("warehouse_receipt_id");
-
-                    b.Property<Guid?>("WarehouseReceiptItemId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("warehouse_receipt_item_id");
-
-                    b.HasKey("AttachmentId")
-                        .HasName("warehouse_evidence_attachments_pkey");
-
-                    b.HasIndex("InventoryAdjustmentId")
-                        .HasDatabaseName("idx_att_adjustment");
-
-                    b.HasIndex("OutboundOrderId")
-                        .HasDatabaseName("idx_att_outbound");
-
-                    b.HasIndex("WarehouseReceiptId")
-                        .HasDatabaseName("idx_att_receipt");
-
-                    b.HasIndex("WarehouseReceiptItemId")
-                        .HasDatabaseName("idx_att_receipt_item");
-
-                    b.ToTable("warehouse_evidence_attachments", "public", t =>
-                        {
-                            t.HasCheckConstraint("chk_attachment_target", "(warehouse_receipt_id IS NOT NULL)::int + (warehouse_receipt_item_id IS NOT NULL)::int + (inventory_adjustment_id IS NOT NULL)::int + (outbound_order_id IS NOT NULL)::int = 1");
-                        });
-                });
-
             modelBuilder.Entity("ColdChainX.Core.Entities.WarehouseLocation", b =>
                 {
                     b.Property<Guid>("LocationId")
@@ -4250,125 +3397,6 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.ToTable("warehouse_receipts", "public");
                 });
 
-            modelBuilder.Entity("ColdChainX.Core.Entities.WarehouseReceiptItem", b =>
-                {
-                    b.Property<Guid>("ItemId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("item_id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<decimal>("ActualQty")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("actual_qty");
-
-                    b.Property<decimal?>("ActualWeightKg")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("actual_weight_kg");
-
-                    b.Property<string>("Barcode")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("barcode");
-
-                    b.Property<string>("BatchNumber")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("batch_number");
-
-                    b.Property<string>("ConditionStatus")
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("condition_status")
-                        .HasDefaultValueSql("'GOOD'::character varying");
-
-                    b.Property<string>("CountryOfOrigin")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("country_of_origin");
-
-                    b.Property<decimal>("ExpectedQty")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("expected_qty");
-
-                    b.Property<DateOnly?>("ExpiryDate")
-                        .HasColumnType("date")
-                        .HasColumnName("expiry_date");
-
-                    b.Property<decimal?>("HeightCm")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("height_cm");
-
-                    b.Property<string>("ItemCode")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("item_code");
-
-                    b.Property<string>("ItemName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("item_name");
-
-                    b.Property<decimal?>("LengthCm")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("length_cm");
-
-                    b.Property<DateOnly?>("ManufacturedDate")
-                        .HasColumnType("date")
-                        .HasColumnName("manufactured_date");
-
-                    b.Property<string>("Note")
-                        .HasColumnType("text")
-                        .HasColumnName("note");
-
-                    b.Property<int>("ProductCategory")
-                        .HasColumnType("integer")
-                        .HasColumnName("product_category");
-
-                    b.Property<string>("QrCode")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("qr_code");
-
-                    b.Property<Guid>("ReceiptId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("receipt_id");
-
-                    b.Property<string>("Unit")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("unit");
-
-                    b.Property<decimal?>("WidthCm")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("width_cm");
-
-                    b.HasKey("ItemId")
-                        .HasName("warehouse_receipt_items_pkey");
-
-                    b.HasIndex("Barcode")
-                        .HasDatabaseName("idx_warehouse_receipt_items_barcode");
-
-                    b.HasIndex("ItemCode")
-                        .HasDatabaseName("idx_warehouse_receipt_items_item_code");
-
-                    b.HasIndex("ReceiptId")
-                        .HasDatabaseName("idx_warehouse_receipt_items_receipt_id");
-
-                    b.ToTable("warehouse_receipt_items", "public");
-                });
-
             modelBuilder.Entity("ColdChainX.Core.Entities.WarehouseZone", b =>
                 {
                     b.Property<Guid>("ZoneId")
@@ -4538,18 +3566,6 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.Navigation("Trip");
                 });
 
-            modelBuilder.Entity("ColdChainX.Core.Entities.AttachmentAuditHistory", b =>
-                {
-                    b.HasOne("ColdChainX.Core.Entities.WarehouseEvidenceAttachment", "Attachment")
-                        .WithMany()
-                        .HasForeignKey("AttachmentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_history_attachment");
-
-                    b.Navigation("Attachment");
-                });
-
             modelBuilder.Entity("ColdChainX.Core.Entities.ChatMessage", b =>
                 {
                     b.HasOne("ColdChainX.Core.Entities.TransportOrder", "Order")
@@ -4637,104 +3653,6 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.Navigation("Customer");
 
                     b.Navigation("Order");
-                });
-
-            modelBuilder.Entity("ColdChainX.Core.Entities.CycleCountEntry", b =>
-                {
-                    b.HasOne("ColdChainX.Core.Entities.InventoryAdjustment", "Adjustment")
-                        .WithMany()
-                        .HasForeignKey("AdjustmentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_entry_adjustment");
-
-                    b.HasOne("ColdChainX.Core.Entities.InventoryBatch", "Batch")
-                        .WithMany()
-                        .HasForeignKey("BatchId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_entry_batch");
-
-                    b.HasOne("ColdChainX.Core.Entities.User", "Counter")
-                        .WithMany()
-                        .HasForeignKey("CountedBy")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_entry_counter_user");
-
-                    b.HasOne("ColdChainX.Core.Entities.WarehouseLocation", "Location")
-                        .WithMany()
-                        .HasForeignKey("LocationId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_entry_location");
-
-                    b.HasOne("ColdChainX.Core.Entities.CycleCountPlan", "Plan")
-                        .WithMany("Entries")
-                        .HasForeignKey("PlanId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_entry_plan");
-
-                    b.HasOne("ColdChainX.Core.Entities.User", "Reviewer")
-                        .WithMany()
-                        .HasForeignKey("ReviewedBy")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_entry_reviewer_user");
-
-                    b.HasOne("ColdChainX.Core.Entities.InventoryStock", "Stock")
-                        .WithMany()
-                        .HasForeignKey("StockId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_entry_stock");
-
-                    b.Navigation("Adjustment");
-
-                    b.Navigation("Batch");
-
-                    b.Navigation("Counter");
-
-                    b.Navigation("Location");
-
-                    b.Navigation("Plan");
-
-                    b.Navigation("Reviewer");
-
-                    b.Navigation("Stock");
-                });
-
-            modelBuilder.Entity("ColdChainX.Core.Entities.CycleCountPlan", b =>
-                {
-                    b.HasOne("ColdChainX.Core.Entities.User", "AssignedToUser")
-                        .WithMany()
-                        .HasForeignKey("AssignedToUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_plan_assigned_user");
-
-                    b.HasOne("ColdChainX.Core.Entities.User", "Completer")
-                        .WithMany()
-                        .HasForeignKey("CompletedBy")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_plan_completer_user");
-
-                    b.HasOne("ColdChainX.Core.Entities.User", "Creator")
-                        .WithMany()
-                        .HasForeignKey("CreatedBy")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_plan_creator_user");
-
-                    b.HasOne("ColdChainX.Core.Entities.Warehouse", "Warehouse")
-                        .WithMany()
-                        .HasForeignKey("WarehouseId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_plan_warehouse");
-
-                    b.Navigation("AssignedToUser");
-
-                    b.Navigation("Completer");
-
-                    b.Navigation("Creator");
-
-                    b.Navigation("Warehouse");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.DeliveryEpod", b =>
@@ -4852,141 +3770,6 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.Navigation("Trip");
                 });
 
-            modelBuilder.Entity("ColdChainX.Core.Entities.InventoryAdjustment", b =>
-                {
-                    b.HasOne("ColdChainX.Core.Entities.InventoryMovement", "Movement")
-                        .WithMany()
-                        .HasForeignKey("MovementId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_adj_movement");
-
-                    b.HasOne("ColdChainX.Core.Entities.InventoryStock", "Stock")
-                        .WithMany()
-                        .HasForeignKey("StockId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_adj_stock");
-
-                    b.Navigation("Movement");
-
-                    b.Navigation("Stock");
-                });
-
-            modelBuilder.Entity("ColdChainX.Core.Entities.InventoryAllocation", b =>
-                {
-                    b.HasOne("ColdChainX.Core.Entities.InventoryStock", "Stock")
-                        .WithMany()
-                        .HasForeignKey("StockId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_allocation_stock");
-
-                    b.Navigation("Stock");
-                });
-
-            modelBuilder.Entity("ColdChainX.Core.Entities.InventoryHold", b =>
-                {
-                    b.HasOne("ColdChainX.Core.Entities.InventoryAdjustment", "Adjustment")
-                        .WithMany()
-                        .HasForeignKey("AdjustmentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_hold_adjustment");
-
-                    b.HasOne("ColdChainX.Core.Entities.User", "Creator")
-                        .WithMany()
-                        .HasForeignKey("CreatedBy")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_hold_user_creator");
-
-                    b.HasOne("ColdChainX.Core.Entities.User", "Releaser")
-                        .WithMany()
-                        .HasForeignKey("ReleasedBy")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_hold_user_releaser");
-
-                    b.HasOne("ColdChainX.Core.Entities.InventoryStock", "Stock")
-                        .WithMany()
-                        .HasForeignKey("StockId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_hold_stock");
-
-                    b.Navigation("Adjustment");
-
-                    b.Navigation("Creator");
-
-                    b.Navigation("Releaser");
-
-                    b.Navigation("Stock");
-                });
-
-            modelBuilder.Entity("ColdChainX.Core.Entities.InventoryMovement", b =>
-                {
-                    b.HasOne("ColdChainX.Core.Entities.InventoryBatch", "Batch")
-                        .WithMany()
-                        .HasForeignKey("BatchId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_movement_batch");
-
-                    b.HasOne("ColdChainX.Core.Entities.WarehouseLocation", "FromLocation")
-                        .WithMany()
-                        .HasForeignKey("FromLocationId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_movement_from_loc");
-
-                    b.HasOne("ColdChainX.Core.Entities.WarehouseLocation", "ToLocation")
-                        .WithMany()
-                        .HasForeignKey("ToLocationId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_movement_to_loc");
-
-                    b.HasOne("ColdChainX.Core.Entities.WarehouseReceiptItem", "WarehouseReceiptItem")
-                        .WithMany()
-                        .HasForeignKey("WarehouseReceiptItemId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_movement_receipt_item");
-
-                    b.Navigation("Batch");
-
-                    b.Navigation("FromLocation");
-
-                    b.Navigation("ToLocation");
-
-                    b.Navigation("WarehouseReceiptItem");
-                });
-
-            modelBuilder.Entity("ColdChainX.Core.Entities.InventoryStock", b =>
-                {
-                    b.HasOne("ColdChainX.Core.Entities.InventoryBatch", "Batch")
-                        .WithMany("InventoryStocks")
-                        .HasForeignKey("BatchId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_stock_batch");
-
-                    b.HasOne("ColdChainX.Core.Entities.Customer", "Customer")
-                        .WithMany()
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_stock_customer");
-
-                    b.HasOne("ColdChainX.Core.Entities.WarehouseLocation", "Location")
-                        .WithMany()
-                        .HasForeignKey("LocationId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_stock_location");
-
-                    b.Navigation("Batch");
-
-                    b.Navigation("Customer");
-
-                    b.Navigation("Location");
-                });
-
             modelBuilder.Entity("ColdChainX.Core.Entities.Invoice", b =>
                 {
                     b.HasOne("ColdChainX.Core.Entities.Customer", "Customer")
@@ -5052,6 +3835,12 @@ namespace ColdChainX.Infrastructure.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_lpns_order");
 
+                    b.HasOne("ColdChainX.Core.Entities.WarehouseReceipt", "Receipt")
+                        .WithMany("Lpns")
+                        .HasForeignKey("ReceiptId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("ColdChainX.Core.Entities.RouteMaster", "Route")
                         .WithMany()
                         .HasForeignKey("RouteId")
@@ -5067,6 +3856,8 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.Navigation("Customer");
 
                     b.Navigation("Order");
+
+                    b.Navigation("Receipt");
 
                     b.Navigation("Route");
 
@@ -5408,41 +4199,6 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.Navigation("Vehicle");
                 });
 
-            modelBuilder.Entity("ColdChainX.Core.Entities.WarehouseEvidenceAttachment", b =>
-                {
-                    b.HasOne("ColdChainX.Core.Entities.InventoryAdjustment", "InventoryAdjustment")
-                        .WithMany()
-                        .HasForeignKey("InventoryAdjustmentId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_att_adjustment");
-
-                    b.HasOne("ColdChainX.Core.Entities.OutboundOrder", "OutboundOrder")
-                        .WithMany()
-                        .HasForeignKey("OutboundOrderId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_att_outbound");
-
-                    b.HasOne("ColdChainX.Core.Entities.WarehouseReceipt", "WarehouseReceipt")
-                        .WithMany()
-                        .HasForeignKey("WarehouseReceiptId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_att_receipt");
-
-                    b.HasOne("ColdChainX.Core.Entities.WarehouseReceiptItem", "WarehouseReceiptItem")
-                        .WithMany()
-                        .HasForeignKey("WarehouseReceiptItemId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_att_receipt_item");
-
-                    b.Navigation("InventoryAdjustment");
-
-                    b.Navigation("OutboundOrder");
-
-                    b.Navigation("WarehouseReceipt");
-
-                    b.Navigation("WarehouseReceiptItem");
-                });
-
             modelBuilder.Entity("ColdChainX.Core.Entities.WarehouseLocation", b =>
                 {
                     b.HasOne("ColdChainX.Core.Entities.WarehouseZone", "Zone")
@@ -5480,17 +4236,6 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.Navigation("Receiver");
 
                     b.Navigation("Warehouse");
-                });
-
-            modelBuilder.Entity("ColdChainX.Core.Entities.WarehouseReceiptItem", b =>
-                {
-                    b.HasOne("ColdChainX.Core.Entities.WarehouseReceipt", "Receipt")
-                        .WithMany("WarehouseReceiptItems")
-                        .HasForeignKey("ReceiptId")
-                        .IsRequired()
-                        .HasConstraintName("fk_wri_wr");
-
-                    b.Navigation("Receipt");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.WarehouseZone", b =>
@@ -5553,11 +4298,6 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.Navigation("TransportOrders");
                 });
 
-            modelBuilder.Entity("ColdChainX.Core.Entities.CycleCountPlan", b =>
-                {
-                    b.Navigation("Entries");
-                });
-
             modelBuilder.Entity("ColdChainX.Core.Entities.DeliveryEpod", b =>
                 {
                     b.Navigation("ReturnedItems");
@@ -5577,11 +4317,6 @@ namespace ColdChainX.Infrastructure.Migrations
             modelBuilder.Entity("ColdChainX.Core.Entities.ExpenseAdvance", b =>
                 {
                     b.Navigation("ExpenseReceipts");
-                });
-
-            modelBuilder.Entity("ColdChainX.Core.Entities.InventoryBatch", b =>
-                {
-                    b.Navigation("InventoryStocks");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.Invoice", b =>
@@ -5738,7 +4473,7 @@ namespace ColdChainX.Infrastructure.Migrations
 
             modelBuilder.Entity("ColdChainX.Core.Entities.WarehouseReceipt", b =>
                 {
-                    b.Navigation("WarehouseReceiptItems");
+                    b.Navigation("Lpns");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.WarehouseZone", b =>

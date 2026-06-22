@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="CloudinaryDotNet" Version="1.29.2" />
+    <PackageReference Include="Handlebars.Net" Version="2.1.6" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.8" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.8">
       <PrivateAssets>all</PrivateAssets>
@@ -28,6 +29,12 @@
     <ProjectReference Include="..\ColdChainX.Application\ColdChainX.Application.csproj" />
     <ProjectReference Include="..\ColdChainX.Core\ColdChainX.Core.csproj" />
     <ProjectReference Include="..\ColdChainX.Shared\ColdChainX.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Templates\*.html">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>
