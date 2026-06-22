@@ -27,7 +27,8 @@ public class GetInboundReceiptDetailQueryHandler : IRequestHandler<GetInboundRec
     public async Task<InboundReceiptDetailDto?> Handle(GetInboundReceiptDetailQuery request, CancellationToken cancellationToken)
     {
         var receipt = await _context.WarehouseReceipts
-            .Include(x => x.WarehouseReceiptItems)
+            .Include(x => x.Lpns)
+                .ThenInclude(l => l.Order)
             .Where(x => x.ReceiptId == request.Id)
             .Select(x => new InboundReceiptDetailDto
             {
@@ -39,13 +40,13 @@ public class GetInboundReceiptDetailQueryHandler : IRequestHandler<GetInboundRec
                 CompletionTime = x.CreatedAt,
                 DriverName = x.DelivererName,
                 TruckPlate = "N/A",
-                Items = x.WarehouseReceiptItems.Select(i => new InboundReceiptItemDto
+                Items = x.Lpns.Select(i => new InboundReceiptItemDto
                 {
-                    ReceiptItemId = i.ItemId,
-                    ItemName = i.ItemName,
-                    ExpectedQuantity = (int)i.ExpectedQty,
-                    ActualQuantity = (int)i.ActualQty,
-                    ConditionStatus = i.ConditionStatus ?? "GOOD"
+                    ReceiptItemId = i.LpnId,
+                    ItemName = i.Order.ItemName,
+                    ExpectedQuantity = i.Quantity,
+                    ActualQuantity = i.Quantity,
+                    ConditionStatus = "GOOD"
                 }).ToList()
             })
             .FirstOrDefaultAsync(cancellationToken);
