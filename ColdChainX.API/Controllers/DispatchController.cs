@@ -182,10 +182,21 @@ public class DispatchController : ControllerBase
         if (firstLpn == null)
             return BadRequest(new { Success = false, Error = $"Không tìm thấy LPN {firstLpnId}." });
 
-        if (firstLpn.Order == null || !firstLpn.Order.PickupLocation.HasValue)
-            return BadRequest(new { Success = false, Error = $"LPN {firstLpn.LpnCode} chưa được nhập kho hoặc thiếu vị trí kho." });
-
-        var originLocId = firstLpn.Order.PickupLocation.Value;
+        Guid originLocId;
+        if (firstLpn.Order != null && firstLpn.Order.PickupLocation.HasValue)
+        {
+            originLocId = firstLpn.Order.PickupLocation.Value;
+        }
+        else
+        {
+            var fallbackLocId = await _db.Locations
+                .Where(l => l.Status == "ACTIVE")
+                .Select(l => l.LocationId)
+                .FirstOrDefaultAsync();
+            if (fallbackLocId == Guid.Empty)
+                return BadRequest(new { Success = false, Error = "Không tìm thấy vị trí kho xuất phát nào trong hệ thống." });
+            originLocId = fallbackLocId;
+        }
 
         var request = new ManualDispatchRequest
         {
@@ -290,63 +301,33 @@ public class DispatchController : ControllerBase
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    //  API 2: WAREHOUSE ORDER — Lệnh bốc xếp cho kho
+    //  API 2: START PICKING — Bắt đầu lấy hàng từ kho
     // ═══════════════════════════════════════════════════════════════════════
 
-
-
     /// <summary>
-    /// WH Monitor duyệt lệnh bốc xếp. Trip và Orders chuyển sang LOADING.
-    /// Gửi thông báo cho Loader.
+    /// Chuyển trip sang trạng thái PICKING — thông báo cho Loader bắt đầu lấy hàng.
+    /// Trip phải đang ở trạng thái PLANNED.
     /// </summary>
-    [HttpPost("warehouse-order/{tripId}/approve")]
-    [ProducesResponseType(typeof(WarehouseOrderResult), 200)]
-    public async Task<IActionResult> ApproveWarehouseOrder(string tripId)
+    [HttpPost("trip/{tripId}/start-picking")]
+    [ProducesResponseType(typeof(StartPickingResult), 200)]
+    public async Task<IActionResult> StartPicking(string tripId)
     {
         var rawId = ExtractGuid(tripId);
         if (!Guid.TryParse(rawId, out var parsedTripId))
             return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
 
-        var currentUserId = GetCurrentUserId();
-        if (currentUserId == Guid.Empty) return Unauthorized();
-
         try
         {
-            var result = await _dispatchService.ApproveWarehouseOrderAsync(parsedTripId, currentUserId);
+            var result = await _dispatchService.StartPickingAsync(parsedTripId);
             return Ok(new { Success = true, Data = result });
         }
-        catch (Exception ex)
+        catch (InvalidOperationException ex)
         {
             return BadRequest(new { Success = false, Error = ex.Message });
         }
-    }
-
-    /// <summary>
-    /// WH Monitor từ chối lệnh bốc xếp. Trip chuyển sang WH_REJECTED, Orders về IN_WAREHOUSE.
-    /// </summary>
-    [HttpPost("warehouse-order/{tripId}/reject")]
-    [Consumes("multipart/form-data")]
-    [ProducesResponseType(typeof(WarehouseOrderResult), 200)]
-    public async Task<IActionResult> RejectWarehouseOrder(string tripId, [FromForm] RejectWarehouseOrderRequest request)
-    {
-        var rawId = ExtractGuid(tripId);
-        if (!Guid.TryParse(rawId, out var parsedTripId))
-            return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
-
-        var currentUserId = GetCurrentUserId();
-        if (currentUserId == Guid.Empty) return Unauthorized();
-
-        if (string.IsNullOrWhiteSpace(request.Reason))
-            return BadRequest(new { Success = false, Error = "Vui lòng nhập lý do từ chối." });
-
-        try
-        {
-            var result = await _dispatchService.RejectWarehouseOrderAsync(parsedTripId, currentUserId, request.Reason);
-            return Ok(new { Success = true, Data = result });
-        }
         catch (Exception ex)
         {
-            return BadRequest(new { Success = false, Error = ex.Message });
+            return StatusCode(500, new { Success = false, Error = "Lỗi hệ thống khi bắt đầu picking.", Detail = ex.Message });
         }
     }
 
@@ -411,39 +392,6 @@ public class DispatchController : ControllerBase
         catch (Exception ex)
         {
             return StatusCode(500, new { Success = false, Error = "Lỗi hệ thống khi kẹp chì.", Detail = ex.Message });
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    //  BACKLOG — Xử lý hàng tồn
-    // ═══════════════════════════════════════════════════════════════════════
-
-    /// <summary>
-    /// Quét các đơn hàng IN_WAREHOUSE tồn lâu hơn số ngày chỉ định, ghép vào các xe nhỏ (≤ 2000kg).
-    /// </summary>
-    [HttpPost("process-backlog")]
-    [Consumes("multipart/form-data")]
-    [ProducesResponseType(typeof(BacklogDispatchResult), 200)]
-    public async Task<IActionResult> ProcessBacklog([FromForm] ProcessBacklogRequest request)
-    {
-        var rawOriginLocId = ExtractGuid(request.OriginWarehouseLocationId);
-        if (!Guid.TryParse(rawOriginLocId, out var originLocId))
-            return BadRequest(new { Success = false, Error = "OriginWarehouseLocationId không hợp lệ." });
-
-        if (request.PlannedStartTime >= request.PlannedEndTime)
-            return BadRequest(new { Success = false, Error = "PlannedStartTime phải nhỏ hơn PlannedEndTime." });
-
-        var backlogDays = request.BacklogDays > 0 ? request.BacklogDays : 1;
-
-        try
-        {
-            var result = await _dispatchService.ProcessBacklogOrdersAsync(
-                originLocId, request.PlannedStartTime, request.PlannedEndTime, backlogDays);
-            return Ok(new { Success = true, Data = result });
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { Success = false, Error = ex.Message });
         }
     }
 

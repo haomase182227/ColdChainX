@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -691,16 +691,6 @@ public class DispatchService : IDispatchService
         if (lpns.Any(l => l.State != LpnState.IN_STOCK))
             throw new InvalidOperationException("Chỉ được ghép chuyến các LPN có trạng thái IN_STOCK.");
 
-        var warehouseIds = lpns
-            .Select(l => l.Receipt.WarehouseId)
-            .Distinct()
-            .ToList();
-
-        if (warehouseIds.Count > 1)
-            throw new InvalidOperationException("Tất cả các LPN được chọn phải cùng thuộc một kho lưu trữ (WarehouseId).");
-
-        if (lpns.Any(l => l.Order.PickupLocation != request.OriginWarehouseLocationId))
-            throw new InvalidOperationException("Tất cả các LPN được chọn phải cùng thuộc một kho xuất phát.");
 
         var orders = lpns
             .GroupBy(l => l.OrderId)
@@ -734,12 +724,17 @@ public class DispatchService : IDispatchService
         if (activeLicense == null)
             throw new InvalidOperationException($"Tài xế {vehicle.Driver.FullName} không có bằng lái còn hạn.");
 
-        // Lấy danh sách TripId đang active để check xe bận (không coi trạng thái PLANNED là bận)
+        // SLA check — không chặn, chỉ cảnh báo
+        var lateLpns = lpns.Where(l => l.SlaDeadline.HasValue && l.SlaDeadline.Value < DateTime.UtcNow).ToList();
+
+        // Lấy danh sách TripId đang active để check xe bận
         var isBusy = await _context.MasterTrips
             .AnyAsync(t => t.VehicleId == request.VehicleId
-                        && (t.Status == "LOADING"
-                         || t.Status == "SEALED" || t.Status == "DISPATCHED"
-                         || t.Status == "PENDING_WH_APPROVAL"));
+                        && (t.Status == "PICKING"
+                         || t.Status == "LOADING"
+                         || t.Status == "LOADING_COMPLETED"
+                         || t.Status == "SEALED"
+                         || t.Status == "DISPATCHED"));
 
         if (isBusy)
             throw new InvalidOperationException($"Xe {vehicle.TruckPlate} hiện đang bận một chuyến khác.");
@@ -796,7 +791,7 @@ public class DispatchService : IDispatchService
             TargetTemperature   = requiredMinTemp,
             PlannedStartTime    = request.PlannedStartTime,
             PlannedEndTime      = request.PlannedEndTime,
-            Status              = "PENDING_WH_APPROVAL", // Chuyển thẳng cho kho duyệt
+            Status              = "PLANNED",
             CreatedAt           = DateTime.UtcNow,
         };
         _context.MasterTrips.Add(masterTrip);
@@ -890,7 +885,12 @@ public class DispatchService : IDispatchService
             Navigation = new NavigationInfo { TotalDistanceKm = directionsResult.TotalDistanceKm, TotalDurationMinutes = directionsResult.TotalDurationSeconds / 60, GoongRouteOverview = directionsResult.OverviewPolyline ?? "", Legs = directionsResult.Legs.Select((leg, idx) => new NavigationLeg { LegIndex = idx + 1, FromAddress = leg.StartAddress ?? "N/A", ToAddress = leg.EndAddress ?? "N/A", DistanceKm = leg.DistanceKm, DurationMinutes = leg.DurationSeconds / 60, Steps = leg.Steps.Select((step, sIdx) => new NavigationStep { StepIndex = sIdx + 1, Instruction = step.Instruction, DistanceKm = step.DistanceKm, DurationSeconds = step.DurationSeconds, Maneuver = step.Maneuver }).ToList() }).ToList() },
             LoadPlan = loadPlan,
             DispatchInstructions = dispatchInstructions,
-            NotifiedCoordinators = notifiedCount
+            NotifiedCoordinators = notifiedCount,
+            LateLpnCount = lateLpns.Count,
+            SlaWarning = lateLpns.Any()
+                ? $"{lateLpns.Count} LPN đã quá SLA deadline. Khuyến nghị dùng xe tải trọng ≤ 2000 kg."
+                : null,
+            SuggestedMaxPayloadKg = lateLpns.Any() ? 2000 : null
         };
     }
 
@@ -903,250 +903,42 @@ public class DispatchService : IDispatchService
         return "AMBIENT";
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  API 2: WAREHOUSE ORDER — Lệnh bốc xếp cho kho
-    // ═══════════════════════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════════════
+    //  API 2: START PICKING — Bat dau lay hang tu kho
+    // ══════════════════════════════════════════════════════════════════════
 
-    public async Task<WarehouseOrderResult> CreateWarehouseOrderAsync(Guid tripId, Guid createdBy)
+    public async Task<StartPickingResult> StartPickingAsync(Guid tripId)
     {
         var trip = await _context.MasterTrips
-            .Include(t => t.Vehicle)
-            .Include(t => t.TransportOrders)
             .FirstOrDefaultAsync(t => t.TripId == tripId)
             ?? throw new KeyNotFoundException("Không tìm thấy chuyến hàng.");
 
-        if (trip.Status != "PLANNED" && trip.Status != "DISPATCHED_PENDING"
-            && trip.Status != "SEALED" && trip.Status != "LOADING" && trip.Status != "PENDING_WH_APPROVAL")
+        if (trip.Status != "PLANNED")
             throw new InvalidOperationException(
-                $"Chuyến hàng đang ở trạng thái '{trip.Status}', " +
-                $"chỉ có thể tạo lệnh kho khi trạng thái là PLANNED hoặc DISPATCHED_PENDING.");
+                $"Không thể bắt đầu picking — chuyến đang ở trạng thái '{trip.Status}'. " +
+                "Chỉ có thể bắt đầu picking khi trạng thái là PLANNED.");
 
-        // Chuyển trip sang PENDING_WH_APPROVAL
-        trip.Status = "PENDING_WH_APPROVAL";
-
-        // Lấy load plan để gửi kèm
-        var stops = await _context.TripStops
-            .Where(ts => ts.TripId == tripId)
-            .OrderBy(ts => ts.StopSequence)
-            .ToListAsync();
-        var stopInfos = stops.Select(s => new StopInfo
-        {
-            LocationId = s.LocationId ?? Guid.Empty,
-            Sequence = s.StopSequence
-        }).ToList();
-
-        var lpns = await _context.Lpns
-            .Include(l => l.Order)
-            .Where(l => l.TripId == tripId)
-            .ToListAsync();
-        var loadPlan = BuildLpnLIFOLoadPlan(lpns, stopInfos);
-
-        // Gửi notification cho WarehouseMonitor (fallback Admin)
-        var whMonitorIds = await _context.Users
-            .Include(u => u.Role)
-            .Where(u => u.Role != null
-                     && (u.Role.RoleName == "WarehouseMonitor" || u.Role.RoleName == "Admin" || u.Role.RoleName == "ADMIN")
-                     && (u.Status == null || u.Status == "ACTIVE"))
-            .Select(u => u.UserId)
-            .ToListAsync();
-
-        var notifiedCount = 0;
-        var actualTemplateId = await GetOrCreateTemplateAsync("DISPATCH_WH_ORDER",
-            "Lệnh bốc xếp chờ duyệt — Xe {vehicle}",
-            "Chuyến hàng {tripId} cần duyệt bốc xếp {orderCount} đơn hàng, tổng {totalWeight}kg.");
-
-        foreach (var userId in whMonitorIds)
-        {
-            var notifParams = JsonSerializer.Serialize(new Dictionary<string, string>
-            {
-                { "tripId", tripId.ToString() },
-                { "vehicle", trip.Vehicle?.TruckPlate ?? "N/A" },
-                { "orderCount", lpns.Count.ToString() },
-                { "totalWeight", lpns.Sum(l => l.ActualWeightKg).ToString("F1") },
-                { "action", "Duyệt hoặc từ chối lệnh bốc xếp" }
-            });
-
-            _context.Notifications.Add(new Notification
-            {
-                NotiId = Guid.NewGuid(),
-                UserId = userId,
-                SenderId = createdBy,
-                TemplateId = actualTemplateId,
-                Params = notifParams,
-                IsRead = false,
-                CreatedAt = DateTime.UtcNow
-            });
-            notifiedCount++;
-        }
+        trip.Status = "PICKING";
+        var lpnCount = await _context.Lpns.CountAsync(l => l.TripId == tripId);
 
         await _context.SaveChangesAsync();
 
         try
         {
-            await _hubContext.Clients.Groups("Group_WarehouseMonitor", "Group_Admin")
-                .SendAsync("WarehouseOrderCreated", new
+            await _hubContext.Clients.Groups("Group_Loader", "Group_WarehouseMonitor")
+                .SendAsync("PickingStarted", new
                 {
                     TripId = tripId,
-                    Status = "PENDING_WH_APPROVAL",
-                    Vehicle = trip.Vehicle?.TruckPlate ?? "N/A",
-                    OrderCount = lpns.Count,
-                    TotalWeight = lpns.Sum(l => l.ActualWeightKg)
+                    Status = "PICKING",
+                    LpnCount = lpnCount
                 });
         }
         catch (Exception)
         {
-            // Fail-safe to avoid blocking API if SignalR fails
+            // Fail-safe — không block API nếu SignalR lỗi
         }
 
-        return new WarehouseOrderResult
-        {
-            TripId = tripId,
-            Status = "PENDING_WH_APPROVAL",
-            Vehicle = trip.Vehicle == null ? null : new VehicleInfo
-            {
-                VehicleId = trip.Vehicle.VehicleId,
-                TruckPlate = trip.Vehicle.TruckPlate,
-                MaxWeightKg = trip.Vehicle.MaxWeight,
-                MaxCbm = trip.Vehicle.MaxCbm,
-                TotalOrderWeightKg = lpns.Sum(l => l.ActualWeightKg),
-                TotalOrderCbm = lpns.Sum(l => l.ActualCbm)
-            },
-            Orders = trip.TransportOrders.Select(o => new OrderSummary
-            {
-                OrderId = o.OrderId,
-                TrackingCode = o.TrackingCode,
-                ItemName = o.ItemName,
-                Quantity = o.Quantity,
-                WeightKg = o.ExpectedWeightKg,
-                Cbm = o.ExpectedCbm,
-                TempCondition = o.TempCondition
-            }).ToList(),
-            LoadPlan = loadPlan,
-            NotifiedUsers = notifiedCount
-        };
-    }
-
-    public async Task<WarehouseOrderResult> ApproveWarehouseOrderAsync(Guid tripId, Guid approvedBy)
-    {
-        var trip = await _context.MasterTrips
-            .Include(t => t.Vehicle)
-            .Include(t => t.TransportOrders)
-            .FirstOrDefaultAsync(t => t.TripId == tripId)
-            ?? throw new KeyNotFoundException("Không tìm thấy chuyến hàng.");
-
-        if (trip.Status != "PENDING_WH_APPROVAL")
-            throw new InvalidOperationException(
-                $"Không thể duyệt — chuyến đang ở trạng thái '{trip.Status}'. " +
-                $"Chỉ duyệt được khi trạng thái là PENDING_WH_APPROVAL.");
-
-        // Approve: chuyển trip → LOADING, orders → LOADING
-        trip.Status = "LOADING";
-        foreach (var order in trip.TransportOrders)
-        {
-            order.Status = "LOADING";
-        }
-
-        // Gửi notification cho Loader
-        await NotifyLoadersAsync(tripId);
-
-        await _context.SaveChangesAsync();
-
-        try
-        {
-            await _hubContext.Clients.Groups("Group_Dispatcher", "Group_Admin")
-                .SendAsync("WarehouseOrderApproved", new
-                {
-                    TripId = tripId,
-                    Status = "LOADING",
-                    ApprovedBy = approvedBy
-                });
-        }
-        catch (Exception)
-        {
-            // Fail-safe to avoid blocking API if SignalR fails
-        }
-
-        return new WarehouseOrderResult
-        {
-            TripId = tripId,
-            Status = "APPROVED",
-            ApprovedBy = approvedBy,
-            ApprovedAt = DateTime.UtcNow,
-            Orders = trip.TransportOrders.Select(o => new OrderSummary
-            {
-                OrderId = o.OrderId,
-                TrackingCode = o.TrackingCode,
-                ItemName = o.ItemName,
-                Quantity = o.Quantity,
-                WeightKg = o.ExpectedWeightKg,
-                Cbm = o.ExpectedCbm,
-                TempCondition = o.TempCondition
-            }).ToList(),
-            NotifiedUsers = 1
-        };
-    }
-
-    public async Task<WarehouseOrderResult> RejectWarehouseOrderAsync(
-        Guid tripId, Guid rejectedBy, string reason)
-    {
-        var trip = await _context.MasterTrips
-            .Include(t => t.TransportOrders)
-            .FirstOrDefaultAsync(t => t.TripId == tripId)
-            ?? throw new KeyNotFoundException("Không tìm thấy chuyến hàng.");
-
-        if (trip.Status != "PENDING_WH_APPROVAL")
-            throw new InvalidOperationException(
-                $"Không thể từ chối — chuyến đang ở trạng thái '{trip.Status}'.");
-
-        // Reject: chuyển trip → WH_REJECTED, orders → IN_WAREHOUSE
-        trip.Status = "WH_REJECTED";
-        foreach (var order in trip.TransportOrders)
-        {
-            order.Status = "IN_WAREHOUSE";
-            order.MasterTripId = null;
-        }
-
-        // Cập nhật LPNs liên quan về trạng thái IN_STOCK và xoá TripId
-        var lpns = await _context.Lpns.Where(l => l.TripId == tripId).ToListAsync();
-        foreach (var lpn in lpns)
-        {
-            lpn.State = LpnState.IN_STOCK;
-            lpn.TripId = null;
-        }
-
-        await _context.SaveChangesAsync();
-
-        try
-        {
-            await _hubContext.Clients.Groups("Group_Dispatcher", "Group_Admin")
-                .SendAsync("WarehouseOrderRejected", new
-                {
-                    TripId = tripId,
-                    Status = "WH_REJECTED",
-                    RejectionReason = reason
-                });
-        }
-        catch (Exception)
-        {
-            // Fail-safe to avoid blocking API if SignalR fails
-        }
-
-        return new WarehouseOrderResult
-        {
-            TripId = tripId,
-            Status = "WH_REJECTED",
-            RejectionReason = reason,
-            Orders = trip.TransportOrders.Select(o => new OrderSummary
-            {
-                OrderId = o.OrderId,
-                TrackingCode = o.TrackingCode,
-                ItemName = o.ItemName,
-                Quantity = o.Quantity,
-                WeightKg = o.ExpectedWeightKg,
-                Cbm = o.ExpectedCbm,
-                TempCondition = o.TempCondition
-            }).ToList()
-        };
+        return new StartPickingResult(tripId, "PICKING", lpnCount);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1363,164 +1155,6 @@ public class DispatchService : IDispatchService
             TripStatus = trip.Status ?? "SEALED",
             WaybillUrl = waybillUrl
         };
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    //  BACKLOG — Xử lý hàng tồn
-    // ═══════════════════════════════════════════════════════════════════════
-
-    public async Task<BacklogDispatchResult> ProcessBacklogOrdersAsync(
-        Guid originLocationId, DateTime plannedStart, DateTime plannedEnd, int backlogDays = 1)
-    {
-        var originLocation = await _context.Locations.FindAsync(originLocationId)
-            ?? throw new InvalidOperationException("LocationId kho xuất phát không tồn tại.");
-
-        var cutoffDate = DateTime.UtcNow.AddDays(-backlogDays);
-
-        // Quét đơn hàng tồn kho lâu
-        var backlogOrders = await _context.TransportOrders
-            .Include(o => o.DestLocationNavigation)
-            .Where(o => o.Status == "IN_WAREHOUSE"
-                     && o.WarehouseReceipts.Any()
-                     && o.CreatedAt.HasValue
-                     && o.CreatedAt.Value < cutoffDate)
-            .OrderBy(o => o.CreatedAt)
-            .ToListAsync();
-
-        if (backlogOrders.Count == 0)
-            throw new InvalidOperationException(
-                $"Không có đơn hàng tồn kho quá {backlogDays} ngày.");
-
-        var result = new BacklogDispatchResult();
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-
-        // Nhóm theo nhiệt độ
-        var tempGroups = backlogOrders
-            .Where(o => o.DestLocation.HasValue && o.DestLocationNavigation != null)
-            .GroupBy(o => NormalizeTempGroup(o.TempCondition))
-            .ToList();
-
-        // Lấy danh sách xe bận
-        var busyVehicleIds = await _context.MasterTrips
-            .Where(t => t.Status == "PLANNED" || t.Status == "LOADING"
-                     || t.Status == "SEALED" || t.Status == "DISPATCHED"
-                     || t.Status == "PENDING_WH_APPROVAL")
-            .Where(t => t.VehicleId.HasValue)
-            .Select(t => t.VehicleId!.Value)
-            .Distinct()
-            .ToListAsync();
-
-        foreach (var group in tempGroups)
-        {
-            var batchOrders = group.ToList();
-            var batchWeight = batchOrders.Sum(o => o.ExpectedWeightKg);
-            var batchCbm = batchOrders.Sum(o => o.ExpectedCbm);
-            var batchMinTemp = GetTargetTemperature(batchOrders);
-
-            // Tìm xe nhỏ (≤ 2000kg) phù hợp
-            var smallVehicle = await _context.Vehicles
-                .Include(v => v.Driver)
-                    .ThenInclude(d => d!.DriverLicenses)
-                .Where(v => v.Status == "ACTIVE"
-                         && v.DriverId != null
-                         && v.MaxWeight <= 2000m
-                         && v.MaxWeight >= batchWeight
-                         && v.MaxCbm >= batchCbm
-                         && v.MinTemp <= batchMinTemp)
-                .ToListAsync();
-
-            var eligibleSmallVehicle = smallVehicle
-                .Where(v => !busyVehicleIds.Contains(v.VehicleId))
-                .Where(v => v.Driver != null
-                         && v.Driver.DriverLicenses.Any(l =>
-                             l.ExpiryDate >= today
-                             && (l.Status == null || l.Status == "ACTIVE")))
-                .OrderBy(v => v.MaxWeight)
-                .FirstOrDefault();
-
-            if (eligibleSmallVehicle == null)
-            {
-                // Không có xe nhỏ phù hợp → skip
-                result.SkippedOrders.AddRange(batchOrders.Select(o => new OrderSummary
-                {
-                    OrderId = o.OrderId,
-                    TrackingCode = o.TrackingCode,
-                    ItemName = o.ItemName,
-                    Quantity = o.Quantity,
-                    WeightKg = o.ExpectedWeightKg,
-                    Cbm = o.ExpectedCbm,
-                    TempCondition = o.TempCondition
-                }));
-                continue;
-            }
-
-            var driver = eligibleSmallVehicle.Driver!;
-
-            // Tính lộ trình
-            var routeResult = await BuildOptimalRouteAsync(
-                originLocation, batchOrders, eligibleSmallVehicle);
-
-            // Tạo MasterTrip
-            var lastDestId = routeResult.StopSequence.Last().LocationId;
-            var trip = new MasterTrip
-            {
-                TripId = Guid.NewGuid(),
-                VehicleId = eligibleSmallVehicle.VehicleId,
-                DriverId = driver.DriverId,
-                OriginLocationId = originLocation.LocationId,
-                DestinationLocationId = lastDestId,
-                TotalDistanceKm = routeResult.TotalDistanceKm,
-                TargetTemperature = batchMinTemp,
-                PlannedStartTime = plannedStart,
-                PlannedEndTime = plannedEnd,
-                Status = "PLANNED",
-                CreatedAt = DateTime.UtcNow,
-            };
-            _context.MasterTrips.Add(trip);
-
-            // Tạo TripStops
-            foreach (var stop in routeResult.StopSequence)
-            {
-                _context.TripStops.Add(new TripStop
-                {
-                    StopId = Guid.NewGuid(),
-                    TripId = trip.TripId,
-                    LocationId = stop.LocationId,
-                    StopSequence = stop.Sequence,
-                    StopType = "DELIVERY",
-                    Status = "PLANNED",
-                    PlannedArrivalTime = plannedStart.AddHours(stop.Sequence),
-                    PlannedDepartureTime = plannedStart.AddHours(stop.Sequence).AddMinutes(20),
-                    CreatedAt = DateTime.UtcNow
-                });
-            }
-
-            // Cập nhật orders
-            foreach (var order in batchOrders)
-            {
-                order.Status = "DISPATCHED_PENDING";
-                order.MasterTripId = trip.TripId;
-            }
-
-            busyVehicleIds.Add(eligibleSmallVehicle.VehicleId);
-
-            result.DispatchedTrips.Add(new BacklogTripSummary
-            {
-                TripId = trip.TripId,
-                TruckPlate = eligibleSmallVehicle.TruckPlate,
-                DriverName = driver.FullName,
-                OrderCount = batchOrders.Count,
-                TotalWeightKg = batchWeight,
-                TempCondition = group.Key
-            });
-            result.TotalProcessed += batchOrders.Count;
-        }
-
-        result.TotalSkipped = result.SkippedOrders.Count;
-
-        await _context.SaveChangesAsync();
-
-        return result;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
