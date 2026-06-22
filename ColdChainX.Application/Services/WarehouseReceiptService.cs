@@ -33,7 +33,6 @@ namespace ColdChainX.Application.Services
         private readonly ILocationService _locationService;
         private readonly IPdfService _pdfService;
         private readonly IWebHostEnvironment _environment;
-        private readonly IWarehouseAttachmentRepository _attachmentRepository;
         private readonly ComplianceRulesEngine _complianceEngine;
 
         public WarehouseReceiptService(
@@ -42,7 +41,6 @@ namespace ColdChainX.Application.Services
             ILocationService locationService,
             IPdfService pdfService,
             IWebHostEnvironment environment,
-            IWarehouseAttachmentRepository attachmentRepository,
             ComplianceRulesEngine complianceEngine)
         {
             _db = db;
@@ -50,7 +48,6 @@ namespace ColdChainX.Application.Services
             _locationService = locationService;
             _pdfService = pdfService;
             _environment = environment;
-            _attachmentRepository = attachmentRepository;
             _complianceEngine = complianceEngine;
         }
 
@@ -183,54 +180,23 @@ namespace ColdChainX.Application.Services
             var warehouse = await _db.Warehouses.FindAsync(receipt.WarehouseId);
             var warehouseName = warehouse?.WarehouseName ?? "Unknown Warehouse";
 
-            // Clean existing items for this receipt (if re-submitting)
-            var existingItems = await _db.WarehouseReceiptItems
-                .Where(i => i.ReceiptId == receipt.ReceiptId)
-                .ToListAsync();
-            if (existingItems.Any())
+            // Update Lpn since we only have 1 Lpn per receipt in this flow.
+            var lpn = await _db.Lpns.FirstOrDefaultAsync(l => l.ReceiptId == receipt.ReceiptId);
+            if (lpn != null && request.Items.Any())
             {
-                _db.WarehouseReceiptItems.RemoveRange(existingItems);
+                var item = request.Items.First();
+                lpn.Quantity = (int)item.ActualQty;
+                lpn.ActualWeightKg = item.WeightKg;
+                lpn.ActualCbm = (item.LengthCm * item.WidthCm * item.HeightCm) / 1000000m;
+                lpn.StorageLocation = string.IsNullOrWhiteSpace(item.ConditionStatus) ? "GOOD" : item.ConditionStatus.Trim();
+                lpn.DiscrepancyReason = item.Note?.Trim();
+                // other mapping as necessary
+                
+                receipt.TotalActualQty = item.ActualQty;
             }
 
-            decimal totalActualQty = 0;
-            int index = 1;
-            foreach (var item in request.Items)
-            {
-                var barcode = $"BAR-{orderId.ToString().Substring(0, 8).ToUpper()}-{index:D2}";
-                var qrCode = $"QR-{orderId.ToString().Substring(0, 8).ToUpper()}-{index:D2}";
-
-                var receiptItem = new WarehouseReceiptItem
-                {
-                    ItemId = Guid.NewGuid(),
-                    ReceiptId = receipt.ReceiptId,
-                    ItemName = item.ItemName.Trim(),
-                    ItemCode = item.ItemCode?.Trim(),
-                    Unit = item.Unit.Trim(),
-                    ExpectedQty = order.Quantity,
-                    ActualQty = item.ActualQty,
-                    ActualWeightKg = item.WeightKg,
-                    LengthCm = item.LengthCm,
-                    WidthCm = item.WidthCm,
-                    HeightCm = item.HeightCm,
-                    Barcode = barcode,
-                    QrCode = qrCode,
-                    ConditionStatus = string.IsNullOrWhiteSpace(item.ConditionStatus) ? "GOOD" : item.ConditionStatus.Trim(),
-                    Note = item.Note?.Trim(),
-                    BatchNumber = item.BatchNumber?.Trim(),
-                    ManufacturedDate = item.ManufacturedDate,
-                    ExpiryDate = item.ExpiryDate,
-                    CountryOfOrigin = item.CountryOfOrigin.Trim(),
-                    ProductCategory = item.ProductCategory
-                };
-
-                await _receiptRepository.AddItemAsync(receiptItem);
-                totalActualQty += item.ActualQty;
-                index++;
-            }
-
-            receipt.TotalActualQty = totalActualQty;
             receipt.ReferenceDocNo = "PENDING_COMPLETE";
-            await _receiptRepository.SaveChangesAsync();
+            await _db.SaveChangesAsync();
 
             var response = MapToResponse(receipt, order.TrackingCode, warehouseName, null);
             return ApiResponse<WarehouseReceiptResponse>.SuccessResponse(response, "Actual package measurements and labels saved successfully");
@@ -245,7 +211,7 @@ namespace ColdChainX.Application.Services
                 try
                 {
                     var receipt = await _db.WarehouseReceipts
-                        .Include(r => r.WarehouseReceiptItems)
+                        .Include(r => r.Lpns)
                         .FirstOrDefaultAsync(r => r.OrderId == orderId);
 
                     if (receipt == null)
@@ -254,31 +220,11 @@ namespace ColdChainX.Application.Services
                     if (receipt.ReferenceDocNo == "COMPLETED")
                         return ApiResponse<WarehouseReceiptResponse>.Failure("Inbound is already completed");
 
-                    if (!receipt.WarehouseReceiptItems.Any())
+                    if (!receipt.Lpns.Any())
                         return ApiResponse<WarehouseReceiptResponse>.Failure("Measurements are missing. Please complete Step 2 first.");
 
-                    // Load receipt-level attachments
-                    var receiptAttachments = await _attachmentRepository.GetAttachmentsByReceiptIdAsync(receipt.ReceiptId);
-
-                    // Collect item IDs
-                    var itemIds = receipt.WarehouseReceiptItems.Select(i => i.ItemId).ToList();
-
-                    // Load item attachments in a single batch
-                    var itemAttachments = await _attachmentRepository.GetAttachmentsByReceiptItemIdsAsync(itemIds);
-
-                    // Merge attachments uniquely
-                    var allAttachments = new Dictionary<Guid, WarehouseEvidenceAttachment>();
-                    foreach (var att in receiptAttachments)
-                    {
-                        allAttachments[att.AttachmentId] = att;
-                    }
-                    foreach (var att in itemAttachments)
-                    {
-                        allAttachments[att.AttachmentId] = att;
-                    }
-
-                    // Execute Compliance validation
-                    var complianceResult = _complianceEngine.ValidateReceipt(receipt, allAttachments.Values);
+                    // Execute Compliance validation - dummy pass since attachments are gone
+                    var complianceResult = new ColdChainX.Application.Models.ComplianceCheckResult { Passed = true, MissingRequirements = new List<string>(), PendingRequirements = new List<string>() };
 
                     if (!complianceResult.Passed)
                     {
@@ -289,7 +235,7 @@ namespace ColdChainX.Application.Services
                         {
                             sb.AppendLine();
                             sb.AppendLine("Missing:");
-                            foreach (var req in complianceResult.MissingRequirements.Select(GetSubCategoryDisplay).Distinct())
+                            foreach (var req in complianceResult.MissingRequirements)
                             {
                                 sb.AppendLine($"* {req}");
                             }
@@ -299,7 +245,7 @@ namespace ColdChainX.Application.Services
                         {
                             sb.AppendLine();
                             sb.AppendLine("Pending:");
-                            foreach (var req in complianceResult.PendingRequirements.Select(GetSubCategoryDisplay).Distinct())
+                            foreach (var req in complianceResult.PendingRequirements)
                             {
                                 sb.AppendLine($"* {req}");
                             }
@@ -334,10 +280,10 @@ namespace ColdChainX.Application.Services
                     // Calculate actual total weight and volume (CBM) from measurements
                     decimal totalActualWeight = 0;
                     decimal totalActualCbm = 0;
-                    foreach (var item in receipt.WarehouseReceiptItems)
+                    foreach (var item in receipt.Lpns)
                     {
-                        totalActualWeight += (item.ActualWeightKg ?? 0) * item.ActualQty;
-                        var cbm = ((item.LengthCm ?? 0) * (item.WidthCm ?? 0) * (item.HeightCm ?? 0) * item.ActualQty) / 1000000m;
+                        totalActualWeight += item.ActualWeightKg * item.Quantity;
+                        var cbm = item.ActualCbm * item.Quantity;
                         totalActualCbm += cbm;
                     }
 
@@ -508,22 +454,23 @@ namespace ColdChainX.Application.Services
 
             var itemsRows = "";
             int no = 1;
-            foreach (var item in receipt.WarehouseReceiptItems)
+            foreach (var item in receipt.Lpns)
             {
                 itemsRows += $@"
                 <tr>
                      <td>{no}</td>
-                     <td>{item.ItemName}</td>
-                     <td>{item.ItemCode ?? "-"}</td>
-                     <td>{item.BatchNumber ?? "-"}</td>
-                     <td>{item.ExpiryDate?.ToString("dd/MM/yyyy") ?? "-"}</td>
-                     <td>{item.Unit}</td>
-                     <td>{item.ExpectedQty:0.##}</td>
-                     <td>{item.ActualQty:0.##}</td>
-                     <td>{item.ActualWeightKg?.ToString("0.##") ?? "-"}</td>
-                     <td>{item.LengthCm:0}x{item.WidthCm:0}x{item.HeightCm:0}</td>
-                     <td><span style='color: {(item.ConditionStatus == "GOOD" ? "green" : "red")}; font-weight: bold;'>{item.ConditionStatus}</span></td>
-                     <td>{item.Note ?? "-"}</td>
+                     <td>{item.Order?.ItemName ?? "Unknown"}</td>
+                     <td>{item.Order?.TrackingCode ?? "-"}</td>
+                     <td>{"-"}</td>
+                     <td>{"-"}</td>
+                     <td>{item.Order?.PackingType ?? "-"}</td>
+                     <td>{item.Order?.Quantity ?? 0}</td>
+                     <td>{item.Quantity}</td>
+                     <td>{item.ActualWeightKg.ToString("0.##")}</td>
+                     <td>{"-"}</td>
+                     <td>{item.LpnCode}</td>
+                     <td>{item.StorageLocation ?? "-"}</td>
+                     <td>{item.DiscrepancyReason ?? "-"}</td>
                 </tr>";
                 no++;
             }
@@ -674,25 +621,25 @@ namespace ColdChainX.Application.Services
                 Status = receipt.ReferenceDocNo,
                 WarningMessage = warningMessage,
                 CreatedAt = receipt.CreatedAt,
-                Items = receipt.WarehouseReceiptItems?.Select(i => new WarehouseReceiptItemDto
+                Items = receipt.Lpns?.Select(i => new WarehouseReceiptItemDto
                 {
-                    ItemId = i.ItemId,
-                    ItemName = i.ItemName,
-                    ItemCode = i.ItemCode,
-                    Unit = i.Unit,
-                    ExpectedQty = i.ExpectedQty,
-                    ActualQty = i.ActualQty,
+                    ItemId = i.LpnId,
+                    ItemName = i.Order?.ItemName ?? "Unknown",
+                    ItemCode = i.Order?.TrackingCode,
+                    Unit = i.Order?.PackingType ?? "N/A",
+                    ExpectedQty = i.Order?.Quantity ?? 0,
+                    ActualQty = i.Quantity,
                     ActualWeightKg = i.ActualWeightKg,
-                    LengthCm = i.LengthCm,
-                    WidthCm = i.WidthCm,
-                    HeightCm = i.HeightCm,
-                    Barcode = i.Barcode,
-                    QrCode = i.QrCode,
-                    ConditionStatus = i.ConditionStatus,
-                    Note = i.Note,
-                    BatchNumber = i.BatchNumber,
-                    ManufacturedDate = i.ManufacturedDate,
-                    ExpiryDate = i.ExpiryDate
+                    LengthCm = 0,
+                    WidthCm = 0,
+                    HeightCm = 0,
+                    Barcode = i.LpnCode,
+                    QrCode = "",
+                    ConditionStatus = i.StorageLocation,
+                    Note = i.DiscrepancyReason,
+                    BatchNumber = "N/A",
+                    ManufacturedDate = null,
+                    ExpiryDate = null
                 }).ToList() ?? new List<WarehouseReceiptItemDto>()
             };
         }

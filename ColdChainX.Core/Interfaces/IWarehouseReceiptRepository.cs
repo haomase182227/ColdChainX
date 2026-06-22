@@ -10,9 +10,7 @@ namespace ColdChainX.Core.Interfaces
         Task<WarehouseReceipt?> GetByIdAsync(Guid receiptId);
         Task<WarehouseReceipt?> GetByOrderIdAsync(Guid orderId);
         Task<List<WarehouseReceipt>> GetActiveReceiptsByWarehouseIdAsync(Guid warehouseId);
-        Task<List<WarehouseReceiptItem>> GetReceiptItemsByItemCodesAsync(IEnumerable<string> itemCodes);
         Task AddAsync(WarehouseReceipt receipt);
-        Task AddItemAsync(WarehouseReceiptItem item);
         Task SaveChangesAsync();
     }
 }

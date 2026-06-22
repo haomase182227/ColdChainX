@@ -24,7 +24,7 @@ namespace ColdChainX.Infrastructure.Repositories
                 .IgnoreQueryFilters()
                 .Include(r => r.Warehouse)
                 .Include(r => r.Order)
-                .Include(r => r.WarehouseReceiptItems)
+                .Include(r => r.Lpns)
                 .FirstOrDefaultAsync(r => r.ReceiptId == receiptId);
         }
 
@@ -34,7 +34,7 @@ namespace ColdChainX.Infrastructure.Repositories
                 .IgnoreQueryFilters()
                 .Include(r => r.Warehouse)
                 .Include(r => r.Order)
-                .Include(r => r.WarehouseReceiptItems)
+                .Include(r => r.Lpns)
                 .FirstOrDefaultAsync(r => r.OrderId == orderId);
         }
 
@@ -43,17 +43,7 @@ namespace ColdChainX.Infrastructure.Repositories
             // Fetch receipts that are completed/active at the warehouse
             return await _db.WarehouseReceipts
                 .Where(r => r.WarehouseId == warehouseId)
-                .Include(r => r.WarehouseReceiptItems)
-                .ToListAsync();
-        }
-
-        public async Task<List<WarehouseReceiptItem>> GetReceiptItemsByItemCodesAsync(IEnumerable<string> itemCodes)
-        {
-            if (itemCodes == null || !itemCodes.Any())
-                return new List<WarehouseReceiptItem>();
-
-            return await _db.WarehouseReceiptItems
-                .Where(i => i.ItemCode != null && itemCodes.Contains(i.ItemCode))
+                .Include(r => r.Lpns)
                 .ToListAsync();
         }
 
@@ -62,10 +52,7 @@ namespace ColdChainX.Infrastructure.Repositories
             await _db.WarehouseReceipts.AddAsync(receipt);
         }
 
-        public async Task AddItemAsync(WarehouseReceiptItem item)
-        {
-            await _db.WarehouseReceiptItems.AddAsync(item);
-        }
+
 
         public async Task SaveChangesAsync()
         {
