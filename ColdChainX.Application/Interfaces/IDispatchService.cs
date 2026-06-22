@@ -21,17 +21,11 @@ public interface IDispatchService
     Task<ManualDispatchResult> ManualDispatchAsync(ManualDispatchRequest request);
 
     // ═══════════════════════════════════════════════════════════════════════
-    //  API 2: WAREHOUSE ORDER — Lệnh bốc xếp cho kho
+    //  API 2: START PICKING — Bắt đầu lấy hàng từ kho
     // ═══════════════════════════════════════════════════════════════════════
 
-    /// <summary>Tạo lệnh bốc xếp cho kho, gửi thông báo WH Monitor duyệt.</summary>
-    Task<WarehouseOrderResult> CreateWarehouseOrderAsync(Guid tripId, Guid createdBy);
-
-    /// <summary>WH Monitor duyệt lệnh → chuyển orders sang LOADING.</summary>
-    Task<WarehouseOrderResult> ApproveWarehouseOrderAsync(Guid tripId, Guid approvedBy);
-
-    /// <summary>WH Monitor từ chối lệnh → trả orders về IN_WAREHOUSE.</summary>
-    Task<WarehouseOrderResult> RejectWarehouseOrderAsync(Guid tripId, Guid rejectedBy, string reason);
+    /// <summary>Chuyển trip PLANNED → PICKING, thông báo loader bắt đầu lấy hàng.</summary>
+    Task<StartPickingResult> StartPickingAsync(Guid tripId);
 
     // ═══════════════════════════════════════════════════════════════════════
     //  API 3: IOT CHECK — Kiểm tra tín hiệu IoT xe
@@ -48,15 +42,5 @@ public interface IDispatchService
     /// Kiểm tra tất cả đơn hàng đã chất lên xe chưa → kẹp chì → cấp E-Waybill.
     /// </summary>
     Task<SealAndDispatchResult> SealAndDispatchAsync(Guid tripId, string sealCode, Guid sealedBy);
-
-    // ═══════════════════════════════════════════════════════════════════════
-    //  BACKLOG — Xử lý hàng tồn
-    // ═══════════════════════════════════════════════════════════════════════
-
-    /// <summary>
-    /// Quét đơn hàng tồn kho lâu (> backlogDays ngày) → ghép chuyến xe nhỏ (≤ 2000kg).
-    /// </summary>
-    Task<BacklogDispatchResult> ProcessBacklogOrdersAsync(
-        Guid originLocationId, DateTime plannedStart, DateTime plannedEnd, int backlogDays = 1);
 
 }

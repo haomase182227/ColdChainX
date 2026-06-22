@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using ColdChainX.Application.DTOs.Dispatch;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
+using ColdChainX.Core.Enums;
 using ColdChainX.Infrastructure.Integration;
 using ColdChainX.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -62,38 +63,43 @@ public class DispatchService : IDispatchService
             vehicle.Status.Equals("MAINTENANCE", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException($"Xe {vehicle.TruckPlate} đang trong trạng thái bảo dưỡng.");
 
-        // ── STEP 2: Lấy đơn hàng đang ở kho ────────────────────────────────
-        var orders = await _context.TransportOrders
-            .Include(o => o.DestLocationNavigation)
-            .Where(o => request.OrderIds.Contains(o.OrderId)
-                        && o.Status == "IN_WAREHOUSE"
-                        && o.WarehouseReceipts.Any())
+        // ── STEP 2: Lấy LPNs đang ở kho ────────────────────────────────
+        var lpns = await _context.Lpns
+            .Include(l => l.Order)
+                .ThenInclude(o => o.DestLocationNavigation)
+            .Include(l => l.Receipt)
+            .Where(l => request.LpnIds.Contains(l.LpnId)
+                        && l.State == LpnState.IN_STOCK)
             .ToListAsync();
 
-        if (orders.Count == 0)
+        if (lpns.Count == 0)
             throw new InvalidOperationException(
-                "Không tìm thấy đơn hàng nào ở trạng thái IN_WAREHOUSE với các OrderId đã cung cấp.");
+                "Không tìm thấy LPN nào ở trạng thái IN_STOCK với các LpnId đã cung cấp.");
 
-        var warehouseIds = orders
-            .SelectMany(o => o.WarehouseReceipts)
-            .Select(w => w.WarehouseId)
+        var warehouseIds = lpns
+            .Select(l => l.Receipt.WarehouseId)
             .Distinct()
             .ToList();
 
         if (warehouseIds.Count > 1)
-            throw new InvalidOperationException("Tất cả các đơn hàng được chọn phải cùng thuộc một kho lưu trữ (WarehouseId).");
+            throw new InvalidOperationException("Tất cả các LPN được chọn phải cùng thuộc một kho lưu trữ (WarehouseId).");
 
-        var missingOrderIds = request.OrderIds
-            .Except(orders.Select(o => o.OrderId))
+        var missingLpnIds = request.LpnIds
+            .Except(lpns.Select(l => l.LpnId))
             .ToList();
-        if (missingOrderIds.Any())
+        if (missingLpnIds.Any())
             throw new InvalidOperationException(
-                $"Các đơn hàng sau không tồn tại hoặc không ở trạng thái IN_WAREHOUSE: " +
-                $"{string.Join(", ", missingOrderIds)}");
+                $"Các LPN sau không tồn tại hoặc không ở trạng thái IN_STOCK: " +
+                $"{string.Join(", ", missingLpnIds)}");
+
+        var orders = lpns
+            .GroupBy(l => l.OrderId)
+            .Select(g => g.First().Order)
+            .ToList();
 
         // ── STEP 3: Kiểm tra tải trọng & thể tích ──────────────────────────
-        var totalWeight = orders.Sum(o => o.ExpectedWeightKg);
-        var totalCbm    = orders.Sum(o => o.ExpectedCbm);
+        var totalWeight = lpns.Sum(l => l.ActualWeightKg);
+        var totalCbm    = lpns.Sum(l => l.ActualCbm);
 
         if (totalWeight > vehicle.MaxWeight)
             throw new InvalidOperationException(
@@ -112,7 +118,7 @@ public class DispatchService : IDispatchService
             originLocation, orders, vehicle);
 
         // ── STEP 6: Thuật toán LIFO container loading nội bộ ───────────────
-        var loadPlan = BuildLIFOLoadPlan(orders, routeResult.StopSequence);
+        var loadPlan = BuildLpnLIFOLoadPlan(lpns, routeResult.StopSequence);
 
         // ── STEP 7: Tạo MasterTrip ──────────────────────────────────────────
         var lastDestId = routeResult.StopSequence.Last().LocationId;
@@ -154,11 +160,16 @@ public class DispatchService : IDispatchService
             });
         }
 
-        // ── STEP 9: Cập nhật trạng thái đơn hàng → LOADING ─────────────────
-        foreach (var order in orders)
+        // ── STEP 9: Cập nhật trạng thái đơn hàng & LPN → ALLOCATED / LOADING ─────────────────
+        foreach (var lpn in lpns)
         {
-            order.Status       = "LOADING";
-            order.MasterTripId = masterTrip.TripId;
+            lpn.TripId = masterTrip.TripId;
+            lpn.State = LpnState.ALLOCATED;
+            if (lpn.Order != null)
+            {
+                lpn.Order.Status = "LOADING";
+                lpn.Order.MasterTripId = masterTrip.TripId;
+            }
         }
 
         // ── STEP 10: Gửi thông báo cho Điều phối viên (Dispatcher) ─────────
@@ -171,17 +182,19 @@ public class DispatchService : IDispatchService
         // ── STEP 11: Build kết quả trả về ──────────────────────────────────
         var routeStops = routeResult.StopSequence.Select(s =>
         {
-            var stopOrders = orders
-                .Where(o => o.DestLocation == s.LocationId)
-                .Select(o => new OrderSummary
+            var stopLpns = lpns
+                .Where(l => l.Order?.DestLocation == s.LocationId)
+                .Select(l => new LpnSummary
                 {
-                    OrderId       = o.OrderId,
-                    TrackingCode  = o.TrackingCode,
-                    ItemName      = o.ItemName,
-                    Quantity      = o.Quantity,
-                    WeightKg      = o.ExpectedWeightKg,
-                    Cbm           = o.ExpectedCbm,
-                    TempCondition = o.TempCondition
+                    LpnId = l.LpnId,
+                    LpnCode = l.LpnCode,
+                    OrderId = l.OrderId,
+                    OrderTrackingCode = l.Order?.TrackingCode ?? string.Empty,
+                    ItemName = l.Order?.ItemName ?? string.Empty,
+                    Quantity = l.Quantity,
+                    WeightKg = l.ActualWeightKg,
+                    Cbm = l.ActualCbm,
+                    TempCondition = l.Order?.TempCondition ?? "AMBIENT"
                 }).ToList();
 
             return new RouteStop
@@ -192,18 +205,20 @@ public class DispatchService : IDispatchService
                 Latitude               = s.Latitude,
                 Longitude              = s.Longitude,
                 DistanceFromPreviousKm = s.DistanceFromPreviousKm,
-                OrdersToUnload         = stopOrders
+                LpnsToUnload           = stopLpns
             };
         }).ToList();
 
         var dispatchInstructions = loadPlan.Select(li => new DispatchInstruction
         {
+            LpnId          = li.LpnId,
+            LpnCode        = li.LpnCode,
             OrderId        = li.OrderId,
             TrackingCode   = li.TrackingCode,
             ItemName       = li.ItemName,
             Action         = "LOAD",
-            PreviousStatus = "IN_WAREHOUSE",
-            TargetStatus   = "LOADING",
+            PreviousStatus = "IN_STOCK",
+            TargetStatus   = "ALLOCATED",
             LoadOrder      = li.LoadOrder,
             Zone           = li.Zone
         }).OrderBy(d => d.LoadOrder).ToList();
@@ -383,6 +398,63 @@ public class DispatchService : IDispatchService
                 ItemName            = order.ItemName,
                 WeightKg            = order.ExpectedWeightKg,
                 Cbm                 = order.ExpectedCbm,
+                TempCondition       = order.TempCondition,
+                Zone                = zone,
+                DeliveryLocationId  = order.DestLocation!.Value,
+                DeliveryStopSequence = item.StopSeq,
+                Reason              = reason
+            });
+        }
+
+        return result;
+    }
+
+    private static List<LoadInstruction> BuildLpnLIFOLoadPlan(
+        List<Lpn> lpns,
+        List<StopInfo> stopSequence)
+    {
+        var stopSeqMap = stopSequence.ToDictionary(s => s.LocationId, s => s.Sequence);
+
+        var enriched = lpns
+            .Where(l => l.Order != null && l.Order.DestLocation.HasValue)
+            .Select(l => new
+            {
+                Lpn         = l,
+                StopSeq     = stopSeqMap.TryGetValue(l.Order.DestLocation!.Value, out var seq) ? seq : 999,
+                TempZone    = ClassifyTempZone(l.Order.TempCondition),
+                TempZoneOrd = TempZoneOrder(l.Order.TempCondition)
+            })
+            .ToList();
+
+        var sorted = enriched
+            .OrderByDescending(x => x.StopSeq)          // điểm cuối vào xe trước
+            .ThenByDescending(x => x.Lpn.ActualWeightKg)  // nặng dưới
+            .ThenBy(x => x.TempZoneOrd)                  // frozen trước
+            .ToList();
+
+        var result = new List<LoadInstruction>();
+        for (int i = 0; i < sorted.Count; i++)
+        {
+            var item   = sorted[i];
+            var lpn    = item.Lpn;
+            var order  = lpn.Order;
+            var zone   = item.TempZone;
+
+            if (item.TempZoneOrd == 0) zone = "REAR";
+
+            var reason = BuildLoadReason(item.StopSeq, stopSequence.Count,
+                                         item.TempZoneOrd, lpn.ActualWeightKg);
+
+            result.Add(new LoadInstruction
+            {
+                LoadOrder           = i + 1,
+                LpnId               = lpn.LpnId,
+                LpnCode             = lpn.LpnCode,
+                OrderId             = order.OrderId,
+                TrackingCode        = order.TrackingCode,
+                ItemName            = order.ItemName,
+                WeightKg            = lpn.ActualWeightKg,
+                Cbm                 = lpn.ActualCbm,
                 TempCondition       = order.TempCondition,
                 Zone                = zone,
                 DeliveryLocationId  = order.DestLocation!.Value,
@@ -601,34 +673,29 @@ public class DispatchService : IDispatchService
         var originLocation = await _context.Locations.FindAsync(request.OriginWarehouseLocationId)
             ?? throw new InvalidOperationException("LocationId kho xuất phát không tồn tại.");
 
-        // 2. Validate đơn hàng
-        var orders = await _context.TransportOrders
-            .Include(o => o.DestLocationNavigation)
-            .Include(o => o.WarehouseReceipts)
-            .Where(o => request.OrderIds.Contains(o.OrderId))
+        // 2. Validate LPNs
+        var lpns = await _context.Lpns
+            .Include(l => l.Order)
+                .ThenInclude(o => o.DestLocationNavigation)
+            .Include(l => l.Receipt)
+            .Where(l => request.LpnIds.Contains(l.LpnId))
             .ToListAsync();
 
-        if (orders.Count == 0)
-            throw new InvalidOperationException("Không tìm thấy đơn hàng nào khớp với danh sách đã chọn.");
+        if (lpns.Count == 0)
+            throw new InvalidOperationException("Không tìm thấy LPN nào khớp với danh sách đã chọn.");
 
-        if (orders.Any(o => o.Status != "IN_WAREHOUSE" || !o.WarehouseReceipts.Any()))
-            throw new InvalidOperationException("Chỉ được ghép chuyến các đơn hàng có trạng thái IN_WAREHOUSE và đã có phiếu nhập kho.");
+        var missingLpns = request.LpnIds.Except(lpns.Select(l => l.LpnId)).ToList();
+        if (missingLpns.Any())
+            throw new InvalidOperationException($"Không tìm thấy các LPN sau: {string.Join(", ", missingLpns)}");
 
-        var warehouseIds = orders
-            .SelectMany(o => o.WarehouseReceipts)
-            .Select(w => w.WarehouseId)
-            .Distinct()
+        if (lpns.Any(l => l.State != LpnState.IN_STOCK))
+            throw new InvalidOperationException("Chỉ được ghép chuyến các LPN có trạng thái IN_STOCK.");
+
+
+        var orders = lpns
+            .GroupBy(l => l.OrderId)
+            .Select(g => g.First().Order)
             .ToList();
-
-        if (warehouseIds.Count > 1)
-            throw new InvalidOperationException("Tất cả các đơn hàng được chọn phải cùng thuộc một kho lưu trữ (WarehouseId).");
-
-        var missingOrders = request.OrderIds.Except(orders.Select(o => o.OrderId)).ToList();
-        if (missingOrders.Any())
-            throw new InvalidOperationException($"Không tìm thấy các đơn hàng sau: {string.Join(", ", missingOrders)}");
-
-        if (orders.Any(o => o.PickupLocation != request.OriginWarehouseLocationId))
-            throw new InvalidOperationException("Tất cả các đơn hàng được chọn phải cùng thuộc một kho xuất phát.");
 
         // 3. Check nhiệt độ
         var firstTemp = NormalizeTempGroup(orders.First().TempCondition);
@@ -657,19 +724,24 @@ public class DispatchService : IDispatchService
         if (activeLicense == null)
             throw new InvalidOperationException($"Tài xế {vehicle.Driver.FullName} không có bằng lái còn hạn.");
 
-        // Lấy danh sách TripId đang active để check xe bận (không coi trạng thái PLANNED là bận)
+        // SLA check — không chặn, chỉ cảnh báo
+        var lateLpns = lpns.Where(l => l.SlaDeadline.HasValue && l.SlaDeadline.Value < DateTime.UtcNow).ToList();
+
+        // Lấy danh sách TripId đang active để check xe bận
         var isBusy = await _context.MasterTrips
             .AnyAsync(t => t.VehicleId == request.VehicleId
-                        && (t.Status == "LOADING"
-                         || t.Status == "SEALED" || t.Status == "DISPATCHED"
-                         || t.Status == "PENDING_WH_APPROVAL"));
+                        && (t.Status == "PICKING"
+                         || t.Status == "LOADING"
+                         || t.Status == "LOADING_COMPLETED"
+                         || t.Status == "SEALED"
+                         || t.Status == "DISPATCHED"));
 
         if (isBusy)
             throw new InvalidOperationException($"Xe {vehicle.TruckPlate} hiện đang bận một chuyến khác.");
 
-        // 5. Kiểm tra tải trọng
-        var totalWeight = orders.Sum(o => o.ExpectedWeightKg);
-        var totalCbm = orders.Sum(o => o.ExpectedCbm);
+        // 5. Kiểm tra tải trọng dựa trên LPNs
+        var totalWeight = lpns.Sum(l => l.ActualWeightKg);
+        var totalCbm = lpns.Sum(l => l.ActualCbm);
         var requiredMinTemp = GetTargetTemperature(orders);
 
         if (totalWeight > vehicle.MaxWeight || totalCbm > vehicle.MaxCbm)
@@ -679,8 +751,8 @@ public class DispatchService : IDispatchService
         // 6. Tính lộ trình (TSP + Goong)
         var routeResult = await BuildOptimalRouteAsync(originLocation, orders, vehicle);
 
-        // 7. LIFO load plan
-        var loadPlan = BuildLIFOLoadPlan(orders, routeResult.StopSequence);
+        // 7. LIFO load plan dựa trên LPNs
+        var loadPlan = BuildLpnLIFOLoadPlan(lpns, routeResult.StopSequence);
 
         // 8. Navigation (Goong)
         var navigationWaypoints = new List<(decimal Lat, decimal Lon, string Address)>
@@ -744,10 +816,15 @@ public class DispatchService : IDispatchService
             });
         }
 
-        // Liên kết đơn hàng với chuyến đi nhưng giữ nguyên trạng thái IN_WAREHOUSE
-        foreach (var order in orders)
+        // Liên kết LPNs và đơn hàng với chuyến đi
+        foreach (var lpn in lpns)
         {
-            order.MasterTripId = masterTrip.TripId;
+            lpn.TripId = masterTrip.TripId;
+            lpn.State = LpnState.ALLOCATED;
+            if (lpn.Order != null)
+            {
+                lpn.Order.MasterTripId = masterTrip.TripId;
+            }
         }
 
         var notifiedCount = 0;
@@ -758,8 +835,18 @@ public class DispatchService : IDispatchService
         {
             Sequence = s.Sequence, LocationId = s.LocationId, Address = s.Address,
             Latitude = s.Latitude, Longitude = s.Longitude, DistanceFromPreviousKm = s.DistanceFromPreviousKm,
-            OrdersToUnload = orders.Where(o => o.DestLocation == s.LocationId).Select(o => new OrderSummary
-            { OrderId = o.OrderId, TrackingCode = o.TrackingCode, ItemName = o.ItemName, Quantity = o.Quantity, WeightKg = o.ExpectedWeightKg, Cbm = o.ExpectedCbm, TempCondition = o.TempCondition }).ToList()
+            LpnsToUnload = lpns.Where(l => l.Order?.DestLocation == s.LocationId).Select(l => new LpnSummary
+            {
+                LpnId = l.LpnId,
+                LpnCode = l.LpnCode,
+                OrderId = l.OrderId,
+                OrderTrackingCode = l.Order?.TrackingCode ?? string.Empty,
+                ItemName = l.Order?.ItemName ?? string.Empty,
+                Quantity = l.Quantity,
+                WeightKg = l.ActualWeightKg,
+                Cbm = l.ActualCbm,
+                TempCondition = l.Order?.TempCondition ?? "AMBIENT"
+            }).ToList()
         }).ToList();
 
         var routeInfo = new RouteInfo 
@@ -772,7 +859,18 @@ public class DispatchService : IDispatchService
         };
 
         var dispatchInstructions = loadPlan.Select(li => new DispatchInstruction
-        { OrderId = li.OrderId, TrackingCode = li.TrackingCode, ItemName = li.ItemName, Action = "LOAD", PreviousStatus = "IN_WAREHOUSE", TargetStatus = "IN_WAREHOUSE", LoadOrder = li.LoadOrder, Zone = li.Zone }).OrderBy(d => d.LoadOrder).ToList();
+        {
+            LpnId = li.LpnId,
+            LpnCode = li.LpnCode,
+            OrderId = li.OrderId,
+            TrackingCode = li.TrackingCode,
+            ItemName = li.ItemName,
+            Action = "LOAD",
+            PreviousStatus = "IN_STOCK",
+            TargetStatus = "ALLOCATED",
+            LoadOrder = li.LoadOrder,
+            Zone = li.Zone
+        }).OrderBy(d => d.LoadOrder).ToList();
 
         var daysToExpiry = activeLicense.ExpiryDate.DayNumber - today.DayNumber;
         var licenseStatus = daysToExpiry <= 30 ? "EXPIRING_SOON" : "VALID";
@@ -782,12 +880,17 @@ public class DispatchService : IDispatchService
             TripId = masterTrip.TripId,
             Vehicle = new VehicleInfo { VehicleId = vehicle.VehicleId, TruckPlate = vehicle.TruckPlate, MaxWeightKg = vehicle.MaxWeight, MaxCbm = vehicle.MaxCbm, TotalOrderWeightKg = totalWeight, TotalOrderCbm = totalCbm, WeightUtilizationPct = Math.Round(totalWeight / vehicle.MaxWeight * 100, 1), CbmUtilizationPct = Math.Round(totalCbm / vehicle.MaxCbm * 100, 1) },
             Driver = new DriverInfo { DriverId = vehicle.Driver.DriverId, FullName = vehicle.Driver.FullName, PhoneNumber = vehicle.Driver.PhoneNumber, IdentityNumber = vehicle.Driver.IdentityNumber, LicenseClass = activeLicense.LicenseClass, LicenseExpiry = activeLicense.ExpiryDate, LicenseStatus = licenseStatus },
-            SelectedOrders = orders.Select(o => new OrderSummary { OrderId = o.OrderId, TrackingCode = o.TrackingCode, ItemName = o.ItemName, Quantity = o.Quantity, WeightKg = o.ExpectedWeightKg, Cbm = o.ExpectedCbm, TempCondition = o.TempCondition }).ToList(),
+            SelectedLpns = lpns.Select(l => new LpnSummary { LpnId = l.LpnId, LpnCode = l.LpnCode, OrderId = l.OrderId, OrderTrackingCode = l.Order?.TrackingCode ?? string.Empty, ItemName = l.Order?.ItemName ?? string.Empty, Quantity = l.Quantity, WeightKg = l.ActualWeightKg, Cbm = l.ActualCbm, TempCondition = l.Order?.TempCondition ?? "AMBIENT" }).ToList(),
             Route = routeInfo,
             Navigation = new NavigationInfo { TotalDistanceKm = directionsResult.TotalDistanceKm, TotalDurationMinutes = directionsResult.TotalDurationSeconds / 60, GoongRouteOverview = directionsResult.OverviewPolyline ?? "", Legs = directionsResult.Legs.Select((leg, idx) => new NavigationLeg { LegIndex = idx + 1, FromAddress = leg.StartAddress ?? "N/A", ToAddress = leg.EndAddress ?? "N/A", DistanceKm = leg.DistanceKm, DurationMinutes = leg.DurationSeconds / 60, Steps = leg.Steps.Select((step, sIdx) => new NavigationStep { StepIndex = sIdx + 1, Instruction = step.Instruction, DistanceKm = step.DistanceKm, DurationSeconds = step.DurationSeconds, Maneuver = step.Maneuver }).ToList() }).ToList() },
             LoadPlan = loadPlan,
             DispatchInstructions = dispatchInstructions,
-            NotifiedCoordinators = notifiedCount
+            NotifiedCoordinators = notifiedCount,
+            LateLpnCount = lateLpns.Count,
+            SlaWarning = lateLpns.Any()
+                ? $"{lateLpns.Count} LPN đã quá SLA deadline. Khuyến nghị dùng xe tải trọng ≤ 2000 kg."
+                : null,
+            SuggestedMaxPayloadKg = lateLpns.Any() ? 2000 : null
         };
     }
 
@@ -800,237 +903,42 @@ public class DispatchService : IDispatchService
         return "AMBIENT";
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  API 2: WAREHOUSE ORDER — Lệnh bốc xếp cho kho
-    // ═══════════════════════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════════════
+    //  API 2: START PICKING — Bat dau lay hang tu kho
+    // ══════════════════════════════════════════════════════════════════════
 
-    public async Task<WarehouseOrderResult> CreateWarehouseOrderAsync(Guid tripId, Guid createdBy)
+    public async Task<StartPickingResult> StartPickingAsync(Guid tripId)
     {
         var trip = await _context.MasterTrips
-            .Include(t => t.Vehicle)
-            .Include(t => t.TransportOrders)
             .FirstOrDefaultAsync(t => t.TripId == tripId)
             ?? throw new KeyNotFoundException("Không tìm thấy chuyến hàng.");
 
-        if (trip.Status != "PLANNED" && trip.Status != "DISPATCHED_PENDING"
-            && trip.Status != "SEALED" && trip.Status != "LOADING")
+        if (trip.Status != "PLANNED")
             throw new InvalidOperationException(
-                $"Chuyến hàng đang ở trạng thái '{trip.Status}', " +
-                $"chỉ có thể tạo lệnh kho khi trạng thái là PLANNED hoặc DISPATCHED_PENDING.");
+                $"Không thể bắt đầu picking — chuyến đang ở trạng thái '{trip.Status}'. " +
+                "Chỉ có thể bắt đầu picking khi trạng thái là PLANNED.");
 
-        // Chuyển trip sang PENDING_WH_APPROVAL
-        trip.Status = "PENDING_WH_APPROVAL";
-
-        // Lấy load plan để gửi kèm
-        var stops = await _context.TripStops
-            .Where(ts => ts.TripId == tripId)
-            .OrderBy(ts => ts.StopSequence)
-            .ToListAsync();
-        var stopInfos = stops.Select(s => new StopInfo
-        {
-            LocationId = s.LocationId ?? Guid.Empty,
-            Sequence = s.StopSequence
-        }).ToList();
-        var loadPlan = BuildLIFOLoadPlan(trip.TransportOrders.ToList(), stopInfos);
-
-        // Gửi notification cho WarehouseMonitor (fallback Admin)
-        var whMonitorIds = await _context.Users
-            .Include(u => u.Role)
-            .Where(u => u.Role != null
-                     && (u.Role.RoleName == "WarehouseMonitor" || u.Role.RoleName == "Admin" || u.Role.RoleName == "ADMIN")
-                     && (u.Status == null || u.Status == "ACTIVE"))
-            .Select(u => u.UserId)
-            .ToListAsync();
-
-        var notifiedCount = 0;
-        var actualTemplateId = await GetOrCreateTemplateAsync("DISPATCH_WH_ORDER",
-            "Lệnh bốc xếp chờ duyệt — Xe {vehicle}",
-            "Chuyến hàng {tripId} cần duyệt bốc xếp {orderCount} đơn hàng, tổng {totalWeight}kg.");
-
-        foreach (var userId in whMonitorIds)
-        {
-            var notifParams = JsonSerializer.Serialize(new Dictionary<string, string>
-            {
-                { "tripId", tripId.ToString() },
-                { "vehicle", trip.Vehicle?.TruckPlate ?? "N/A" },
-                { "orderCount", trip.TransportOrders.Count.ToString() },
-                { "totalWeight", trip.TransportOrders.Sum(o => o.ExpectedWeightKg).ToString("F1") },
-                { "action", "Duyệt hoặc từ chối lệnh bốc xếp" }
-            });
-
-            _context.Notifications.Add(new Notification
-            {
-                NotiId = Guid.NewGuid(),
-                UserId = userId,
-                SenderId = createdBy,
-                TemplateId = actualTemplateId,
-                Params = notifParams,
-                IsRead = false,
-                CreatedAt = DateTime.UtcNow
-            });
-            notifiedCount++;
-        }
+        trip.Status = "PICKING";
+        var lpnCount = await _context.Lpns.CountAsync(l => l.TripId == tripId);
 
         await _context.SaveChangesAsync();
 
         try
         {
-            await _hubContext.Clients.Groups("Group_WarehouseMonitor", "Group_Admin")
-                .SendAsync("WarehouseOrderCreated", new
+            await _hubContext.Clients.Groups("Group_Loader", "Group_WarehouseMonitor")
+                .SendAsync("PickingStarted", new
                 {
                     TripId = tripId,
-                    Status = "PENDING_WH_APPROVAL",
-                    Vehicle = trip.Vehicle?.TruckPlate ?? "N/A",
-                    OrderCount = trip.TransportOrders.Count,
-                    TotalWeight = trip.TransportOrders.Sum(o => o.ExpectedWeightKg)
+                    Status = "PICKING",
+                    LpnCount = lpnCount
                 });
         }
         catch (Exception)
         {
-            // Fail-safe to avoid blocking API if SignalR fails
+            // Fail-safe — không block API nếu SignalR lỗi
         }
 
-        return new WarehouseOrderResult
-        {
-            TripId = tripId,
-            Status = "PENDING_WH_APPROVAL",
-            Vehicle = trip.Vehicle == null ? null : new VehicleInfo
-            {
-                VehicleId = trip.Vehicle.VehicleId,
-                TruckPlate = trip.Vehicle.TruckPlate,
-                MaxWeightKg = trip.Vehicle.MaxWeight,
-                MaxCbm = trip.Vehicle.MaxCbm,
-                TotalOrderWeightKg = trip.TransportOrders.Sum(o => o.ExpectedWeightKg),
-                TotalOrderCbm = trip.TransportOrders.Sum(o => o.ExpectedCbm)
-            },
-            Orders = trip.TransportOrders.Select(o => new OrderSummary
-            {
-                OrderId = o.OrderId,
-                TrackingCode = o.TrackingCode,
-                ItemName = o.ItemName,
-                Quantity = o.Quantity,
-                WeightKg = o.ExpectedWeightKg,
-                Cbm = o.ExpectedCbm,
-                TempCondition = o.TempCondition
-            }).ToList(),
-            LoadPlan = loadPlan,
-            NotifiedUsers = notifiedCount
-        };
-    }
-
-    public async Task<WarehouseOrderResult> ApproveWarehouseOrderAsync(Guid tripId, Guid approvedBy)
-    {
-        var trip = await _context.MasterTrips
-            .Include(t => t.Vehicle)
-            .Include(t => t.TransportOrders)
-            .FirstOrDefaultAsync(t => t.TripId == tripId)
-            ?? throw new KeyNotFoundException("Không tìm thấy chuyến hàng.");
-
-        if (trip.Status != "PENDING_WH_APPROVAL")
-            throw new InvalidOperationException(
-                $"Không thể duyệt — chuyến đang ở trạng thái '{trip.Status}'. " +
-                $"Chỉ duyệt được khi trạng thái là PENDING_WH_APPROVAL.");
-
-        // Approve: chuyển trip → LOADING, orders → LOADING
-        trip.Status = "LOADING";
-        foreach (var order in trip.TransportOrders)
-        {
-            order.Status = "LOADING";
-        }
-
-        // Gửi notification cho Loader
-        await NotifyLoadersAsync(tripId);
-
-        await _context.SaveChangesAsync();
-
-        try
-        {
-            await _hubContext.Clients.Groups("Group_Dispatcher", "Group_Admin")
-                .SendAsync("WarehouseOrderApproved", new
-                {
-                    TripId = tripId,
-                    Status = "LOADING",
-                    ApprovedBy = approvedBy
-                });
-        }
-        catch (Exception)
-        {
-            // Fail-safe to avoid blocking API if SignalR fails
-        }
-
-        return new WarehouseOrderResult
-        {
-            TripId = tripId,
-            Status = "APPROVED",
-            ApprovedBy = approvedBy,
-            ApprovedAt = DateTime.UtcNow,
-            Orders = trip.TransportOrders.Select(o => new OrderSummary
-            {
-                OrderId = o.OrderId,
-                TrackingCode = o.TrackingCode,
-                ItemName = o.ItemName,
-                Quantity = o.Quantity,
-                WeightKg = o.ExpectedWeightKg,
-                Cbm = o.ExpectedCbm,
-                TempCondition = o.TempCondition
-            }).ToList(),
-            NotifiedUsers = 1
-        };
-    }
-
-    public async Task<WarehouseOrderResult> RejectWarehouseOrderAsync(
-        Guid tripId, Guid rejectedBy, string reason)
-    {
-        var trip = await _context.MasterTrips
-            .Include(t => t.TransportOrders)
-            .FirstOrDefaultAsync(t => t.TripId == tripId)
-            ?? throw new KeyNotFoundException("Không tìm thấy chuyến hàng.");
-
-        if (trip.Status != "PENDING_WH_APPROVAL")
-            throw new InvalidOperationException(
-                $"Không thể từ chối — chuyến đang ở trạng thái '{trip.Status}'.");
-
-        // Reject: chuyển trip → WH_REJECTED, orders → IN_WAREHOUSE
-        trip.Status = "WH_REJECTED";
-        foreach (var order in trip.TransportOrders)
-        {
-            order.Status = "IN_WAREHOUSE";
-            order.MasterTripId = null;
-        }
-
-        await _context.SaveChangesAsync();
-
-        try
-        {
-            await _hubContext.Clients.Groups("Group_Dispatcher", "Group_Admin")
-                .SendAsync("WarehouseOrderRejected", new
-                {
-                    TripId = tripId,
-                    Status = "WH_REJECTED",
-                    RejectionReason = reason
-                });
-        }
-        catch (Exception)
-        {
-            // Fail-safe to avoid blocking API if SignalR fails
-        }
-
-        return new WarehouseOrderResult
-        {
-            TripId = tripId,
-            Status = "WH_REJECTED",
-            RejectionReason = reason,
-            Orders = trip.TransportOrders.Select(o => new OrderSummary
-            {
-                OrderId = o.OrderId,
-                TrackingCode = o.TrackingCode,
-                ItemName = o.ItemName,
-                Quantity = o.Quantity,
-                WeightKg = o.ExpectedWeightKg,
-                Cbm = o.ExpectedCbm,
-                TempCondition = o.TempCondition
-            }).ToList()
-        };
+        return new StartPickingResult(tripId, "PICKING", lpnCount);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1121,32 +1029,40 @@ public class DispatchService : IDispatchService
             .FirstOrDefaultAsync(t => t.TripId == tripId)
             ?? throw new KeyNotFoundException("Không tìm thấy chuyến hàng.");
 
-        // Kiểm tra trạng thái: phải là LOADING (đã được WH approve)
-        if (trip.Status != "LOADING")
+        // Kiểm tra trạng thái: phải là LOADING_COMPLETED (kho đã xếp xong)
+        if (trip.Status != "LOADING_COMPLETED")
             throw new InvalidOperationException(
                 $"Không thể kẹp chì — chuyến đang ở trạng thái '{trip.Status}'. " +
-                $"Chỉ kẹp chì được khi trạng thái là LOADING (đã được kho duyệt).");
+                $"Chỉ kẹp chì được khi trạng thái là LOADING_COMPLETED (kho đã xếp xong).");
 
         // Kiểm tra đã kẹp chì chưa
-        if (trip.Seals.Any(s => s.Status == "APPLIED"))
+        if (trip.Seals.Any(s => s.Status == "APPLIED") || !string.IsNullOrEmpty(trip.SealNumber))
             throw new InvalidOperationException("Chuyến hàng đã được kẹp chì trước đó.");
 
-        // Kiểm tra tất cả đơn hàng đã được chất hết chưa
-        var totalOrders = trip.TransportOrders.Count;
-        var loadedOrders = trip.TransportOrders
-            .Count(o => o.Status == "LOADING" || o.Status == "LOADED");
-        var allLoaded = loadedOrders == totalOrders && totalOrders > 0;
+        // Lấy tất cả LPN của chuyến này để kiểm tra
+        var lpns = await _context.Lpns
+            .Include(l => l.Order)
+            .Where(l => l.TripId == tripId)
+            .ToListAsync();
+
+        if (lpns.Count == 0)
+            throw new InvalidOperationException("Chuyến đi không có LPN nào.");
+
+        // Kiểm tra tất cả LPN đã được bốc xếp (SHIPPED)
+        var totalLpns = lpns.Count;
+        var loadedLpns = lpns.Count(l => l.State == LpnState.SHIPPED);
+        var allLoaded = loadedLpns == totalLpns;
 
         if (!allLoaded)
         {
-            var notLoadedOrders = trip.TransportOrders
-                .Where(o => o.Status != "LOADING" && o.Status != "LOADED")
-                .Select(o => o.TrackingCode)
+            var notLoadedLpns = lpns
+                .Where(l => l.State != LpnState.SHIPPED)
+                .Select(l => l.LpnCode)
                 .ToList();
             throw new InvalidOperationException(
-                $"Chưa chất hết hàng! Còn {totalOrders - loadedOrders}/{totalOrders} đơn chưa xếp: " +
-                $"{string.Join(", ", notLoadedOrders)}. " +
-                $"Tất cả đơn phải ở trạng thái LOADING hoặc LOADED trước khi kẹp chì.");
+                $"Chưa bốc xếp hết LPN! Còn {totalLpns - loadedLpns}/{totalLpns} LPN chưa bốc: " +
+                $"{string.Join(", ", notLoadedLpns)}. " +
+                $"Tất cả LPN phải ở trạng thái SHIPPED trước khi kẹp chì.");
         }
 
         // Tạo Seal record
@@ -1159,6 +1075,9 @@ public class DispatchService : IDispatchService
             Status    = "APPLIED",
             CreatedAt = DateTime.UtcNow
         });
+
+        // Gán SealNumber cho trip
+        trip.SealNumber = sealCode;
 
         // Chuyển trip → SEALED
         trip.Status = "SEALED";
@@ -1229,171 +1148,13 @@ public class DispatchService : IDispatchService
             TripId = tripId,
             SealCode = sealCode,
             AllOrdersLoaded = allLoaded,
-            TotalOrders = totalOrders,
-            LoadedOrders = loadedOrders,
+            TotalOrders = totalLpns,
+            LoadedOrders = loadedLpns,
             SealedAt = DateTime.UtcNow,
             SealedBy = sealedBy,
             TripStatus = trip.Status ?? "SEALED",
             WaybillUrl = waybillUrl
         };
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    //  BACKLOG — Xử lý hàng tồn
-    // ═══════════════════════════════════════════════════════════════════════
-
-    public async Task<BacklogDispatchResult> ProcessBacklogOrdersAsync(
-        Guid originLocationId, DateTime plannedStart, DateTime plannedEnd, int backlogDays = 1)
-    {
-        var originLocation = await _context.Locations.FindAsync(originLocationId)
-            ?? throw new InvalidOperationException("LocationId kho xuất phát không tồn tại.");
-
-        var cutoffDate = DateTime.UtcNow.AddDays(-backlogDays);
-
-        // Quét đơn hàng tồn kho lâu
-        var backlogOrders = await _context.TransportOrders
-            .Include(o => o.DestLocationNavigation)
-            .Where(o => o.Status == "IN_WAREHOUSE"
-                     && o.WarehouseReceipts.Any()
-                     && o.CreatedAt.HasValue
-                     && o.CreatedAt.Value < cutoffDate)
-            .OrderBy(o => o.CreatedAt)
-            .ToListAsync();
-
-        if (backlogOrders.Count == 0)
-            throw new InvalidOperationException(
-                $"Không có đơn hàng tồn kho quá {backlogDays} ngày.");
-
-        var result = new BacklogDispatchResult();
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-
-        // Nhóm theo nhiệt độ
-        var tempGroups = backlogOrders
-            .Where(o => o.DestLocation.HasValue && o.DestLocationNavigation != null)
-            .GroupBy(o => NormalizeTempGroup(o.TempCondition))
-            .ToList();
-
-        // Lấy danh sách xe bận
-        var busyVehicleIds = await _context.MasterTrips
-            .Where(t => t.Status == "PLANNED" || t.Status == "LOADING"
-                     || t.Status == "SEALED" || t.Status == "DISPATCHED"
-                     || t.Status == "PENDING_WH_APPROVAL")
-            .Where(t => t.VehicleId.HasValue)
-            .Select(t => t.VehicleId!.Value)
-            .Distinct()
-            .ToListAsync();
-
-        foreach (var group in tempGroups)
-        {
-            var batchOrders = group.ToList();
-            var batchWeight = batchOrders.Sum(o => o.ExpectedWeightKg);
-            var batchCbm = batchOrders.Sum(o => o.ExpectedCbm);
-            var batchMinTemp = GetTargetTemperature(batchOrders);
-
-            // Tìm xe nhỏ (≤ 2000kg) phù hợp
-            var smallVehicle = await _context.Vehicles
-                .Include(v => v.Driver)
-                    .ThenInclude(d => d!.DriverLicenses)
-                .Where(v => v.Status == "ACTIVE"
-                         && v.DriverId != null
-                         && v.MaxWeight <= 2000m
-                         && v.MaxWeight >= batchWeight
-                         && v.MaxCbm >= batchCbm
-                         && v.MinTemp <= batchMinTemp)
-                .ToListAsync();
-
-            var eligibleSmallVehicle = smallVehicle
-                .Where(v => !busyVehicleIds.Contains(v.VehicleId))
-                .Where(v => v.Driver != null
-                         && v.Driver.DriverLicenses.Any(l =>
-                             l.ExpiryDate >= today
-                             && (l.Status == null || l.Status == "ACTIVE")))
-                .OrderBy(v => v.MaxWeight)
-                .FirstOrDefault();
-
-            if (eligibleSmallVehicle == null)
-            {
-                // Không có xe nhỏ phù hợp → skip
-                result.SkippedOrders.AddRange(batchOrders.Select(o => new OrderSummary
-                {
-                    OrderId = o.OrderId,
-                    TrackingCode = o.TrackingCode,
-                    ItemName = o.ItemName,
-                    Quantity = o.Quantity,
-                    WeightKg = o.ExpectedWeightKg,
-                    Cbm = o.ExpectedCbm,
-                    TempCondition = o.TempCondition
-                }));
-                continue;
-            }
-
-            var driver = eligibleSmallVehicle.Driver!;
-
-            // Tính lộ trình
-            var routeResult = await BuildOptimalRouteAsync(
-                originLocation, batchOrders, eligibleSmallVehicle);
-
-            // Tạo MasterTrip
-            var lastDestId = routeResult.StopSequence.Last().LocationId;
-            var trip = new MasterTrip
-            {
-                TripId = Guid.NewGuid(),
-                VehicleId = eligibleSmallVehicle.VehicleId,
-                DriverId = driver.DriverId,
-                OriginLocationId = originLocation.LocationId,
-                DestinationLocationId = lastDestId,
-                TotalDistanceKm = routeResult.TotalDistanceKm,
-                TargetTemperature = batchMinTemp,
-                PlannedStartTime = plannedStart,
-                PlannedEndTime = plannedEnd,
-                Status = "PLANNED",
-                CreatedAt = DateTime.UtcNow,
-            };
-            _context.MasterTrips.Add(trip);
-
-            // Tạo TripStops
-            foreach (var stop in routeResult.StopSequence)
-            {
-                _context.TripStops.Add(new TripStop
-                {
-                    StopId = Guid.NewGuid(),
-                    TripId = trip.TripId,
-                    LocationId = stop.LocationId,
-                    StopSequence = stop.Sequence,
-                    StopType = "DELIVERY",
-                    Status = "PLANNED",
-                    PlannedArrivalTime = plannedStart.AddHours(stop.Sequence),
-                    PlannedDepartureTime = plannedStart.AddHours(stop.Sequence).AddMinutes(20),
-                    CreatedAt = DateTime.UtcNow
-                });
-            }
-
-            // Cập nhật orders
-            foreach (var order in batchOrders)
-            {
-                order.Status = "DISPATCHED_PENDING";
-                order.MasterTripId = trip.TripId;
-            }
-
-            busyVehicleIds.Add(eligibleSmallVehicle.VehicleId);
-
-            result.DispatchedTrips.Add(new BacklogTripSummary
-            {
-                TripId = trip.TripId,
-                TruckPlate = eligibleSmallVehicle.TruckPlate,
-                DriverName = driver.FullName,
-                OrderCount = batchOrders.Count,
-                TotalWeightKg = batchWeight,
-                TempCondition = group.Key
-            });
-            result.TotalProcessed += batchOrders.Count;
-        }
-
-        result.TotalSkipped = result.SkippedOrders.Count;
-
-        await _context.SaveChangesAsync();
-
-        return result;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1562,19 +1323,25 @@ public class DispatchService : IDispatchService
 
         var html = await File.ReadAllTextAsync(templatePath);
 
+        var lpns = await _context.Lpns
+            .Include(l => l.Order)
+                .ThenInclude(o => o.Customer)
+            .Where(l => l.TripId == trip.TripId)
+            .ToListAsync();
+
         var ordersRows = "";
         int no = 1;
-        foreach (var order in trip.TransportOrders)
+        foreach (var lpn in lpns)
         {
             ordersRows += $@"
             <tr>
                 <td>{no}</td>
-                <td>{order.TrackingCode}</td>
-                <td>{order.Customer?.CompanyName ?? "Khách hàng vãng lai"}</td>
-                <td>{order.ItemName}</td>
-                <td>{order.Quantity}</td>
-                <td>{order.ExpectedWeightKg:0.##} kg</td>
-                <td>{order.TempCondition}</td>
+                <td>{lpn.LpnCode} / {lpn.Order?.TrackingCode ?? "N/A"}</td>
+                <td>{lpn.Order?.Customer?.CompanyName ?? "Khách hàng vãng lai"}</td>
+                <td>{lpn.Order?.ItemName ?? "N/A"}</td>
+                <td>{lpn.Quantity}</td>
+                <td>{lpn.ActualWeightKg:0.##} kg</td>
+                <td>{lpn.Order?.TempCondition ?? "AMBIENT"}</td>
             </tr>";
             no++;
         }
@@ -1605,10 +1372,9 @@ public class DispatchService : IDispatchService
 
     public async Task<List<LoadInstruction>> GetLoadPlanAsync(Guid tripId)
     {
-        var trip = await _context.MasterTrips
-            .Include(t => t.TransportOrders)
-            .FirstOrDefaultAsync(t => t.TripId == tripId)
-            ?? throw new KeyNotFoundException("Không tìm thấy chuyến đi.");
+        var tripExists = await _context.MasterTrips.AnyAsync(t => t.TripId == tripId);
+        if (!tripExists)
+            throw new KeyNotFoundException("Không tìm thấy chuyến đi.");
 
         var stops = await _context.TripStops
             .Where(ts => ts.TripId == tripId)
@@ -1621,7 +1387,12 @@ public class DispatchService : IDispatchService
             Sequence = s.StopSequence
         }).ToList();
 
-        var loadPlan = BuildLIFOLoadPlan(trip.TransportOrders.ToList(), stopInfos);
+        var lpns = await _context.Lpns
+            .Include(l => l.Order)
+            .Where(l => l.TripId == tripId)
+            .ToListAsync();
+
+        var loadPlan = BuildLpnLIFOLoadPlan(lpns, stopInfos);
         return loadPlan;
     }
 
@@ -1632,7 +1403,6 @@ public class DispatchService : IDispatchService
             .Include(t => t.Driver)
             .Include(t => t.OriginLocation)
             .Include(t => t.DestinationLocation)
-            .Include(t => t.TransportOrders)
             .FirstOrDefaultAsync(t => t.TripId == tripId)
             ?? throw new KeyNotFoundException("Không tìm thấy chuyến đi.");
 
@@ -1648,7 +1418,12 @@ public class DispatchService : IDispatchService
             Sequence = s.StopSequence
         }).ToList();
 
-        var loadPlan = BuildLIFOLoadPlan(trip.TransportOrders.ToList(), stopInfos);
+        var lpns = await _context.Lpns
+            .Include(l => l.Order)
+            .Where(l => l.TripId == tripId)
+            .ToListAsync();
+
+        var loadPlan = BuildLpnLIFOLoadPlan(lpns, stopInfos);
 
         // Build stop address mapping
         var stopAddresses = stops.ToDictionary(s => s.LocationId ?? Guid.Empty, s => s.Location?.Address ?? "N/A");
@@ -1732,7 +1507,7 @@ public class DispatchService : IDispatchService
             var stopAddr = item.DeliveryLocationId != Guid.Empty && stopAddresses.TryGetValue(item.DeliveryLocationId, out var addr) ? addr : "—";
             instructionRows += $@"<tr>
                 <td style='text-align:center;font-weight:700;font-size:14px;color:{color};padding:8px;border:1px solid #e2e8f0;'>{item.LoadOrder}</td>
-                <td style='padding:8px;border:1px solid #e2e8f0;font-size:11px;color:#6b7280;'>{item.TrackingCode}</td>
+                <td style='padding:8px;border:1px solid #e2e8f0;font-size:11px;color:#6b7280;'>{item.LpnCode} / {item.TrackingCode}</td>
                 <td style='padding:8px;border:1px solid #e2e8f0;font-size:12px;font-weight:600;'>{System.Net.WebUtility.HtmlEncode(item.ItemName)}</td>
                 <td style='padding:8px;border:1px solid #e2e8f0;text-align:center;'><span style='background:{bg};color:{color};padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700;'>{item.Zone}</span></td>
                 <td style='padding:8px;border:1px solid #e2e8f0;text-align:center;font-size:11px;'>{item.TempCondition}</td>
@@ -1810,7 +1585,7 @@ public class DispatchService : IDispatchService
   <thead>
     <tr>
       <th style='width:40px;text-align:center;'>Thứ tự XẾP VÀO</th>
-      <th>Mã đơn</th>
+      <th>Mã LPN / Mã đơn</th>
       <th>Tên hàng</th>
       <th>Ngăn</th>
       <th>Nhiệt độ</th>

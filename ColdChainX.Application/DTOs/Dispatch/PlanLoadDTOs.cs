@@ -9,8 +9,8 @@ namespace ColdChainX.Application.DTOs.Dispatch;
 
 public class PlanLoadRequest
 {
-    /// <summary>Danh sách đơn hàng cần ghép chuyến (phải đang ở trạng thái IN_WAREHOUSE).</summary>
-    public List<Guid> OrderIds { get; set; } = new();
+    /// <summary>Danh sách LPN cần ghép chuyến (phải đang ở trạng thái IN_STOCK).</summary>
+    public List<Guid> LpnIds { get; set; } = new();
 
     /// <summary>Xe tải được chỉ định.</summary>
     public Guid VehicleId { get; set; }
@@ -90,14 +90,27 @@ public class RouteStop
     /// <summary>Khoảng cách từ điểm trước (km).</summary>
     public decimal DistanceFromPreviousKm { get; set; }
 
-    /// <summary>Danh sách đơn hàng sẽ được dỡ tại điểm này.</summary>
-    public List<OrderSummary> OrdersToUnload { get; set; } = new();
+    /// <summary>Danh sách LPN sẽ được dỡ tại điểm này.</summary>
+    public List<LpnSummary> LpnsToUnload { get; set; } = new();
 }
 
 public class OrderSummary
 {
     public Guid OrderId { get; set; }
     public string TrackingCode { get; set; } = null!;
+    public string ItemName { get; set; } = null!;
+    public int Quantity { get; set; }
+    public decimal WeightKg { get; set; }
+    public decimal Cbm { get; set; }
+    public string TempCondition { get; set; } = null!;
+}
+
+public class LpnSummary
+{
+    public Guid LpnId { get; set; }
+    public string LpnCode { get; set; } = null!;
+    public Guid OrderId { get; set; }
+    public string OrderTrackingCode { get; set; } = null!;
     public string ItemName { get; set; } = null!;
     public int Quantity { get; set; }
     public decimal WeightKg { get; set; }
@@ -113,6 +126,8 @@ public class LoadInstruction
     /// <summary>Thứ tự xếp hàng lên xe (1 = xếp trước nhất, ở sâu nhất trong thùng).</summary>
     public int LoadOrder { get; set; }
 
+    public Guid LpnId { get; set; }
+    public string LpnCode { get; set; } = null!;
     public Guid OrderId { get; set; }
     public string TrackingCode { get; set; } = null!;
     public string ItemName { get; set; } = null!;
@@ -136,6 +151,8 @@ public class LoadInstruction
 /// <summary>Lệnh điều động — yêu cầu nhân viên kho thực hiện.</summary>
 public class DispatchInstruction
 {
+    public Guid LpnId { get; set; }
+    public string LpnCode { get; set; } = null!;
     public Guid OrderId { get; set; }
     public string TrackingCode { get; set; } = null!;
     public string ItemName { get; set; } = null!;
@@ -156,8 +173,8 @@ public class DispatchInstruction
 /// </summary>
 public class ManualDispatchRequest
 {
-    /// <summary>Danh sách OrderId do người dùng chọn (IN_WAREHOUSE).</summary>
-    public List<Guid> OrderIds { get; set; } = new();
+    /// <summary>Danh sách LpnId do người dùng chọn (IN_STOCK).</summary>
+    public List<Guid> LpnIds { get; set; } = new();
 
     /// <summary>VehicleId do người dùng chọn.</summary>
     public Guid VehicleId { get; set; }
@@ -187,8 +204,8 @@ public class ManualDispatchResult
     public VehicleInfo Vehicle { get; set; } = null!;
     public DriverInfo Driver { get; set; } = null!;
 
-    /// <summary>Danh sách đơn hàng được chọn.</summary>
-    public List<OrderSummary> SelectedOrders { get; set; } = new();
+    /// <summary>Danh sách LPN được chọn.</summary>
+    public List<LpnSummary> SelectedLpns { get; set; } = new();
 
     /// <summary>Lộ trình tối ưu.</summary>
     public RouteInfo Route { get; set; } = null!;
@@ -206,7 +223,19 @@ public class ManualDispatchResult
 
     /// <summary>URL đến file PDF Sơ đồ gộp chuyến (Lệnh điều động + LIFO Load Plan)</summary>
     public string? LifoPdfUrl { get; set; }
+
+    /// <summary>Cảnh báo khi có LPN đã quá SLA deadline — không chặn dispatch.</summary>
+    public string? SlaWarning { get; set; }
+
+    /// <summary>Số LPN đã quá SLA deadline.</summary>
+    public int LateLpnCount { get; set; }
+
+    /// <summary>Tải trọng xe tối đa được khuyến nghị khi có LPN trễ SLA (kg).</summary>
+    public int? SuggestedMaxPayloadKg { get; set; }
 }
+
+/// <summary>Kết quả bắt đầu picking — trip chuyển sang PICKING.</summary>
+public record StartPickingResult(Guid TripId, string Status, int LpnCount);
 
 /// <summary>Thông tin tài xế được chọn cho chuyến.</summary>
 public class DriverInfo
