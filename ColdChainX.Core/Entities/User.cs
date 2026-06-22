@@ -19,6 +19,8 @@ public partial class User
 
     public string? Phone { get; set; }
 
+    public Guid? WarehouseId { get; set; }
+
     public string? Status { get; set; }
 
     public string? RefreshToken { get; set; }

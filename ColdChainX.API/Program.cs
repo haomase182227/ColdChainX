@@ -34,6 +34,7 @@ builder.Services.AddSingleton(Channel.CreateUnbounded<TelemetryData>(new Unbound
 builder.Services.AddSingleton<RedisService>();
 builder.Services.AddHostedService<TelemetryMqttWorker>();
 builder.Services.AddHostedService<TelemetryProcessorWorker>();
+builder.Services.AddHostedService<InventoryAgingWorker>();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace ColdChainX.Core.Entities;
@@ -41,5 +41,5 @@ public partial class WarehouseReceipt
 
     public virtual Warehouse Warehouse { get; set; } = null!;
 
-    public virtual ICollection<WarehouseReceiptItem> WarehouseReceiptItems { get; set; } = new List<WarehouseReceiptItem>();
+    public virtual ICollection<Lpn> Lpns { get; set; } = new List<Lpn>();
 }

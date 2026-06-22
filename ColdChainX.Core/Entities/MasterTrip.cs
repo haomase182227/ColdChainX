@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace ColdChainX.Core.Entities;
@@ -14,6 +14,8 @@ public partial class MasterTrip
     public Guid OriginLocationId { get; set; }
 
     public Guid DestinationLocationId { get; set; }
+
+    public string? SealNumber { get; set; }
 
     public decimal? TotalDistanceKm { get; set; }
 

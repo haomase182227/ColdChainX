@@ -32,7 +32,6 @@ namespace ColdChainX.Application.Services
 
         public async Task<ApiResponse<AuthResponseDto>> RegisterAsync(RegisterRequest request)
         {
-            // Validate role - chỉ Admin, Dispatcher, Sales, Loader được tạo qua endpoint này
             if (!string.Equals(request.Role, "Admin", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(request.Role, "Dispatcher", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(request.Role, "Sales", StringComparison.OrdinalIgnoreCase) &&
@@ -385,28 +384,31 @@ namespace ColdChainX.Application.Services
             return ApiResponse<AuthResponseDto>.SuccessResponse(dto, "Driver account created successfully");
         }
 
-        public async Task<ApiResponse<AuthResponseDto>> CreateLoaderAsync(CreateLoaderRequest request)
+
+        public async Task<ApiResponse<AuthResponseDto>> CreateWarehouseWorkerAsync(CreateWarehouseWorkerRequest request)
         {
-            var email = request.Email.Trim().ToLowerInvariant();
+            var email = request.Email?.Trim().ToLowerInvariant();
             var username = string.IsNullOrWhiteSpace(request.Username)
-                ? email
+                ? (email ?? Guid.NewGuid().ToString("N")[..10])
                 : request.Username.Trim().ToLowerInvariant();
 
             if (username.Length > 50)
                 return ApiResponse<AuthResponseDto>.Failure("Username must not exceed 50 characters");
 
-            var existing = await _userRepository.GetByEmailAsync(email);
-            if (existing != null)
-                return ApiResponse<AuthResponseDto>.Failure("Email already in use");
+            if (!string.IsNullOrWhiteSpace(email))
+            {
+                var existing = await _userRepository.GetByEmailAsync(email);
+                if (existing != null)
+                    return ApiResponse<AuthResponseDto>.Failure("Email already in use");
+            }
 
             var existingUsername = await _userRepository.GetByUsernameAsync(username);
             if (existingUsername != null)
                 return ApiResponse<AuthResponseDto>.Failure("Username already in use");
 
-            // Get Loader role
-            var role = await _userRepository.GetRoleByNameAsync("Loader");
+            var role = await _userRepository.GetRoleByNameAsync("WarehouseWorker");
             if (role == null)
-                return ApiResponse<AuthResponseDto>.Failure("Loader role not found in the system");
+                return ApiResponse<AuthResponseDto>.Failure("WarehouseWorker role not found in the system");
 
             var user = new User
             {
@@ -417,6 +419,7 @@ namespace ColdChainX.Application.Services
                 Phone = request.Phone?.Trim(),
                 RoleId = role.RoleId,
                 Role = role,
+                WarehouseId = request.WarehouseId,
                 Status = ActiveStatus,
                 CreatedAt = DbNow()
             };
@@ -438,7 +441,7 @@ namespace ColdChainX.Application.Services
             dto.RefreshToken = refreshToken;
             dto.AccessTokenExpiresAt = accessExpiresAt;
 
-            return ApiResponse<AuthResponseDto>.SuccessResponse(dto, "Loader account created successfully");
+            return ApiResponse<AuthResponseDto>.SuccessResponse(dto, "WarehouseWorker account created successfully");
         }
 
         public async Task<ApiResponse<DriverDto>> UpdateDriverAsync(Guid driverId, UpdateDriverInfoRequest request)

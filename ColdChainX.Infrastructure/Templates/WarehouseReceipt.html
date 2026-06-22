@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: 'Times New Roman', serif; font-size: 14px; max-width: 800px; margin: 0 auto; padding: 20px; color: #000; }
+        .flex-between { display: flex; justify-content: space-between; margin-bottom: 20px; }
+        .text-center { text-align: center; }
+        .bold { font-weight: bold; }
+        h2 { font-size: 20px; margin: 5px 0; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; margin-bottom: 20px; }
+        th, td { border: 1px solid #000; padding: 6px; text-align: left; }
+        th { text-align: center; }
+        .signature-row { display: flex; justify-content: space-between; text-align: center; margin-top: 30px; }
+        .sig-box { width: 20%; }
+        .italic { font-style: italic; }
+    </style>
+</head>
+<body>
+    <div class="flex-between">
+        <div>
+            <div class="bold">Đơn vị: {{CompanyName}}</div>
+            <div>Bộ phận: Inbound - {{HubName}}</div>
+        </div>
+        <div class="text-center">
+            <div class="bold">Mẫu số 01 - VT</div>
+            <div class="italic">(Ban hành theo Thông tư số 200/2014/TT-BTC)</div>
+        </div>
+    </div>
+
+    <div class="text-center">
+        <h2>PHIẾU NHẬP KHO</h2>
+        <div class="italic">Ngày {{CreatedDay}} tháng {{CreatedMonth}} năm {{CreatedYear}}</div>
+        <div>Số: {{ReceiptCode}}</div>
+    </div>
+
+    <div style="margin-top: 15px; line-height: 1.8;">
+        <div>- Họ và tên người giao: <b>{{DriverName}}</b></div>
+        <div>- Theo đơn hàng số: <b>{{OrderCode}}</b> của Khách hàng: <b>{{CustomerName}}</b></div>
+        <div>- Nhập tại kho: <b>{{HubName}}</b> - Địa chỉ: {{HubAddress}}</div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th rowspan="2">STT</th>
+                <th rowspan="2">Tên, nhãn hiệu, quy cách hàng hóa</th>
+                <th rowspan="2">Mã LPN</th>
+                <th rowspan="2">ĐVT</th>
+                <th colspan="2">Số lượng</th>
+                <th rowspan="2">Ghi chú</th>
+            </tr>
+            <tr>
+                <th>Theo C.Từ</th>
+                <th>Thực nhập</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{#each Items}}
+            <tr>
+                <td class="text-center">{{Index}}</td>
+                <td>{{ItemName}}</td>
+                <td>{{LpnCode}}</td>
+                <td class="text-center">{{Unit}}</td>
+                <td class="text-center">{{ExpectedQty}}</td>
+                <td class="text-center">{{ActualQty}}</td>
+                <td>{{Notes}}</td>
+            </tr>
+            {{/each}}
+        </tbody>
+    </table>
+
+    <div class="signature-row">
+        <div class="sig-box">
+            <div class="bold">Người lập phiếu</div><div class="italic">(Ký, họ tên)</div>
+            <br><br><br><b>{{CreatorName}}</b>
+        </div>
+        <div class="sig-box">
+            <div class="bold">Người giao hàng</div><div class="italic">(Ký, họ tên)</div>
+            <br><br><br><b>{{DriverName}}</b>
+        </div>
+        <div class="sig-box">
+            <div class="bold">Thủ kho</div><div class="italic">(Ký, họ tên)</div>
+            <br><br><br><b>{{WarehouseManagerName}}</b>
+        </div>
+    </div>
+</body>
+</html>
