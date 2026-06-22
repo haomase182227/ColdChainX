@@ -119,6 +119,8 @@ namespace ColdChainX.UnitTests
             public Task<string> SaveWarehouseReceiptPdfAsync(string htmlContent, string receiptCode) => Task.FromResult("http://test.com/receipt.pdf");
             public Task<string> SaveWaybillPdfAsync(string htmlContent, string tripId) => Task.FromResult("http://test.com/waybill.pdf");
             public Task<string> SaveLoadPlanPdfAsync(string htmlContent, string tripId) => Task.FromResult("http://test.com/loadplan.pdf");
+            public Task<string> GenerateManifestPdfAsync(Guid tripId) => Task.FromResult("http://test.com/manifest.pdf");
+            public Task<string> GenerateOutboundTicketPdfAsync(Guid tripId) => Task.FromResult("http://test.com/outbound-ticket.pdf");
         }
 
         private class MockWebHostEnvironment : IWebHostEnvironment
