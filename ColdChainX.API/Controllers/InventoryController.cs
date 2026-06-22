@@ -42,6 +42,14 @@ public class InventoryController : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("lpns/{id}/documents")]
+    public async Task<IActionResult> GetLpnDocuments(Guid id)
+    {
+        var result = await _mediator.Send(new ColdChainX.Application.Features.Inventory.Queries.GetLpnDocumentsQuery(id));
+        if (result == null) return NotFound(new { Success = false, Message = "LPN not found." });
+        return Ok(new { Success = true, Data = result });
+    }
+
     [HttpPut("lpns/{id}")]
     public async Task<IActionResult> UpdateLpn(Guid id, [FromBody] ColdChainX.Application.Features.Inventory.Commands.UpdateLpnCommand command)
     {

@@ -22,7 +22,7 @@ public class GetInventoryAgingQueryHandler : IRequestHandler<GetInventoryAgingQu
             {
                 l.LpnId,
                 l.LpnCode,
-                l.ItemName,
+                l.Order.ItemName,
                 l.StorageLocation,
                 l.InboundTime,
                 l.SlaDeadline

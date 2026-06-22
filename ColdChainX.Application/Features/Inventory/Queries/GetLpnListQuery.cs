@@ -32,7 +32,9 @@ public class GetLpnListQueryHandler : IRequestHandler<GetLpnListQuery, List<LpnD
 
         if (!string.IsNullOrWhiteSpace(request.Keyword))
         {
-            query = query.Where(x => x.LpnCode.Contains(request.Keyword) || x.ItemName.Contains(request.Keyword));
+            query = query.Where(x =>
+                x.LpnCode.Contains(request.Keyword) ||
+                x.Order.ItemName.Contains(request.Keyword));
         }
 
         var lpns = await query
@@ -42,11 +44,11 @@ public class GetLpnListQueryHandler : IRequestHandler<GetLpnListQuery, List<LpnD
             {
                 LpnId = x.LpnId,
                 LpnCode = x.LpnCode,
-                ItemName = x.ItemName,
-                BatchNumber = x.BatchNumber,
+                ItemName = x.Order.ItemName,
+                BatchNumber = "N/A",
                 StorageLocation = x.StorageLocation,
                 Quantity = x.Quantity,
-                ExpectedWeightKg = x.ExpectedWeightKg,
+                ExpectedWeightKg = x.Order.ExpectedWeightKg,
                 ActualWeightKg = x.ActualWeightKg,
                 State = x.State.ToString(),
                 Condition = x.DiscrepancyReason,

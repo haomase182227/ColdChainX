@@ -7,7 +7,6 @@ namespace ColdChainX.Application.Features.Inventory.Commands;
 public class UpdateLpnCommand : IRequest<UpdateLpnResponse>
 {
     public Guid LpnId { get; set; }
-    public string? BatchNumber { get; set; }
     public string? StorageLocation { get; set; }
     public string? DiscrepancyReason { get; set; }
 }
@@ -34,7 +33,6 @@ public class UpdateLpnCommandHandler : IRequestHandler<UpdateLpnCommand, UpdateL
         if (lpn == null)
             return new UpdateLpnResponse { Success = false, Message = "LPN không tồn tại trong hệ thống." };
 
-        lpn.BatchNumber = request.BatchNumber ?? lpn.BatchNumber;
         lpn.StorageLocation = request.StorageLocation ?? lpn.StorageLocation;
         lpn.DiscrepancyReason = request.DiscrepancyReason ?? lpn.DiscrepancyReason;
         lpn.UpdatedAt = DateTime.UtcNow;
