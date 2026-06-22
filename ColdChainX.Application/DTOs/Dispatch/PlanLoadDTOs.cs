@@ -223,7 +223,19 @@ public class ManualDispatchResult
 
     /// <summary>URL đến file PDF Sơ đồ gộp chuyến (Lệnh điều động + LIFO Load Plan)</summary>
     public string? LifoPdfUrl { get; set; }
+
+    /// <summary>Cảnh báo khi có LPN đã quá SLA deadline — không chặn dispatch.</summary>
+    public string? SlaWarning { get; set; }
+
+    /// <summary>Số LPN đã quá SLA deadline.</summary>
+    public int LateLpnCount { get; set; }
+
+    /// <summary>Tải trọng xe tối đa được khuyến nghị khi có LPN trễ SLA (kg).</summary>
+    public int? SuggestedMaxPayloadKg { get; set; }
 }
+
+/// <summary>Kết quả bắt đầu picking — trip chuyển sang PICKING.</summary>
+public record StartPickingResult(Guid TripId, string Status, int LpnCount);
 
 /// <summary>Thông tin tài xế được chọn cho chuyến.</summary>
 public class DriverInfo
