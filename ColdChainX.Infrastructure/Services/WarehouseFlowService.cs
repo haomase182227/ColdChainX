@@ -48,28 +48,19 @@ public class WarehouseFlowService : IWarehouseFlowService
             LpnId = Guid.NewGuid(),
             LpnCode = GenerateCode("LPN"),
             OrderId = order.OrderId,
+            Order = order,
             CustomerId = order.CustomerId,
             RouteId = order.RouteId,
             TripId = order.MasterTripId,
-            ItemName = order.ItemName,
-            BatchNumber = request.BatchNumber,
             Quantity = order.Quantity,
-            ExpectedWeightKg = order.ExpectedWeightKg,
             ActualWeightKg = request.ActualWeightKg,
-            ExpectedCbm = order.ExpectedCbm,
             ActualCbm = actualCbm,
-            LengthCm = request.LengthCm,
-            WidthCm = request.WidthCm,
-            HeightCm = request.HeightCm,
             RequiredTemperature = ParseTemperature(order.TempCondition),
             RecordedTemperature = request.RecordedTemperature,
-            MaxDiffPercent = maxDiff,
             State = hasDiscrepancy ? LpnState.DISCREPANCY_HOLD : LpnState.RECEIVING,
             DiscrepancyReason = hasDiscrepancy
                 ? $"Actual cargo differs from expected by {maxDiff:0.##}% (weight {weightDiff:0.##}%, cbm {cbmDiff:0.##}%)."
                 : null,
-            DiscrepancyPdfUrl = hasDiscrepancy ? MockPdfUrl("discrepancy", order.TrackingCode) : null,
-            GrnPdfUrl = hasDiscrepancy ? null : MockPdfUrl("grn", order.TrackingCode),
             SlaDeadline = CalculateSlaDeadline(order.Route),
             CreatedAt = now
         };
@@ -90,7 +81,7 @@ public class WarehouseFlowService : IWarehouseFlowService
                 lpn.LpnCode,
                 order.OrderId,
                 order.TrackingCode,
-                lpn.MaxDiffPercent,
+                MaxDiffPercent = maxDiff,
                 lpn.DiscrepancyReason
             });
         }
@@ -115,15 +106,14 @@ public class WarehouseFlowService : IWarehouseFlowService
 
         if (request.AcceptSurcharge)
         {
-            lpn.State = LpnState.IN_STOCK;
-            lpn.InboundTime ??= DateTime.UtcNow;
+            lpn.State = LpnState.RECEIVING;
             lpn.UpdatedAt = DateTime.UtcNow;
-            lpn.Order.Status = "IN_STOCK";
+            lpn.Order.Status = "RECEIVING";
 
             await _db.SaveChangesAsync();
             await tx.CommitAsync();
 
-            return ApiResponse<object>.SuccessResponse(ToResponse(lpn, lpn.Order.TrackingCode), "Discrepancy accepted. LPN moved to IN_STOCK.");
+            return ApiResponse<object>.SuccessResponse(ToResponse(lpn, lpn.Order.TrackingCode), "Discrepancy accepted. LPN moved to RECEIVING and waiting putaway.");
         }
 
         var handlingFee = request.HandlingFee ?? 150000m;
@@ -206,7 +196,6 @@ public class WarehouseFlowService : IWarehouseFlowService
             return ApiResponse<LpnResponse>.Failure("Only IN_STOCK or ALLOCATED LPNs can be picked.");
 
         lpn.State = LpnState.PICKED;
-        lpn.PickedAt = DateTime.UtcNow;
         lpn.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
@@ -240,7 +229,6 @@ public class WarehouseFlowService : IWarehouseFlowService
         {
             lpn.TripId = tripId;
             lpn.State = LpnState.SHIPPED;
-            lpn.ShippedAt = now;
             lpn.UpdatedAt = now;
         }
 
@@ -304,7 +292,6 @@ public class WarehouseFlowService : IWarehouseFlowService
         if (!lpn.PenaltyBills.Any(x => x.IsPaid))
             return ApiResponse<LpnResponse>.Failure("Penalty bill must be paid before generating return PDF.");
 
-        lpn.ReturnPdfUrl = MockPdfUrl("return", lpn.LpnCode);
         lpn.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
@@ -382,19 +369,27 @@ public class WarehouseFlowService : IWarehouseFlowService
             LpnCode = lpn.LpnCode,
             OrderId = lpn.OrderId,
             TrackingCode = trackingCode,
-            ItemName = lpn.ItemName,
+            ItemName = lpn.Order.ItemName,
             StorageLocation = lpn.StorageLocation,
             Quantity = lpn.Quantity,
-            ExpectedWeightKg = lpn.ExpectedWeightKg,
+            ExpectedWeightKg = lpn.Order.ExpectedWeightKg,
             ActualWeightKg = lpn.ActualWeightKg,
-            ExpectedCbm = lpn.ExpectedCbm,
+            ExpectedCbm = lpn.Order.ExpectedCbm,
             ActualCbm = lpn.ActualCbm,
-            MaxDiffPercent = lpn.MaxDiffPercent,
+            MaxDiffPercent = Math.Max(
+                CalculateDiffPercent(lpn.Order.ExpectedWeightKg, lpn.ActualWeightKg),
+                CalculateDiffPercent(lpn.Order.ExpectedCbm, lpn.ActualCbm)),
             State = lpn.State,
             DiscrepancyReason = lpn.DiscrepancyReason,
-            GrnPdfUrl = lpn.GrnPdfUrl,
-            DiscrepancyPdfUrl = lpn.DiscrepancyPdfUrl,
-            ReturnPdfUrl = lpn.ReturnPdfUrl,
+            GrnPdfUrl = lpn.State == LpnState.RECEIVING || lpn.State == LpnState.IN_STOCK
+                ? MockPdfUrl("grn", trackingCode ?? lpn.LpnCode)
+                : null,
+            DiscrepancyPdfUrl = lpn.State == LpnState.DISCREPANCY_HOLD
+                ? MockPdfUrl("discrepancy", trackingCode ?? lpn.LpnCode)
+                : null,
+            ReturnPdfUrl = lpn.State == LpnState.RETURN_PENDING
+                ? MockPdfUrl("return", lpn.LpnCode)
+                : null,
             InboundTime = lpn.InboundTime,
             SlaDeadline = lpn.SlaDeadline,
             AgingColor = CalculateAgingColor(lpn)
