@@ -25,7 +25,7 @@ namespace ColdChainX.UnitTests
                 .Options;
 
             _db = new ApplicationDbContext(options);
-            _service = new AsnService(_db);
+            _service = new AsnService(_db, null!, null!);
         }
 
         public void Dispose()

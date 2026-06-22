@@ -15,10 +15,14 @@ namespace ColdChainX.Infrastructure.Services
     {
         private const string ContractSigned = "CONTRACT_SIGNED";
         private readonly ApplicationDbContext _db;
+        private readonly IPdfGeneratorService _pdfGeneratorService;
+        private readonly IFileService _fileService;
 
-        public AsnService(ApplicationDbContext db)
+        public AsnService(ApplicationDbContext db, IPdfGeneratorService pdfGeneratorService, IFileService fileService)
         {
             _db = db;
+            _pdfGeneratorService = pdfGeneratorService;
+            _fileService = fileService;
         }
 
         public async Task<ApiResponse<PagedResult<InboundScheduleResponse>>> GetInboundSchedulesAsync(
@@ -210,11 +214,28 @@ namespace ColdChainX.Infrastructure.Services
                 RequestedDropoffTime = requestedDropoff,
                 QrCodeValue = qrValue,
                 Status = "SCHEDULED",
+                Phone = request.Phone,
+                WarehouseId = request.WarehouseId,
+                CustomerId = request.CustomerId ?? customerId,
                 CreatedAt = DbNow()
             };
 
             _db.InboundAsns.Add(asn);
             await _db.SaveChangesAsync();
+
+            try
+            {
+                // Generate PDF and Upload
+                var pdfBytes = await _pdfGeneratorService.GeneratePdfAsync("Asn", new { Asn = asn, Order = order });
+                var pdfUrl = await _fileService.UploadFileAsync(pdfBytes, $"{asnCode}.pdf");
+                
+                asn.FileUrl = pdfUrl;
+                await _db.SaveChangesAsync();
+            }
+            catch (Exception)
+            {
+                // Ignore PDF gen error for now so we don't break ASN creation
+            }
 
             return ApiResponse<AsnResponse>.SuccessResponse(new AsnResponse
             {
@@ -227,8 +248,126 @@ namespace ColdChainX.Infrastructure.Services
                 CutOffTime = order.Route.CutOffTime,
                 QrCodeValue = asn.QrCodeValue,
                 Status = asn.Status,
+                Phone = asn.Phone,
+                WarehouseId = asn.WarehouseId,
+                CustomerId = asn.CustomerId,
+                FileUrl = asn.FileUrl,
                 CreatedAt = asn.CreatedAt
             }, "ASN created successfully");
+        }
+
+        public async Task<ApiResponse<List<AsnScheduleResponse>>> GetScheduleAsync(DateOnly date, string? status)
+        {
+            var from = date.ToDateTime(TimeOnly.MinValue);
+            var to = date.ToDateTime(TimeOnly.MaxValue);
+
+            var query = _db.InboundAsns
+                .AsNoTracking()
+                .Include(a => a.Order)
+                    .ThenInclude(o => o.Customer)
+                .Include(a => a.Order)
+                    .ThenInclude(o => o.Route)
+                .Where(a => a.RequestedDropoffTime >= from && a.RequestedDropoffTime <= to);
+
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                var normalizedStatus = status.Trim();
+                query = query.Where(a => a.Status == normalizedStatus);
+            }
+
+            var items = await query
+                .OrderBy(a => a.RequestedDropoffTime)
+                .ToListAsync();
+
+            var customerEmails = items
+                .Select(a => a.Order.Customer?.Email)
+                .Where(email => !string.IsNullOrWhiteSpace(email))
+                .Select(email => email!.ToLower())
+                .Distinct()
+                .ToList();
+
+            var customerUsers = await _db.Users
+                .AsNoTracking()
+                .Where(u => u.Email != null && customerEmails.Contains(u.Email.ToLower()))
+                .Select(u => new { Email = u.Email!.ToLower(), u.UserId })
+                .ToListAsync();
+
+            var userByEmail = customerUsers
+                .GroupBy(u => u.Email)
+                .ToDictionary(g => g.Key, g => g.First().UserId);
+
+            var result = items.Select(a =>
+            {
+                var customerEmail = a.Order.Customer?.Email?.ToLower();
+                userByEmail.TryGetValue(customerEmail ?? string.Empty, out var customerUserId);
+
+                return new AsnScheduleResponse
+                {
+                    AsnId = a.AsnId,
+                    AsnCode = a.AsnCode,
+                    OrderId = a.OrderId,
+                    TrackingCode = a.Order.TrackingCode,
+                    CustomerId = a.Order.CustomerId,
+                    CustomerName = a.Order.Customer?.CompanyName,
+                    CustomerEmail = a.Order.Customer?.Email,
+                    CustomerUserId = customerUserId == Guid.Empty ? null : customerUserId,
+                    RouteId = a.Order.RouteId,
+                    RouteCode = a.Order.Route?.RouteCode,
+                    RequestedDropoffTime = a.RequestedDropoffTime,
+                    CutOffTime = a.Order.Route?.CutOffTime,
+                    Status = a.Status,
+                    QrCodeValue = a.QrCodeValue
+                };
+            }).ToList();
+
+            return ApiResponse<List<AsnScheduleResponse>>.SuccessResponse(result, "ASN schedule retrieved successfully");
+        }
+
+        public async Task<ApiResponse<List<AsnResponse>>> GetAsnsByCustomerIdAsync(Guid customerId)
+        {
+            var rawAsns = await _db.InboundAsns
+                .Include(a => a.Order)
+                .ThenInclude(o => o.Route)
+                .Where(a => a.CustomerId == customerId || a.Order.CustomerId == customerId)
+                .OrderByDescending(a => a.CreatedAt)
+                .Select(a => new
+                {
+                    a.AsnId,
+                    a.AsnCode,
+                    a.OrderId,
+                    RouteId = a.Order.RouteId,
+                    RouteCode = a.Order.Route != null ? a.Order.Route.RouteCode : string.Empty,
+                    a.RequestedDropoffTime,
+                    CutOffTime = a.Order.Route != null ? (TimeSpan?)a.Order.Route.CutOffTime : null,
+                    a.QrCodeValue,
+                    a.Status,
+                    a.Phone,
+                    a.WarehouseId,
+                    a.CustomerId,
+                    a.FileUrl,
+                    a.CreatedAt
+                })
+                .ToListAsync();
+
+            var asns = rawAsns.Select(a => new AsnResponse
+            {
+                AsnId = a.AsnId,
+                AsnCode = a.AsnCode,
+                OrderId = a.OrderId,
+                RouteId = a.RouteId ?? Guid.Empty,
+                RouteCode = a.RouteCode,
+                RequestedDropoffTime = a.RequestedDropoffTime,
+                CutOffTime = a.CutOffTime ?? TimeSpan.Zero,
+                QrCodeValue = a.QrCodeValue,
+                Status = a.Status,
+                Phone = a.Phone,
+                WarehouseId = a.WarehouseId,
+                CustomerId = a.CustomerId,
+                FileUrl = a.FileUrl,
+                CreatedAt = a.CreatedAt
+            }).ToList();
+
+            return ApiResponse<List<AsnResponse>>.SuccessResponse(asns, "Retrieved ASNs successfully");
         }
 
         private async Task<string> GenerateUniqueAsnCodeAsync()

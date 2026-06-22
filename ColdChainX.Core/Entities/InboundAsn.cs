@@ -16,6 +16,14 @@ public partial class InboundAsn
 
     public string Status { get; set; } = null!;
 
+    public string? Phone { get; set; }
+
+    public Guid? WarehouseId { get; set; }
+
+    public Guid? CustomerId { get; set; }
+
+    public string? FileUrl { get; set; }
+
     public DateTime? CreatedAt { get; set; }
 
     public virtual TransportOrder Order { get; set; } = null!;

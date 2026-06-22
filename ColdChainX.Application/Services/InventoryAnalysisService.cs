@@ -8,6 +8,7 @@ using ColdChainX.Application.DTOs.Common;
 using ColdChainX.Application.DTOs.Inventory;
 using ColdChainX.Application.DTOs.Warehouse;
 using ColdChainX.Application.Interfaces;
+using ColdChainX.Core.Enums;
 using ColdChainX.Shared.Responses;
 
 namespace ColdChainX.Application.Services
@@ -27,44 +28,43 @@ namespace ColdChainX.Application.Services
         {
             try
             {
-                var today = DateOnly.FromDateTime(DateTime.UtcNow);
+                var today = DateTime.UtcNow;
                 var warningThresholdDate = today.AddDays(warningDays);
 
-                var query = _db.InventoryStocks
-                    .Include(s => s.Batch)
-                    .Include(s => s.Location)
-                        .ThenInclude(l => l.Zone)
-                            .ThenInclude(z => z.Warehouse)
-                    .Where(s => s.QuantityOnHand > 0 && s.Status == "AVAILABLE");
+                var query = _db.Lpns
+                    .Include(l => l.Order)
+                    .Include(l => l.Receipt)
+                        .ThenInclude(r => r.Warehouse)
+                    .Where(l => l.Quantity > 0 && (l.State == LpnState.IN_STOCK || l.State == LpnState.ALLOCATED));
 
                 if (warehouseId.HasValue)
                 {
-                    query = query.Where(s => s.Location.Zone.WarehouseId == warehouseId.Value);
+                    query = query.Where(l => l.Receipt.WarehouseId == warehouseId.Value);
                 }
 
-                // Filter soon-to-expire batches
-                query = query.Where(s => s.Batch.ExpiryDate <= warningThresholdDate);
+                // Filter soon-to-expire batches using SlaDeadline as expiration threshold
+                query = query.Where(l => l.SlaDeadline != null && l.SlaDeadline <= warningThresholdDate);
 
                 int totalCount = await query.CountAsync();
 
                 var items = await query
-                    .OrderBy(s => s.Batch.ExpiryDate)
+                    .OrderBy(l => l.SlaDeadline)
                     .Skip((pageNumber - 1) * pageSize)
                     .Take(pageSize)
                     .ToListAsync();
 
                 var responseList = items.Select(s => new ExpiryAlertResponse
                 {
-                    StockId = s.StockId,
-                    ItemCode = s.ItemCode,
-                    ItemName = s.ItemName,
-                    BatchId = s.BatchId,
-                    BatchNumber = s.Batch.BatchNumber,
-                    ExpiryDate = s.Batch.ExpiryDate,
-                    QuantityOnHand = s.QuantityOnHand,
-                    RemainingDays = s.Batch.ExpiryDate.DayNumber - today.DayNumber,
-                    WarehouseName = s.Location.Zone.Warehouse.WarehouseName,
-                    LocationCode = s.Location.LocationCode
+                    StockId = s.LpnId,
+                    ItemCode = s.Order.TrackingCode ?? string.Empty,
+                    ItemName = s.Order.ItemName ?? string.Empty,
+                    BatchId = Guid.Empty,
+                    BatchNumber = "N/A",
+                    ExpiryDate = s.SlaDeadline.HasValue ? DateOnly.FromDateTime(s.SlaDeadline.Value) : DateOnly.FromDateTime(DateTime.UtcNow),
+                    QuantityOnHand = s.Quantity,
+                    RemainingDays = s.SlaDeadline.HasValue ? (s.SlaDeadline.Value - today).Days : warningDays,
+                    WarehouseName = s.Receipt.Warehouse?.WarehouseName ?? "Unknown",
+                    LocationCode = s.StorageLocation ?? "N/A"
                 }).ToList();
 
                 var pagedResult = PagedResult<ExpiryAlertResponse>.Create(responseList, totalCount, pageNumber, pageSize);
@@ -84,39 +84,39 @@ namespace ColdChainX.Application.Services
                 var now = DateTime.UtcNow;
                 var thresholdDateTime = now.AddDays(-thresholdDays);
 
-                var query = _db.InventoryStocks
-                    .Include(s => s.Location)
-                        .ThenInclude(l => l.Zone)
-                            .ThenInclude(z => z.Warehouse)
-                    .Where(s => s.QuantityOnHand > 0 && s.Status == "AVAILABLE");
+                var query = _db.Lpns
+                    .Include(l => l.Order)
+                    .Include(l => l.Receipt)
+                        .ThenInclude(r => r.Warehouse)
+                    .Where(l => l.Quantity > 0 && (l.State == LpnState.IN_STOCK || l.State == LpnState.ALLOCATED));
 
                 if (warehouseId.HasValue)
                 {
-                    query = query.Where(s => s.Location.Zone.WarehouseId == warehouseId.Value);
+                    query = query.Where(l => l.Receipt.WarehouseId == warehouseId.Value);
                 }
 
                 // Filter stocks created or received before the threshold date
-                query = query.Where(s => s.InboundDate <= thresholdDateTime);
+                query = query.Where(l => l.InboundTime != null && l.InboundTime <= thresholdDateTime);
 
                 int totalCount = await query.CountAsync();
 
                 var items = await query
-                    .OrderBy(s => s.InboundDate)
+                    .OrderBy(l => l.InboundTime)
                     .Skip((pageNumber - 1) * pageSize)
                     .Take(pageSize)
                     .ToListAsync();
 
                 var responseList = items.Select(s => new AgingStockResponse
                 {
-                    StockId = s.StockId,
-                    ItemCode = s.ItemCode,
-                    ItemName = s.ItemName,
-                    InboundDate = s.InboundDate,
-                    StorageDays = (int)(now - s.InboundDate).TotalDays,
-                    QuantityOnHand = s.QuantityOnHand,
-                    PalletCount = s.PalletCount,
-                    WarehouseName = s.Location.Zone.Warehouse.WarehouseName,
-                    LocationCode = s.Location.LocationCode
+                    StockId = s.LpnId,
+                    ItemCode = s.Order.TrackingCode ?? string.Empty,
+                    ItemName = s.Order.ItemName ?? string.Empty,
+                    InboundDate = s.InboundTime ?? s.CreatedAt,
+                    StorageDays = (int)(now - (s.InboundTime ?? s.CreatedAt)).TotalDays,
+                    QuantityOnHand = s.Quantity,
+                    PalletCount = 1,
+                    WarehouseName = s.Receipt.Warehouse?.WarehouseName ?? "Unknown",
+                    LocationCode = s.StorageLocation ?? "N/A"
                 }).ToList();
 
                 var pagedResult = PagedResult<AgingStockResponse>.Create(responseList, totalCount, pageNumber, pageSize);
@@ -133,46 +133,75 @@ namespace ColdChainX.Application.Services
         {
             try
             {
-                var query = _db.InventoryStocks
-                    .Include(s => s.Location)
-                        .ThenInclude(l => l.Zone)
-                            .ThenInclude(z => z.Warehouse)
-                    .Where(s => s.QuantityOnHand > 0 && s.Status == "AVAILABLE");
+                var query = _db.Lpns
+                    .Include(l => l.Order)
+                    .Include(l => l.Receipt)
+                        .ThenInclude(r => r.Warehouse)
+                    .Where(l => l.Quantity > 0 && (l.State == LpnState.IN_STOCK || l.State == LpnState.ALLOCATED));
 
                 if (warehouseId.HasValue)
                 {
-                    query = query.Where(s => s.Location.Zone.WarehouseId == warehouseId.Value);
+                    query = query.Where(l => l.Receipt.WarehouseId == warehouseId.Value);
                 }
 
-                // Flag if stock required range is incompatible with zone capability
-                query = query.Where(s =>
-                    (s.RequiredTempMin.HasValue && s.Location.Zone.TemperatureMax.HasValue && s.RequiredTempMin.Value > s.Location.Zone.TemperatureMax.Value) ||
-                    (s.RequiredTempMax.HasValue && s.Location.Zone.TemperatureMin.HasValue && s.RequiredTempMax.Value < s.Location.Zone.TemperatureMin.Value)
-                );
+                var items = await query.ToListAsync();
 
-                int totalCount = await query.CountAsync();
-
-                var items = await query
-                    .OrderBy(s => s.ItemCode)
-                    .Skip((pageNumber - 1) * pageSize)
-                    .Take(pageSize)
+                // Load the active locations and zones for temperature comparison
+                var dbLocations = await _db.WarehouseLocations
+                    .Include(l => l.Zone)
                     .ToListAsync();
 
-                var responseList = items.Select(s => new TempAuditResponse
-                {
-                    StockId = s.StockId,
-                    ItemCode = s.ItemCode,
-                    ItemName = s.ItemName,
-                    RequiredTempMin = s.RequiredTempMin,
-                    RequiredTempMax = s.RequiredTempMax,
-                    ZoneTemperatureMin = s.Location.Zone.TemperatureMin,
-                    ZoneTemperatureMax = s.Location.Zone.TemperatureMax,
-                    ZoneCode = s.Location.Zone.ZoneCode,
-                    LocationCode = s.Location.LocationCode,
-                    WarehouseName = s.Location.Zone.Warehouse.WarehouseName
-                }).ToList();
+                var locationMap = dbLocations
+                    .Where(loc => !string.IsNullOrEmpty(loc.LocationCode))
+                    .GroupBy(loc => loc.LocationCode.ToUpperInvariant())
+                    .ToDictionary(g => g.Key, g => g.First());
 
-                var pagedResult = PagedResult<TempAuditResponse>.Create(responseList, totalCount, pageNumber, pageSize);
+                var responseList = new List<TempAuditResponse>();
+
+                foreach (var s in items)
+                {
+                    var locCode = s.StorageLocation?.ToUpperInvariant() ?? string.Empty;
+                    locationMap.TryGetValue(locCode, out var loc);
+
+                    // Check if the required temperature matches the zone range
+                    decimal? reqMin = s.RequiredTemperature;
+                    decimal? reqMax = s.RequiredTemperature;
+
+                    decimal? zoneMin = loc?.Zone?.TemperatureMin;
+                    decimal? zoneMax = loc?.Zone?.TemperatureMax;
+
+                    bool isFlagged = false;
+                    if (reqMin.HasValue)
+                    {
+                        if (zoneMax.HasValue && reqMin.Value > zoneMax.Value) isFlagged = true;
+                        if (zoneMin.HasValue && reqMin.Value < zoneMin.Value) isFlagged = true;
+                    }
+
+                    if (isFlagged)
+                    {
+                        responseList.Add(new TempAuditResponse
+                        {
+                            StockId = s.LpnId,
+                            ItemCode = s.Order.TrackingCode ?? string.Empty,
+                            ItemName = s.Order.ItemName ?? string.Empty,
+                            RequiredTempMin = reqMin,
+                            RequiredTempMax = reqMax,
+                            ZoneTemperatureMin = zoneMin,
+                            ZoneTemperatureMax = zoneMax,
+                            ZoneCode = loc?.Zone?.ZoneCode ?? "Unknown",
+                            LocationCode = s.StorageLocation ?? "N/A",
+                            WarehouseName = s.Receipt.Warehouse?.WarehouseName ?? "Unknown"
+                        });
+                    }
+                }
+
+                int totalCount = responseList.Count;
+                var pagedItems = responseList
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToList();
+
+                var pagedResult = PagedResult<TempAuditResponse>.Create(pagedItems, totalCount, pageNumber, pageSize);
                 return ApiResponse<PagedResult<TempAuditResponse>>.SuccessResponse(pagedResult, "Temperature audits completed and flagged items retrieved successfully.");
             }
             catch (Exception ex)

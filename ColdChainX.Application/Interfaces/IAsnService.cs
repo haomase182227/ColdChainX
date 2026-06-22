@@ -20,5 +20,9 @@ namespace ColdChainX.Application.Interfaces
             Guid? orderId,
             int pageNumber,
             int pageSize);
+
+        Task<ApiResponse<List<AsnScheduleResponse>>> GetScheduleAsync(DateOnly date, string? status);
+
+        Task<ApiResponse<List<AsnResponse>>> GetAsnsByCustomerIdAsync(Guid customerId);
     }
 }

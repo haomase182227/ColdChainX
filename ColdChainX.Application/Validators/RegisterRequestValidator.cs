@@ -7,7 +7,7 @@ namespace ColdChainX.Application.Validators
 {
     public class RegisterRequestValidator : AbstractValidator<RegisterRequest>
     {
-        private static readonly string[] AllowedRoles = { "Admin", "Dispatcher", "Sales" };
+        private static readonly string[] AllowedRoles = { "Admin", "Dispatcher", "Sales", "Loader" };
 
         public RegisterRequestValidator()
         {
@@ -26,12 +26,13 @@ namespace ColdChainX.Application.Validators
 
             RuleFor(x => x.Password)
                 .NotEmpty().WithMessage("Password is required")
-                .MinimumLength(6).WithMessage("Password must be at least 6 characters");
+                .MinimumLength(6).WithMessage("Password must be at least 6 characters")
+                .MaximumLength(50).WithMessage("Password cannot exceed 50 characters");
 
             RuleFor(x => x.Role)
                 .NotEmpty().WithMessage("Role is required")
                 .Must(role => AllowedRoles.Contains(role, StringComparer.OrdinalIgnoreCase))
-                .WithMessage("Only Admin, Dispatcher, or Sales roles are allowed");
+                .WithMessage("Only Admin, Dispatcher, Sales, or Loader roles are allowed");
         }
     }
 }

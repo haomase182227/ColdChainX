@@ -14,18 +14,11 @@ namespace ColdChainX.Application.Interfaces
         DbSet<WarehouseZone> WarehouseZones { get; }
         DbSet<WarehouseLocation> WarehouseLocations { get; }
         DbSet<WarehouseReceipt> WarehouseReceipts { get; }
-        DbSet<WarehouseReceiptItem> WarehouseReceiptItems { get; }
-        DbSet<InventoryStock> InventoryStocks { get; }
-        DbSet<InventoryAdjustment> InventoryAdjustments { get; }
-        DbSet<InventoryHold> InventoryHolds { get; }
-        DbSet<InventoryMovement> InventoryMovements { get; }
-        DbSet<InventoryBatch> InventoryBatches { get; }
+        DbSet<InboundAsn> InboundAsns { get; }
+
         DbSet<OutboundOrder> OutboundOrders { get; }
         DbSet<OutboundOrderItem> OutboundOrderItems { get; }
-        DbSet<InventoryAllocation> InventoryAllocations { get; }
-        DbSet<WarehouseEvidenceAttachment> WarehouseEvidenceAttachments { get; }
-        DbSet<CycleCountPlan> CycleCountPlans { get; }
-        DbSet<CycleCountEntry> CycleCountEntries { get; }
+
         DbSet<TransportOrder> TransportOrders { get; }
         DbSet<Customer> Customers { get; }
         DbSet<MasterTrip> MasterTrips { get; }
@@ -33,11 +26,13 @@ namespace ColdChainX.Application.Interfaces
         DbSet<InvoiceLine> InvoiceLines { get; }
         DbSet<Quotation> Quotations { get; }
         DbSet<ComplianceZoningRule> ComplianceZoningRules { get; }
-        DbSet<AttachmentAuditHistory> AttachmentAuditHistories { get; }
         DbSet<PricingMatrix> PricingMatrices { get; }
         DbSet<IncidentReport> IncidentReports { get; }
         DbSet<Claim> Claims { get; }
         DbSet<ClaimEvidence> ClaimEvidences { get; }
+        DbSet<Lpn> Lpns { get; }
+        DbSet<PenaltyBill> PenaltyBills { get; }
+        DbSet<DeliveryEpod> DeliveryEpods { get; }
 
         DatabaseFacade Database { get; }
         Microsoft.EntityFrameworkCore.ChangeTracking.ChangeTracker ChangeTracker { get; }

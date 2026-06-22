@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using ColdChainX.Application.Services;
 using ColdChainX.Core.Entities;
+using ColdChainX.Core.Enums;
 using ColdChainX.Infrastructure.Persistence;
 using Xunit;
 
@@ -42,52 +43,41 @@ namespace ColdChainX.UnitTests
             var wh = new Warehouse { WarehouseId = warehouseId, WarehouseCode = "WH-EXP", WarehouseName = "Expiry WH", WarehouseType = "COLD", Address = "123 Cold St", Status = "ACTIVE", MaxPallets = 100 };
             _db.Warehouses.Add(wh);
 
-            var zone = new WarehouseZone { ZoneId = Guid.NewGuid(), WarehouseId = warehouseId, ZoneCode = "Z-EXP", ZoneName = "Zone Expiry", ZoneType = "STORAGE", StorageType = "RACK", Status = "ACTIVE", MaxCapacityPallets = 50, CurrentPallets = 10 };
-            _db.WarehouseZones.Add(zone);
+            var orderNear = new TransportOrder { OrderId = Guid.NewGuid(), TrackingCode = "ITEM-NEAR", ItemName = "Near Expiry Item", PackingType = "BOX", Category = "FOOD", Quantity = 10, TempCondition = "COLD", Status = "ASSIGNED" };
+            var orderFar = new TransportOrder { OrderId = Guid.NewGuid(), TrackingCode = "ITEM-FAR", ItemName = "Far Expiry Item", PackingType = "BOX", Category = "FOOD", Quantity = 10, TempCondition = "COLD", Status = "ASSIGNED" };
+            _db.TransportOrders.AddRange(orderNear, orderFar);
 
-            var loc = new WarehouseLocation { LocationId = Guid.NewGuid(), ZoneId = zone.ZoneId, LocationCode = "LOC-EXP", Status = "ACTIVE", MaxCapacityPallets = 10, CurrentPallets = 2 };
-            _db.WarehouseLocations.Add(loc);
+            var receiptNear = new WarehouseReceipt { ReceiptId = Guid.NewGuid(), ReceiptCode = "REC-NEAR", OrderId = orderNear.OrderId, WarehouseId = warehouseId, ReceiptType = "INBOUND", DelivererName = "DelNear", CreatedAt = DateTime.UtcNow };
+            var receiptFar = new WarehouseReceipt { ReceiptId = Guid.NewGuid(), ReceiptCode = "REC-FAR", OrderId = orderFar.OrderId, WarehouseId = warehouseId, ReceiptType = "INBOUND", DelivererName = "DelFar", CreatedAt = DateTime.UtcNow };
+            _db.WarehouseReceipts.AddRange(receiptNear, receiptFar);
 
-            // Batches:
-            // 1. Expired/Near expiry (10 days from now) -> Should be flagged
-            var batchNear = new InventoryBatch { BatchId = Guid.NewGuid(), ItemCode = "ITEM-NEAR", BatchNumber = "B-NEAR", ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10)), Status = "ACTIVE", CreatedAt = DateTime.UtcNow };
-            // 2. Far expiry (60 days from now) -> Should NOT be flagged when warningDays is 30
-            var batchFar = new InventoryBatch { BatchId = Guid.NewGuid(), ItemCode = "ITEM-FAR", BatchNumber = "B-FAR", ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(60)), Status = "ACTIVE", CreatedAt = DateTime.UtcNow };
-            _db.InventoryBatches.AddRange(batchNear, batchFar);
-
-            var stockNear = new InventoryStock
+            var lpnNear = new Lpn
             {
-                StockId = Guid.NewGuid(),
-                LocationId = loc.LocationId,
-                CustomerId = customerId,
-                ItemCode = "ITEM-NEAR",
-                ItemName = "Near Expiry Item",
-                Unit = "PCS",
-                BatchId = batchNear.BatchId,
-                QuantityOnHand = 50m,
-                PalletCount = 1,
-                Status = "AVAILABLE",
-                InboundDate = DateTime.UtcNow,
+                LpnId = Guid.NewGuid(),
+                LpnCode = "LPN-NEAR",
+                OrderId = orderNear.OrderId,
+                ReceiptId = receiptNear.ReceiptId,
+                Quantity = 50,
+                State = LpnState.IN_STOCK,
+                SlaDeadline = DateTime.UtcNow.AddDays(10),
+                StorageLocation = "LOC-EXP",
                 CreatedAt = DateTime.UtcNow
             };
 
-            var stockFar = new InventoryStock
+            var lpnFar = new Lpn
             {
-                StockId = Guid.NewGuid(),
-                LocationId = loc.LocationId,
-                CustomerId = customerId,
-                ItemCode = "ITEM-FAR",
-                ItemName = "Far Expiry Item",
-                Unit = "PCS",
-                BatchId = batchFar.BatchId,
-                QuantityOnHand = 100m,
-                PalletCount = 2,
-                Status = "AVAILABLE",
-                InboundDate = DateTime.UtcNow,
+                LpnId = Guid.NewGuid(),
+                LpnCode = "LPN-FAR",
+                OrderId = orderFar.OrderId,
+                ReceiptId = receiptFar.ReceiptId,
+                Quantity = 100,
+                State = LpnState.IN_STOCK,
+                SlaDeadline = DateTime.UtcNow.AddDays(60),
+                StorageLocation = "LOC-EXP",
                 CreatedAt = DateTime.UtcNow
             };
 
-            _db.InventoryStocks.AddRange(stockNear, stockFar);
+            _db.Lpns.AddRange(lpnNear, lpnFar);
             await _db.SaveChangesAsync();
 
             // Act
@@ -100,8 +90,7 @@ namespace ColdChainX.UnitTests
             
             var item = response.Data.Data.First();
             Assert.Equal("ITEM-NEAR", item.ItemCode);
-            Assert.Equal("B-NEAR", item.BatchNumber);
-            Assert.Equal(10, item.RemainingDays);
+            Assert.Equal("N/A", item.BatchNumber);
             Assert.Equal("Expiry WH", item.WarehouseName);
             Assert.Equal("LOC-EXP", item.LocationCode);
         }
@@ -115,50 +104,41 @@ namespace ColdChainX.UnitTests
             var wh = new Warehouse { WarehouseId = warehouseId, WarehouseCode = "WH-AGE", WarehouseName = "Aging WH", WarehouseType = "COLD", Address = "123 Cold St", Status = "ACTIVE", MaxPallets = 100 };
             _db.Warehouses.Add(wh);
 
-            var zone = new WarehouseZone { ZoneId = Guid.NewGuid(), WarehouseId = warehouseId, ZoneCode = "Z-AGE", ZoneName = "Zone Aging", ZoneType = "STORAGE", StorageType = "RACK", Status = "ACTIVE", MaxCapacityPallets = 50, CurrentPallets = 10 };
-            _db.WarehouseZones.Add(zone);
+            var orderOld = new TransportOrder { OrderId = Guid.NewGuid(), TrackingCode = "ITEM-OLD", ItemName = "Old Stock Item", PackingType = "BOX", Category = "FOOD", Quantity = 10, TempCondition = "COLD", Status = "ASSIGNED" };
+            var orderNew = new TransportOrder { OrderId = Guid.NewGuid(), TrackingCode = "ITEM-NEW", ItemName = "New Stock Item", PackingType = "BOX", Category = "FOOD", Quantity = 10, TempCondition = "COLD", Status = "ASSIGNED" };
+            _db.TransportOrders.AddRange(orderOld, orderNew);
 
-            var loc = new WarehouseLocation { LocationId = Guid.NewGuid(), ZoneId = zone.ZoneId, LocationCode = "LOC-AGE", Status = "ACTIVE", MaxCapacityPallets = 10, CurrentPallets = 2 };
-            _db.WarehouseLocations.Add(loc);
+            var receiptOld = new WarehouseReceipt { ReceiptId = Guid.NewGuid(), ReceiptCode = "REC-OLD", OrderId = orderOld.OrderId, WarehouseId = warehouseId, ReceiptType = "INBOUND", DelivererName = "DelOld", CreatedAt = DateTime.UtcNow.AddDays(-45) };
+            var receiptNew = new WarehouseReceipt { ReceiptId = Guid.NewGuid(), ReceiptCode = "REC-NEW", OrderId = orderNew.OrderId, WarehouseId = warehouseId, ReceiptType = "INBOUND", DelivererName = "DelNew", CreatedAt = DateTime.UtcNow.AddDays(-5) };
+            _db.WarehouseReceipts.AddRange(receiptOld, receiptNew);
 
-            var batch = new InventoryBatch { BatchId = Guid.NewGuid(), ItemCode = "ITEM-AGE", BatchNumber = "B-AGE", ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(100)), Status = "ACTIVE", CreatedAt = DateTime.UtcNow };
-            _db.InventoryBatches.Add(batch);
-
-            // Stock 1: Inbound 45 days ago -> Should be flagged if threshold is 30 days
-            var stockOld = new InventoryStock
+            var lpnOld = new Lpn
             {
-                StockId = Guid.NewGuid(),
-                LocationId = loc.LocationId,
-                CustomerId = customerId,
-                ItemCode = "ITEM-OLD",
-                ItemName = "Old Stock Item",
-                Unit = "PCS",
-                BatchId = batch.BatchId,
-                QuantityOnHand = 50m,
-                PalletCount = 1,
-                Status = "AVAILABLE",
-                InboundDate = DateTime.UtcNow.AddDays(-45),
+                LpnId = Guid.NewGuid(),
+                LpnCode = "LPN-OLD",
+                OrderId = orderOld.OrderId,
+                ReceiptId = receiptOld.ReceiptId,
+                Quantity = 50,
+                State = LpnState.IN_STOCK,
+                InboundTime = DateTime.UtcNow.AddDays(-45),
+                StorageLocation = "LOC-AGE",
                 CreatedAt = DateTime.UtcNow.AddDays(-45)
             };
 
-            // Stock 2: Inbound 5 days ago -> Should NOT be flagged if threshold is 30 days
-            var stockNew = new InventoryStock
+            var lpnNew = new Lpn
             {
-                StockId = Guid.NewGuid(),
-                LocationId = loc.LocationId,
-                CustomerId = customerId,
-                ItemCode = "ITEM-NEW",
-                ItemName = "New Stock Item",
-                Unit = "PCS",
-                BatchId = batch.BatchId,
-                QuantityOnHand = 100m,
-                PalletCount = 2,
-                Status = "AVAILABLE",
-                InboundDate = DateTime.UtcNow.AddDays(-5),
+                LpnId = Guid.NewGuid(),
+                LpnCode = "LPN-NEW",
+                OrderId = orderNew.OrderId,
+                ReceiptId = receiptNew.ReceiptId,
+                Quantity = 100,
+                State = LpnState.IN_STOCK,
+                InboundTime = DateTime.UtcNow.AddDays(-5),
+                StorageLocation = "LOC-AGE",
                 CreatedAt = DateTime.UtcNow.AddDays(-5)
             };
 
-            _db.InventoryStocks.AddRange(stockOld, stockNew);
+            _db.Lpns.AddRange(lpnOld, lpnNew);
             await _db.SaveChangesAsync();
 
             // Act
@@ -196,67 +176,59 @@ namespace ColdChainX.UnitTests
             _db.WarehouseZones.AddRange(hotZone, freezerZone);
             _db.WarehouseLocations.AddRange(locHot, locFreezer);
 
-            var batch = new InventoryBatch { BatchId = Guid.NewGuid(), ItemCode = "ITEM-TEMP", BatchNumber = "B-TEMP", ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(100)), Status = "ACTIVE", CreatedAt = DateTime.UtcNow };
-            _db.InventoryBatches.Add(batch);
+            var order1 = new TransportOrder { OrderId = Guid.NewGuid(), TrackingCode = "ITEM-TOO-HOT", ItemName = "Chilled Item", PackingType = "BOX", Category = "FOOD", Quantity = 10, TempCondition = "COLD", Status = "ASSIGNED" };
+            var order2 = new TransportOrder { OrderId = Guid.NewGuid(), TrackingCode = "ITEM-TOO-COLD", ItemName = "Chilled Item 2", PackingType = "BOX", Category = "FOOD", Quantity = 10, TempCondition = "COLD", Status = "ASSIGNED" };
+            var order3 = new TransportOrder { OrderId = Guid.NewGuid(), TrackingCode = "ITEM-OK", ItemName = "Frozen Item", PackingType = "BOX", Category = "FOOD", Quantity = 10, TempCondition = "COLD", Status = "ASSIGNED" };
+            _db.TransportOrders.AddRange(order1, order2, order3);
 
-            // Stock 1: Requires min 2 max 8, stored in Z-HOT (10 to 15) -> Should be flagged (Too hot)
-            var stockTooHot = new InventoryStock
+            var receipt1 = new WarehouseReceipt { ReceiptId = Guid.NewGuid(), ReceiptCode = "REC-1", OrderId = order1.OrderId, WarehouseId = warehouseId, ReceiptType = "INBOUND", DelivererName = "Del1", CreatedAt = DateTime.UtcNow };
+            var receipt2 = new WarehouseReceipt { ReceiptId = Guid.NewGuid(), ReceiptCode = "REC-2", OrderId = order2.OrderId, WarehouseId = warehouseId, ReceiptType = "INBOUND", DelivererName = "Del2", CreatedAt = DateTime.UtcNow };
+            var receipt3 = new WarehouseReceipt { ReceiptId = Guid.NewGuid(), ReceiptCode = "REC-3", OrderId = order3.OrderId, WarehouseId = warehouseId, ReceiptType = "INBOUND", DelivererName = "Del3", CreatedAt = DateTime.UtcNow };
+            _db.WarehouseReceipts.AddRange(receipt1, receipt2, receipt3);
+
+            // Lpn 1: Requires 5 (RequiredTemperature = 5), stored in LOC-HOT -> Should be flagged (Too hot)
+            var lpnTooHot = new Lpn
             {
-                StockId = Guid.NewGuid(),
-                LocationId = locHot.LocationId,
-                CustomerId = customerId,
-                ItemCode = "ITEM-TOO-HOT",
-                ItemName = "Chilled Item",
-                Unit = "PCS",
-                BatchId = batch.BatchId,
-                QuantityOnHand = 50m,
-                PalletCount = 1,
-                RequiredTempMin = 2m,
-                RequiredTempMax = 8m,
-                Status = "AVAILABLE",
-                InboundDate = DateTime.UtcNow,
+                LpnId = Guid.NewGuid(),
+                LpnCode = "LPN-TOO-HOT",
+                OrderId = order1.OrderId,
+                ReceiptId = receipt1.ReceiptId,
+                Quantity = 50,
+                State = LpnState.IN_STOCK,
+                RequiredTemperature = 5m,
+                StorageLocation = "LOC-HOT",
                 CreatedAt = DateTime.UtcNow
             };
 
-            // Stock 2: Requires min 2 max 8, stored in Z-FREEZER (-20 to -15) -> Should be flagged (Too cold)
-            var stockTooCold = new InventoryStock
+            // Lpn 2: Requires 5, stored in LOC-FREEZER -> Should be flagged (Too cold)
+            var lpnTooCold = new Lpn
             {
-                StockId = Guid.NewGuid(),
-                LocationId = locFreezer.LocationId,
-                CustomerId = customerId,
-                ItemCode = "ITEM-TOO-COLD",
-                ItemName = "Chilled Item 2",
-                Unit = "PCS",
-                BatchId = batch.BatchId,
-                QuantityOnHand = 50m,
-                PalletCount = 1,
-                RequiredTempMin = 2m,
-                RequiredTempMax = 8m,
-                Status = "AVAILABLE",
-                InboundDate = DateTime.UtcNow,
+                LpnId = Guid.NewGuid(),
+                LpnCode = "LPN-TOO-COLD",
+                OrderId = order2.OrderId,
+                ReceiptId = receipt2.ReceiptId,
+                Quantity = 50,
+                State = LpnState.IN_STOCK,
+                RequiredTemperature = 5m,
+                StorageLocation = "LOC-FREEZER",
                 CreatedAt = DateTime.UtcNow
             };
 
-            // Stock 3: Requires min -25 max -10, stored in Z-FREEZER (-20 to -15) -> Compatible, should NOT be flagged
-            var stockCompatible = new InventoryStock
+            // Lpn 3: Requires -18, stored in LOC-FREEZER -> Compatible, should NOT be flagged
+            var lpnCompatible = new Lpn
             {
-                StockId = Guid.NewGuid(),
-                LocationId = locFreezer.LocationId,
-                CustomerId = customerId,
-                ItemCode = "ITEM-OK",
-                ItemName = "Frozen Item",
-                Unit = "PCS",
-                BatchId = batch.BatchId,
-                QuantityOnHand = 50m,
-                PalletCount = 1,
-                RequiredTempMin = -25m,
-                RequiredTempMax = -10m,
-                Status = "AVAILABLE",
-                InboundDate = DateTime.UtcNow,
+                LpnId = Guid.NewGuid(),
+                LpnCode = "LPN-OK",
+                OrderId = order3.OrderId,
+                ReceiptId = receipt3.ReceiptId,
+                Quantity = 50,
+                State = LpnState.IN_STOCK,
+                RequiredTemperature = -18m,
+                StorageLocation = "LOC-FREEZER",
                 CreatedAt = DateTime.UtcNow
             };
 
-            _db.InventoryStocks.AddRange(stockTooHot, stockTooCold, stockCompatible);
+            _db.Lpns.AddRange(lpnTooHot, lpnTooCold, lpnCompatible);
             await _db.SaveChangesAsync();
 
             // Act

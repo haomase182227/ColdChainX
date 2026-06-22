@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: 'Times New Roman', serif; font-size: 14px; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .header { display: flex; text-align: center; font-weight: bold; margin-bottom: 30px; }
+        .header-left, .header-right { width: 50%; }
+        h2 { text-align: center; margin: 5px 0; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #000; padding: 8px; text-align: left; }
+        .sig-container { display: flex; justify-content: space-around; margin-top: 40px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">{{CompanyName}}<br>{{HubName}}</div>
+        <div class="header-right">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM<br>Độc lập - Tự do - Hạnh phúc</div>
+    </div>
+
+    <h2>BIÊN BẢN GHI NHẬN HÀNG HÓA BẤT THƯỜNG</h2>
+    <div style="text-align: center; font-style: italic; margin-bottom: 20px;">Số: {{DiscrepancyCode}}</div>
+
+    <div style="line-height: 1.6;">
+        Hôm nay, lúc {{Time}} ngày {{Date}}, tại Kho {{HubName}}, chúng tôi gồm:<br>
+        <b>I. Đại diện Kho (Bên Nhận):</b><br>
+        - Ông/Bà: {{QcName}} - Chức vụ: NV Kiểm hàng (QC)<br>
+        <b>II. Đại diện Vận tải (Bên Giao):</b><br>
+        - Ông/Bà: {{DriverName}} - Số xe: {{VehiclePlateNumber}}<br>
+        <br>
+        <b>Nội dung xác nhận bất thường đối với đơn hàng {{OrderCode}}:</b>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>STT</th>
+                <th>Mã LPN bị giữ</th>
+                <th>Tên Hàng Hóa</th>
+                <th>Khai báo (Kg/Cbm)</th>
+                <th>Thực tế (Kg/Cbm)</th>
+                <th>Lý do / Tình trạng bất thường</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{#each DiscrepancyItems}}
+            <tr>
+                <td>{{Index}}</td>
+                <td>{{LpnCode}}</td>
+                <td>{{ItemName}}</td>
+                <td>{{ExpectedValue}}</td>
+                <td>{{ActualValue}}</td>
+                <td>{{Reason}}</td>
+            </tr>
+            {{/each}}
+        </tbody>
+    </table>
+
+    <div style="margin-top: 15px;"><i>Ý kiến bổ sung: {{AdditionalNotes}}</i></div>
+
+    <div class="sig-container">
+        <div><b>Đại diện Bên Giao (Tài xế)</b><br><i>(Ký, ghi rõ họ tên)</i></div>
+        <div><b>Đại diện Bên Nhận (Kho)</b><br><i>(Ký, ghi rõ họ tên)</i></div>
+    </div>
+</body>
+</html>
