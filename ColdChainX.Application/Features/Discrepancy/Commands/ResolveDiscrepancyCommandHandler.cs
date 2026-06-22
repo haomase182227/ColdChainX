@@ -30,7 +30,7 @@ public class ResolveDiscrepancyCommandHandler : IRequestHandler<ResolveDiscrepan
 
         if (request.Accept)
         {
-            lpn.State = LpnState.IN_STOCK;
+            lpn.State = LpnState.RECEIVING;
             lpn.UpdatedAt = DateTime.UtcNow;
             
             await _context.SaveChangesAsync(cancellationToken);
@@ -38,7 +38,7 @@ public class ResolveDiscrepancyCommandHandler : IRequestHandler<ResolveDiscrepan
             return new ResolveDiscrepancyResponse 
             { 
                 Success = true, 
-                Message = "Discrepancy accepted by Sales. LPN is now IN_STOCK."
+                Message = "Discrepancy accepted by Sales. LPN is now RECEIVING and waiting putaway."
             };
         }
         else

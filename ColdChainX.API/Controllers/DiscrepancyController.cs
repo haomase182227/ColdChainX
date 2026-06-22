@@ -24,4 +24,18 @@ public class DiscrepancyController : ControllerBase
 
         return Ok(result);
     }
+
+    [HttpGet("{receiptId}/pdf")]
+    public async Task<IActionResult> GetDiscrepancyPdf(Guid receiptId)
+    {
+        try
+        {
+            var pdfBytes = await _mediator.Send(new ColdChainX.Application.Features.Discrepancy.Queries.GenerateDiscrepancyPdfQuery(receiptId));
+            return File(pdfBytes, "application/pdf", $"BienBanBatThuong_{receiptId.ToString().Substring(0, 8)}.pdf");
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
 }
