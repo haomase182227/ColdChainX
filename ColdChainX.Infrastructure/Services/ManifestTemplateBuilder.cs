@@ -244,7 +244,7 @@ namespace ColdChainX.Infrastructure.Services
             <tr>
                 <td>Trạm {stop.Sequence}</td>
                 <td>{stop.Address}</td>
-                <td>{stop.OrdersToUnload?.Count ?? 0} đơn</td>
+                <td>{stop.LpnsToUnload?.Count ?? 0} LPN</td>
                 <td>{stop.DistanceFromPreviousKm:F1}</td>
             </tr>");
                 }
@@ -281,7 +281,7 @@ namespace ColdChainX.Infrastructure.Services
                     
                     sb.Append($@"
             <div class='pallet {cssClass}'>
-                <strong>{lp.TrackingCode}</strong> - {lp.ItemName} ({lp.WeightKg} kg)<br/>
+                <strong>{lp.LpnCode} / {lp.TrackingCode}</strong> - {lp.ItemName} ({lp.WeightKg} kg)<br/>
                 <small>Dỡ tại: Trạm {lp.DeliveryStopSequence} | Lệnh bốc: {lp.LoadOrder}</small>
             </div>");
                 }
