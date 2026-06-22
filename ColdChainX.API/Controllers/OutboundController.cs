@@ -48,4 +48,18 @@ public class OutboundController : ControllerBase
         var result = await _mediator.Send(new ColdChainX.Application.Features.Outbound.Queries.GetOutboundPickListQuery(masterTripId));
         return Ok(result);
     }
+
+    [HttpGet("orders/{orderId}/epod-pdf")]
+    public async Task<IActionResult> GetEpodPdf(Guid orderId)
+    {
+        try
+        {
+            var pdfBytes = await _mediator.Send(new ColdChainX.Application.Features.Outbound.Queries.GenerateEpodPdfQuery(orderId));
+            return File(pdfBytes, "application/pdf", $"ePOD_{orderId.ToString().Substring(0, 8)}.pdf");
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
 }

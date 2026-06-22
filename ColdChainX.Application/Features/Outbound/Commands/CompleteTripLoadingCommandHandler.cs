@@ -44,7 +44,6 @@ public class CompleteTripLoadingCommandHandler : IRequestHandler<CompleteTripLoa
             }
 
             lpn.State = LpnState.SHIPPED;
-            lpn.ShippedAt = DateTime.UtcNow;
             lpn.UpdatedAt = DateTime.UtcNow;
             lpn.TripId = trip.TripId;
         }

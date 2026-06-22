@@ -28,7 +28,6 @@ public class PickLpnCommandHandler : IRequestHandler<PickLpnCommand, PickLpnResp
         }
 
         lpn.State = LpnState.PICKED;
-        lpn.PickedAt = DateTime.UtcNow;
         lpn.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);

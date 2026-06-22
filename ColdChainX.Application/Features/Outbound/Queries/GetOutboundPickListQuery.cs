@@ -33,7 +33,7 @@ public class GetOutboundPickListQueryHandler : IRequestHandler<GetOutboundPickLi
             {
                 LpnId = x.LpnId,
                 LpnCode = x.LpnCode,
-                ItemName = x.ItemName,
+                ItemName = x.Order.ItemName,
                 StorageLocation = x.StorageLocation ?? "N/A",
                 Quantity = x.Quantity,
                 Condition = x.DiscrepancyReason ?? "GOOD",

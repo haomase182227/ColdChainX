@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using MediatR;
 
 namespace ColdChainX.API.Controllers;
 
@@ -28,6 +29,7 @@ public class DispatchController : ControllerBase
     private readonly ILocationService _locationService;
     private readonly IWebHostEnvironment _env;
     private readonly IFileService _fileService;
+    private readonly IMediator _mediator;
 
     public DispatchController(
         IDispatchService dispatchService,
@@ -37,7 +39,8 @@ public class DispatchController : ControllerBase
         IPdfService pdfService,
         ILocationService locationService,
         IWebHostEnvironment env,
-        IFileService fileService)
+        IFileService fileService,
+        IMediator mediator)
     {
         _dispatchService = dispatchService;
         _vehicleService = vehicleService;
@@ -47,6 +50,7 @@ public class DispatchController : ControllerBase
         _locationService = locationService;
         _env = env;
         _fileService = fileService;
+        _mediator = mediator;
     }
 
     private Guid GetCurrentUserId()
@@ -475,5 +479,18 @@ var rawOrders = await (from r in _db.WarehouseReceipts
         var parts = input.Split(new[] { ':', '|' });
         return parts[0].Trim();
     }
-}
 
+    [HttpGet("trips/{id}/export-pdf")]
+    public async Task<IActionResult> GetTripExportPdf(Guid id)
+    {
+        try
+        {
+            var pdfBytes = await _mediator.Send(new ColdChainX.Application.Features.Outbound.Queries.GenerateDispatchPdfQuery(id));
+            return File(pdfBytes, "application/pdf", $"PhieuXuatKho_{id.ToString().Substring(0, 8)}.pdf");
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
+}

@@ -18,18 +18,15 @@ namespace ColdChainX.Application.Services
     public class OutboundOrderService : IOutboundOrderService
     {
         private readonly IApplicationDbContext _db;
-        private readonly IWarehouseAttachmentRepository _attachmentRepository;
         private readonly ComplianceRulesEngine _complianceEngine;
         private readonly ILogger<OutboundOrderService> _logger;
 
         public OutboundOrderService(
             IApplicationDbContext db,
-            IWarehouseAttachmentRepository attachmentRepository,
             ComplianceRulesEngine complianceEngine,
             ILogger<OutboundOrderService> logger)
         {
             _db = db;
-            _attachmentRepository = attachmentRepository;
             _complianceEngine = complianceEngine;
             _logger = logger;
         }
