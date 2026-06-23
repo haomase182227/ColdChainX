@@ -1,5 +1,6 @@
 using System;
 using System.Text.Json.Serialization;
+using ColdChainX.Application.DTOs.WarehouseFlow;
 
 namespace ColdChainX.Application.DTOs.Contracts
 {
@@ -40,5 +41,11 @@ namespace ColdChainX.Application.DTOs.Contracts
 
         [JsonPropertyName("resolvedAt")]
         public DateTime? ResolvedAt { get; set; }
+
+        [JsonPropertyName("penaltyBill")]
+        public PenaltyBillResponse? PenaltyBill { get; set; }
+
+        [JsonPropertyName("returnSlip")]
+        public InboundReturnSlipResponse? ReturnSlip { get; set; }
     }
 }

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using ColdChainX.Application.DTOs.Contracts;
+using ColdChainX.Application.DTOs.WarehouseFlow;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Application.Features.Discrepancy.Commands;
 using ColdChainX.Core.Entities;
@@ -187,9 +188,27 @@ namespace ColdChainX.Infrastructure.Services
                 appendix.OrderId,
                 new { Appendix_Number = appendix.AppendixNumber, Tracking_Code = appendix.Order.TrackingCode, File_URL = pdfUrl });
 
+            // Notify Sales as well
+            await EnsureNotificationTemplateAsync("NOTI_APPENDIX_SENT");
+            await AddNotificationAsync(
+                salesUserId,
+                salesUserId,
+                "NOTI_APPENDIX_SENT",
+                appendix.OrderId,
+                new { Appendix_Number = appendix.AppendixNumber, Tracking_Code = appendix.Order.TrackingCode });
+
             await _db.SaveChangesAsync();
 
             await _hubContext.Clients.User(appendix.Order.CustomerId.ToString()!).SendAsync("AppendixPendingSignature", new
+            {
+                appendix.AppendixId,
+                appendix.AppendixNumber,
+                appendix.PdfUrl,
+                appendix.Status,
+                appendix.OrderId
+            });
+
+            await _hubContext.Clients.Group("Group_Sales").SendAsync("AppendixSent", new
             {
                 appendix.AppendixId,
                 appendix.AppendixNumber,
@@ -256,29 +275,138 @@ namespace ColdChainX.Infrastructure.Services
             if (appendix.Order.CustomerId != customerId)
                 return ApiResponse<ContractAppendixResponse>.Failure("CustomerId does not match the order customer");
 
-            appendix.Status = Rejected;
-            appendix.ResolvedAt = DbNow();
+            var lpn = await _db.Lpns.FirstOrDefaultAsync(l => l.OrderId == appendix.OrderId);
+            if (lpn == null)
+                return ApiResponse<ContractAppendixResponse>.Failure("No LPN found for this order");
 
-            var salesUserId = await ResolveSalesUserIdAsync();
-            var customerUserId = await ResolveCustomerUserIdAsync(customerId);
-            await EnsureNotificationTemplateAsync("NOTI_APPENDIX_REJECTED");
-            await AddNotificationAsync(
-                salesUserId,
-                customerUserId,
-                "NOTI_APPENDIX_REJECTED",
-                appendix.OrderId,
-                new { Appendix_Number = appendix.AppendixNumber, Tracking_Code = appendix.Order.TrackingCode });
-
-            await _db.SaveChangesAsync();
-
-            await _hubContext.Clients.Group("Group_Sales").SendAsync("AppendixRejected", new
+            var strategy = _db.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
             {
-                appendix.AppendixId,
-                appendix.AppendixNumber,
-                appendix.OrderId
-            });
+                await using var transaction = await _db.Database.BeginTransactionAsync();
 
-            return ApiResponse<ContractAppendixResponse>.SuccessResponse(ToResponse(appendix), "Contract appendix rejected by customer");
+                // 1. Resolve Discrepancy (Accept = false, charge 200,000 VND handling fee)
+                const decimal PenaltyAmount = 200000m;
+                var resolveCmd = new ResolveDiscrepancyCommand
+                {
+                    LpnId = lpn.LpnId,
+                    Accept = false,
+                    PenaltyAmount = PenaltyAmount,
+                    PenaltyReason = "Discrepancy appendix rejected by customer"
+                };
+                var resolveRes = await _mediator.Send(resolveCmd);
+                if (!resolveRes.Success)
+                {
+                    await transaction.RollbackAsync();
+                    return ApiResponse<ContractAppendixResponse>.Failure($"Failed to resolve discrepancy: {resolveRes.Message}");
+                }
+
+                // 2. Create Inbound Return Slip
+                var slipCode = await GenerateUniqueSlipCodeAsync();
+                var returnSlip = new InboundReturnSlip
+                {
+                    ReturnSlipId = Guid.NewGuid(),
+                    OrderId = appendix.OrderId,
+                    LpnId = lpn.LpnId,
+                    SlipCode = slipCode,
+                    ReturnedWeightKg = lpn.ActualWeightKg,
+                    ReturnedCbm = lpn.ActualCbm,
+                    ReturnedQty = lpn.Quantity,
+                    Reason = "Discrepancy appendix rejected by customer",
+                    CreatedAt = DbNow()
+                };
+                _db.InboundReturnSlips.Add(returnSlip);
+
+                // Save slip code changes so PDF generator has data
+                await _db.SaveChangesAsync();
+
+                // Generate Inbound Return Slip PDF
+                try
+                {
+                    returnSlip.PdfUrl = await GenerateReturnSlipPdfAsync(appendix.Order, lpn, returnSlip, PenaltyAmount);
+                }
+                catch (Exception ex)
+                {
+                    // Proceed
+                }
+
+                // 3. Mark appendix as EXECUTED (directly executed since it is auto-resolved)
+                appendix.Status = Executed;
+                appendix.ResolvedAt = DbNow();
+
+                var salesUserId = await ResolveSalesUserIdAsync();
+                var customerUserId = await ResolveCustomerUserIdAsync(customerId);
+                await EnsureNotificationTemplateAsync("NOTI_APPENDIX_REJECTED");
+                await AddNotificationAsync(
+                    salesUserId,
+                    customerUserId,
+                    "NOTI_APPENDIX_REJECTED",
+                    appendix.OrderId,
+                    new { Appendix_Number = appendix.AppendixNumber, Tracking_Code = appendix.Order.TrackingCode });
+
+                // Also notify execute to Sales
+                await EnsureNotificationTemplateAsync("NOTI_APPENDIX_EXECUTED");
+                await AddNotificationAsync(
+                    salesUserId,
+                    salesUserId,
+                    "NOTI_APPENDIX_EXECUTED",
+                    appendix.OrderId,
+                    new { Appendix_Number = appendix.AppendixNumber, Tracking_Code = appendix.Order.TrackingCode });
+
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                // Retrieve the created PenaltyBill
+                var penaltyBill = await _db.PenaltyBills.FirstOrDefaultAsync(pb => pb.OrderId == appendix.OrderId);
+
+                var resp = ToResponse(appendix);
+                if (penaltyBill != null)
+                {
+                    resp.PenaltyBill = new PenaltyBillResponse
+                    {
+                        PenaltyBillId = penaltyBill.PenaltyBillId,
+                        BillCode = penaltyBill.BillCode,
+                        LpnId = penaltyBill.LpnId,
+                        OrderId = penaltyBill.OrderId,
+                        HandlingFee = penaltyBill.HandlingFee,
+                        StorageFee = penaltyBill.StorageFee,
+                        TotalAmount = penaltyBill.TotalAmount,
+                        Reason = penaltyBill.Reason,
+                        IsPaid = penaltyBill.IsPaid,
+                        CreatedAt = penaltyBill.CreatedAt,
+                        PaidAt = penaltyBill.PaidAt
+                    };
+                }
+                resp.ReturnSlip = new InboundReturnSlipResponse
+                {
+                    ReturnSlipId = returnSlip.ReturnSlipId,
+                    OrderId = returnSlip.OrderId,
+                    LpnId = returnSlip.LpnId,
+                    SlipCode = returnSlip.SlipCode,
+                    ReturnedWeightKg = returnSlip.ReturnedWeightKg,
+                    ReturnedCbm = returnSlip.ReturnedCbm,
+                    ReturnedQty = returnSlip.ReturnedQty,
+                    Reason = returnSlip.Reason,
+                    PdfUrl = returnSlip.PdfUrl,
+                    CreatedAt = returnSlip.CreatedAt
+                };
+
+                await _hubContext.Clients.Group("Group_Sales").SendAsync("AppendixRejected", new
+                {
+                    appendix.AppendixId,
+                    appendix.AppendixNumber,
+                    appendix.OrderId
+                });
+
+                await _hubContext.Clients.Group("Group_Sales").SendAsync("AppendixExecuted", new
+                {
+                    appendix.AppendixId,
+                    appendix.AppendixNumber,
+                    appendix.Status,
+                    appendix.OrderId
+                });
+
+                return ApiResponse<ContractAppendixResponse>.SuccessResponse(resp, "Contract appendix rejected by customer and discrepancy executed immediately");
+            });
         }
 
         public async Task<ApiResponse<ContractAppendixResponse>> ExecuteAppendixResolutionAsync(Guid appendixId, Guid salesUserId)
@@ -297,6 +425,8 @@ namespace ColdChainX.Infrastructure.Services
             var lpn = await _db.Lpns.FirstOrDefaultAsync(l => l.OrderId == appendix.OrderId);
             if (lpn == null)
                 return ApiResponse<ContractAppendixResponse>.Failure("No LPN found for this order");
+
+            var wasRejected = appendix.Status == Rejected;
 
             var strategy = _db.Database.CreateExecutionStrategy();
             return await strategy.ExecuteAsync(async () =>
@@ -413,10 +543,67 @@ namespace ColdChainX.Infrastructure.Services
                 appendix.Status = Executed;
                 appendix.ResolvedAt = DbNow();
 
+                await EnsureNotificationTemplateAsync("NOTI_APPENDIX_EXECUTED");
+                await AddNotificationAsync(
+                    salesUserId,
+                    salesUserId,
+                    "NOTI_APPENDIX_EXECUTED",
+                    appendix.OrderId,
+                    new { Appendix_Number = appendix.AppendixNumber, Tracking_Code = appendix.Order.TrackingCode });
+
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                return ApiResponse<ContractAppendixResponse>.SuccessResponse(ToResponse(appendix), "Appendix resolution executed successfully");
+                // SignalR
+                await _hubContext.Clients.Group("Group_Sales").SendAsync("AppendixExecuted", new
+                {
+                    appendix.AppendixId,
+                    appendix.AppendixNumber,
+                    appendix.Status,
+                    appendix.OrderId
+                });
+
+                var resp = ToResponse(appendix);
+                if (wasRejected)
+                {
+                    var penaltyBill = await _db.PenaltyBills.FirstOrDefaultAsync(pb => pb.OrderId == appendix.OrderId);
+                    if (penaltyBill != null)
+                    {
+                        resp.PenaltyBill = new PenaltyBillResponse
+                        {
+                            PenaltyBillId = penaltyBill.PenaltyBillId,
+                            BillCode = penaltyBill.BillCode,
+                            LpnId = penaltyBill.LpnId,
+                            OrderId = penaltyBill.OrderId,
+                            HandlingFee = penaltyBill.HandlingFee,
+                            StorageFee = penaltyBill.StorageFee,
+                            TotalAmount = penaltyBill.TotalAmount,
+                            Reason = penaltyBill.Reason,
+                            IsPaid = penaltyBill.IsPaid,
+                            CreatedAt = penaltyBill.CreatedAt,
+                            PaidAt = penaltyBill.PaidAt
+                        };
+                    }
+                    var returnSlip = await _db.InboundReturnSlips.FirstOrDefaultAsync(rs => rs.OrderId == appendix.OrderId);
+                    if (returnSlip != null)
+                    {
+                        resp.ReturnSlip = new InboundReturnSlipResponse
+                        {
+                            ReturnSlipId = returnSlip.ReturnSlipId,
+                            OrderId = returnSlip.OrderId,
+                            LpnId = returnSlip.LpnId,
+                            SlipCode = returnSlip.SlipCode,
+                            ReturnedWeightKg = returnSlip.ReturnedWeightKg,
+                            ReturnedCbm = returnSlip.ReturnedCbm,
+                            ReturnedQty = returnSlip.ReturnedQty,
+                            Reason = returnSlip.Reason,
+                            PdfUrl = returnSlip.PdfUrl,
+                            CreatedAt = returnSlip.CreatedAt
+                        };
+                    }
+                }
+
+                return ApiResponse<ContractAppendixResponse>.SuccessResponse(resp, "Appendix resolution executed successfully");
             });
         }
 
@@ -761,6 +948,12 @@ namespace ColdChainX.Infrastructure.Services
                 "NOTI_APPENDIX_REJECTED" => (
                     "Khách hàng từ chối ký phụ lục {{Appendix_Number}}",
                     "Khách hàng đã từ chối phụ lục hợp đồng số {{Appendix_Number}}. Đơn hàng đã chuyển sang hoàn trả."),
+                "NOTI_APPENDIX_SENT" => (
+                    "Đã gửi phụ lục hợp đồng {{Appendix_Number}}",
+                    "Phụ lục hợp đồng số {{Appendix_Number}} của đơn {{Tracking_Code}} đã được gửi thành công cho khách hàng."),
+                "NOTI_APPENDIX_EXECUTED" => (
+                    "Xử lý phụ lục {{Appendix_Number}} thành công",
+                    "Yêu cầu giải quyết chênh lệch cho đơn hàng {{Tracking_Code}} (Phụ lục số {{Appendix_Number}}) đã được thực thi thành công."),
                 _ => (
                     "Cập nhật phụ lục hợp đồng {{Appendix_Number}}",
                     "Phụ lục hợp đồng {{Appendix_Number}} có cập nhật mới.")
@@ -780,6 +973,26 @@ namespace ColdChainX.Infrastructure.Services
         private async Task AddNotificationAsync(Guid? userId, Guid? senderId, string templateId, Guid orderId, object parameters)
         {
             if (!userId.HasValue) return;
+
+            // Clean up previous notifications in the discrepancy/appendix flow for this order
+            var flowTemplates = new[]
+            {
+                "NOTI_QC_DISCREPANCY",
+                "NOTI_APPENDIX_PENDING_SIGNATURE",
+                "NOTI_APPENDIX_ACCEPTED",
+                "NOTI_APPENDIX_REJECTED",
+                "NOTI_APPENDIX_SENT",
+                "NOTI_APPENDIX_EXECUTED"
+            };
+
+            var oldNotifications = await _db.Notifications
+                .Where(n => n.OrderId == orderId && flowTemplates.Contains(n.TemplateId))
+                .ToListAsync();
+
+            if (oldNotifications.Any())
+            {
+                _db.Notifications.RemoveRange(oldNotifications);
+            }
 
             _db.Notifications.Add(new Notification
             {
