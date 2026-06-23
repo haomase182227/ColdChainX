@@ -16,6 +16,8 @@ namespace ColdChainX.Infrastructure.Migrations
             //     schema: "public",
             //     table: "warehouse_evidence_attachments");
 
+            // Already dropped in previous migration
+            /*
             migrationBuilder.DropTable(
                 name: "cycle_count_entries",
                 schema: "public");
@@ -47,6 +49,7 @@ namespace ColdChainX.Infrastructure.Migrations
             migrationBuilder.DropTable(
                 name: "inventory_batches",
                 schema: "public");
+            */
 
             migrationBuilder.DropIndex(
                 name: "idx_att_adjustment",

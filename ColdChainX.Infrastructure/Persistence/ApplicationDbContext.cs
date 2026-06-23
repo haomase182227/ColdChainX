@@ -108,6 +108,10 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
 
     public virtual DbSet<PenaltyBill> PenaltyBills { get; set; }
 
+    public virtual DbSet<ContractAppendix> ContractAppendices { get; set; }
+
+    public virtual DbSet<InboundReturnSlip> InboundReturnSlips { get; set; }
+
     public virtual DbSet<ComplianceZoningRule> ComplianceZoningRules { get; set; }
 
 
@@ -2261,9 +2265,119 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasConstraintName("fk_penalty_bills_paid_by");
         });
 
+        modelBuilder.Entity<ContractAppendix>(entity =>
+        {
+            entity.HasKey(e => e.AppendixId).HasName("contract_appendices_pkey");
+            entity.ToTable("contract_appendices");
+
+            entity.Property(e => e.AppendixId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("appendix_id");
+
+            entity.Property(e => e.ContractId).HasColumnName("contract_id");
+            entity.Property(e => e.OrderId).HasColumnName("order_id");
+
+            entity.Property(e => e.AppendixNumber)
+                .HasMaxLength(50)
+                .HasColumnName("appendix_number");
+
+            entity.Property(e => e.AdjustedPrice)
+                .HasPrecision(18, 2)
+                .HasColumnName("adjusted_price");
+
+            entity.Property(e => e.Reason)
+                .HasColumnName("reason");
+
+            entity.Property(e => e.Status)
+                .HasMaxLength(30)
+                .HasColumnName("status");
+
+            entity.Property(e => e.DraftHtmlContent)
+                .HasColumnName("draft_html_content");
+
+            entity.Property(e => e.PdfUrl)
+                .HasMaxLength(255)
+                .HasColumnName("pdf_url");
+
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+
+            entity.Property(e => e.SentAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("sent_at");
+
+            entity.Property(e => e.ResolvedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("resolved_at");
+
+            entity.HasIndex(e => e.AppendixNumber).IsUnique().HasDatabaseName("uq_contract_appendices_number");
+
+            entity.HasOne(e => e.Contract).WithMany()
+                .HasForeignKey(e => e.ContractId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_contract_appendices_contract");
+
+            entity.HasOne(e => e.Order).WithMany()
+                .HasForeignKey(e => e.OrderId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_contract_appendices_order");
+        });
+
+        modelBuilder.Entity<InboundReturnSlip>(entity =>
+        {
+            entity.HasKey(e => e.ReturnSlipId).HasName("inbound_return_slips_pkey");
+            entity.ToTable("inbound_return_slips");
+
+            entity.Property(e => e.ReturnSlipId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("return_slip_id");
+
+            entity.Property(e => e.OrderId).HasColumnName("order_id");
+            entity.Property(e => e.LpnId).HasColumnName("lpn_id");
+
+            entity.Property(e => e.SlipCode)
+                .HasMaxLength(50)
+                .HasColumnName("slip_code");
+
+            entity.Property(e => e.ReturnedWeightKg)
+                .HasPrecision(18, 2)
+                .HasColumnName("returned_weight_kg");
+
+            entity.Property(e => e.ReturnedCbm)
+                .HasPrecision(18, 4)
+                .HasColumnName("returned_cbm");
+
+            entity.Property(e => e.ReturnedQty)
+                .HasColumnName("returned_qty");
+
+            entity.Property(e => e.Reason)
+                .HasColumnName("reason");
+
+            entity.Property(e => e.PdfUrl)
+                .HasMaxLength(255)
+                .HasColumnName("pdf_url");
+
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+
+            entity.HasIndex(e => e.SlipCode).IsUnique().HasDatabaseName("uq_inbound_return_slips_code");
+
+            entity.HasOne(e => e.Order).WithMany()
+                .HasForeignKey(e => e.OrderId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_inbound_return_slips_order");
+
+            entity.HasOne(e => e.Lpn).WithMany()
+                .HasForeignKey(e => e.LpnId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_inbound_return_slips_lpn");
+        });
 
         OnModelCreatingPartial(modelBuilder);
-
     }
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);

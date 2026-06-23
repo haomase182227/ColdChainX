@@ -4,6 +4,7 @@ using ColdChainX.Core.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 namespace ColdChainX.Application.Features.Inbound.Commands;
 
@@ -173,6 +174,29 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
             
             receipt.PdfUrl = pdfUrl;
             await _context.SaveChangesAsync(cancellationToken);
+
+            // Send notification to Sales, Admin, and Manager
+            await EnsureNotificationTemplateAsync("NOTI_QC_DISCREPANCY", cancellationToken);
+            var salesUsers = await _context.Users
+                .Include(u => u.Role)
+                .Where(u => u.Role != null && (u.Role.RoleName.ToLower() == "sales" || u.Role.RoleName.ToLower() == "admin" || u.Role.RoleName.ToLower() == "manager"))
+                .ToListAsync(cancellationToken);
+
+            foreach (var user in salesUsers)
+            {
+                _context.Notifications.Add(new Notification
+                {
+                    NotiId = Guid.NewGuid(),
+                    UserId = user.UserId,
+                    SenderId = request.ReceiverId,
+                    TemplateId = "NOTI_QC_DISCREPANCY",
+                    Params = JsonSerializer.Serialize(new { Tracking_Code = order.TrackingCode, Pdf_URL = pdfUrl ?? "" }),
+                    OrderId = order.OrderId,
+                    IsRead = false,
+                    CreatedAt = now
+                });
+            }
+            await _context.SaveChangesAsync(cancellationToken);
         }
 
         if (hasDiscrepancy)
@@ -197,6 +221,39 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
             DiffPercent = maxDiff,
             PdfUrl = pdfUrl
         };
+    }
+
+    private async Task EnsureNotificationTemplateAsync(string templateId, CancellationToken cancellationToken)
+    {
+        if (await _context.NotificationTemplates.AnyAsync(t => t.TemplateId == templateId, cancellationToken))
+            return;
+
+        var typeId = await _context.Messagetypes
+            .Where(t => t.TypeName == "ORDER_STATUS")
+            .Select(t => (Guid?)t.TypeId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (!typeId.HasValue)
+        {
+            var type = new Messagetype
+            {
+                TypeId = Guid.NewGuid(),
+                TypeName = "ORDER_STATUS",
+                Description = "Cập nhật trạng thái đơn hàng, báo giá, hợp đồng"
+            };
+            _context.Messagetypes.Add(type);
+            typeId = type.TypeId;
+        }
+
+        _context.NotificationTemplates.Add(new NotificationTemplate
+        {
+            TemplateId = templateId,
+            TypeId = typeId.Value,
+            TitleTemplate = "Đơn hàng {{Tracking_Code}} bị giữ lại do chênh lệch QC",
+            BodyTemplate = "Phát hiện chênh lệch >5% tại Inbound QC. Biên bản bất thường: {{Pdf_URL}}",
+            Channel = "IN_APP",
+            Status = "ACTIVE"
+        });
     }
 
     private static ProcessInboundQcResponse Failure(string message)

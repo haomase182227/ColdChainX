@@ -42,6 +42,12 @@ namespace ColdChainX.Infrastructure.Services
         public async Task<string> SaveInvoicePdfAsync(string htmlContent, string invoiceCode)
             => await SavePdfAsync(htmlContent, "invoices", invoiceCode, "invoice");
 
+        public async Task<string> SaveContractAppendixPdfAsync(string htmlContent, string appendixNumber)
+            => await SavePdfAsync(htmlContent, "appendices", appendixNumber, "appendix");
+
+        public async Task<string> SaveInboundReturnSlipPdfAsync(string htmlContent, string slipCode)
+            => await SavePdfAsync(htmlContent, "returnslips", slipCode, "returnslip");
+
         private async Task<string> SavePdfAsync(string htmlContent, string folderName, string fileCode, string prefix = "waybill")
         {
             var root = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot");

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: 'Times New Roman', Times, serif; font-size: 13pt; line-height: 1.5; margin: 0 auto; max-width: 800px; padding: 20px 40px; color: #000; }
+        .header-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        .header-table td { border: none; vertical-align: top; }
+        .info-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; margin-left: 20px; }
+        .info-table td { border: none; padding: 3px 0; vertical-align: top; }
+        .col-label { width: 140px; font-weight: bold; }
+        .title { text-align: center; font-size: 16pt; font-weight: bold; margin: 30px 0 15px 0; }
+        .italic-text { font-style: italic; }
+        .bold { font-weight: bold; }
+        .justify { text-align: justify; }
+        .section-title { font-weight: bold; margin-top: 20px; margin-bottom: 5px; }
+        .section-content { margin-left: 20px; text-align: justify; }
+        .section-content p { margin: 5px 0; }
+        .data-table { width: 100%; border-collapse: collapse; margin-top: 15px; margin-bottom: 15px; }
+        .data-table th, .data-table td { border: 1px solid #000; padding: 8px; text-align: left; }
+        .data-table th { background-color: #f2f2f2; font-weight: bold; text-align: center; }
+    </style>
+</head>
+<body>
+    <table class="header-table">
+        <tr>
+            <td style="width: 40%; text-align: center; vertical-align: top;"><img src="/images/logo.png" alt="Logo" style="height: 55px;" /></td>
+            <td style="width: 60%; text-align: center; vertical-align: top;">
+                <div style="font-weight: bold; font-size: 13pt;">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
+                <div style="font-style: italic; font-size: 13pt;">Độc Lập - Tự Do - Hạnh Phúc</div><div>***********</div>
+            </td>
+        </tr>
+        <tr>
+            <td style="text-align: center; vertical-align: bottom; padding-top: 20px;">PLHĐ Số: {{Appendix_Number}}/ProShip</td>
+            <td style="text-align: center; vertical-align: bottom; padding-top: 20px; font-style: italic;">TP. Hồ Chí Minh, Ngày {{Day}} tháng {{Month}} năm {{Year}}</td>
+        </tr>
+    </table>
+
+    <div class="title">PHỤ LỤC HỢP ĐỒNG ĐIỀU CHỈNH GIÁ CƯỚC</div>
+    <div class="italic-text justify" style="margin-bottom: 20px;">
+        <p style="margin: 0;">- Căn cứ Hợp đồng vận chuyển hàng hóa số {{Contract_Number}} đã ký kết giữa hai bên;</p>
+        <p style="margin: 0;">- Căn cứ Biên bản ghi nhận hàng hóa bất thường thực tế tại Hub vận hành;</p>
+        <p style="margin: 0;">- Căn cứ vào thỏa thuận thống nhất giữa hai bên về việc điều chỉnh giá cước vận chuyển do thay đổi tải trọng/thể tích hàng hóa thực tế.</p>
+    </div>
+
+    <div style="margin-bottom: 10px;"><span class="bold">Bên A (Khách hàng): <span style="text-transform: uppercase;">{{Customer_CompanyName}}</span></span></div>
+    <table class="info-table">
+        <tr><td class="col-label">Địa chỉ:</td><td colspan="3">{{Customer_Address}}</td></tr>
+        <tr><td class="col-label">MST:</td><td colspan="3">{{Customer_TaxCode}}</td></tr>
+        <tr>
+            <td class="col-label">Người đại diện:</td><td style="width: 40%;">{{Customer_RepName}}</td>
+            <td class="col-label" style="width: 80px;">Chức vụ:</td><td>{{Customer_RepTitle}}</td>
+        </tr>
+        <tr><td class="col-label">Điện thoại:</td><td>{{Customer_Phone}}</td><td class="col-label">Email:</td><td>{{Customer_Email}}</td></tr>
+    </table>
+
+    <div style="margin-bottom: 10px; margin-top: 15px;"><span class="bold">Bên B: CÔNG TY CỔ PHẦN PROSHIP</span></div>
+    <table class="info-table">
+        <tr><td class="col-label">Địa chỉ:</td><td colspan="3">602/45D Điện Biên Phủ, P. 22, Quận Bình Thạnh, Tp. HCM</td></tr>
+        <tr><td class="col-label">MST:</td><td colspan="3">0313214289</td></tr>
+    </table>
+
+    <p class="justify">Hai bên thống nhất ký kết Phụ lục hợp đồng về việc điều chỉnh thông tin đơn hàng và chi phí vận chuyển cụ thể như sau:</p>
+
+    <div class="section-title">ĐIỀU 1: THÔNG TIN CHÊNH LỆCH HÀNG HÓA VẬN CHUYỂN</div>
+    <div class="section-content">
+        <p>Thông tin hàng hóa của đơn hàng: <strong>{{Tracking_Code}}</strong> (Tên hàng: {{Item_Name}}) có chênh lệch thực tế khi kiểm đếm tại Hub như sau:</p>
+        
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Thông số</th>
+                    <th>Khai báo (Expected)</th>
+                    <th>Thực tế (Actual)</th>
+                    <th>Chênh lệch (%)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="bold">Trọng lượng (Weight)</td>
+                    <td>{{Expected_Weight}} KG</td>
+                    <td>{{Actual_Weight}} KG</td>
+                    <td rowspan="2" style="text-align: center; vertical-align: middle;" class="bold">{{Discrepancy_Percent}}%</td>
+                </tr>
+                <tr>
+                    <td class="bold">Thể tích (CBM)</td>
+                    <td>{{Expected_Cbm}} CBM</td>
+                    <td>{{Actual_Cbm}} CBM</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section-title">ĐIỀU 2: ĐIỀU CHỈNH GIÁ CƯỚC VẬN CHUYỂN</div>
+    <div class="section-content">
+        <p>Do hàng hóa có sự thay đổi lớn về trọng lượng/thể tích thực tế so với khai báo ban đầu, hai bên thống nhất điều chỉnh giá cước vận chuyển như sau:</p>
+        <table class="info-table" style="margin-left: 0;">
+            <tr><td class="col-label" style="width: 250px;">1. Giá cước gốc theo hợp đồng:</td><td class="bold">{{Original_Price}} VNĐ</td></tr>
+            <tr><td class="col-label" style="width: 250px;">2. Chi phí điều chỉnh tăng thêm:</td><td class="bold" style="color: red;">+ {{Adjusted_Price}} VNĐ</td></tr>
+            <tr><td class="col-label" style="width: 250px;">3. Tổng giá cước mới sau điều chỉnh:</td><td class="bold">{{New_Price}} VNĐ</td></tr>
+            <tr><td class="col-label" style="width: 250px;">Lý do điều chỉnh:</td><td>{{Reason}}</td></tr>
+        </table>
+        <p><i>(Tổng giá cước trên đã bao gồm thuế GTGT và các phụ phí phát sinh liên quan trực tiếp đến việc xử lý chênh lệch hàng hóa).</i></p>
+    </div>
+
+    <div class="section-title">ĐIỀU 3: HIỆU LỰC THI HÀNH</div>
+    <div class="section-content">
+        <p>1. Phụ lục này là phần không thể tách rời của Hợp đồng số {{Contract_Number}}.</p>
+        <p>2. Các điều khoản khác của Hợp đồng số {{Contract_Number}} không được đề cập trong Phụ lục này vẫn giữ nguyên hiệu lực thi hành.</p>
+        <p>3. Phụ lục này có hiệu lực kể từ ngày ký và được lập thành hai (02) bản có giá trị pháp lý như nhau, mỗi bên giữ một (01) bản.</p>
+    </div>
+
+    <table style="width: 100%; margin-top: 40px; text-align: center;">
+        <tr>
+            <td style="width: 50%; vertical-align: top;"><span class="bold">ĐẠI DIỆN BÊN A</span></td>
+            <td style="width: 50%; vertical-align: top;"><span class="bold">ĐẠI DIỆN BÊN B<br>GIÁM ĐỐC</span><br/><br/><br/><br/>NGUYỄN DUY TOÀN</td>
+        </tr>
+    </table>
+</body>
+</html>

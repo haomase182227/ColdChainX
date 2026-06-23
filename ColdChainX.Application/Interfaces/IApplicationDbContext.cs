@@ -33,6 +33,11 @@ namespace ColdChainX.Application.Interfaces
         DbSet<Lpn> Lpns { get; }
         DbSet<PenaltyBill> PenaltyBills { get; }
         DbSet<DeliveryEpod> DeliveryEpods { get; }
+        DbSet<ContractAppendix> ContractAppendices { get; }
+        DbSet<InboundReturnSlip> InboundReturnSlips { get; }
+        DbSet<Notification> Notifications { get; }
+        DbSet<NotificationTemplate> NotificationTemplates { get; }
+        DbSet<Messagetype> Messagetypes { get; }
 
         DatabaseFacade Database { get; }
         Microsoft.EntityFrameworkCore.ChangeTracking.ChangeTracker ChangeTracker { get; }

@@ -8,5 +8,7 @@ namespace ColdChainX.Application.Interfaces
         Task<string> SaveWaybillPdfAsync(string htmlContent, string tripId);
         Task<string> SaveLoadPlanPdfAsync(string htmlContent, string tripId);
         Task<string> SaveInvoicePdfAsync(string htmlContent, string invoiceCode);
+        Task<string> SaveContractAppendixPdfAsync(string htmlContent, string appendixNumber);
+        Task<string> SaveInboundReturnSlipPdfAsync(string htmlContent, string slipCode);
     }
 }
