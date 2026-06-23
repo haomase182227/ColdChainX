@@ -25,44 +25,56 @@ public class CompleteTripLoadingCommandHandler : IRequestHandler<CompleteTripLoa
         _pdfService = pdfService;
     }
 
+    /// <summary>
+    /// Xac nhan toan bo chuyen da len xe — chuyen LPN tu LOADING_COMPLETED sang RELEASED.
+    ///
+    /// Precondition  : TAT CA LPN cua TripId phai o trang thai LOADING_COMPLETED
+    ///                 (moi LPN da duoc goi POST /api/Outbound/pick truoc do)
+    /// Postcondition : LPN.State == RELEASED
+    ///                 Trip.Status == LOADING_COMPLETED
+    ///
+    /// Sau buoc nay, goi POST /api/Dispatch/seal-and-dispatch/{tripId} de kep chi.
+    /// </summary>
     public async Task<CompleteTripLoadingResponse> Handle(CompleteTripLoadingCommand request, CancellationToken cancellationToken)
     {
         var trip = await _context.MasterTrips.FirstOrDefaultAsync(t => t.TripId == request.TripId, cancellationToken);
         if (trip == null)
-        {
-            return new CompleteTripLoadingResponse { Success = false, Message = "Trip not found." };
-        }
+            return new CompleteTripLoadingResponse { Success = false, Message = "Không tìm thấy chuyến hàng." };
 
-        var lpns = await _context.Lpns
-            .Where(l => request.LoadedLpnIds.Contains(l.LpnId))
+        // Lay TAT CA LPN cua chuyen theo TripId
+        var allLpns = await _context.Lpns
+            .Where(l => l.TripId == request.TripId)
             .ToListAsync(cancellationToken);
 
-        if (!lpns.Any())
+        if (!allLpns.Any())
+            return new CompleteTripLoadingResponse { Success = false, Message = "Chuyến hàng không có LPN nào." };
+
+        // Kiem tra toan bo LPN da duoc boc (LOADING_COMPLETED)
+        var notDoneLpns = allLpns.Where(l => l.State != LpnState.LOADING_COMPLETED).ToList();
+        if (notDoneLpns.Any())
         {
-            return new CompleteTripLoadingResponse { Success = false, Message = "No LPNs found to load." };
+            var codes = string.Join(", ", notDoneLpns.Select(l => $"{l.LpnCode}({l.State})"));
+            return new CompleteTripLoadingResponse
+            {
+                Success = false,
+                Message = $"Còn {notDoneLpns.Count}/{allLpns.Count} LPN chưa ở trạng thái LOADING_COMPLETED: {codes}. " +
+                          $"Vui lòng gọi POST /api/Outbound/pick cho từng LPN còn lại trước khi xác nhận chuyến."
+            };
         }
 
-        foreach (var lpn in lpns)
+        // Chuyen tat ca LPN sang RELEASED
+        foreach (var lpn in allLpns)
         {
-            if (lpn.State != LpnState.LOADING)
-            {
-                return new CompleteTripLoadingResponse { Success = false, Message = $"LPN {lpn.LpnCode} phải ở trạng thái LOADING trước khi xác nhận xuất kho. Trạng thái hiện tại: {lpn.State}" };
-            }
-
             lpn.State = LpnState.RELEASED;
             lpn.UpdatedAt = DateTime.UtcNow;
-            lpn.TripId = trip.TripId;
         }
 
         trip.Status = "LOADING_COMPLETED";
-
         await _context.SaveChangesAsync(cancellationToken);
 
-        // Publish Events for all loaded LPNs
-        foreach (var lpn in lpns)
-        {
+        // Publish events cho tat ca LPN
+        foreach (var lpn in allLpns)
             await _mediator.Publish(new Events.LpnShippedEvent(lpn.OrderId, lpn.LpnId), cancellationToken);
-        }
 
         string? manifestUrl = null;
         string? outboundTicketUrl = null;
@@ -88,7 +100,7 @@ public class CompleteTripLoadingCommandHandler : IRequestHandler<CompleteTripLoa
         return new CompleteTripLoadingResponse
         {
             Success = true,
-            Message = $"Trip {trip.TripId} loaded successfully with {lpns.Count} LPNs.",
+            Message = $"Xác nhận chuyến {trip.TripId} thành công — {allLpns.Count} LPN đã RELEASED (xuất kho).",
             ManifestPdfUrl = manifestUrl,
             HandoverPdfUrl = null,
             OutboundTicketPdfUrl = outboundTicketUrl
