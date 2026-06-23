@@ -11,12 +11,18 @@ public class CompleteTripLoadingCommandHandler : IRequestHandler<CompleteTripLoa
     private readonly IApplicationDbContext _context;
     private readonly ILogger<CompleteTripLoadingCommandHandler> _logger;
     private readonly IMediator _mediator;
+    private readonly IPdfService _pdfService;
 
-    public CompleteTripLoadingCommandHandler(IApplicationDbContext context, ILogger<CompleteTripLoadingCommandHandler> logger, IMediator mediator)
+    public CompleteTripLoadingCommandHandler(
+        IApplicationDbContext context,
+        ILogger<CompleteTripLoadingCommandHandler> logger,
+        IMediator mediator,
+        IPdfService pdfService)
     {
         _context = context;
         _logger = logger;
         _mediator = mediator;
+        _pdfService = pdfService;
     }
 
     public async Task<CompleteTripLoadingResponse> Handle(CompleteTripLoadingCommand request, CancellationToken cancellationToken)
@@ -38,17 +44,16 @@ public class CompleteTripLoadingCommandHandler : IRequestHandler<CompleteTripLoa
 
         foreach (var lpn in lpns)
         {
-            if (lpn.State != LpnState.PICKED)
+            if (lpn.State != LpnState.LOADING)
             {
-                return new CompleteTripLoadingResponse { Success = false, Message = $"LPN {lpn.LpnCode} is not in PICKED state (Current: {lpn.State})." };
+                return new CompleteTripLoadingResponse { Success = false, Message = $"LPN {lpn.LpnCode} phải ở trạng thái LOADING trước khi xác nhận xuất kho. Trạng thái hiện tại: {lpn.State}" };
             }
 
-            lpn.State = LpnState.SHIPPED;
+            lpn.State = LpnState.RELEASED;
             lpn.UpdatedAt = DateTime.UtcNow;
             lpn.TripId = trip.TripId;
         }
 
-        trip.SealNumber = request.SealNumber;
         trip.Status = "LOADING_COMPLETED";
 
         await _context.SaveChangesAsync(cancellationToken);
@@ -59,15 +64,34 @@ public class CompleteTripLoadingCommandHandler : IRequestHandler<CompleteTripLoa
             await _mediator.Publish(new Events.LpnShippedEvent(lpn.OrderId, lpn.LpnId), cancellationToken);
         }
 
-        _logger.LogInformation($"[PDF_MOCK] Generating Manifest, Handover, and Outbound Ticket PDFs for Trip {trip.TripId}...");
+        string? manifestUrl = null;
+        string? outboundTicketUrl = null;
 
-        return new CompleteTripLoadingResponse 
-        { 
-            Success = true, 
-            Message = $"Trip {trip.TripId} sealed successfully with {lpns.Count} LPNs.",
-            ManifestPdfUrl = $"https://coldchainx.mock/api/docs/manifest/{trip.TripId}.pdf",
-            HandoverPdfUrl = $"https://coldchainx.mock/api/docs/handover/{trip.TripId}.pdf",
-            OutboundTicketPdfUrl = $"https://coldchainx.mock/api/docs/outbound/{trip.TripId}.pdf"
+        try
+        {
+            manifestUrl = await _pdfService.GenerateManifestPdfAsync(trip.TripId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Không thể sinh Manifest PDF cho trip {TripId}.", trip.TripId);
+        }
+
+        try
+        {
+            outboundTicketUrl = await _pdfService.GenerateOutboundTicketPdfAsync(trip.TripId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Không thể sinh Phiếu Xuất Kho PDF cho trip {TripId}.", trip.TripId);
+        }
+
+        return new CompleteTripLoadingResponse
+        {
+            Success = true,
+            Message = $"Trip {trip.TripId} loaded successfully with {lpns.Count} LPNs.",
+            ManifestPdfUrl = manifestUrl,
+            HandoverPdfUrl = null,
+            OutboundTicketPdfUrl = outboundTicketUrl
         };
     }
 }

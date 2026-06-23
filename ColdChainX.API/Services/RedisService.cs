@@ -30,19 +30,14 @@ public sealed class RedisService : IAsyncDisposable
                 "Redis connection string is missing. Set ConnectionStrings__Redis or REDIS_CONNECTION_STRING in environment variables.");
         }
 
+        var options = ConfigurationOptions.Parse(connectionString);
+        options.AbortOnConnectFail = false;
+
         _redis = new Lazy<ConnectionMultiplexer>(
-            () => ConnectionMultiplexer.Connect(connectionString),
+            () => ConnectionMultiplexer.Connect(options),
             LazyThreadSafetyMode.ExecutionAndPublication);
 
-        try
-        {
-            var ping = _redis.Value.GetDatabase().Ping();
-            logger.LogInformation("Redis connected successfully. Ping={PingMs}ms", ping.TotalMilliseconds);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Failed to connect to Redis on startup. Redis features will not be available or will throw errors during operation.");
-        }
+        logger.LogInformation("Redis configured for {Endpoint}. Connection is established lazily.", connectionString);
     }
 
     public async Task<long> AddTelemetryAndTrimAsync(string deviceId, TelemetryData data)

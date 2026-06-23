@@ -1,7 +1,10 @@
+using System.Text;
 using System.Text.RegularExpressions;
 using ColdChainX.Application.Interfaces;
+using ColdChainX.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 using PuppeteerSharp;
 using PuppeteerSharp.Media;
 
@@ -14,12 +17,18 @@ namespace ColdChainX.Infrastructure.Services
         private readonly IWebHostEnvironment _environment;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly IFileService _fileService;
+        private readonly ApplicationDbContext _context;
 
-        public SimplePdfService(IWebHostEnvironment environment, IHttpContextAccessor httpContextAccessor, IFileService fileService)
+        public SimplePdfService(
+            IWebHostEnvironment environment,
+            IHttpContextAccessor httpContextAccessor,
+            IFileService fileService,
+            ApplicationDbContext context)
         {
             _environment = environment;
             _httpContextAccessor = httpContextAccessor;
             _fileService = fileService;
+            _context = context;
         }
 
         public async Task<string> SaveContractPdfAsync(string htmlContent, string contractNumber)
@@ -47,6 +56,135 @@ namespace ColdChainX.Infrastructure.Services
 
         public async Task<string> SaveInboundReturnSlipPdfAsync(string htmlContent, string slipCode)
             => await SavePdfAsync(htmlContent, "returnslips", slipCode, "returnslip");
+
+        public async Task<string> GenerateManifestPdfAsync(Guid tripId)
+        {
+            var trip = await _context.MasterTrips
+                .Include(t => t.Vehicle)
+                .Include(t => t.Driver)
+                .Include(t => t.OriginLocation)
+                .Include(t => t.DestinationLocation)
+                .Include(t => t.TripStops).ThenInclude(ts => ts.Location)
+                .FirstOrDefaultAsync(t => t.TripId == tripId)
+                ?? throw new KeyNotFoundException($"Không tìm thấy chuyến hàng {tripId}.");
+
+            var lpns = await _context.Lpns
+                .Include(l => l.Order)
+                .Where(l => l.TripId == tripId)
+                .OrderBy(l => l.LpnCode)
+                .ToListAsync();
+
+            var issuedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm");
+            var sb = new StringBuilder();
+            sb.AppendLine("<!DOCTYPE html><html><head><meta charset='UTF-8'>");
+            sb.AppendLine("<style>body{font-family:Arial,sans-serif;font-size:12px;padding:20px}");
+            sb.AppendLine("h1{font-size:16px;text-align:center;text-transform:uppercase}");
+            sb.AppendLine(".info{margin-bottom:12px}.info td{padding:3px 8px}");
+            sb.AppendLine("table.lpn{width:100%;border-collapse:collapse;margin-top:12px}");
+            sb.AppendLine("table.lpn th,table.lpn td{border:1px solid #333;padding:5px 8px;text-align:left}");
+            sb.AppendLine("table.lpn th{background:#eee;font-weight:bold}");
+            sb.AppendLine(".footer{margin-top:30px;display:flex;justify-content:space-between}");
+            sb.AppendLine(".sign-box{text-align:center;width:200px}");
+            sb.AppendLine(".sign-box p{border-top:1px solid #333;margin-top:50px;padding-top:4px}</style></head><body>");
+
+            sb.AppendLine("<h1>Biên Bản Hàng Ghép Chuyến (Manifest)</h1>");
+            sb.AppendLine("<table class='info'>");
+            sb.AppendLine($"<tr><td><b>Số chuyến:</b></td><td>{tripId.ToString()[..8].ToUpper()}</td>");
+            sb.AppendLine($"<td><b>Ngày lập:</b></td><td>{issuedAt}</td></tr>");
+            sb.AppendLine($"<tr><td><b>Xe:</b></td><td>{trip.Vehicle?.TruckPlate ?? "N/A"} ({trip.Vehicle?.VehicleType ?? ""})</td>");
+            sb.AppendLine($"<td><b>Tài xế:</b></td><td>{trip.Driver?.FullName ?? "N/A"} — {trip.Driver?.PhoneNumber ?? ""}</td></tr>");
+            sb.AppendLine($"<tr><td><b>Kho xuất:</b></td><td>{trip.OriginLocation?.Address ?? "N/A"}</td>");
+            sb.AppendLine($"<td><b>Điểm đến:</b></td><td>{trip.DestinationLocation?.Address ?? "N/A"}</td></tr>");
+            sb.AppendLine($"<tr><td><b>Số seal:</b></td><td>{trip.SealNumber ?? "—"}</td>");
+            sb.AppendLine($"<td><b>Trạng thái:</b></td><td>{trip.Status}</td></tr>");
+            sb.AppendLine("</table>");
+
+            sb.AppendLine("<table class='lpn'>");
+            sb.AppendLine("<thead><tr><th>STT</th><th>Mã LPN</th><th>Đơn hàng</th><th>Hàng hóa</th><th>SL</th><th>Trọng lượng (kg)</th><th>CBM (m³)</th><th>Nhiệt độ</th></tr></thead><tbody>");
+            var totalWeight = 0m; var totalCbm = 0m;
+            for (int i = 0; i < lpns.Count; i++)
+            {
+                var l = lpns[i];
+                sb.AppendLine($"<tr><td>{i + 1}</td><td>{l.LpnCode}</td><td>{l.Order?.TrackingCode ?? "N/A"}</td>");
+                sb.AppendLine($"<td>{l.Order?.ItemName ?? "N/A"}</td><td>{l.Quantity}</td>");
+                sb.AppendLine($"<td>{l.ActualWeightKg:F2}</td><td>{l.ActualCbm:F3}</td><td>{l.Order?.TempCondition ?? "AMBIENT"}</td></tr>");
+                totalWeight += l.ActualWeightKg; totalCbm += l.ActualCbm;
+            }
+            sb.AppendLine($"<tr><td colspan='5'><b>Tổng cộng</b></td><td><b>{totalWeight:F2}</b></td><td><b>{totalCbm:F3}</b></td><td></td></tr>");
+            sb.AppendLine("</tbody></table>");
+
+            sb.AppendLine("<div class='footer'>");
+            sb.AppendLine("<div class='sign-box'><p>Người lập biên bản</p></div>");
+            sb.AppendLine("<div class='sign-box'><p>Thủ kho</p></div>");
+            sb.AppendLine("<div class='sign-box'><p>Tài xế</p></div>");
+            sb.AppendLine("</div></body></html>");
+
+            return await SavePdfAsync(sb.ToString(), "manifests", tripId.ToString(), "manifest");
+        }
+
+        public async Task<string> GenerateOutboundTicketPdfAsync(Guid tripId)
+        {
+            var trip = await _context.MasterTrips
+                .Include(t => t.Vehicle)
+                .Include(t => t.Driver)
+                .Include(t => t.OriginLocation)
+                .FirstOrDefaultAsync(t => t.TripId == tripId)
+                ?? throw new KeyNotFoundException($"Không tìm thấy chuyến hàng {tripId}.");
+
+            var lpns = await _context.Lpns
+                .Include(l => l.Order)
+                .Where(l => l.TripId == tripId)
+                .OrderBy(l => l.LpnCode)
+                .ToListAsync();
+
+            var issuedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm");
+            var sb = new StringBuilder();
+            sb.AppendLine("<!DOCTYPE html><html><head><meta charset='UTF-8'>");
+            sb.AppendLine("<style>body{font-family:Arial,sans-serif;font-size:12px;padding:20px}");
+            sb.AppendLine("h1{font-size:16px;text-align:center;text-transform:uppercase}");
+            sb.AppendLine("h2{font-size:13px;text-align:center;margin-top:0}");
+            sb.AppendLine(".info{margin-bottom:12px}.info td{padding:3px 8px}");
+            sb.AppendLine("table.lpn{width:100%;border-collapse:collapse;margin-top:12px}");
+            sb.AppendLine("table.lpn th,table.lpn td{border:1px solid #333;padding:5px 8px}");
+            sb.AppendLine("table.lpn th{background:#eee;font-weight:bold;text-align:center}");
+            sb.AppendLine(".footer{margin-top:30px;display:flex;justify-content:space-between}");
+            sb.AppendLine(".sign-box{text-align:center;width:200px}");
+            sb.AppendLine(".sign-box p{border-top:1px solid #333;margin-top:50px;padding-top:4px}</style></head><body>");
+
+            sb.AppendLine("<h1>Phiếu Xuất Kho</h1>");
+            sb.AppendLine($"<h2>Số: XK-{tripId.ToString()[..8].ToUpper()} &nbsp;|&nbsp; Ngày: {issuedAt}</h2>");
+
+            sb.AppendLine("<table class='info'>");
+            sb.AppendLine($"<tr><td><b>Kho xuất:</b></td><td>{trip.OriginLocation?.Address ?? "N/A"}</td>");
+            sb.AppendLine($"<td><b>Biển số xe:</b></td><td>{trip.Vehicle?.TruckPlate ?? "N/A"}</td></tr>");
+            sb.AppendLine($"<tr><td><b>Tài xế:</b></td><td>{trip.Driver?.FullName ?? "N/A"}</td>");
+            sb.AppendLine($"<td><b>Số seal:</b></td><td>{trip.SealNumber ?? "—"}</td></tr>");
+            sb.AppendLine($"<tr><td><b>Giờ xuất:</b></td><td>{issuedAt}</td>");
+            sb.AppendLine($"<td><b>Tổng LPN:</b></td><td>{lpns.Count}</td></tr>");
+            sb.AppendLine("</table>");
+
+            sb.AppendLine("<table class='lpn'>");
+            sb.AppendLine("<thead><tr><th>STT</th><th>Mã LPN</th><th>Mã vận đơn</th><th>Hàng hóa</th><th>Số lượng</th><th>KG</th><th>CBM</th></tr></thead><tbody>");
+            var tw = 0m; var tc = 0m;
+            for (int i = 0; i < lpns.Count; i++)
+            {
+                var l = lpns[i];
+                sb.AppendLine($"<tr><td style='text-align:center'>{i + 1}</td><td>{l.LpnCode}</td>");
+                sb.AppendLine($"<td>{l.Order?.TrackingCode ?? "N/A"}</td><td>{l.Order?.ItemName ?? "N/A"}</td>");
+                sb.AppendLine($"<td style='text-align:center'>{l.Quantity}</td><td style='text-align:right'>{l.ActualWeightKg:F2}</td><td style='text-align:right'>{l.ActualCbm:F3}</td></tr>");
+                tw += l.ActualWeightKg; tc += l.ActualCbm;
+            }
+            sb.AppendLine($"<tr><td colspan='5' style='text-align:right'><b>Tổng</b></td><td style='text-align:right'><b>{tw:F2}</b></td><td style='text-align:right'><b>{tc:F3}</b></td></tr>");
+            sb.AppendLine("</tbody></table>");
+
+            sb.AppendLine("<div class='footer'>");
+            sb.AppendLine("<div class='sign-box'><p>Thủ kho (Xuất)</p></div>");
+            sb.AppendLine("<div class='sign-box'><p>Người nhận hàng / Tài xế</p></div>");
+            sb.AppendLine("<div class='sign-box'><p>Điều phối viên</p></div>");
+            sb.AppendLine("</div></body></html>");
+
+            return await SavePdfAsync(sb.ToString(), "outbound-tickets", tripId.ToString(), "phieu-xuat-kho");
+        }
 
         private async Task<string> SavePdfAsync(string htmlContent, string folderName, string fileCode, string prefix = "waybill")
         {

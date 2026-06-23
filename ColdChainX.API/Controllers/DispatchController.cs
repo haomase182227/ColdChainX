@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using ColdChainX.Application.DTOs.Dispatch;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
+using ColdChainX.Core.Enums;
 using ColdChainX.Infrastructure.Persistence;
 using ColdChainX.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -110,56 +111,53 @@ public class DispatchController : ControllerBase
     }
 
     /// <summary>
-    /// [Lookup] Danh sách đơn hàng đang ở trạng thái IN_WAREHOUSE — dùng để chọn đơn cho plan-load.
+    /// [Lookup] Danh sách LPN đang ở trạng thái IN_STOCK — dùng để chọn LPN cho manual-dispatch.
     /// </summary>
-    [HttpGet("lookup/orders-ready")]
+    [HttpGet("lookup/lpns-ready")]
     [ProducesResponseType(typeof(object), 200)]
-    public async Task<IActionResult> LookupOrdersReady()
+    public async Task<IActionResult> LookupLpnsReady()
     {
-var rawOrders = await (from r in _db.WarehouseReceipts
-                               join o in _db.TransportOrders on r.OrderId equals o.OrderId
-                               join w in _db.Warehouses on r.WarehouseId equals w.WarehouseId
-                               join c in _db.Customers on o.CustomerId equals c.CustomerId into cg
-                               from cust in cg.DefaultIfEmpty()
-                               select new
-                               {
-                                   o.OrderId,
-                                   o.TrackingCode,
-                                   o.ItemName,
-                                   o.CustomerId,
-                                   o.Category,
-                                   o.TempCondition,
-                                   Weight = o.ActualWeightKg > 0 ? o.ActualWeightKg : o.ExpectedWeightKg,
-                                   Cbm = o.ActualCbm > 0 ? o.ActualCbm : o.ExpectedCbm,
-                                   CustomerName = cust != null ? cust.CompanyName : "N/A",
-                                   WarehouseName = w.WarehouseName,
-                                   o.CreatedAt
-                               })
-                               .OrderByDescending(x => x.CreatedAt)
-                               .ToListAsync();
+        var rawLpns = await (from l in _db.Lpns
+                             join o in _db.TransportOrders on l.OrderId equals o.OrderId
+                             join w in _db.Warehouses on l.Receipt.WarehouseId equals w.WarehouseId
+                             join c in _db.Customers on o.CustomerId equals c.CustomerId into cg
+                             from cust in cg.DefaultIfEmpty()
+                             where l.State == LpnState.IN_STOCK
+                             select new
+                             {
+                                 l.LpnId,
+                                 l.LpnCode,
+                                 l.Quantity,
+                                 l.ActualWeightKg,
+                                 l.ActualCbm,
+                                 o.OrderId,
+                                 o.TrackingCode,
+                                 o.ItemName,
+                                 o.TempCondition,
+                                 CustomerName = cust != null ? cust.CompanyName : "N/A",
+                                 WarehouseName = w.WarehouseName,
+                                 l.CreatedAt
+                             })
+                             .OrderByDescending(x => x.CreatedAt)
+                             .ToListAsync();
 
-        var orders = rawOrders.Select(x => {
-            var locCode = "RCV-STAGE-01";
-            return new
-            {
-                x.OrderId,
-                Label = $"{x.TrackingCode} — {x.ItemName} | {x.Weight}kg / {x.Cbm}m³ ({x.TempCondition}) | Khách: {x.CustomerName} | Kho: {x.WarehouseName} (Vị trí: {locCode})",
-                x.TrackingCode,
-                x.ItemName,
-                x.Category,
-                x.TempCondition,
-                ExpectedWeightKg = x.Weight,
-                ExpectedCbm = x.Cbm,
-                Status = "IN_WAREHOUSE",
-                x.CreatedAt
-            };
+        var items = rawLpns.Select(x => new
+        {
+            x.LpnId,
+            Label = $"{x.LpnCode} ({x.TrackingCode}) — {x.ItemName} | Qty: {x.Quantity} | {x.ActualWeightKg}kg / {x.ActualCbm}m³ ({x.TempCondition}) | Khách: {x.CustomerName} | Kho: {x.WarehouseName}",
+            x.LpnCode,
+            x.TrackingCode,
+            x.ItemName,
+            x.TempCondition,
+            x.Quantity,
+            x.ActualWeightKg,
+            x.ActualCbm,
+            x.OrderId,
+            x.CreatedAt
         }).ToList();
 
-        return Ok(new { Success = true, Count = orders.Count, Data = orders });
+        return Ok(new { Success = true, Count = items.Count, Data = items });
     }
-
-
-
 
     [HttpPost("manual-dispatch")]
     [Consumes("multipart/form-data")]
@@ -167,31 +165,42 @@ var rawOrders = await (from r in _db.WarehouseReceipts
     [ProducesResponseType(typeof(object), 400)]
     [ProducesResponseType(typeof(object), 500)]
     public async Task<IActionResult> ManualDispatch(
-        [FromQuery] List<string> orderIds,
+        [FromQuery] List<string> lpnIds,
         [FromForm] ManualDispatchFormRequest form)
     {
-        if (orderIds == null || !orderIds.Any())
-            return BadRequest(new { Success = false, Error = "Vui lòng chọn ít nhất một đơn hàng." });
+        if (lpnIds == null || !lpnIds.Any())
+            return BadRequest(new { Success = false, Error = "Vui lòng chọn ít nhất một LPN." });
 
         if (form.PlannedStartTime >= form.PlannedEndTime)
             return BadRequest(new { Success = false, Error = "PlannedStartTime phải nhỏ hơn PlannedEndTime." });
 
-        var parsedOrderIds = orderIds.Select(id => Guid.Parse(ExtractGuid(id))).ToList();
+        var parsedLpnIds = lpnIds.Select(id => Guid.Parse(ExtractGuid(id))).ToList();
 
-        // Tự động tìm kho xuất phát từ đơn hàng đầu tiên
-        var firstOrderId = parsedOrderIds.First();
-        var firstOrder = await _db.TransportOrders.FindAsync(firstOrderId);
-        if (firstOrder == null)
-            return BadRequest(new { Success = false, Error = $"Không tìm thấy đơn hàng {firstOrderId}." });
+        // Tự động tìm kho xuất phát từ LPN đầu tiên
+        var firstLpnId = parsedLpnIds.First();
+        var firstLpn = await _db.Lpns.Include(l => l.Order).FirstOrDefaultAsync(l => l.LpnId == firstLpnId);
+        if (firstLpn == null)
+            return BadRequest(new { Success = false, Error = $"Không tìm thấy LPN {firstLpnId}." });
 
-        if (!firstOrder.PickupLocation.HasValue)
-            return BadRequest(new { Success = false, Error = $"Đơn hàng {firstOrder.TrackingCode} chưa được nhập kho (thiếu vị trí kho)." });
-
-        var originLocId = firstOrder.PickupLocation.Value;
+        Guid originLocId;
+        if (firstLpn.Order != null && firstLpn.Order.PickupLocation.HasValue)
+        {
+            originLocId = firstLpn.Order.PickupLocation.Value;
+        }
+        else
+        {
+            var fallbackLocId = await _db.Locations
+                .Where(l => l.Status == "ACTIVE")
+                .Select(l => l.LocationId)
+                .FirstOrDefaultAsync();
+            if (fallbackLocId == Guid.Empty)
+                return BadRequest(new { Success = false, Error = "Không tìm thấy vị trí kho xuất phát nào trong hệ thống." });
+            originLocId = fallbackLocId;
+        }
 
         var request = new ManualDispatchRequest
         {
-            OrderIds = parsedOrderIds,
+            LpnIds = parsedLpnIds,
             VehicleId = Guid.Parse(ExtractGuid(form.VehicleId)),
             OriginWarehouseLocationId = originLocId,
             PlannedStartTime          = form.PlannedStartTime,
@@ -292,87 +301,33 @@ var rawOrders = await (from r in _db.WarehouseReceipts
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    //  API 2: WAREHOUSE ORDER — Lệnh bốc xếp cho kho
+    //  API 2: START PICKING — Bắt đầu lấy hàng từ kho
     // ═══════════════════════════════════════════════════════════════════════
 
     /// <summary>
-    /// Tạo lệnh bốc xếp cho kho (sau khi đã dispatch). Trip chuyển sang PENDING_WH_APPROVAL.
-    /// Gửi thông báo cho WarehouseMonitor để duyệt.
+    /// Chuyển trip sang trạng thái PICKING — thông báo cho Loader bắt đầu lấy hàng.
+    /// Trip phải đang ở trạng thái PLANNED.
     /// </summary>
-    [HttpPost("warehouse-order/{tripId}")]
-    [ProducesResponseType(typeof(WarehouseOrderResult), 200)]
-    public async Task<IActionResult> CreateWarehouseOrder(string tripId)
+    [HttpPost("trip/{tripId}/start-picking")]
+    [ProducesResponseType(typeof(StartPickingResult), 200)]
+    public async Task<IActionResult> StartPicking(string tripId)
     {
         var rawId = ExtractGuid(tripId);
         if (!Guid.TryParse(rawId, out var parsedTripId))
             return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
 
-        var currentUserId = GetCurrentUserId();
-        if (currentUserId == Guid.Empty) return Unauthorized();
-
         try
         {
-            var result = await _dispatchService.CreateWarehouseOrderAsync(parsedTripId, currentUserId);
+            var result = await _dispatchService.StartPickingAsync(parsedTripId);
             return Ok(new { Success = true, Data = result });
         }
-        catch (Exception ex)
+        catch (InvalidOperationException ex)
         {
             return BadRequest(new { Success = false, Error = ex.Message });
         }
-    }
-
-    /// <summary>
-    /// WH Monitor duyệt lệnh bốc xếp. Trip và Orders chuyển sang LOADING.
-    /// Gửi thông báo cho Loader.
-    /// </summary>
-    [HttpPost("warehouse-order/{tripId}/approve")]
-    [ProducesResponseType(typeof(WarehouseOrderResult), 200)]
-    public async Task<IActionResult> ApproveWarehouseOrder(string tripId)
-    {
-        var rawId = ExtractGuid(tripId);
-        if (!Guid.TryParse(rawId, out var parsedTripId))
-            return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
-
-        var currentUserId = GetCurrentUserId();
-        if (currentUserId == Guid.Empty) return Unauthorized();
-
-        try
-        {
-            var result = await _dispatchService.ApproveWarehouseOrderAsync(parsedTripId, currentUserId);
-            return Ok(new { Success = true, Data = result });
-        }
         catch (Exception ex)
         {
-            return BadRequest(new { Success = false, Error = ex.Message });
-        }
-    }
-
-    /// <summary>
-    /// WH Monitor từ chối lệnh bốc xếp. Trip chuyển sang WH_REJECTED, Orders về IN_WAREHOUSE.
-    /// </summary>
-    [HttpPost("warehouse-order/{tripId}/reject")]
-    [Consumes("multipart/form-data")]
-    [ProducesResponseType(typeof(WarehouseOrderResult), 200)]
-    public async Task<IActionResult> RejectWarehouseOrder(string tripId, [FromForm] RejectWarehouseOrderRequest request)
-    {
-        var rawId = ExtractGuid(tripId);
-        if (!Guid.TryParse(rawId, out var parsedTripId))
-            return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
-
-        var currentUserId = GetCurrentUserId();
-        if (currentUserId == Guid.Empty) return Unauthorized();
-
-        if (string.IsNullOrWhiteSpace(request.Reason))
-            return BadRequest(new { Success = false, Error = "Vui lòng nhập lý do từ chối." });
-
-        try
-        {
-            var result = await _dispatchService.RejectWarehouseOrderAsync(parsedTripId, currentUserId, request.Reason);
-            return Ok(new { Success = true, Data = result });
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { Success = false, Error = ex.Message });
+            return StatusCode(500, new { Success = false, Error = "Lỗi hệ thống khi bắt đầu picking.", Detail = ex.Message });
         }
     }
 
@@ -437,39 +392,6 @@ var rawOrders = await (from r in _db.WarehouseReceipts
         catch (Exception ex)
         {
             return StatusCode(500, new { Success = false, Error = "Lỗi hệ thống khi kẹp chì.", Detail = ex.Message });
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    //  BACKLOG — Xử lý hàng tồn
-    // ═══════════════════════════════════════════════════════════════════════
-
-    /// <summary>
-    /// Quét các đơn hàng IN_WAREHOUSE tồn lâu hơn số ngày chỉ định, ghép vào các xe nhỏ (≤ 2000kg).
-    /// </summary>
-    [HttpPost("process-backlog")]
-    [Consumes("multipart/form-data")]
-    [ProducesResponseType(typeof(BacklogDispatchResult), 200)]
-    public async Task<IActionResult> ProcessBacklog([FromForm] ProcessBacklogRequest request)
-    {
-        var rawOriginLocId = ExtractGuid(request.OriginWarehouseLocationId);
-        if (!Guid.TryParse(rawOriginLocId, out var originLocId))
-            return BadRequest(new { Success = false, Error = "OriginWarehouseLocationId không hợp lệ." });
-
-        if (request.PlannedStartTime >= request.PlannedEndTime)
-            return BadRequest(new { Success = false, Error = "PlannedStartTime phải nhỏ hơn PlannedEndTime." });
-
-        var backlogDays = request.BacklogDays > 0 ? request.BacklogDays : 1;
-
-        try
-        {
-            var result = await _dispatchService.ProcessBacklogOrdersAsync(
-                originLocId, request.PlannedStartTime, request.PlannedEndTime, backlogDays);
-            return Ok(new { Success = true, Data = result });
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { Success = false, Error = ex.Message });
         }
     }
 
