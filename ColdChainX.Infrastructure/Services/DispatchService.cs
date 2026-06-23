@@ -14,6 +14,7 @@ using ColdChainX.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging;
 using ColdChainX.Infrastructure.Hubs;
 
 namespace ColdChainX.Infrastructure.Services;
@@ -26,6 +27,7 @@ public class DispatchService : IDispatchService
     private readonly IPdfService _pdfService;
     private readonly IWebHostEnvironment _environment;
     private readonly IHubContext<NotificationHub> _hubContext;
+    private readonly ILogger<DispatchService> _logger;
 
     // Tên role điều phối viên
     private const string CoordinatorRoleName = "Dispatcher";
@@ -39,7 +41,8 @@ public class DispatchService : IDispatchService
         ILocationService locationService,
         IPdfService pdfService,
         IWebHostEnvironment environment,
-        IHubContext<NotificationHub> hubContext)
+        IHubContext<NotificationHub> hubContext,
+        ILogger<DispatchService> logger)
     {
         _context = context;
         _geminiClient = geminiClient;
@@ -47,6 +50,7 @@ public class DispatchService : IDispatchService
         _pdfService = pdfService;
         _environment = environment;
         _hubContext = hubContext;
+        _logger = logger;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -697,10 +701,8 @@ public class DispatchService : IDispatchService
             .Select(g => g.First().Order)
             .ToList();
 
-        // 3. Check nhiệt độ
-        var firstTemp = NormalizeTempGroup(orders.First().TempCondition);
-        if (orders.Any(o => NormalizeTempGroup(o.TempCondition) != firstTemp))
-            throw new InvalidOperationException("Tất cả các đơn hàng phải có cùng yêu cầu nhiệt độ (TempCondition).");
+        // 3. Check nhiệt độ — cho phép nhiều nhóm nhiệt độ khác nhau vì LIFO chia 3 vùng:
+        // REAR (frozen) / MID (chilled) / FRONT (ambient)
 
         // 4. Validate xe + tài xế
         var vehicle = await _context.Vehicles
@@ -710,7 +712,9 @@ public class DispatchService : IDispatchService
             ?? throw new InvalidOperationException("Không tìm thấy xe (Vehicle) đã chọn.");
 
         if (vehicle.Status != "ACTIVE")
-            throw new InvalidOperationException($"Xe {vehicle.TruckPlate} không ở trạng thái ACTIVE.");
+            throw new InvalidOperationException(
+                $"Xe {vehicle.TruckPlate} không thể ghép chuyến — trạng thái hiện tại: '{vehicle.Status}'. " +
+                $"Chỉ xe ACTIVE mới có thể được ghép chuyến.");
 
         if (vehicle.DriverId == null || vehicle.Driver == null)
             throw new InvalidOperationException($"Xe {vehicle.TruckPlate} chưa được gán tài xế.");
@@ -727,10 +731,11 @@ public class DispatchService : IDispatchService
         // SLA check — không chặn, chỉ cảnh báo
         var lateLpns = lpns.Where(l => l.SlaDeadline.HasValue && l.SlaDeadline.Value < DateTime.UtcNow).ToList();
 
-        // Lấy danh sách TripId đang active để check xe bận
+        // Kiểm tra xe bận — bao gồm PLANNED để tránh double-book
         var isBusy = await _context.MasterTrips
             .AnyAsync(t => t.VehicleId == request.VehicleId
-                        && (t.Status == "PICKING"
+                        && (t.Status == "PLANNED"
+                         || t.Status == "PICKING"
                          || t.Status == "LOADING"
                          || t.Status == "LOADING_COMPLETED"
                          || t.Status == "SEALED"
@@ -824,11 +829,17 @@ public class DispatchService : IDispatchService
             if (lpn.Order != null)
             {
                 lpn.Order.MasterTripId = masterTrip.TripId;
+                lpn.Order.Status = "LOADING";
             }
         }
 
-        var notifiedCount = 0;
+        // Cập nhật trạng thái xe và tài xế → Planning (đã ghép chuyến, chờ xuất phát)
+        vehicle.Status = "Planning";
+        if (vehicle.Driver != null)
+            vehicle.Driver.Status = "Planning";
         await _context.SaveChangesAsync();
+
+        var notifiedCount = 0;
 
         // 10. Build response
         var routeStops = routeResult.StopSequence.Select(s => new RouteStop
@@ -1039,30 +1050,32 @@ public class DispatchService : IDispatchService
         if (trip.Seals.Any(s => s.Status == "APPLIED") || !string.IsNullOrEmpty(trip.SealNumber))
             throw new InvalidOperationException("Chuyến hàng đã được kẹp chì trước đó.");
 
-        // Lấy tất cả LPN của chuyến này để kiểm tra
+        // Lấy tất cả LPN của chuyến này kèm thông tin để tạo OutboundOrder
         var lpns = await _context.Lpns
             .Include(l => l.Order)
+                .ThenInclude(o => o.DestLocationNavigation)
+            .Include(l => l.Customer)
             .Where(l => l.TripId == tripId)
             .ToListAsync();
 
         if (lpns.Count == 0)
             throw new InvalidOperationException("Chuyến đi không có LPN nào.");
 
-        // Kiểm tra tất cả LPN đã được bốc xếp (SHIPPED)
+        // Kiểm tra tất cả LPN đã rời kho (RELEASED)
         var totalLpns = lpns.Count;
-        var loadedLpns = lpns.Count(l => l.State == LpnState.SHIPPED);
+        var loadedLpns = lpns.Count(l => l.State == LpnState.RELEASED);
         var allLoaded = loadedLpns == totalLpns;
 
         if (!allLoaded)
         {
             var notLoadedLpns = lpns
-                .Where(l => l.State != LpnState.SHIPPED)
+                .Where(l => l.State != LpnState.RELEASED)
                 .Select(l => l.LpnCode)
                 .ToList();
             throw new InvalidOperationException(
-                $"Chưa bốc xếp hết LPN! Còn {totalLpns - loadedLpns}/{totalLpns} LPN chưa bốc: " +
+                $"Chưa xác nhận xuất kho hết LPN! Còn {totalLpns - loadedLpns}/{totalLpns} LPN chưa RELEASED: " +
                 $"{string.Join(", ", notLoadedLpns)}. " +
-                $"Tất cả LPN phải ở trạng thái SHIPPED trước khi kẹp chì.");
+                $"Tất cả LPN phải ở trạng thái RELEASED trước khi kẹp chì.");
         }
 
         // Tạo Seal record
@@ -1076,43 +1089,56 @@ public class DispatchService : IDispatchService
             CreatedAt = DateTime.UtcNow
         });
 
+        // Cập nhật LPN → SHIPPING (đang trên xe, chưa giao)
+        foreach (var lpn in lpns)
+            lpn.State = LpnState.SHIPPING;
+
         // Gán SealNumber cho trip
         trip.SealNumber = sealCode;
 
         // Chuyển trip → SEALED
         trip.Status = "SEALED";
 
-        // Cập nhật orders → SEALED
+        // Cập nhật tất cả TransportOrder → SEALED
         foreach (var order in trip.TransportOrders)
-        {
             order.Status = "SEALED";
 
-            // Tạo OutboundOrder và OutboundOrderItem
+        // Tạo OutboundOrder từ LPN: group theo CustomerId
+        // → 1 OutboundOrder / khách hàng, mỗi LPN là 1 OutboundOrderItem
+        var now = DateTime.UtcNow;
+        var lpnsByCustomer = lpns.GroupBy(l => l.CustomerId ?? Guid.Empty);
+
+        foreach (var customerGroup in lpnsByCustomer)
+        {
+            var firstLpn = customerGroup.First();
+            var customer  = firstLpn.Customer;
+
             var outboundOrder = new OutboundOrder
             {
-                OutboundOrderId = Guid.NewGuid(),
-                OrderCode = $"OUT-{DateTime.UtcNow:yyyyMMddHHmmss}-{order.TrackingCode}",
-                CustomerId = order.CustomerId ?? Guid.Empty,
-                ReceiverName = "Default Receiver",
-                ReceiverPhone = "0000000000",
-                DestinationAddress = order.DestLocationNavigation?.Address ?? "Unknown Address",
-                Status = ColdChainX.Core.Enums.OutboundOrderStatus.SHIPPED,
-                CreatedAt = DateTime.UtcNow,
-                CreatedBy = sealedBy
+                OutboundOrderId    = Guid.NewGuid(),
+                OrderCode          = $"OUT-{now:yyyyMMddHHmmss}-{customerGroup.Key.ToString("N")[..8]}",
+                CustomerId         = customerGroup.Key,
+                ReceiverName       = customer?.CompanyName ?? customerGroup.Key.ToString(),
+                ReceiverPhone      = customer?.Email ?? string.Empty,
+                DestinationAddress = firstLpn.Order?.DestLocationNavigation?.Address ?? string.Empty,
+                Status             = ColdChainX.Core.Enums.OutboundOrderStatus.SHIPPED,
+                CreatedAt          = now,
+                CreatedBy          = sealedBy
             };
-
-            var outboundItem = new OutboundOrderItem
-            {
-                OutboundOrderItemId = Guid.NewGuid(),
-                OutboundOrderId = outboundOrder.OutboundOrderId,
-                ItemCode = order.TrackingCode,
-                ItemName = order.ItemName,
-                Unit = order.PackingType,
-                Quantity = order.Quantity
-            };
-
             _context.OutboundOrders.Add(outboundOrder);
-            _context.OutboundOrderItems.Add(outboundItem);
+
+            foreach (var lpn in customerGroup)
+            {
+                _context.OutboundOrderItems.Add(new OutboundOrderItem
+                {
+                    OutboundOrderItemId = Guid.NewGuid(),
+                    OutboundOrderId     = outboundOrder.OutboundOrderId,
+                    ItemCode            = lpn.LpnCode,
+                    ItemName            = lpn.Order?.ItemName ?? string.Empty,
+                    Unit                = lpn.Order?.PackingType ?? string.Empty,
+                    Quantity            = lpn.Quantity
+                });
+            }
         }
 
         // Issue E-Waybill
@@ -1135,10 +1161,14 @@ public class DispatchService : IDispatchService
                 UploadedBy = documentUploader
             });
             trip.Status = "DISPATCHED";
+            if (trip.Vehicle != null)
+                trip.Vehicle.Status = "OnTrip";
+            if (trip.Driver != null)
+                trip.Driver.Status = "OnTrip";
         }
-        catch
+        catch (Exception ex)
         {
-            // Waybill generation failed, keep status as SEALED
+            _logger.LogWarning(ex, "Waybill generation failed for trip {TripId}. Trip remains SEALED.", tripId);
         }
 
         await _context.SaveChangesAsync();

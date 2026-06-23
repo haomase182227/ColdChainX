@@ -79,7 +79,7 @@ public class GetLpnDocumentsQueryHandler : IRequestHandler<GetLpnDocumentsQuery,
         }
 
         // 5. ePOD (Proof of Delivery for the Order)
-        if (lpn.State == ColdChainX.Core.Enums.LpnState.SHIPPED) // Assuming shipped means it can have ePOD
+        if (lpn.State == ColdChainX.Core.Enums.LpnState.RELEASED || lpn.State == ColdChainX.Core.Enums.LpnState.SHIPPING)
         {
             docs.Add(new LpnDocumentDto
             {

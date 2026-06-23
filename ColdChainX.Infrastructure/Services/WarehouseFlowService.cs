@@ -195,7 +195,7 @@ public class WarehouseFlowService : IWarehouseFlowService
         if (lpn.State != LpnState.IN_STOCK && lpn.State != LpnState.ALLOCATED)
             return ApiResponse<LpnResponse>.Failure("Only IN_STOCK or ALLOCATED LPNs can be picked.");
 
-        lpn.State = LpnState.PICKED;
+        lpn.State = LpnState.LOADING;
         lpn.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
@@ -219,8 +219,8 @@ public class WarehouseFlowService : IWarehouseFlowService
         if (lpns.Count != request.LpnIds.Count)
             return ApiResponse<TripLoadingResponse>.Failure("One or more LPNs were not found.");
 
-        if (lpns.Any(x => x.State != LpnState.PICKED))
-            return ApiResponse<TripLoadingResponse>.Failure("All LPNs must be PICKED before loading completion.");
+        if (lpns.Any(x => x.State != LpnState.LOADING))
+            return ApiResponse<TripLoadingResponse>.Failure("All LPNs must be in LOADING state before loading completion.");
 
         await using var tx = await _db.Database.BeginTransactionAsync();
 
@@ -228,7 +228,7 @@ public class WarehouseFlowService : IWarehouseFlowService
         foreach (var lpn in lpns)
         {
             lpn.TripId = tripId;
-            lpn.State = LpnState.SHIPPED;
+            lpn.State = LpnState.RELEASED;
             lpn.UpdatedAt = now;
         }
 

@@ -8,6 +8,7 @@ public enum LpnState
     RETURN_PENDING = 3,
     IN_STOCK = 4,
     ALLOCATED = 5,
-    PICKED = 6,
-    SHIPPED = 7
+    LOADING = 6,
+    RELEASED = 7,
+    SHIPPING = 8
 }

@@ -5,6 +5,7 @@ namespace ColdChainX.Core.Enums
         Active,
         Inactive,
         UnderMaintenance,
+        Planning,
         OnTrip
     }
 }
