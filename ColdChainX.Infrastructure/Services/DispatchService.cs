@@ -712,7 +712,9 @@ public class DispatchService : IDispatchService
             ?? throw new InvalidOperationException("Không tìm thấy xe (Vehicle) đã chọn.");
 
         if (vehicle.Status != "ACTIVE")
-            throw new InvalidOperationException($"Xe {vehicle.TruckPlate} không ở trạng thái ACTIVE.");
+            throw new InvalidOperationException(
+                $"Xe {vehicle.TruckPlate} không thể ghép chuyến — trạng thái hiện tại: '{vehicle.Status}'. " +
+                $"Chỉ xe ACTIVE mới có thể được ghép chuyến.");
 
         if (vehicle.DriverId == null || vehicle.Driver == null)
             throw new InvalidOperationException($"Xe {vehicle.TruckPlate} chưa được gán tài xế.");
@@ -831,8 +833,13 @@ public class DispatchService : IDispatchService
             }
         }
 
-        var notifiedCount = 0;
+        // Cập nhật trạng thái xe và tài xế → Planning (đã ghép chuyến, chờ xuất phát)
+        vehicle.Status = "Planning";
+        if (vehicle.Driver != null)
+            vehicle.Driver.Status = "Planning";
         await _context.SaveChangesAsync();
+
+        var notifiedCount = 0;
 
         // 10. Build response
         var routeStops = routeResult.StopSequence.Select(s => new RouteStop
@@ -1154,6 +1161,10 @@ public class DispatchService : IDispatchService
                 UploadedBy = documentUploader
             });
             trip.Status = "DISPATCHED";
+            if (trip.Vehicle != null)
+                trip.Vehicle.Status = "OnTrip";
+            if (trip.Driver != null)
+                trip.Driver.Status = "OnTrip";
         }
         catch (Exception ex)
         {
