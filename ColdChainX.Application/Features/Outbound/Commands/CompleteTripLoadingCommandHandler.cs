@@ -54,7 +54,6 @@ public class CompleteTripLoadingCommandHandler : IRequestHandler<CompleteTripLoa
             lpn.TripId = trip.TripId;
         }
 
-        trip.SealNumber = request.SealNumber;
         trip.Status = "LOADING_COMPLETED";
 
         await _context.SaveChangesAsync(cancellationToken);

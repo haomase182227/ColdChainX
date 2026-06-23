@@ -5,7 +5,6 @@ namespace ColdChainX.Application.Features.Outbound.Commands;
 public class CompleteTripLoadingCommand : IRequest<CompleteTripLoadingResponse>
 {
     public Guid TripId { get; set; }
-    public string SealNumber { get; set; } = string.Empty;
     public List<Guid> LoadedLpnIds { get; set; } = new();
 }
 

@@ -27,18 +27,13 @@ public class LpnShippedEventHandler : INotificationHandler<LpnShippedEvent>
             .Where(l => l.OrderId == notification.OrderId)
             .ToListAsync(cancellationToken);
 
-        // If all LPNs are SHIPPED, change the Order status to COMPLETED
+        // Log khi toàn bộ LPN của đơn hàng đã lên xe — trạng thái COMPLETED sẽ được cập nhật
+        // sau khi giao hàng thành công (ePOD), không phải tại thời điểm xếp xe.
         if (orderLpns.Any() && orderLpns.All(l => l.State == LpnState.SHIPPED))
         {
-            var order = await _context.TransportOrders
-                .FirstOrDefaultAsync(o => o.OrderId == notification.OrderId, cancellationToken);
-                
-            if (order != null && order.Status != "COMPLETED")
-            {
-                order.Status = "COMPLETED";
-                await _context.SaveChangesAsync(cancellationToken);
-                _logger.LogInformation("Order {OrderId} is now COMPLETED because all LPNs have been shipped.", order.OrderId);
-            }
+            _logger.LogInformation(
+                "All LPNs for order {OrderId} have been loaded onto the vehicle.",
+                notification.OrderId);
         }
     }
 }
