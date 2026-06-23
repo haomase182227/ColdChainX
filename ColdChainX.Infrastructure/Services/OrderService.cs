@@ -47,9 +47,14 @@ namespace ColdChainX.Infrastructure.Services
             _hubContext = hubContext;
         }
 
-        public async Task<ApiResponse<PagedResult<OrderResponse>>> GetOrdersAsync(int pageNumber, int pageSize)
+        public async Task<ApiResponse<PagedResult<OrderResponse>>> GetOrdersAsync(int pageNumber, int pageSize, string? status = null)
         {
-            var query = BuildOrderQuery().OrderByDescending(o => o.CreatedAt);
+            var query = BuildOrderQuery();
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                query = query.Where(o => o.Status == status);
+            }
+            query = query.OrderByDescending(o => o.CreatedAt);
             var totalRecords = await query.CountAsync();
             var orders = await query
                 .Skip(NormalizeSkip(pageNumber, pageSize))
@@ -73,15 +78,18 @@ namespace ColdChainX.Infrastructure.Services
             return ApiResponse<OrderResponse>.SuccessResponse(ToOrderResponse(order), "Order retrieved successfully");
         }
 
-        public async Task<ApiResponse<PagedResult<OrderResponse>>> GetOrdersByCustomerAsync(Guid customerId, int pageNumber, int pageSize)
+        public async Task<ApiResponse<PagedResult<OrderResponse>>> GetOrdersByCustomerAsync(Guid customerId, int pageNumber, int pageSize, string? status = null)
         {
             var customerExists = await _db.Customers.AnyAsync(c => c.CustomerId == customerId);
             if (!customerExists)
                 return ApiResponse<PagedResult<OrderResponse>>.Failure("Customer not found");
 
-            var query = BuildOrderQuery()
-                .Where(o => o.CustomerId == customerId)
-                .OrderByDescending(o => o.CreatedAt);
+            var query = BuildOrderQuery().Where(o => o.CustomerId == customerId);
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                query = query.Where(o => o.Status == status);
+            }
+            query = query.OrderByDescending(o => o.CreatedAt);
             var totalRecords = await query.CountAsync();
             var orders = await query
                 .Skip(NormalizeSkip(pageNumber, pageSize))

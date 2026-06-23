@@ -17,7 +17,9 @@ public class ResolveDiscrepancyCommandHandler : IRequestHandler<ResolveDiscrepan
 
     public async Task<ResolveDiscrepancyResponse> Handle(ResolveDiscrepancyCommand request, CancellationToken cancellationToken)
     {
-        var lpn = await _context.Lpns.FirstOrDefaultAsync(l => l.LpnId == request.LpnId, cancellationToken);
+        var lpn = await _context.Lpns
+            .Include(l => l.Order)
+            .FirstOrDefaultAsync(l => l.LpnId == request.LpnId, cancellationToken);
         if (lpn == null)
         {
             return new ResolveDiscrepancyResponse { Success = false, Message = "LPN not found." };
@@ -32,6 +34,10 @@ public class ResolveDiscrepancyCommandHandler : IRequestHandler<ResolveDiscrepan
         {
             lpn.State = LpnState.RECEIVING;
             lpn.UpdatedAt = DateTime.UtcNow;
+            if (lpn.Order != null)
+            {
+                lpn.Order.Status = "RECEIVING";
+            }
             
             await _context.SaveChangesAsync(cancellationToken);
 
@@ -46,6 +52,10 @@ public class ResolveDiscrepancyCommandHandler : IRequestHandler<ResolveDiscrepan
             // Reject -> Create Penalty Bill and Return
             lpn.State = LpnState.RETURN_PENDING;
             lpn.UpdatedAt = DateTime.UtcNow;
+            if (lpn.Order != null)
+            {
+                lpn.Order.Status = "RETURN_PENDING";
+            }
 
             var bill = new PenaltyBill
             {

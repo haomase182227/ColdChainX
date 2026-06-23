@@ -48,6 +48,8 @@ namespace ColdChainX.Infrastructure.Services
             _mediator = mediator;
         }
 
+        private const decimal MinChargeableWeightKg = 30m;
+
         public async Task<ApiResponse<string>> PreviewAppendixAsync(Guid orderId, decimal adjustedPrice, string reason)
         {
             var data = await LoadAppendixDataAsync(orderId);
@@ -59,12 +61,12 @@ namespace ColdChainX.Infrastructure.Services
 
             var template = await LoadAppendixTemplateAsync();
             var appendixNumber = await GenerateUniqueAppendixNumberAsync();
-            var html = RenderAppendixTemplate(template, data, appendixNumber, adjustedPrice, reason);
+            var html = await RenderAppendixTemplateAsync(template, data, appendixNumber, adjustedPrice, reason);
 
             return ApiResponse<string>.SuccessResponse(html, "Appendix preview generated successfully");
         }
 
-        public async Task<ApiResponse<ContractAppendixResponse>> GenerateAppendixAsync(Guid orderId, decimal adjustedPrice, string reason, Guid salesUserId)
+        public async Task<ApiResponse<ContractAppendixResponse>> GenerateAppendixAsync(Guid orderId, decimal? adjustedPrice, string reason, Guid salesUserId)
         {
             var data = await LoadAppendixDataAsync(orderId);
             if (data == null)
@@ -84,9 +86,37 @@ namespace ColdChainX.Infrastructure.Services
                 if (existingAppendix != null)
                     return ApiResponse<ContractAppendixResponse>.Failure($"An active contract appendix already exists for this order (Status: {existingAppendix.Status})");
 
+                decimal resolvedAdjustedPrice = 0m;
+                if (adjustedPrice.HasValue)
+                {
+                    resolvedAdjustedPrice = adjustedPrice.Value;
+                }
+                else
+                {
+                    var volumetricRate = await GetSystemConfigDecimalAsync("VolumetricConversionRate", 250m);
+                    var actualCbm = data.Order.ActualCbm ?? data.Order.ExpectedCbm;
+                    var volumetricWeight = Math.Round(actualCbm * volumetricRate, 2);
+                    var chargeableWeight = Math.Max(Math.Max(data.Order.ActualWeightKg, volumetricWeight), MinChargeableWeightKg);
+
+                    var tier = await _db.WeightTiers
+                        .AsNoTracking()
+                        .Where(t => t.RouteId == data.Order.RouteId.Value
+                                    && chargeableWeight >= t.MinWeightKg
+                                    && (!t.MaxWeightKg.HasValue || chargeableWeight <= t.MaxWeightKg.Value))
+                        .OrderByDescending(t => t.MinWeightKg)
+                        .FirstOrDefaultAsync();
+
+                    if (tier == null)
+                        return ApiResponse<ContractAppendixResponse>.Failure($"Weight tier is missing for route and chargeable weight {chargeableWeight} kg");
+
+                    var newBaseFreight = Math.Round(chargeableWeight * tier.PricePerKg, 0);
+                    var originalBaseFreight = data.Quotation.BaseFreight;
+                    resolvedAdjustedPrice = newBaseFreight - originalBaseFreight;
+                }
+
                 var appendixNumber = await GenerateUniqueAppendixNumberAsync();
                 var template = await LoadAppendixTemplateAsync();
-                var htmlContent = RenderAppendixTemplate(template, data, appendixNumber, adjustedPrice, reason);
+                var htmlContent = await RenderAppendixTemplateAsync(template, data, appendixNumber, resolvedAdjustedPrice, reason);
 
                 var appendix = new ContractAppendix
                 {
@@ -94,7 +124,7 @@ namespace ColdChainX.Infrastructure.Services
                     ContractId = data.Contract?.ContractId,
                     OrderId = orderId,
                     AppendixNumber = appendixNumber,
-                    AdjustedPrice = adjustedPrice,
+                    AdjustedPrice = resolvedAdjustedPrice,
                     Reason = reason,
                     Status = Draft,
                     DraftHtmlContent = htmlContent,
@@ -399,6 +429,18 @@ namespace ColdChainX.Infrastructure.Services
             return ApiResponse<ContractAppendixResponse>.SuccessResponse(ToResponse(appendix), "Contract appendix retrieved");
         }
 
+        public async Task<ApiResponse<ContractAppendixResponse>> GetAppendixByOrderIdAsync(Guid orderId)
+        {
+            var appendix = await _db.ContractAppendices
+                .AsNoTracking()
+                .FirstOrDefaultAsync(a => a.OrderId == orderId && (a.Status == Draft || a.Status == Sent || a.Status == Accepted || a.Status == Rejected || a.Status == Executed));
+
+            if (appendix == null)
+                return ApiResponse<ContractAppendixResponse>.Failure("Contract appendix not found for this order");
+
+            return ApiResponse<ContractAppendixResponse>.SuccessResponse(ToResponse(appendix), "Contract appendix retrieved");
+        }
+
         public async Task<ApiResponse<string>> GetAppendixHtmlAsync(Guid appendixId)
         {
             var html = await _db.ContractAppendices.AsNoTracking()
@@ -482,15 +524,57 @@ namespace ColdChainX.Infrastructure.Services
             return await File.ReadAllTextAsync(path);
         }
 
-        private string RenderAppendixTemplate(string template, AppendixData data, string appendixNumber, decimal adjustedPrice, string reason)
+        private async Task<decimal> GetSystemConfigDecimalAsync(string key, decimal fallback)
+        {
+            var value = await _db.SystemConfigs
+                .AsNoTracking()
+                .Where(c => c.Key == key)
+                .Select(c => c.Value)
+                .FirstOrDefaultAsync();
+
+            return decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed)
+                ? parsed
+                : fallback;
+        }
+
+        private async Task<string> RenderAppendixTemplateAsync(string template, AppendixData data, string appendixNumber, decimal adjustedPrice, string reason)
         {
             var now = DateTime.UtcNow;
-            var originalPrice = data.Quotation.FinalAmount;
-            var newPrice = originalPrice + adjustedPrice;
+            
+            var volumetricRate = await GetSystemConfigDecimalAsync("VolumetricConversionRate", 250m);
+            var actualCbm = data.Order.ActualCbm ?? data.Order.ExpectedCbm;
+            var volumetricWeight = Math.Round(actualCbm * volumetricRate, 2);
+            var chargeableWeight = Math.Max(Math.Max(data.Order.ActualWeightKg, volumetricWeight), MinChargeableWeightKg);
 
-            var weightDiff = Math.Round(Math.Abs(data.Order.ActualWeightKg - data.Order.ExpectedWeightKg) / data.Order.ExpectedWeightKg * 100m, 2);
-            var cbmDiff = Math.Round(Math.Abs((data.Order.ActualCbm ?? data.Order.ExpectedCbm) - data.Order.ExpectedCbm) / data.Order.ExpectedCbm * 100m, 2);
-            var maxDiff = Math.Max(weightDiff, cbmDiff);
+            var tier = await _db.WeightTiers
+                .AsNoTracking()
+                .Where(t => t.RouteId == data.Order.RouteId.Value
+                            && chargeableWeight >= t.MinWeightKg
+                            && (!t.MaxWeightKg.HasValue || chargeableWeight <= t.MaxWeightKg.Value))
+                .OrderByDescending(t => t.MinWeightKg)
+                .FirstOrDefaultAsync();
+
+            var unitPrice = tier?.PricePerKg ?? 0m;
+            var newBasePrice = Math.Round(chargeableWeight * unitPrice, 0);
+            var originalBasePrice = data.Quotation.BaseFreight;
+
+            var expectedVolumetricWeight = data.Quotation.VolumetricWeightKg ?? Math.Round(data.Order.ExpectedCbm * volumetricRate, 2);
+            var expectedChargeableWeight = data.Quotation.ChargeableWeightKg ?? Math.Max(Math.Max(data.Order.ExpectedWeightKg, expectedVolumetricWeight), MinChargeableWeightKg);
+
+            var weightDiff = data.Order.ExpectedWeightKg > 0
+                ? Math.Round((data.Order.ActualWeightKg - data.Order.ExpectedWeightKg) / data.Order.ExpectedWeightKg * 100m, 2)
+                : 0m;
+            var cbmDiff = data.Order.ExpectedCbm > 0
+                ? Math.Round((actualCbm - data.Order.ExpectedCbm) / data.Order.ExpectedCbm * 100m, 2)
+                : 0m;
+            var volumetricWeightDiff = expectedVolumetricWeight > 0
+                ? Math.Round((volumetricWeight - expectedVolumetricWeight) / expectedVolumetricWeight * 100m, 2)
+                : 0m;
+            var chargeableWeightDiff = expectedChargeableWeight > 0
+                ? Math.Round((chargeableWeight - expectedChargeableWeight) / expectedChargeableWeight * 100m, 2)
+                : 0m;
+
+            var maxDiff = Math.Max(Math.Abs(weightDiff), Math.Abs(cbmDiff));
 
             var replacements = new Dictionary<string, string?>
             {
@@ -508,15 +592,33 @@ namespace ColdChainX.Infrastructure.Services
                 ["Customer_Email"] = data.Customer.Email ?? string.Empty,
                 ["Tracking_Code"] = data.Order.TrackingCode,
                 ["Item_Name"] = data.Order.ItemName,
-                ["Expected_Weight"] = data.Order.ExpectedWeightKg.ToString("0.##"),
-                ["Expected_Cbm"] = data.Order.ExpectedCbm.ToString("0.####"),
-                ["Actual_Weight"] = data.Order.ActualWeightKg.ToString("0.##"),
-                ["Actual_Cbm"] = (data.Order.ActualCbm ?? data.Order.ExpectedCbm).ToString("0.####"),
-                ["Discrepancy_Percent"] = maxDiff.ToString("0.##"),
-                ["Original_Price"] = originalPrice.ToString("N0", CultureInfo.InvariantCulture),
+                ["Expected_Weight"] = data.Order.ExpectedWeightKg.ToString("0.##", CultureInfo.InvariantCulture),
+                ["Expected_Cbm"] = data.Order.ExpectedCbm.ToString("0.####", CultureInfo.InvariantCulture),
+                ["Actual_Weight"] = data.Order.ActualWeightKg.ToString("0.##", CultureInfo.InvariantCulture),
+                ["Actual_Cbm"] = actualCbm.ToString("0.####", CultureInfo.InvariantCulture),
+                ["Discrepancy_Percent"] = maxDiff.ToString("0.##", CultureInfo.InvariantCulture),
+                ["Original_Price"] = originalBasePrice.ToString("N0", CultureInfo.InvariantCulture),
                 ["Adjusted_Price"] = adjustedPrice.ToString("N0", CultureInfo.InvariantCulture),
-                ["New_Price"] = newPrice.ToString("N0", CultureInfo.InvariantCulture),
-                ["Reason"] = reason
+                ["New_Price"] = (originalBasePrice + adjustedPrice).ToString("N0", CultureInfo.InvariantCulture),
+                ["Reason"] = reason,
+
+                ["Volumetric_Rate"] = volumetricRate.ToString("0.##", CultureInfo.InvariantCulture),
+                ["Actual_Volumetric_Weight"] = volumetricWeight.ToString("0.##", CultureInfo.InvariantCulture),
+                ["Actual_Chargeable_Weight"] = chargeableWeight.ToString("0.##", CultureInfo.InvariantCulture),
+                ["Unit_Price"] = unitPrice.ToString("N0", CultureInfo.InvariantCulture),
+                ["New_Base_Price"] = newBasePrice.ToString("N0", CultureInfo.InvariantCulture),
+                ["Original_Base_Price"] = originalBasePrice.ToString("N0", CultureInfo.InvariantCulture),
+
+                ["Expected_Qty"] = data.Order.Quantity.ToString(),
+                ["Actual_Qty"] = data.Order.Quantity.ToString(),
+                ["Packing_Type"] = data.Order.PackingType ?? "Kiện",
+                ["Expected_Volumetric_Weight"] = expectedVolumetricWeight.ToString("0.##", CultureInfo.InvariantCulture),
+                ["Expected_Chargeable_Weight"] = expectedChargeableWeight.ToString("0.##", CultureInfo.InvariantCulture),
+
+                ["Weight_Diff"] = (weightDiff >= 0 ? "+" : "") + weightDiff.ToString("0.##", CultureInfo.InvariantCulture),
+                ["Cbm_Diff"] = (cbmDiff >= 0 ? "+" : "") + cbmDiff.ToString("0.##", CultureInfo.InvariantCulture),
+                ["Volumetric_Weight_Diff"] = (volumetricWeightDiff >= 0 ? "+" : "") + volumetricWeightDiff.ToString("0.##", CultureInfo.InvariantCulture),
+                ["Chargeable_Weight_Diff"] = (chargeableWeightDiff >= 0 ? "+" : "") + chargeableWeightDiff.ToString("0.##", CultureInfo.InvariantCulture)
             };
 
             foreach (var replacement in replacements)

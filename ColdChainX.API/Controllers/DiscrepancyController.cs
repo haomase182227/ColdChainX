@@ -1,6 +1,9 @@
 using ColdChainX.Application.Features.Discrepancy.Commands;
+using ColdChainX.Application.Features.Discrepancy.Queries;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using System;
+using System.Threading.Tasks;
 
 namespace ColdChainX.API.Controllers;
 
@@ -13,6 +16,23 @@ public class DiscrepancyController : ControllerBase
     public DiscrepancyController(IMediator mediator)
     {
         _mediator = mediator;
+    }
+
+    [HttpGet("pending")]
+    public async Task<IActionResult> GetPendingDiscrepancies()
+    {
+        var result = await _mediator.Send(new GetPendingDiscrepanciesQuery());
+        return Ok(result);
+    }
+
+    [HttpGet("{lpnId:guid}")]
+    public async Task<IActionResult> GetDiscrepancyDetail(Guid lpnId)
+    {
+        var result = await _mediator.Send(new GetDiscrepancyDetailQuery(lpnId));
+        if (result == null)
+            return NotFound(new { Message = "Discrepancy LPN not found" });
+
+        return Ok(result);
     }
 
     [HttpPost("resolve")]

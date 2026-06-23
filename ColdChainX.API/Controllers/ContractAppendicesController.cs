@@ -34,16 +34,12 @@ namespace ColdChainX.API.Controllers
             return Content(result.Data!, "text/html; charset=utf-8");
         }
 
-        [HttpPost("generate")]
-        [Authorize(Roles = "Sales,Admin,Manager,Dispatcher")]
-        public async Task<IActionResult> GenerateAppendix([FromBody] GenerateAppendixRequest request)
+        [HttpGet("by-order/{orderId:guid}")]
+        [Authorize(Roles = "Sales,Admin,Manager,Dispatcher,Customer")]
+        public async Task<IActionResult> GetAppendixByOrderId(Guid orderId)
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (!Guid.TryParse(userIdClaim, out var salesUserId))
-                return Unauthorized("UserId claim is missing from token");
-
-            var result = await _appendixService.GenerateAppendixAsync(request.OrderId, request.AdjustedPrice, request.Reason, salesUserId);
-            if (!result.Success) return BadRequest(result);
+            var result = await _appendixService.GetAppendixByOrderIdAsync(orderId);
+            if (!result.Success) return NotFound(result);
             return Ok(result);
         }
 

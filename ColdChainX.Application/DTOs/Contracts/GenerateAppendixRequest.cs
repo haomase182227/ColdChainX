@@ -9,7 +9,7 @@ namespace ColdChainX.Application.DTOs.Contracts
         public Guid OrderId { get; set; }
 
         [JsonPropertyName("adjustedPrice")]
-        public decimal AdjustedPrice { get; set; }
+        public decimal? AdjustedPrice { get; set; }
 
         [JsonPropertyName("reason")]
         public string Reason { get; set; } = string.Empty;

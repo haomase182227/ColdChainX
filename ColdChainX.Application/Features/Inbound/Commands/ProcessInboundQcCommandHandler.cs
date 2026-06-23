@@ -16,13 +16,20 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
     private readonly ILogger<ProcessInboundQcCommandHandler> _logger;
     private readonly IFileService _fileService;
     private readonly IMediator _mediator;
+    private readonly IContractAppendixService _appendixService;
 
-    public ProcessInboundQcCommandHandler(IApplicationDbContext context, ILogger<ProcessInboundQcCommandHandler> logger, IFileService fileService, IMediator mediator)
+    public ProcessInboundQcCommandHandler(
+        IApplicationDbContext context,
+        ILogger<ProcessInboundQcCommandHandler> logger,
+        IFileService fileService,
+        IMediator mediator,
+        IContractAppendixService appendixService)
     {
         _context = context;
         _logger = logger;
         _fileService = fileService;
         _mediator = mediator;
+        _appendixService = appendixService;
     }
 
     public async Task<ProcessInboundQcResponse> Handle(ProcessInboundQcCommand request, CancellationToken cancellationToken)
@@ -175,6 +182,48 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
             receipt.PdfUrl = pdfUrl;
             await _context.SaveChangesAsync(cancellationToken);
 
+            // Automatically generate a pre-tax contract appendix in DRAFT status
+            var salesUserId = await _context.Users
+                .Include(u => u.Role)
+                .Where(u => u.Role != null && u.Role.RoleName.ToLower() == "sales")
+                .Select(u => u.UserId)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (salesUserId == Guid.Empty)
+            {
+                salesUserId = await _context.Users
+                    .Include(u => u.Role)
+                    .Where(u => u.Role != null && (u.Role.RoleName.ToLower() == "admin" || u.Role.RoleName.ToLower() == "manager"))
+                    .Select(u => u.UserId)
+                    .FirstOrDefaultAsync(cancellationToken);
+            }
+
+            if (salesUserId == Guid.Empty)
+            {
+                salesUserId = request.ReceiverId;
+            }
+
+            var isWeightHigher = request.ActualWeightKg > order.ExpectedWeightKg;
+            var isCbmHigher = actualCbm > order.ExpectedCbm;
+            var weightSign = isWeightHigher ? "+" : "-";
+            var cbmSign = isCbmHigher ? "+" : "-";
+
+            var appendixReason = $"Phát hiện chênh lệch thực tế khi kiểm đếm QC tại Hub (Trọng lượng chênh lệch: {weightSign}{weightDiff:0.##}%, Thể tích chênh lệch: {cbmSign}{cbmDiff:0.##}%).";
+
+            var appendixResult = await _appendixService.GenerateAppendixAsync(
+                order.OrderId,
+                null,
+                appendixReason,
+                salesUserId);
+
+            if (!appendixResult.Success)
+            {
+                _logger.LogError("Failed to automatically generate contract appendix: {Message}", appendixResult.Message);
+            }
+
+            var appendixIdStr = appendixResult.Success ? appendixResult.Data!.AppendixId.ToString() : "";
+            var appendixNumberStr = appendixResult.Success ? appendixResult.Data!.AppendixNumber : "";
+
             // Send notification to Sales, Admin, and Manager
             await EnsureNotificationTemplateAsync("NOTI_QC_DISCREPANCY", cancellationToken);
             var salesUsers = await _context.Users
@@ -190,7 +239,12 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
                     UserId = user.UserId,
                     SenderId = request.ReceiverId,
                     TemplateId = "NOTI_QC_DISCREPANCY",
-                    Params = JsonSerializer.Serialize(new { Tracking_Code = order.TrackingCode, Pdf_URL = pdfUrl ?? "" }),
+                    Params = JsonSerializer.Serialize(new { 
+                        Tracking_Code = order.TrackingCode, 
+                        Pdf_URL = pdfUrl ?? "",
+                        Appendix_Id = appendixIdStr,
+                        Appendix_Number = appendixNumberStr
+                    }),
                     OrderId = order.OrderId,
                     IsRead = false,
                     CreatedAt = now
@@ -225,8 +279,7 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
 
     private async Task EnsureNotificationTemplateAsync(string templateId, CancellationToken cancellationToken)
     {
-        if (await _context.NotificationTemplates.AnyAsync(t => t.TemplateId == templateId, cancellationToken))
-            return;
+        var existing = await _context.NotificationTemplates.FirstOrDefaultAsync(t => t.TemplateId == templateId, cancellationToken);
 
         var typeId = await _context.Messagetypes
             .Where(t => t.TypeName == "ORDER_STATUS")
@@ -242,18 +295,35 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
                 Description = "Cập nhật trạng thái đơn hàng, báo giá, hợp đồng"
             };
             _context.Messagetypes.Add(type);
+            await _context.SaveChangesAsync(cancellationToken);
             typeId = type.TypeId;
         }
 
-        _context.NotificationTemplates.Add(new NotificationTemplate
+        var expectedTitle = "Đơn hàng {{Tracking_Code}} bị giữ lại do chênh lệch QC";
+        var expectedBody = "Phát hiện chênh lệch >5% tại Inbound QC. Biên bản bất thường: {{Pdf_URL}}. Phụ lục hợp đồng nháp: {{Appendix_Number}} (ID: {{Appendix_Id}})";
+
+        if (existing != null)
         {
-            TemplateId = templateId,
-            TypeId = typeId.Value,
-            TitleTemplate = "Đơn hàng {{Tracking_Code}} bị giữ lại do chênh lệch QC",
-            BodyTemplate = "Phát hiện chênh lệch >5% tại Inbound QC. Biên bản bất thường: {{Pdf_URL}}",
-            Channel = "IN_APP",
-            Status = "ACTIVE"
-        });
+            if (existing.BodyTemplate != expectedBody || existing.TitleTemplate != expectedTitle)
+            {
+                existing.TitleTemplate = expectedTitle;
+                existing.BodyTemplate = expectedBody;
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+        }
+        else
+        {
+            _context.NotificationTemplates.Add(new NotificationTemplate
+            {
+                TemplateId = templateId,
+                TypeId = typeId.Value,
+                TitleTemplate = expectedTitle,
+                BodyTemplate = expectedBody,
+                Channel = "IN_APP",
+                Status = "ACTIVE"
+            });
+            await _context.SaveChangesAsync(cancellationToken);
+        }
     }
 
     private static ProcessInboundQcResponse Failure(string message)
