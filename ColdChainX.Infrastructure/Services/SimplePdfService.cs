@@ -32,21 +32,19 @@ namespace ColdChainX.Infrastructure.Services
         }
 
         public async Task<string> SaveContractPdfAsync(string htmlContent, string contractNumber)
-            => await SavePdfAsync(htmlContent, "contracts", contractNumber);
+            => await SavePdfAsync(htmlContent, contractNumber);
 
         public async Task<string> SaveQuotationPdfAsync(string htmlContent, string quoteNumber)
-            => await SavePdfAsync(htmlContent, "quotations", quoteNumber);
+            => await SavePdfAsync(htmlContent, quoteNumber);
 
         public async Task<string> SaveWarehouseReceiptPdfAsync(string htmlContent, string receiptCode)
-            => await SavePdfAsync(htmlContent, "receipts", receiptCode, "receipt");
+            => await SavePdfAsync(htmlContent, receiptCode, "receipt");
 
         public async Task<string> SaveWaybillPdfAsync(string htmlContent, string fileCode)
-        {
-            return await SavePdfAsync(htmlContent, "waybills", fileCode, "lifo");
-        }
+            => await SavePdfAsync(htmlContent, fileCode, "lifo");
 
         public async Task<string> SaveLoadPlanPdfAsync(string htmlContent, string tripId)
-            => await SavePdfAsync(htmlContent, "loadplans", tripId, "loadplan");
+            => await SavePdfAsync(htmlContent, tripId, "loadplan");
 
         public async Task<string> GenerateManifestPdfAsync(Guid tripId)
         {
@@ -110,7 +108,7 @@ namespace ColdChainX.Infrastructure.Services
             sb.AppendLine("<div class='sign-box'><p>Tài xế</p></div>");
             sb.AppendLine("</div></body></html>");
 
-            return await SavePdfAsync(sb.ToString(), "manifests", tripId.ToString(), "manifest");
+            return await SavePdfAsync(sb.ToString(), tripId.ToString(), "manifest");
         }
 
         public async Task<string> GenerateOutboundTicketPdfAsync(Guid tripId)
@@ -174,10 +172,10 @@ namespace ColdChainX.Infrastructure.Services
             sb.AppendLine("<div class='sign-box'><p>Điều phối viên</p></div>");
             sb.AppendLine("</div></body></html>");
 
-            return await SavePdfAsync(sb.ToString(), "outbound-tickets", tripId.ToString(), "phieu-xuat-kho");
+            return await SavePdfAsync(sb.ToString(), tripId.ToString(), "phieu-xuat-kho");
         }
 
-        private async Task<string> SavePdfAsync(string htmlContent, string folderName, string fileCode, string prefix = "waybill")
+        private async Task<string> SavePdfAsync(string htmlContent, string fileCode, string prefix = "waybill")
         {
             var root = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot");
             var fileName = $"{prefix}_{SanitizeFileName(fileCode)}.pdf";
@@ -202,16 +200,6 @@ namespace ColdChainX.Infrastructure.Services
                 }
             });
 
-            // 1. Lưu xuống local wwwroot/{folderName}/{fileName} để backup/check
-            var targetFolder = Path.Combine(root, folderName);
-            if (!Directory.Exists(targetFolder))
-            {
-                Directory.CreateDirectory(targetFolder);
-            }
-            var localPath = Path.Combine(targetFolder, fileName);
-            await File.WriteAllBytesAsync(localPath, pdfBytes);
-
-            // 2. Upload lên Cloudinary và trả về link Cloudinary chuẩn để FE gọi được trên cả Production
             return await _fileService.UploadFileAsync(pdfBytes, fileName);
         }
 
