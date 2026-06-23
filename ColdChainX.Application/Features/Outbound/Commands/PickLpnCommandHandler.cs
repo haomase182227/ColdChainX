@@ -22,12 +22,12 @@ public class PickLpnCommandHandler : IRequestHandler<PickLpnCommand, PickLpnResp
             return new PickLpnResponse { Success = false, Message = "LPN not found." };
         }
 
-        if (lpn.State != LpnState.IN_STOCK && lpn.State != LpnState.ALLOCATED)
+        if (lpn.State != LpnState.ALLOCATED)
         {
-            return new PickLpnResponse { Success = false, Message = $"Cannot pick LPN from state: {lpn.State}" };
+            return new PickLpnResponse { Success = false, Message = $"LPN phải ở trạng thái ALLOCATED trước khi chất hàng. Trạng thái hiện tại: {lpn.State}" };
         }
 
-        lpn.State = LpnState.PICKED;
+        lpn.State = LpnState.LOADING;
         lpn.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);

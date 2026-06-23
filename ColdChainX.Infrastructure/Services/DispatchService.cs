@@ -1054,21 +1054,21 @@ public class DispatchService : IDispatchService
         if (lpns.Count == 0)
             throw new InvalidOperationException("Chuyến đi không có LPN nào.");
 
-        // Kiểm tra tất cả LPN đã được bốc xếp (SHIPPED)
+        // Kiểm tra tất cả LPN đã rời kho (RELEASED)
         var totalLpns = lpns.Count;
-        var loadedLpns = lpns.Count(l => l.State == LpnState.SHIPPED);
+        var loadedLpns = lpns.Count(l => l.State == LpnState.RELEASED);
         var allLoaded = loadedLpns == totalLpns;
 
         if (!allLoaded)
         {
             var notLoadedLpns = lpns
-                .Where(l => l.State != LpnState.SHIPPED)
+                .Where(l => l.State != LpnState.RELEASED)
                 .Select(l => l.LpnCode)
                 .ToList();
             throw new InvalidOperationException(
-                $"Chưa bốc xếp hết LPN! Còn {totalLpns - loadedLpns}/{totalLpns} LPN chưa bốc: " +
+                $"Chưa xác nhận xuất kho hết LPN! Còn {totalLpns - loadedLpns}/{totalLpns} LPN chưa RELEASED: " +
                 $"{string.Join(", ", notLoadedLpns)}. " +
-                $"Tất cả LPN phải ở trạng thái SHIPPED trước khi kẹp chì.");
+                $"Tất cả LPN phải ở trạng thái RELEASED trước khi kẹp chì.");
         }
 
         // Tạo Seal record
@@ -1081,6 +1081,10 @@ public class DispatchService : IDispatchService
             Status    = "APPLIED",
             CreatedAt = DateTime.UtcNow
         });
+
+        // Cập nhật LPN → SHIPPING (đang trên xe, chưa giao)
+        foreach (var lpn in lpns)
+            lpn.State = LpnState.SHIPPING;
 
         // Gán SealNumber cho trip
         trip.SealNumber = sealCode;

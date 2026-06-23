@@ -29,7 +29,7 @@ public class LpnShippedEventHandler : INotificationHandler<LpnShippedEvent>
 
         // Log khi toàn bộ LPN của đơn hàng đã lên xe — trạng thái COMPLETED sẽ được cập nhật
         // sau khi giao hàng thành công (ePOD), không phải tại thời điểm xếp xe.
-        if (orderLpns.Any() && orderLpns.All(l => l.State == LpnState.SHIPPED))
+        if (orderLpns.Any() && orderLpns.All(l => l.State == LpnState.RELEASED))
         {
             _logger.LogInformation(
                 "All LPNs for order {OrderId} have been loaded onto the vehicle.",

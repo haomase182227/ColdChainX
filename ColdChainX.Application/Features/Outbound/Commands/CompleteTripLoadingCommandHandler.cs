@@ -44,12 +44,12 @@ public class CompleteTripLoadingCommandHandler : IRequestHandler<CompleteTripLoa
 
         foreach (var lpn in lpns)
         {
-            if (lpn.State != LpnState.PICKED)
+            if (lpn.State != LpnState.LOADING)
             {
-                return new CompleteTripLoadingResponse { Success = false, Message = $"LPN {lpn.LpnCode} is not in PICKED state (Current: {lpn.State})." };
+                return new CompleteTripLoadingResponse { Success = false, Message = $"LPN {lpn.LpnCode} phải ở trạng thái LOADING trước khi xác nhận xuất kho. Trạng thái hiện tại: {lpn.State}" };
             }
 
-            lpn.State = LpnState.SHIPPED;
+            lpn.State = LpnState.RELEASED;
             lpn.UpdatedAt = DateTime.UtcNow;
             lpn.TripId = trip.TripId;
         }
