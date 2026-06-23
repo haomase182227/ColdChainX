@@ -186,6 +186,11 @@ namespace ColdChainX.Infrastructure.Services
 
         private async Task<string> SavePdfAsync(string htmlContent, string fileCode, string prefix = "waybill")
         {
+            return await SavePdfAsync(htmlContent, string.Empty, fileCode, prefix);
+        }
+
+        private async Task<string> SavePdfAsync(string htmlContent, string folderName, string fileCode, string prefix = "waybill")
+        {
             var root = _environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot");
             var fileName = $"{prefix}_{SanitizeFileName(fileCode)}.pdf";
             var normalizedHtml = NormalizeHtmlForLocalAssets(htmlContent, root);
@@ -208,6 +213,17 @@ namespace ColdChainX.Infrastructure.Services
                     Right = "10mm"
                 }
             });
+
+            if (!string.IsNullOrWhiteSpace(folderName))
+            {
+                var targetFolder = Path.Combine(root, folderName);
+                if (!Directory.Exists(targetFolder))
+                {
+                    Directory.CreateDirectory(targetFolder);
+                }
+                var localPath = Path.Combine(targetFolder, fileName);
+                await File.WriteAllBytesAsync(localPath, pdfBytes);
+            }
 
             return await _fileService.UploadFileAsync(pdfBytes, fileName);
         }
