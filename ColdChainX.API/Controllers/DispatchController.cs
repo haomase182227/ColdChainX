@@ -159,6 +159,24 @@ public class DispatchController : ControllerBase
         return Ok(new { Success = true, Count = items.Count, Data = items });
     }
 
+    /// <summary>
+    /// [BUOC 1/5] Ghep chuyen thu cong — chon xe, tai xe va danh sach LPN.
+    /// </summary>
+    /// <remarks>
+    /// TRANG THAI LPN: IN_STOCK → ALLOCATED
+    ///
+    /// Dieu kien:
+    ///   - Cac LPN duoc chon phai o trang thai IN_STOCK
+    ///   - Xe phai ACTIVE va chua duoc gan chuyen nao
+    ///   - Tai xe phai co bang lai con han
+    ///
+    /// Sau buoc nay:
+    ///   - LPN.State = ALLOCATED
+    ///   - Trip.Status = PLANNED
+    ///   - Tra ve LifoPdfUrl (so do xep hang LIFO) va thong tin lo trinh Goong
+    ///
+    /// Buoc tiep theo: POST /api/Dispatch/trip/{tripId}/start-picking
+    /// </remarks>
     [HttpPost("manual-dispatch")]
     [Consumes("multipart/form-data")]
     [ProducesResponseType(typeof(ManualDispatchResult), 200)]
@@ -305,9 +323,20 @@ public class DispatchController : ControllerBase
     // ═══════════════════════════════════════════════════════════════════════
 
     /// <summary>
-    /// Chuyển trip sang trạng thái PICKING — thông báo cho Loader bắt đầu lấy hàng.
-    /// Trip phải đang ở trạng thái PLANNED.
+    /// [STEP 2/5] Bat dau lenh boc hang — chuyen LPN tu ALLOCATED sang LOADING.
     /// </summary>
+    /// <remarks>
+    /// LPN state: ALLOCATED → LOADING
+    /// Trip status: PLANNED → PICKING
+    ///
+    /// Precondition : Trip.Status == PLANNED
+    /// Postcondition:
+    ///   - Tat ca LPN cua chuyen: State = LOADING
+    ///   - Trip.Status = PICKING
+    ///
+    /// Next step: goi POST /api/Outbound/pick cho tung LPN
+    /// </remarks>
+    /// <param name="tripId">ID chuyen hang (tu ket qua manual-dispatch)</param>
     [HttpPost("trip/{tripId}/start-picking")]
     [ProducesResponseType(typeof(StartPickingResult), 200)]
     public async Task<IActionResult> StartPicking(string tripId)
@@ -362,9 +391,25 @@ public class DispatchController : ControllerBase
     // ═══════════════════════════════════════════════════════════════════════
 
     /// <summary>
-    /// Kiểm tra tất cả đơn hàng đã được xếp lên xe chưa. Nếu đủ → kẹp chì → cấp E-Waybill.
-    /// Chuyển Trip sang SEALED / DISPATCHED.
+    /// [STEP 5/5] Kep chi + cap giay di duong (E-Waybill).
     /// </summary>
+    /// <remarks>
+    /// LPN state: RELEASED → SHIPPING
+    /// Trip status: LOADING_COMPLETED → SEALED → DISPATCHED
+    ///
+    /// Precondition:
+    ///   - Trip.Status == LOADING_COMPLETED  (da goi load-trip truoc)
+    ///   - Tat ca LPN cua chuyen: State == RELEASED
+    ///   - SealCode la bat buoc
+    ///
+    /// Postcondition:
+    ///   - LPN.State = SHIPPING
+    ///   - Trip.Status = SEALED (hoac DISPATCHED neu sinh duoc E-Waybill)
+    ///   - Tao Seal record + OutboundOrder + TransportDocument (E-Waybill PDF)
+    ///   - Cap nhat Vehicle.Status = OnTrip, Driver.Status = OnTrip
+    /// </remarks>
+    /// <param name="tripId">ID chuyen hang</param>
+    /// <param name="request">SealCode bat buoc</param>
     [HttpPost("seal-and-dispatch/{tripId}")]
     [Consumes("multipart/form-data")]
     [ProducesResponseType(typeof(SealAndDispatchResult), 200)]

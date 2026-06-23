@@ -29,6 +29,11 @@ public class GetLpnListQueryHandler : IRequestHandler<GetLpnListQuery, List<LpnD
         {
             query = query.Where(x => x.State == request.Status.Value);
         }
+        else
+        {
+            // Mac dinh an LPN da xoa mem — chi hien thi khi loc tuong minh ?status=DELETED
+            query = query.Where(x => x.State != LpnState.DELETED);
+        }
 
         if (!string.IsNullOrWhiteSpace(request.Keyword))
         {

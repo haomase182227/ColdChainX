@@ -21,14 +21,12 @@ namespace ColdChainX.Infrastructure.Services
             var loadPlan = result.LoadPlan?.OrderBy(x => x.LoadOrder).ToList()
                            ?? new List<LoadInstruction>();
 
-            // Assign a unique color to each LPN by index
             var colorMap = new Dictionary<string, string>();
             for (int i = 0; i < loadPlan.Count; i++)
                 colorMap[loadPlan[i].LpnCode ?? $"LPN-{i}"] = ColorPalette[i % ColorPalette.Length];
 
             int totalRows = (loadPlan.Count + COLS - 1) / COLS;
 
-            // Helper: get LPN at grid position
             LoadInstruction? Cell(int r, int c)
             {
                 int idx = r * COLS + c;
@@ -41,114 +39,164 @@ namespace ColdChainX.Infrastructure.Services
             string DarkenHex(string hex, double factor = 0.65)
             {
                 if (hex.Length < 7) return hex;
-                int r = Convert.ToInt32(hex.Substring(1, 2), 16);
-                int g = Convert.ToInt32(hex.Substring(3, 2), 16);
-                int b = Convert.ToInt32(hex.Substring(5, 2), 16);
-                return $"#{(int)(r * factor):X2}{(int)(g * factor):X2}{(int)(b * factor):X2}";
+                int r2 = Convert.ToInt32(hex.Substring(1, 2), 16);
+                int g2 = Convert.ToInt32(hex.Substring(3, 2), 16);
+                int b2 = Convert.ToInt32(hex.Substring(5, 2), 16);
+                return $"#{(int)(r2 * factor):X2}{(int)(g2 * factor):X2}{(int)(b2 * factor):X2}";
             }
 
             string H(string? s) => WebUtility.HtmlEncode(s ?? "");
 
-            var sb = new StringBuilder();
+            // ══════════════════════════════════════════════════════════════════
+            //  TRUCK SIDE-VIEW SVG
+            //  Cab on LEFT, Rear door on RIGHT
+            //  LoadOrder=1 (deepest, near cab) = leftmost slot
+            //  LoadOrder=N (near door) = rightmost slot
+            // ══════════════════════════════════════════════════════════════════
 
-            // ── ISO-3D SVG ──────────────────────────────────────────────────
-            // Isometric math: origin at top-center, each cell CELL_W×CELL_H
-            const int CELL_W = 70;
-            const int CELL_H = 35;
-            const int BOX_H  = 38;
-            int svgW = (COLS + totalRows + 2) * CELL_W / 2 + 60;
-            int svgH = (COLS + totalRows + 1) * CELL_H / 2 + BOX_H + 70;
-            int originX = (totalRows + 1) * CELL_W / 2 + 10;
-            int originY = BOX_H + 20;
+            const int TRUCK_W = 860;
+            const int TRUCK_H = 252;
+            // Inner cargo area inside trailer
+            const int CARGO_X = 126;
+            const int CARGO_Y = 52;
+            const int CARGO_W = 700;
+            const int CARGO_H = 132;
 
-            // Convert truck (a=col, b=row) to screen (iso)
-            (int sx, int sy) IsoXY(int a, int b, int z = 0) => (
-                originX + (a - b) * CELL_W / 2,
-                originY + (a + b) * CELL_H / 2 - z * BOX_H
-            );
+            float sliceW = (float)CARGO_W / Math.Max(totalRows, 1);
+            float itemH  = (float)CARGO_H / COLS;
 
-            string Pt(int x, int y) => $"{x},{y}";
+            var truckSb = new StringBuilder();
+            truckSb.Append($"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 {TRUCK_W} {TRUCK_H}' style='width:100%;display:block;'>");
 
-            var svgSb = new StringBuilder();
-            svgSb.Append($"<svg xmlns='http://www.w3.org/2000/svg' width='{svgW}' height='{svgH}' style='max-width:100%;'>");
+            // Ground shadow
+            truckSb.Append($"<ellipse cx='440' cy='{TRUCK_H - 6}' rx='408' ry='7' fill='rgba(0,0,0,0.09)'/>");
 
-            // Draw container floor shadow
-            var (fx0, fy0) = IsoXY(0, 0, 0);
-            var (fx1, fy1) = IsoXY(COLS, 0, 0);
-            var (fx2, fy2) = IsoXY(COLS, totalRows, 0);
-            var (fx3, fy3) = IsoXY(0, totalRows, 0);
-            svgSb.Append($"<polygon points='{Pt(fx0,fy0+4)} {Pt(fx1,fy1+4)} {Pt(fx2,fy2+4)} {Pt(fx3,fy3+4)}' fill='rgba(0,0,0,0.12)'/>");
-            svgSb.Append($"<polygon points='{Pt(fx0,fy0)} {Pt(fx1,fy1)} {Pt(fx2,fy2)} {Pt(fx3,fy3)}' fill='#ECEFF1' stroke='#90A4AE' stroke-width='1.5'/>");
+            // ── TRAILER BODY ──────────────────────────────────────────────────
+            // Main body
+            truckSb.Append("<rect x='118' y='36' width='728' height='164' rx='4' fill='#F0F4F8' stroke='#455A64' stroke-width='2.5'/>");
+            // Roof trim
+            truckSb.Append("<rect x='118' y='36' width='728' height='15' rx='4' fill='#546E7A'/>");
+            // Floor trim
+            truckSb.Append("<rect x='118' y='185' width='728' height='15' fill='#546E7A'/>");
+            // Rivet line on roof
+            for (int rx = 140; rx < 840; rx += 60)
+                truckSb.Append($"<circle cx='{rx}' cy='43' r='2.5' fill='#78909C'/>");
+            // Rivet line on floor
+            for (int rx = 140; rx < 840; rx += 60)
+                truckSb.Append($"<circle cx='{rx}' cy='192' r='2.5' fill='#78909C'/>");
 
-            // Draw boxes painter's order: high row+col first → low last
-            var drawOrder = new List<(int row, int col)>();
-            for (int r = totalRows - 1; r >= 0; r--)
-                for (int c = COLS - 1; c >= 0; c--)
-                    drawOrder.Add((r, c));
+            // Rear door (red vertical bar with handle)
+            truckSb.Append("<rect x='838' y='36' width='10' height='164' rx='3' fill='#C62828'/>");
+            truckSb.Append("<rect x='841' y='104' width='4' height='36' rx='2' fill='#FFCDD2'/>");
+            // Door hinges
+            truckSb.Append("<rect x='838' y='52' width='10' height='6' rx='2' fill='#B71C1C'/>");
+            truckSb.Append("<rect x='838' y='178' width='10' height='6' rx='2' fill='#B71C1C'/>");
 
-            foreach (var (row, col) in drawOrder)
+            // ── CARGO ITEMS ───────────────────────────────────────────────────
+            for (int r = 0; r < totalRows; r++)
             {
-                var lpn  = Cell(row, col);
-                var fill = Color(lpn);
-                var dark = DarkenHex(fill, 0.60);
-                var mid  = DarkenHex(fill, 0.78);
-
-                // 8 corners of the box
-                var (t0x, t0y) = IsoXY(col,   row,   1); // top back-left
-                var (t1x, t1y) = IsoXY(col+1, row,   1); // top back-right
-                var (t2x, t2y) = IsoXY(col+1, row+1, 1); // top front-right
-                var (t3x, t3y) = IsoXY(col,   row+1, 1); // top front-left
-                var (b0x, b0y) = IsoXY(col,   row,   0); // bot back-left
-                var (b1x, b1y) = IsoXY(col+1, row,   0); // bot back-right
-                var (b2x, b2y) = IsoXY(col+1, row+1, 0); // bot front-right
-                var (b3x, b3y) = IsoXY(col,   row+1, 0); // bot front-left
-
-                if (lpn == null)
+                for (int c = 0; c < COLS; c++)
                 {
-                    // Empty slot - draw faint outline only
-                    svgSb.Append($"<polygon points='{Pt(t0x,t0y)} {Pt(t1x,t1y)} {Pt(t2x,t2y)} {Pt(t3x,t3y)}' fill='#ECEFF1' stroke='#CFD8DC' stroke-width='1'/>");
-                    svgSb.Append($"<polygon points='{Pt(t3x,t3y)} {Pt(b3x,b3y)} {Pt(b0x,b0y)} {Pt(t0x,t0y)}' fill='#E0E0E0' stroke='#CFD8DC' stroke-width='0.5'/>");
-                    svgSb.Append($"<polygon points='{Pt(t1x,t1y)} {Pt(t2x,t2y)} {Pt(b2x,b2y)} {Pt(b1x,b1y)}' fill='#DADADA' stroke='#CFD8DC' stroke-width='0.5'/>");
-                    continue;
+                    var lpn  = Cell(r, c);
+                    float ix = CARGO_X + r * sliceW + 1.5f;
+                    float iy = CARGO_Y + c * itemH + 1.5f;
+                    float iw = sliceW - 3f;
+                    float ih = itemH - 3f;
+
+                    if (lpn == null)
+                    {
+                        truckSb.Append($"<rect x='{ix:F1}' y='{iy:F1}' width='{iw:F1}' height='{ih:F1}' rx='2' fill='#ECEFF1' stroke='#CFD8DC' stroke-width='1' stroke-dasharray='3,2'/>");
+                        continue;
+                    }
+
+                    var fill  = Color(lpn);
+                    var dark  = DarkenHex(fill, 0.72);
+                    var light = DarkenHex(fill, 1.0); // same as fill for top gradient
+
+                    truckSb.Append($"<defs><linearGradient id='g{r}_{c}' x1='0' y1='0' x2='0' y2='1'><stop offset='0%' stop-color='{light}'/><stop offset='100%' stop-color='{dark}'/></linearGradient></defs>");
+                    truckSb.Append($"<rect x='{ix:F1}' y='{iy:F1}' width='{iw:F1}' height='{ih:F1}' rx='2' fill='url(#g{r}_{c})' stroke='{dark}' stroke-width='1.5'/>");
+
+                    float tx = ix + iw / 2f;
+                    float ty = iy + ih / 2f;
+
+                    float fsSz = iw > 36 ? 11 : (iw > 20 ? 8 : 6);
+                    truckSb.Append($"<text x='{tx:F1}' y='{(ty + 4.5f):F1}' text-anchor='middle' font-family='Arial' font-size='{fsSz:F0}' font-weight='bold' fill='white' stroke='rgba(0,0,0,0.45)' stroke-width='2.5' paint-order='stroke'>#{lpn.LoadOrder}</text>");
+
+                    if (iw > 46)
+                    {
+                        string sc = (lpn.LpnCode ?? "").Length > 7 ? (lpn.LpnCode ?? "")[^7..] : (lpn.LpnCode ?? "");
+                        truckSb.Append($"<text x='{tx:F1}' y='{(ty + 15f):F1}' text-anchor='middle' font-family='Arial' font-size='6' fill='rgba(255,255,255,0.88)'>{H(sc)}</text>");
+                    }
                 }
-
-                // Top face
-                svgSb.Append($"<polygon points='{Pt(t0x,t0y)} {Pt(t1x,t1y)} {Pt(t2x,t2y)} {Pt(t3x,t3y)}' fill='{fill}' stroke='white' stroke-width='1.5'/>");
-                // Left face (front-left)
-                svgSb.Append($"<polygon points='{Pt(t3x,t3y)} {Pt(b3x,b3y)} {Pt(b0x,b0y)} {Pt(t0x,t0y)}' fill='{mid}' stroke='white' stroke-width='1'/>");
-                // Right face (front-right)
-                svgSb.Append($"<polygon points='{Pt(t1x,t1y)} {Pt(t2x,t2y)} {Pt(b2x,b2y)} {Pt(b1x,b1y)}' fill='{dark}' stroke='white' stroke-width='1'/>");
-
-                // Text on top face: load order
-                int tx = (t0x + t1x + t2x + t3x) / 4;
-                int ty = (t0y + t1y + t2y + t3y) / 4;
-                svgSb.Append($"<text x='{tx}' y='{ty-4}' text-anchor='middle' font-family='Arial' font-size='10' font-weight='bold' fill='white' stroke='rgba(0,0,0,0.3)' stroke-width='2' paint-order='stroke'>{lpn.LoadOrder}</text>");
-                string shortCode = (lpn.LpnCode ?? "").Length > 8 ? (lpn.LpnCode ?? "")[^8..] : (lpn.LpnCode ?? "");
-                svgSb.Append($"<text x='{tx}' y='{ty+8}' text-anchor='middle' font-family='Arial' font-size='7' fill='white' opacity='0.9'>{H(shortCode)}</text>");
             }
 
-            // Container outline on top
-            svgSb.Append($"<polygon points='{Pt(fx0,fy0)} {Pt(fx1,fy1)} {Pt(fx2,fy2)} {Pt(fx3,fy3)}' fill='none' stroke='#455A64' stroke-width='2'/>");
+            // Trailer inner frame (top of cargo area)
+            truckSb.Append($"<rect x='{CARGO_X - 2}' y='{CARGO_Y - 2}' width='{CARGO_W + 4}' height='{CARGO_H + 4}' rx='3' fill='none' stroke='#90A4AE' stroke-width='1'/>");
 
-            // Door arrow at front (row = totalRows side)
-            var (dax, day) = IsoXY(COLS / 2, totalRows, 0);
-            svgSb.Append($"<text x='{dax}' y='{day + 18}' text-anchor='middle' font-family='Arial' font-size='9' font-weight='bold' fill='#E74C3C'>🚪 CỬA XE</text>");
+            // ── CAB ───────────────────────────────────────────────────────────
+            // Sleeper / roof fairing
+            truckSb.Append("<rect x='26' y='24' width='98' height='20' rx='5' fill='#263238'/>");
+            // Cab body (trapezoid — cab slopes at front)
+            truckSb.Append("<polygon points='4,52 122,38 122,200 4,200' fill='#2E4057'/>");
+            // Windshield
+            truckSb.Append("<polygon points='11,57 118,44 118,110 11,110' fill='#64B5F6' opacity='0.82'/>");
+            truckSb.Append("<polygon points='11,57 118,44 118,110 11,110' fill='none' stroke='#1A252F' stroke-width='1.5'/>");
+            // Wiper
+            truckSb.Append("<line x1='26' y1='109' x2='90' y2='59' stroke='#1A252F' stroke-width='1.2' opacity='0.5'/>");
+            // Cab door panel
+            truckSb.Append("<rect x='8' y='115' width='110' height='81' rx='3' fill='#243447'/>");
+            // Door window
+            truckSb.Append("<rect x='13' y='120' width='100' height='46' rx='3' fill='#90CAF9' opacity='0.68'/>");
+            // Door handle
+            truckSb.Append("<rect x='97' y='166' width='20' height='5' rx='2.5' fill='#90A4AE'/>");
+            // Door step
+            truckSb.Append("<rect x='4' y='198' width='74' height='9' rx='3' fill='#1C2B38'/>");
+            // Front bumper / grille area
+            truckSb.Append("<rect x='2' y='164' width='14' height='36' rx='3' fill='#1C2B38'/>");
+            truckSb.Append("<line x1='2' y1='170' x2='16' y2='170' stroke='#546E7A' stroke-width='1.5'/>");
+            truckSb.Append("<line x1='2' y1='177' x2='16' y2='177' stroke='#546E7A' stroke-width='1.5'/>");
+            truckSb.Append("<line x1='2' y1='184' x2='16' y2='184' stroke='#546E7A' stroke-width='1.5'/>");
+            // Cab-to-trailer coupling
+            truckSb.Append("<line x1='120' y1='38' x2='120' y2='200' stroke='#37474F' stroke-width='2' stroke-dasharray='5,3'/>");
 
-            // Cab label at back (row = 0 side)
-            var (cax, cay) = IsoXY(COLS / 2, 0, 1);
-            svgSb.Append($"<text x='{cax}' y='{cay - 8}' text-anchor='middle' font-family='Arial' font-size='9' fill='#546E7A'>⬆ CABIN</text>");
+            // ── WHEELS ────────────────────────────────────────────────────────
+            // Front wheel
+            truckSb.Append("<circle cx='60' cy='222' r='24' fill='#1A1A1A'/>");
+            truckSb.Append("<circle cx='60' cy='222' r='15' fill='#2C2C2C'/>");
+            truckSb.Append("<circle cx='60' cy='222' r='6'  fill='#607D8B'/>");
+            // Rear axle bar
+            truckSb.Append("<rect x='672' y='216' width='76' height='12' rx='4' fill='#455A64'/>");
+            // Rear wheel 1
+            truckSb.Append("<circle cx='676' cy='222' r='24' fill='#1A1A1A'/>");
+            truckSb.Append("<circle cx='676' cy='222' r='15' fill='#2C2C2C'/>");
+            truckSb.Append("<circle cx='676' cy='222' r='6'  fill='#607D8B'/>");
+            // Rear wheel 2
+            truckSb.Append("<circle cx='744' cy='222' r='24' fill='#1A1A1A'/>");
+            truckSb.Append("<circle cx='744' cy='222' r='15' fill='#2C2C2C'/>");
+            truckSb.Append("<circle cx='744' cy='222' r='6'  fill='#607D8B'/>");
 
-            svgSb.Append("</svg>");
-            string isoSvg = svgSb.ToString();
+            // ── ANNOTATIONS ──────────────────────────────────────────────────
+            // CABIN label
+            truckSb.Append("<text x='62' y='250' text-anchor='middle' font-family='Arial' font-size='10' fill='#2E4057' font-weight='bold'>⬆ CABIN</text>");
+            // DOOR label
+            truckSb.Append("<text x='843' y='250' text-anchor='middle' font-family='Arial' font-size='10' fill='#C62828' font-weight='bold'>🚪 CỬA SAU</text>");
+            // Direction hint
+            truckSb.Append("<text x='480' y='250' text-anchor='middle' font-family='Arial' font-size='8' fill='#78909C'>← Xếp vào trước (LIFO: vào trước, lấy ra sau)</text>");
 
-            // ── TOP VIEW (Floor Plan) ────────────────────────────────────────
+            truckSb.Append("</svg>");
+            string truckSvg = truckSb.ToString();
+
+            // ══════════════════════════════════════════════════════════════════
+            //  TOP VIEW (floor plan)
+            // ══════════════════════════════════════════════════════════════════
+
             var topSb = new StringBuilder();
             topSb.Append("<table class='plan-table'>");
-            topSb.Append("<tr><td class='axis-cell' colspan='1'></td><td class='axis-cell' style='text-align:center;font-size:8px;color:#888;' colspan='2'>← Trái &nbsp; Phải →</td></tr>");
+            topSb.Append("<tr><td class='axis-cell'></td><td class='axis-cell' style='text-align:center;font-size:8px;color:#888;' colspan='2'>← Trái &nbsp; Phải →</td></tr>");
             for (int r = 0; r < totalRows; r++)
             {
                 topSb.Append("<tr>");
-                string rowLabel = r == 0 ? "CAB" : r == totalRows - 1 ? "CỬA" : $"R{r+1}";
+                string rowLabel = r == 0 ? "CAB" : r == totalRows - 1 ? "CỬA" : $"R{r + 1}";
                 topSb.Append($"<td class='axis-cell'>{rowLabel}</td>");
                 for (int c = 0; c < COLS; c++)
                 {
@@ -157,111 +205,102 @@ namespace ColdChainX.Infrastructure.Services
                     if (lpn == null)
                         topSb.Append("<td class='plan-cell empty-cell'></td>");
                     else
-                        topSb.Append($"<td class='plan-cell' style='background:{bg};' title='{H(lpn.LpnCode)}'><span class='plan-order'>#{lpn.LoadOrder}</span><br/><span class='plan-code'>{H(lpn.LpnCode?.Split('-').Last() ?? "")}</span></td>");
+                        topSb.Append($"<td class='plan-cell' style='background:{bg};'><span class='plan-order'>#{lpn.LoadOrder}</span><br/><span class='plan-code'>{H(lpn.LpnCode?.Split('-').Last() ?? "")}</span></td>");
                 }
                 topSb.Append("</tr>");
             }
             topSb.Append("</table>");
 
-            // ── FRONT CROSS-SECTION (looking from door inward) ─────────────
-            var frontSb = new StringBuilder();
-            frontSb.Append("<div class='front-section'>");
-            frontSb.Append("<div class='front-container-outline'>");
-            // Show first visible row from door = last row in grid
-            for (int r = totalRows - 1; r >= 0; r--)
-            {
-                frontSb.Append($"<div class='front-row-depth' style='opacity:{1.0 - r * 0.12:F2};'>");
-                for (int c = 0; c < COLS; c++)
-                {
-                    var lpn = Cell(r, c);
-                    var bg  = Color(lpn);
-                    if (lpn == null)
-                        frontSb.Append("<div class='front-cell front-empty'></div>");
-                    else
-                    {
-                        var border = DarkenHex(bg, 0.7);
-                        frontSb.Append($"<div class='front-cell' style='background:{bg};border-color:{border};'>");
-                        frontSb.Append($"<span class='fc-order'>#{lpn.LoadOrder}</span>");
-                        string itemShort = (lpn.ItemName ?? "").Length > 8 ? (lpn.ItemName ?? "")[..8] + "…" : (lpn.ItemName ?? "");
-                        frontSb.Append($"<span class='fc-name'>{H(itemShort)}</span>");
-                        frontSb.Append("</div>");
-                    }
-                }
-                frontSb.Append("</div>");
-            }
-            frontSb.Append("</div>");
-            frontSb.Append("<div class='front-door-bar'>🚪 NHÌN TỪ CỬA SAU VÀO</div>");
-            frontSb.Append("</div>");
+            // ══════════════════════════════════════════════════════════════════
+            //  COLOR LEGEND
+            // ══════════════════════════════════════════════════════════════════
 
-            // ── SIDE VIEW (elevation from the right) ────────────────────────
-            var sideSb = new StringBuilder();
-            sideSb.Append("<table class='plan-table'>");
-            sideSb.Append("<tr><td class='axis-cell'></td><td class='axis-cell' style='text-align:center;font-size:8px;color:#888;' colspan='1'>Độ sâu hàng</td></tr>");
-            for (int r = 0; r < totalRows; r++)
-            {
-                sideSb.Append("<tr>");
-                string rowLabel = r == 0 ? "CAB" : r == totalRows - 1 ? "CỬA" : $"R{r+1}";
-                sideSb.Append($"<td class='axis-cell'>{rowLabel}</td>");
-                // Side view: show 1 cell wide representing the row (both cols merged as one side slice)
-                var lpn0 = Cell(r, 0);
-                var lpn1 = Cell(r, 1);
-                // Use gradient to represent two pallets side by side
-                string bg0 = Color(lpn0);
-                string bg1 = Color(lpn1);
-                if (lpn0 == null && lpn1 == null)
-                {
-                    sideSb.Append("<td class='plan-cell empty-cell' colspan='1' style='width:90px;'></td>");
-                }
-                else
-                {
-                    string gradBg = lpn1 != null
-                        ? $"linear-gradient(to right, {bg0} 50%, {bg1} 50%)"
-                        : bg0;
-                    sideSb.Append($"<td class='plan-cell' style='background:{gradBg};width:90px;'>");
-                    if (lpn0 != null) sideSb.Append($"<span class='plan-order' style='float:left'>#{lpn0.LoadOrder}</span>");
-                    if (lpn1 != null) sideSb.Append($"<span class='plan-order' style='float:right'>#{lpn1.LoadOrder}</span>");
-                    sideSb.Append("</td>");
-                }
-                sideSb.Append("</tr>");
-            }
-            sideSb.Append("</table>");
-
-            // ── COLOR LEGEND ─────────────────────────────────────────────────
             var legendSb = new StringBuilder();
             legendSb.Append("<div class='legend-wrap'>");
             foreach (var lpn in loadPlan)
             {
-                var bg      = Color(lpn);
-                string zone = lpn.Zone ?? "—";
-                string zoneIcon = zone == "REAR" ? "🔵" : zone == "MID" ? "🩵" : "🟢";
+                var bg   = Color(lpn);
+                string zoneIcon = (lpn.Zone ?? "") == "REAR" ? "🔵" : (lpn.Zone ?? "") == "MID" ? "🩵" : "🟢";
                 legendSb.Append($"<div class='legend-row'>");
                 legendSb.Append($"<div class='legend-swatch' style='background:{bg};'></div>");
                 legendSb.Append($"<div class='legend-info'>");
                 legendSb.Append($"<span class='legend-order'>#{lpn.LoadOrder}</span>");
                 legendSb.Append($"<span class='legend-code'>{H(lpn.LpnCode)}</span>");
                 legendSb.Append($"<span class='legend-item'>{H(lpn.ItemName)} {zoneIcon}</span>");
-                legendSb.Append($"<span class='legend-weight'>{lpn.WeightKg:0.#}kg / {lpn.Cbm:0.##}m³</span>");
-                legendSb.Append($"</div>");
-                legendSb.Append("</div>");
+                legendSb.Append($"<span class='legend-weight'>{lpn.WeightKg:0.#}kg</span>");
+                legendSb.Append("</div></div>");
             }
             legendSb.Append("</div>");
 
-            // ── TIMELINE ─────────────────────────────────────────────────────
-            var tlSb = new StringBuilder();
-            tlSb.Append("<div class='timeline-bar'>");
-            var originAddr = result.Navigation?.Legs?.FirstOrDefault()?.FromAddress ?? "Kho xuất phát";
-            tlSb.Append($"<div class='tl-node origin'><div class='tl-dot'></div><div class='tl-label'><b>Kho</b><br/>{H(originAddr)}</div></div>");
-            if (result.Route?.Stops != null)
+            // ══════════════════════════════════════════════════════════════════
+            //  GOONG NAVIGATION — lộ trình chi tiết
+            // ══════════════════════════════════════════════════════════════════
+
+            var navSb = new StringBuilder();
+            var navInfo = result.Navigation;
+            if (navInfo?.Legs?.Any() == true)
             {
-                foreach (var stop in result.Route.Stops.OrderBy(s => s.Sequence))
+                navSb.Append($"<div class='nav-summary'>");
+                navSb.Append($"<span class='ns-item'>🛣️ Tổng: <b>{navInfo.TotalDistanceKm:F1} km</b></span>");
+                navSb.Append($"<span class='ns-item'>⏱️ ~<b>{navInfo.TotalDurationMinutes} phút</b></span>");
+                navSb.Append($"<span class='ns-item'>📍 <b>{navInfo.Legs.Count}</b> chặng</span>");
+                navSb.Append("</div>");
+
+                foreach (var leg in navInfo.Legs)
                 {
-                    tlSb.Append($"<div class='tl-arrow'>▶</div>");
-                    tlSb.Append($"<div class='tl-node stop'><div class='tl-dot'></div><div class='tl-label'><b>Trạm {stop.Sequence}</b><br/>{H(stop.Address ?? "—")} ({stop.DistanceFromPreviousKm:F1}km)</div></div>");
+                    navSb.Append("<div class='leg-block'>");
+                    navSb.Append($"<div class='leg-header'>");
+                    navSb.Append($"<span class='leg-num'>Chặng {leg.LegIndex}</span>");
+                    navSb.Append($"<span class='leg-route'>{H(leg.FromAddress)} <span class='leg-arrow'>→</span> {H(leg.ToAddress)}</span>");
+                    navSb.Append($"<span class='leg-dist'>{leg.DistanceKm:F1} km / {leg.DurationMinutes} phút</span>");
+                    navSb.Append("</div>");
+
+                    if (leg.Steps?.Any() == true)
+                    {
+                        navSb.Append("<div class='step-list'>");
+                        foreach (var step in leg.Steps)
+                        {
+                            string icon = (step.Maneuver ?? "") switch
+                            {
+                                "turn-left"  or "turn-sharp-left"  => "↰",
+                                "turn-right" or "turn-sharp-right" => "↱",
+                                "roundabout" or "roundabout-left"  => "↻",
+                                "uturn-left" or "uturn-right"      => "↩",
+                                "merge"                            => "⤵",
+                                "ramp-left"                        => "↖",
+                                "ramp-right"                       => "↗",
+                                _                                  => "↑"
+                            };
+                            navSb.Append($"<div class='step'><span class='step-icon'>{icon}</span><span class='step-text'>{H(step.Instruction)}</span><span class='step-dist'>{step.DistanceKm:F2} km</span></div>");
+                        }
+                        navSb.Append("</div>");
+                    }
+                    navSb.Append("</div>");
                 }
             }
-            tlSb.Append("</div>");
+            else
+            {
+                // Fallback: timeline from Route stops
+                navSb.Append("<div class='nav-fallback'>");
+                var originAddr = result.Navigation?.Legs?.FirstOrDefault()?.FromAddress
+                                 ?? result.Route?.Stops?.FirstOrDefault()?.Address
+                                 ?? "Kho xuất phát";
+                navSb.Append($"<div class='tl-node origin'><div class='tl-dot'></div><div class='tl-label'><b>Kho xuất phát</b><br/>{H(originAddr)}</div></div>");
+                if (result.Route?.Stops != null)
+                {
+                    foreach (var stop in result.Route.Stops.OrderBy(s => s.Sequence))
+                    {
+                        navSb.Append($"<div class='tl-arrow'>▶</div>");
+                        navSb.Append($"<div class='tl-node stop'><div class='tl-dot'></div><div class='tl-label'><b>Trạm {stop.Sequence}</b><br/>{H(stop.Address ?? "—")} ({stop.DistanceFromPreviousKm:F1} km)</div></div>");
+                    }
+                }
+                navSb.Append("</div>");
+            }
 
-            // ── DISPATCH TABLE ───────────────────────────────────────────────
+            // ══════════════════════════════════════════════════════════════════
+            //  LIFO TABLE
+            // ══════════════════════════════════════════════════════════════════
+
             var tableSb = new StringBuilder();
             tableSb.Append(@"<table class='data-table'>
 <thead><tr>
@@ -287,103 +326,86 @@ namespace ColdChainX.Infrastructure.Services
             }
             tableSb.Append("</tbody></table>");
 
-            // ── FULL HTML ────────────────────────────────────────────────────
-            sb.Append($@"<!DOCTYPE html>
+            // ══════════════════════════════════════════════════════════════════
+            //  FULL HTML
+            // ══════════════════════════════════════════════════════════════════
+
+            return $@"<!DOCTYPE html>
 <html lang='vi'>
 <head>
 <meta charset='UTF-8'>
 <title>Lệnh Điều Động LIFO — ColdChainX</title>
 <style>
-  @page {{ size: A3 landscape; margin: 12mm 14mm; }}
-  *  {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  @page {{ size: A3 landscape; margin: 10mm 12mm; }}
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
   body {{ font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; background: #ECEFF1; color: #263238; }}
 
   /* ── Header ── */
   .page-header {{
     display: flex; align-items: center; justify-content: space-between;
-    background: #1A237E; color: #fff; padding: 10px 20px; border-radius: 6px 6px 0 0; margin-bottom: 8px;
+    background: linear-gradient(135deg, #1A237E 0%, #283593 100%);
+    color: #fff; padding: 10px 20px; border-radius: 6px; margin-bottom: 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
   }}
-  .brand {{ font-size: 20px; font-weight: 800; letter-spacing: 1.5px; }}
+  .brand {{ font-size: 22px; font-weight: 900; letter-spacing: 2px; }}
   .brand span {{ color: #FF6F00; }}
-  .doc-meta {{ text-align: right; font-size: 10px; opacity: 0.8; line-height: 1.6; }}
-  .doc-title {{ font-size: 13px; font-weight: 600; text-align: center; flex: 1; }}
+  .doc-title {{ font-size: 13px; font-weight: 700; text-align: center; flex: 1; letter-spacing: 0.5px; }}
+  .doc-meta {{ text-align: right; font-size: 10px; opacity: 0.85; line-height: 1.7; }}
 
   /* ── Info Bar ── */
   .info-bar {{ display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 8px; }}
-  .ic {{ background: #fff; border-radius: 5px; padding: 8px 12px; border-left: 3px solid #FF6F00; box-shadow: 0 1px 3px rgba(0,0,0,.1); }}
-  .ic .lbl {{ font-size: 8px; text-transform: uppercase; color: #90A4AE; letter-spacing: .5px; }}
-  .ic .val {{ font-size: 12px; font-weight: 700; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+  .ic {{ background: #fff; border-radius: 6px; padding: 8px 12px; border-left: 4px solid #FF6F00; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }}
+  .ic .lbl {{ font-size: 8px; text-transform: uppercase; color: #90A4AE; letter-spacing: .6px; }}
+  .ic .val {{ font-size: 13px; font-weight: 800; margin-top: 2px; }}
 
   /* ── Section ── */
-  .section {{ background: #fff; border-radius: 6px; padding: 12px 14px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }}
-  .sec-title {{ font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #78909C; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #ECEFF1; display: flex; align-items: center; gap: 6px; }}
-  .sec-title::before {{ content: ''; width: 12px; height: 3px; background: #1A237E; border-radius: 2px; }}
+  .section {{ background: #fff; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }}
+  .sec-title {{ font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #78909C; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #ECEFF1; display: flex; align-items: center; gap: 6px; }}
+  .sec-title::before {{ content: ''; width: 14px; height: 3px; background: #1A237E; border-radius: 2px; flex-shrink: 0; }}
 
-  /* ── 4-view grid ── */
-  .diagram-grid {{
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: auto auto;
-    gap: 8px;
-  }}
-  .view-box {{
-    background: #F5F7FA; border: 1px solid #CFD8DC; border-radius: 6px;
-    padding: 8px; display: flex; flex-direction: column;
-  }}
-  .view-title {{
-    font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: .8px;
-    color: #546E7A; margin-bottom: 6px; padding-bottom: 5px; border-bottom: 1px dashed #CFD8DC;
-    display: flex; align-items: center; gap: 4px;
-  }}
-  .view-body {{ flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; }}
+  /* ── Two-column layout ── */
+  .two-col {{ display: grid; grid-template-columns: 1fr 1.6fr; gap: 8px; margin-bottom: 8px; }}
 
-  /* ── Plan table (top view + side view) ── */
+  /* ── Floor plan table ── */
   .plan-table {{ border-collapse: collapse; }}
   .plan-table td {{ padding: 0; }}
-  .axis-cell {{
-    font-size: 8px; font-weight: 700; color: #78909C; text-align: center;
-    padding: 2px 4px; min-width: 26px;
-  }}
-  .plan-cell {{
-    width: 52px; height: 42px; border: 2px solid #fff; text-align: center; vertical-align: middle;
-    font-size: 8px; font-weight: 700; color: #fff; position: relative; cursor: default;
-  }}
+  .axis-cell {{ font-size: 8px; font-weight: 700; color: #78909C; text-align: center; padding: 2px 5px; min-width: 28px; }}
+  .plan-cell {{ width: 54px; height: 44px; border: 2.5px solid #fff; text-align: center; vertical-align: middle; font-size: 8px; font-weight: 700; color: #fff; }}
   .empty-cell {{ background: #ECEFF1 !important; border: 2px dashed #CFD8DC !important; }}
-  .plan-order {{ font-size: 11px; font-weight: 800; display: block; line-height: 1.2; text-shadow: 0 1px 2px rgba(0,0,0,.4); }}
+  .plan-order {{ font-size: 12px; font-weight: 800; display: block; line-height: 1.2; text-shadow: 0 1px 3px rgba(0,0,0,.45); }}
   .plan-code  {{ font-size: 6.5px; opacity: .85; }}
-
-  /* ── Front cross-section ── */
-  .front-section {{ display: flex; flex-direction: column; align-items: center; gap: 3px; width: 100%; }}
-  .front-container-outline {{ border: 2.5px solid #455A64; background: #ECEFF1; padding: 6px; border-radius: 3px; display: flex; flex-direction: column; gap: 3px; width: 100%; }}
-  .front-row-depth {{ display: flex; gap: 4px; justify-content: center; }}
-  .front-cell {{
-    flex: 1; min-width: 55px; height: 48px; border: 2px solid; border-radius: 3px;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    font-size: 8px; color: #fff; font-weight: 700;
-  }}
-  .front-empty {{ background: #E0E0E0 !important; border: 2px dashed #BDBDBD !important; color: #aaa; }}
-  .fc-order {{ font-size: 12px; font-weight: 800; text-shadow: 0 1px 2px rgba(0,0,0,.5); line-height: 1.1; }}
-  .fc-name  {{ font-size: 7px; opacity: .9; max-width: 54px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }}
-  .front-door-bar {{ background: #B71C1C; color: #fff; padding: 3px 12px; border-radius: 3px; font-size: 8px; font-weight: 700; letter-spacing: .5px; }}
 
   /* ── Legend ── */
   .legend-wrap {{ display: flex; flex-direction: column; gap: 4px; }}
   .legend-row {{ display: flex; align-items: center; gap: 6px; padding: 3px 0; border-bottom: 1px solid #F5F5F5; }}
-  .legend-swatch {{ width: 22px; height: 22px; border-radius: 4px; flex-shrink: 0; border: 1px solid rgba(0,0,0,.15); }}
+  .legend-swatch {{ width: 20px; height: 20px; border-radius: 4px; flex-shrink: 0; border: 1px solid rgba(0,0,0,.15); }}
   .legend-info {{ display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }}
   .legend-order {{ font-size: 11px; font-weight: 800; min-width: 22px; }}
-  .legend-code  {{ font-size: 9px; color: #546E7A; font-family: monospace; }}
+  .legend-code  {{ font-size: 8px; color: #546E7A; font-family: monospace; }}
   .legend-item  {{ font-size: 10px; font-weight: 600; flex: 1; }}
-  .legend-weight{{ font-size: 9px; color: #78909C; }}
+  .legend-weight{{ font-size: 9px; color: #90A4AE; }}
 
-  /* ── Timeline ── */
-  .timeline-bar {{ display: flex; align-items: flex-start; flex-wrap: wrap; gap: 4px; padding: 4px 0; }}
+  /* ── Goong Navigation ── */
+  .nav-summary {{ display: flex; gap: 14px; padding: 6px 10px; background: #E8F5E9; border-radius: 5px; margin-bottom: 8px; border-left: 4px solid #43A047; }}
+  .ns-item {{ font-size: 10px; color: #2E7D32; }}
+  .leg-block {{ margin-bottom: 8px; border: 1px solid #E8EAF6; border-radius: 5px; overflow: hidden; }}
+  .leg-header {{ display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; padding: 6px 10px; background: #E8EAF6; }}
+  .leg-num {{ font-size: 9px; font-weight: 800; color: #1A237E; background: #C5CAE9; padding: 2px 7px; border-radius: 10px; flex-shrink: 0; }}
+  .leg-route {{ font-size: 10px; color: #263238; font-weight: 600; flex: 1; }}
+  .leg-arrow {{ color: #3F51B5; font-weight: 800; margin: 0 2px; }}
+  .leg-dist {{ font-size: 9px; color: #546E7A; flex-shrink: 0; }}
+  .step-list {{ padding: 4px 8px; display: flex; flex-direction: column; gap: 2px; }}
+  .step {{ display: flex; align-items: baseline; gap: 5px; padding: 2px 0; border-bottom: 1px solid #F5F5F5; font-size: 9px; }}
+  .step-icon {{ font-size: 11px; flex-shrink: 0; width: 14px; text-align: center; color: #5C6BC0; }}
+  .step-text {{ flex: 1; color: #37474F; line-height: 1.4; }}
+  .step-dist {{ color: #90A4AE; font-size: 8px; flex-shrink: 0; }}
+  .nav-fallback {{ display: flex; align-items: flex-start; flex-wrap: wrap; gap: 4px; padding: 4px 0; }}
   .tl-node {{ display: flex; align-items: flex-start; gap: 5px; }}
   .tl-dot  {{ width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }}
   .tl-node.origin .tl-dot {{ background: #E53935; }}
   .tl-node.stop   .tl-dot {{ background: #1A237E; }}
-  .tl-label {{ font-size: 9px; color: #546E7A; line-height: 1.4; max-width: 130px; }}
-  .tl-arrow {{ color: #90A4AE; font-size: 11px; margin-top: 1px; }}
+  .tl-label {{ font-size: 9px; color: #546E7A; line-height: 1.4; max-width: 140px; }}
+  .tl-arrow {{ color: #90A4AE; font-size: 11px; margin-top: 2px; }}
 
   /* ── Data Table ── */
   .data-table {{ width: 100%; border-collapse: collapse; font-size: 10px; }}
@@ -395,7 +417,7 @@ namespace ColdChainX.Infrastructure.Services
   .badge {{ display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 8px; font-weight: 700; }}
 
   /* ── Footer ── */
-  .page-footer {{ text-align: center; font-size: 9px; color: #90A4AE; margin-top: 8px; padding: 6px; }}
+  .page-footer {{ text-align: center; font-size: 9px; color: #90A4AE; padding: 5px; margin-top: 4px; }}
 </style>
 </head>
 <body>
@@ -404,8 +426,8 @@ namespace ColdChainX.Infrastructure.Services
   <div class='brand'>Cold<span>Chain</span>X</div>
   <div class='doc-title'>LỆNH ĐIỀU ĐỘNG &amp; SƠ ĐỒ XẾP HÀNG LIFO</div>
   <div class='doc-meta'>
-    Trip ID: {result.TripId}<br/>
-    Ngày lập: {DateTime.Now:dd/MM/yyyy HH:mm}
+    Trip: {result.TripId}<br/>
+    Ngày: {DateTime.Now:dd/MM/yyyy HH:mm}
   </div>
 </div>
 
@@ -418,57 +440,29 @@ namespace ColdChainX.Infrastructure.Services
 </div>
 
 <div class='section'>
-  <div class='sec-title'>Sơ đồ Container Nhiều Góc Nhìn</div>
-  <div class='diagram-grid'>
-
-    <!-- View 1: Isometric 3D -->
-    <div class='view-box' style='grid-row: 1 / 3;'>
-      <div class='view-title'>📦 Mặt xéo 3D — Isometric (nhìn từ góc phải trên)</div>
-      <div class='view-body'>
-        {isoSvg}
-      </div>
-    </div>
-
-    <!-- View 2: Front Cross-Section -->
-    <div class='view-box'>
-      <div class='view-title'>🔲 Mặt cắt trước — Nhìn từ cửa sau vào</div>
-      <div class='view-body'>
-        {frontSb}
-      </div>
-    </div>
-
-    <!-- View 3: Top view + Side view side by side -->
-    <div class='view-box' style='display:grid; grid-template-columns: 1fr 1fr; gap: 8px; padding:8px;'>
-      <div>
-        <div class='view-title'>🗺️ Mặt trên — Sơ đồ mặt bằng</div>
-        <div class='view-body' style='justify-content:flex-start;'>
-          {topSb}
-        </div>
-      </div>
-      <div>
-        <div class='view-title'>📐 Mặt bên — Nhìn từ bên phải</div>
-        <div class='view-body' style='justify-content:flex-start;'>
-          {sideSb}
-        </div>
-      </div>
-    </div>
-
-  </div>
+  <div class='sec-title'>🚛 Sơ đồ xếp hàng — Nhìn từ bên hông xe (LIFO)</div>
+  {truckSvg}
 </div>
 
-<div class='section' style='display:grid; grid-template-columns: 2fr 1fr; gap: 12px;'>
+<div class='two-col'>
   <div>
-    <div class='sec-title'>Lộ trình chuyến</div>
-    {tlSb}
+    <div class='section'>
+      <div class='sec-title'>🗺️ Mặt bằng container (nhìn từ trên)</div>
+      {topSb}
+    </div>
+    <div class='section'>
+      <div class='sec-title'>🎨 Chú thích màu lô hàng</div>
+      {legendSb}
+    </div>
   </div>
-  <div>
-    <div class='sec-title'>Chú thích màu lô hàng</div>
-    {legendSb}
+  <div class='section'>
+    <div class='sec-title'>📍 Lộ trình chi tiết (Goong Maps)</div>
+    {navSb}
   </div>
 </div>
 
 <div class='section'>
-  <div class='sec-title'>Bảng lệnh bốc xếp — LIFO Load Plan</div>
+  <div class='sec-title'>📋 Bảng lệnh bốc xếp — LIFO Load Plan</div>
   {tableSb}
 </div>
 
@@ -477,9 +471,7 @@ namespace ColdChainX.Infrastructure.Services
 </div>
 
 </body>
-</html>");
-
-            return sb.ToString();
+</html>";
         }
     }
 }

@@ -930,6 +930,15 @@ public class DispatchService : IDispatchService
                 "Chỉ có thể bắt đầu picking khi trạng thái là PLANNED.");
 
         trip.Status = "PICKING";
+
+        // Chuyển tất cả LPN của chuyến từ ALLOCATED → LOADING
+        var allocatedLpns = await _context.Lpns
+            .Where(l => l.TripId == tripId && l.State == LpnState.ALLOCATED)
+            .ToListAsync();
+
+        foreach (var lpn in allocatedLpns)
+            lpn.State = LpnState.LOADING;
+
         var lpnCount = await _context.Lpns.CountAsync(l => l.TripId == tripId);
 
         await _context.SaveChangesAsync();
