@@ -243,6 +243,34 @@ public class ManualDispatchResult
 /// <summary>Kết quả bắt đầu picking — trip chuyển sang PICKING.</summary>
 public record StartPickingResult(Guid TripId, string Status, int LpnCount);
 
+/// <summary>
+/// Kết quả hủy chuyến (cancel/un-plan). Đưa toàn bộ trạng thái về như trước khi manual-dispatch:
+/// LPN → IN_STOCK (về kho), đơn hàng → IN_STOCK, xe/tài xế → ACTIVE, seal → CANCELLED.
+/// </summary>
+public class CancelTripResult
+{
+    public Guid TripId { get; set; }
+    public string PreviousStatus { get; set; } = null!;
+    public string NewStatus { get; set; } = "CANCELLED";
+
+    /// <summary>Số LPN đã được đưa về IN_STOCK (trở lại kho).</summary>
+    public int ResetLpnCount { get; set; }
+
+    /// <summary>Số đơn hàng đã được đưa về IN_STOCK và gỡ khỏi chuyến.</summary>
+    public int ResetOrderCount { get; set; }
+
+    /// <summary>Số seal đã bị hủy.</summary>
+    public int CancelledSealCount { get; set; }
+
+    /// <summary>Số chứng từ (E-Waybill) đã bị vô hiệu.</summary>
+    public int VoidedDocumentCount { get; set; }
+
+    public string? VehiclePlate { get; set; }
+    public string? DriverName { get; set; }
+    public DateTime CancelledAt { get; set; }
+    public string Message { get; set; } = null!;
+}
+
 /// <summary>Thông tin tài xế được chọn cho chuyến.</summary>
 public class DriverInfo
 {

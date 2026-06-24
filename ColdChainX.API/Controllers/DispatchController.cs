@@ -412,6 +412,54 @@ public class DispatchController : ControllerBase
     }
 
     // ═══════════════════════════════════════════════════════════════════════
+    //  API 2.1: CANCEL TRIP — Hủy chuyến đã ghép, reset toàn bộ về free
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Hủy một chuyến đã ghép (planning) — kể cả đã bốc hàng / xếp hàng / kẹp chì.
+    /// </summary>
+    /// <remarks>
+    /// ĐIỀU KIỆN: không được có LPN nào ở trạng thái SHIPPING (hàng đã xuất phát).
+    ///
+    /// Sau khi hủy, toàn bộ trở về như trước khi gọi manual-dispatch:
+    ///   - LPN.State → IN_STOCK (hàng trở lại kho), gỡ TripId
+    ///   - Đơn hàng → IN_STOCK, gỡ MasterTripId
+    ///   - Seal → CANCELLED, gỡ SealNumber
+    ///   - E-Waybill (TransportDocument) → CANCELLED
+    ///   - Vehicle.Status / Driver.Status → ACTIVE (giải phóng)
+    ///   - Trip.Status → CANCELLED
+    ///
+    /// Xe sau khi hủy có thể được ghép chuyến mới qua POST /api/Dispatch/manual-dispatch.
+    /// </remarks>
+    /// <param name="tripId">ID chuyến cần hủy</param>
+    [HttpPost("trip/{tripId}/cancel")]
+    [ProducesResponseType(typeof(CancelTripResult), 200)]
+    public async Task<IActionResult> CancelTrip(string tripId)
+    {
+        var rawId = ExtractGuid(tripId);
+        if (!Guid.TryParse(rawId, out var parsedTripId))
+            return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
+
+        try
+        {
+            var result = await _dispatchService.CancelTripAsync(parsedTripId);
+            return Ok(new { Success = true, Data = result });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { Success = false, Error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Success = false, Error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { Success = false, Error = "Lỗi hệ thống khi hủy chuyến.", Detail = ex.Message });
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
     //  API 3: IOT CHECK — Kiểm tra tín hiệu IoT xe
     // ═══════════════════════════════════════════════════════════════════════
 
