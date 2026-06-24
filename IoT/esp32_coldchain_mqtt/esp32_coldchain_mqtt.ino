@@ -12,6 +12,7 @@
 #define MCU_SIM_RX_PIN          16
 #define MCU_SIM_BAUDRATE        115200
 #define DS18B20_PIN             13 
+#define SIREN_PIN               25
 
 // ===== CẤU HÌNH NHÀ MẠNG 4G VIETTEL =====
 const char apn[]      = "v-internet"; 
@@ -28,6 +29,7 @@ const char* MQTT_PASSWORD = "123456";
 const char* DEVICE_ID = "ESP32-COLDCHAIN-001";
 const uint32_t TELEMETRY_INTERVAL_MS = 15000; // 15 giây gửi nhiệt độ 1 lần
 const uint32_t GPS_INTERVAL_MS = 120000;      // 2 phút (120s) lấy GPS 1 lần
+const uint32_t SIREN_DURATION_MS = 10000;     // 10 giây bật còi khi có cảnh báo
 const uint8_t MQTT_PUBLISH_QOS = 1;
 
 // Khởi tạo các đối tượng
@@ -43,6 +45,8 @@ uint32_t lastTelemetryMs = 0;
 uint32_t lastGpsMs = 0;
 uint16_t nextPacketId = 1;
 bool doorOpen = false;
+bool sirenActive = false;
+uint32_t sirenUntilMs = 0;
 
 // Biến lưu GPS hiện tại
 float currentLat = 0.0;
@@ -54,12 +58,19 @@ void connectMqtt();
 void publishTelemetry();
 void updateLBSLocation();
 String getIsoTimestamp();
+void handleMqttMessage(char* topic, byte* payload, unsigned int length);
+void handleCommandPayload(const uint8_t* payload, size_t length);
+void activateSiren(uint32_t durationMs);
+void updateSiren();
 bool publishMqttQos1(const char* topic, const uint8_t* payload, size_t payloadLength);
 bool waitForPubAck(uint16_t packetId, uint32_t timeoutMs);
 bool readMqttRemainingLength(uint32_t& remainingLength, uint32_t timeoutMs);
 bool readMqttByte(uint8_t& value, uint32_t timeoutMs);
+bool readMqttBytes(uint8_t* buffer, size_t length, uint32_t timeoutMs);
 bool writeMqttRemainingLength(uint32_t remainingLength);
 bool writeAll(const uint8_t* data, size_t length);
+bool processIncomingPublishPacket(uint8_t fixedHeader, uint32_t remainingLength, uint32_t timeoutMs);
+bool sendPubAck(uint16_t packetId);
 
 void setup() {
   Serial.begin(115200);
@@ -69,6 +80,8 @@ void setup() {
   
   // Khởi động cảm biến nhiệt độ
   sensors.begin();
+  pinMode(SIREN_PIN, OUTPUT);
+  digitalWrite(SIREN_PIN, LOW);
 
   // Khởi động giao tiếp với Module SIM
   SerialAT.begin(MCU_SIM_BAUDRATE, SERIAL_8N1, MCU_SIM_RX_PIN, MCU_SIM_TX_PIN);
@@ -82,6 +95,7 @@ void setup() {
 
   // Cấu hình MQTT
   mqttClient.setServer(MQTT_HOST, MQTT_PORT);
+  mqttClient.setCallback(handleMqttMessage);
   mqttClient.setKeepAlive(90);
   mqttClient.setSocketTimeout(10);
   
@@ -101,6 +115,7 @@ void loop() {
   }
 
   mqttClient.loop();
+  updateSiren();
   const uint32_t now = millis();
 
   // 3. Cập nhật tọa độ LBS mỗi 2 phút
@@ -146,12 +161,70 @@ void connectMqtt() {
 
     if (connected) {
       Serial.println(" THÀNH CÔNG!");
+      char commandTopic[96];
+      snprintf(commandTopic, sizeof(commandTopic), "commands/coldchain/%s/commands", DEVICE_ID);
+      if (mqttClient.subscribe(commandTopic, MQTT_PUBLISH_QOS)) {
+        Serial.print("Đã subscribe topic lệnh: ");
+        Serial.println(commandTopic);
+      } else {
+        Serial.println("Lỗi: Không subscribe được topic lệnh.");
+      }
     } else {
       Serial.print(" Lỗi RC=");
       Serial.print(mqttClient.state());
       Serial.println(". Thử lại sau 3s...");
       delay(3000);
     }
+  }
+}
+
+void handleMqttMessage(char* topic, byte* payload, unsigned int length) {
+  Serial.print("Nhận MQTT command | Topic: ");
+  Serial.print(topic);
+  Serial.print(" | Payload: ");
+  for (unsigned int i = 0; i < length; i++) {
+    Serial.print(static_cast<char>(payload[i]));
+  }
+  Serial.println();
+
+  handleCommandPayload(reinterpret_cast<const uint8_t*>(payload), length);
+}
+
+void handleCommandPayload(const uint8_t* payload, size_t length) {
+  StaticJsonDocument<256> doc;
+  DeserializationError error = deserializeJson(doc, payload, length);
+  if (error) {
+    Serial.print("Lỗi parse command JSON: ");
+    Serial.println(error.c_str());
+    return;
+  }
+
+  const char* command = doc["Command"] | "";
+  const char* targetDevice = doc["DeviceCode"] | DEVICE_ID;
+  if (strcmp(targetDevice, DEVICE_ID) != 0) {
+    return;
+  }
+
+  if (strcmp(command, "ACTIVATE_SIREN") == 0) {
+    activateSiren(SIREN_DURATION_MS);
+  } else {
+    Serial.print("Command không hỗ trợ: ");
+    Serial.println(command);
+  }
+}
+
+void activateSiren(uint32_t durationMs) {
+  sirenActive = true;
+  sirenUntilMs = millis() + durationMs;
+  digitalWrite(SIREN_PIN, HIGH);
+  Serial.println("Đã bật còi cảnh báo.");
+}
+
+void updateSiren() {
+  if (sirenActive && static_cast<int32_t>(millis() - sirenUntilMs) >= 0) {
+    sirenActive = false;
+    digitalWrite(SIREN_PIN, LOW);
+    Serial.println("Đã tắt còi cảnh báo.");
   }
 }
 
@@ -271,12 +344,66 @@ bool waitForPubAck(uint16_t packetId, uint32_t timeoutMs) {
       if (ackPacketId == packetId) return true;
       continue;
     }
+
+    if ((fixedHeader & 0xF0) == 0x30) {
+      if (!processIncomingPublishPacket(fixedHeader, remainingLength, 1000)) return false;
+      continue;
+    }
+
     for (uint32_t i = 0; i < remainingLength; i++) {
       uint8_t ignored = 0;
       if (!readMqttByte(ignored, 1000)) return false;
     }
   }
   return false;
+}
+
+bool processIncomingPublishPacket(uint8_t fixedHeader, uint32_t remainingLength, uint32_t timeoutMs) {
+  if (remainingLength < 2) return false;
+
+  uint8_t topicLengthBytes[2] = { 0, 0 };
+  if (!readMqttBytes(topicLengthBytes, sizeof(topicLengthBytes), timeoutMs)) return false;
+
+  uint16_t topicLength = (static_cast<uint16_t>(topicLengthBytes[0]) << 8) | topicLengthBytes[1];
+  if (topicLength > remainingLength - 2) return false;
+
+  char topic[128];
+  const bool topicFits = topicLength < sizeof(topic);
+  for (uint16_t i = 0; i < topicLength; i++) {
+    uint8_t value = 0;
+    if (!readMqttByte(value, timeoutMs)) return false;
+    if (topicFits) topic[i] = static_cast<char>(value);
+  }
+  if (topicFits) topic[topicLength] = '\0';
+
+  uint32_t consumed = 2 + topicLength;
+  const uint8_t qos = (fixedHeader & 0x06) >> 1;
+  uint16_t incomingPacketId = 0;
+  if (qos > 0) {
+    uint8_t packetIdBytes[2] = { 0, 0 };
+    if (!readMqttBytes(packetIdBytes, sizeof(packetIdBytes), timeoutMs)) return false;
+    incomingPacketId = (static_cast<uint16_t>(packetIdBytes[0]) << 8) | packetIdBytes[1];
+    consumed += 2;
+  }
+  if (consumed > remainingLength) return false;
+
+  uint32_t payloadLength = remainingLength - consumed;
+  uint8_t payload[256];
+  const bool payloadFits = payloadLength <= sizeof(payload);
+  for (uint32_t i = 0; i < payloadLength; i++) {
+    uint8_t value = 0;
+    if (!readMqttByte(value, timeoutMs)) return false;
+    if (payloadFits) payload[i] = value;
+  }
+
+  if (qos == 1 && incomingPacketId != 0 && !sendPubAck(incomingPacketId)) {
+    return false;
+  }
+
+  if (topicFits && payloadFits) {
+    handleCommandPayload(payload, payloadLength);
+  }
+  return true;
 }
 
 bool readMqttRemainingLength(uint32_t& remainingLength, uint32_t timeoutMs) {
@@ -307,6 +434,13 @@ bool readMqttByte(uint8_t& value, uint32_t timeoutMs) {
   return false;
 }
 
+bool readMqttBytes(uint8_t* buffer, size_t length, uint32_t timeoutMs) {
+  for (size_t i = 0; i < length; i++) {
+    if (!readMqttByte(buffer[i], timeoutMs)) return false;
+  }
+  return true;
+}
+
 bool writeMqttRemainingLength(uint32_t remainingLength) {
   do {
     uint8_t encodedByte = remainingLength % 128;
@@ -319,4 +453,14 @@ bool writeMqttRemainingLength(uint32_t remainingLength) {
 
 bool writeAll(const uint8_t* data, size_t length) {
   return gsmClient.write(data, length) == length;
+}
+
+bool sendPubAck(uint16_t packetId) {
+  const uint8_t pubAck[4] = {
+    0x40,
+    0x02,
+    static_cast<uint8_t>((packetId >> 8) & 0xFF),
+    static_cast<uint8_t>(packetId & 0xFF)
+  };
+  return writeAll(pubAck, sizeof(pubAck));
 }
