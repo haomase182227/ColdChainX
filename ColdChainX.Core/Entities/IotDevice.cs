@@ -7,6 +7,8 @@ public partial class IotDevice
 {
     public Guid DeviceId { get; set; }
 
+    public string? DeviceCode { get; set; }
+
     public Guid? VehicleId { get; set; }
 
     public int? BatteryLevel { get; set; }
