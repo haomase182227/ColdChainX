@@ -267,6 +267,24 @@ public class DispatchController : ControllerBase
     }
 
     // ═══════════════════════════════════════════════════════════════════════
+    //  API 1.3: LẤY LẠI LINK GIẤY ĐI ĐƯỜNG (E-WAYBILL) THEO TRIP ID
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [HttpGet("trip/{tripId}/waybill-url")]
+    [ProducesResponseType(typeof(object), 200)]
+    [ProducesResponseType(typeof(object), 404)]
+    public IActionResult GetWaybillUrl(string tripId)
+    {
+        var rawId = ExtractGuid(tripId);
+        if (!Guid.TryParse(rawId, out var id))
+            return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
+
+        // Giấy đi đường lưu với prefix "waybill_" (tách biệt hoàn toàn với sơ đồ LIFO "lifo_")
+        var url = _fileService.GetSignedUrl($"coldchainx/waybill_{id}");
+        return Ok(new { Success = true, WaybillPdfUrl = url });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
     //  API 1.2: LẤY LẠI BẢN ĐỒ DẪN ĐƯỜNG (GOONG) THEO TRIP ID
     // ═══════════════════════════════════════════════════════════════════════
 
