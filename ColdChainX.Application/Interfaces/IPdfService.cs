@@ -6,6 +6,10 @@ namespace ColdChainX.Application.Interfaces
         Task<string> SaveQuotationPdfAsync(string htmlContent, string quoteNumber);
         Task<string> SaveWarehouseReceiptPdfAsync(string htmlContent, string receiptCode);
         Task<string> SaveWaybillPdfAsync(string htmlContent, string tripId);
+
+        /// <summary>Lưu PDF Sơ đồ gộp chuyến / LIFO (prefix "lifo_") — KHÔNG trùng tên với giấy đi đường.</summary>
+        Task<string> SaveLifoMapPdfAsync(string htmlContent, string tripId);
+
         Task<string> SaveLoadPlanPdfAsync(string htmlContent, string tripId);
         Task<string> SaveInvoicePdfAsync(string htmlContent, string invoiceCode);
         Task<string> SaveContractAppendixPdfAsync(string htmlContent, string appendixNumber);

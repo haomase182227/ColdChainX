@@ -650,6 +650,40 @@ public class DispatchService : IDispatchService
 
     private static double ToRad(double deg) => deg * Math.PI / 180.0;
 
+    /// <summary>
+    /// Decode encoded polyline (thuật toán Google/Goong) → danh sách toạ độ lat/lng.
+    /// Cho phép FE vẽ thẳng đường đi lên Goong Map mà không cần thư viện decode.
+    /// </summary>
+    private static List<RoutePathPoint> DecodePolyline(string? encoded)
+    {
+        var path = new List<RoutePathPoint>();
+        if (string.IsNullOrEmpty(encoded)) return path;
+
+        int index = 0, len = encoded.Length;
+        int lat = 0, lng = 0;
+
+        while (index < len)
+        {
+            int b, shift = 0, result = 0;
+            do { b = encoded[index++] - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+            var dlat = (result & 1) != 0 ? ~(result >> 1) : (result >> 1);
+            lat += dlat;
+
+            shift = 0; result = 0;
+            do { b = encoded[index++] - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+            var dlng = (result & 1) != 0 ? ~(result >> 1) : (result >> 1);
+            lng += dlng;
+
+            path.Add(new RoutePathPoint
+            {
+                Lat = lat / 100000m,
+                Lng = lng / 100000m
+            });
+        }
+
+        return path;
+    }
+
     // ── Internal result types ────────────────────────────────────────────────
 
     private class RouteCalculationResult
@@ -883,6 +917,63 @@ public class DispatchService : IDispatchService
             Zone = li.Zone
         }).OrderBy(d => d.LoadOrder).ToList();
 
+        // 10b. Build RouteGuidance — gói sẵn cho FE vẽ Goong Map (marker + polyline + turn-by-turn)
+        var guidanceWaypoints = new List<RouteWaypoint>
+        {
+            new()
+            {
+                Sequence = 0,
+                Type     = "ORIGIN",
+                Lat      = originLocation.Latitude,
+                Lng      = originLocation.Longitude,
+                Address  = originLocation.Address,
+                LpnCount = 0
+            }
+        };
+        foreach (var s in routeResult.StopSequence)
+        {
+            var isLast = s.Sequence == routeResult.StopSequence.Count;
+            guidanceWaypoints.Add(new RouteWaypoint
+            {
+                Sequence = s.Sequence,
+                Type     = isLast ? "DESTINATION" : "STOP",
+                Lat      = s.Latitude,
+                Lng      = s.Longitude,
+                Address  = s.Address,
+                LpnCount = lpns.Count(l => l.Order?.DestLocation == s.LocationId)
+            });
+        }
+
+        var flatSteps = new List<NavigationStep>();
+        var stepNo = 1;
+        foreach (var leg in directionsResult.Legs)
+            foreach (var st in leg.Steps)
+                flatSteps.Add(new NavigationStep
+                {
+                    StepIndex       = stepNo++,
+                    Instruction     = st.Instruction,
+                    DistanceKm      = st.DistanceKm,
+                    DurationSeconds = st.DurationSeconds,
+                    Maneuver        = st.Maneuver
+                });
+
+        var lastStop = routeResult.StopSequence.Last();
+        var mapRoute = new RouteGuidance
+        {
+            OriginLat          = originLocation.Latitude,
+            OriginLng          = originLocation.Longitude,
+            OriginAddress      = originLocation.Address,
+            DestinationLat     = lastStop.Latitude,
+            DestinationLng     = lastStop.Longitude,
+            DestinationAddress = lastStop.Address,
+            TotalDistanceKm    = directionsResult.TotalDistanceKm,
+            TotalDurationMinutes = directionsResult.TotalDurationSeconds / 60,
+            OverviewPolyline   = directionsResult.OverviewPolyline,
+            Waypoints          = guidanceWaypoints,
+            Path               = DecodePolyline(directionsResult.OverviewPolyline),
+            Steps              = flatSteps
+        };
+
         var daysToExpiry = activeLicense.ExpiryDate.DayNumber - today.DayNumber;
         var licenseStatus = daysToExpiry <= 30 ? "EXPIRING_SOON" : "VALID";
 
@@ -893,6 +984,7 @@ public class DispatchService : IDispatchService
             Driver = new DriverInfo { DriverId = vehicle.Driver.DriverId, FullName = vehicle.Driver.FullName, PhoneNumber = vehicle.Driver.PhoneNumber, IdentityNumber = vehicle.Driver.IdentityNumber, LicenseClass = activeLicense.LicenseClass, LicenseExpiry = activeLicense.ExpiryDate, LicenseStatus = licenseStatus },
             SelectedLpns = lpns.Select(l => new LpnSummary { LpnId = l.LpnId, LpnCode = l.LpnCode, OrderId = l.OrderId, OrderTrackingCode = l.Order?.TrackingCode ?? string.Empty, ItemName = l.Order?.ItemName ?? string.Empty, Quantity = l.Quantity, WeightKg = l.ActualWeightKg, Cbm = l.ActualCbm, TempCondition = l.Order?.TempCondition ?? "AMBIENT" }).ToList(),
             Route = routeInfo,
+            MapRoute = mapRoute,
             Navigation = new NavigationInfo { TotalDistanceKm = directionsResult.TotalDistanceKm, TotalDurationMinutes = directionsResult.TotalDurationSeconds / 60, GoongRouteOverview = directionsResult.OverviewPolyline ?? "", Legs = directionsResult.Legs.Select((leg, idx) => new NavigationLeg { LegIndex = idx + 1, FromAddress = leg.StartAddress ?? "N/A", ToAddress = leg.EndAddress ?? "N/A", DistanceKm = leg.DistanceKm, DurationMinutes = leg.DurationSeconds / 60, Steps = leg.Steps.Select((step, sIdx) => new NavigationStep { StepIndex = sIdx + 1, Instruction = step.Instruction, DistanceKm = step.DistanceKm, DurationSeconds = step.DurationSeconds, Maneuver = step.Maneuver }).ToList() }).ToList() },
             LoadPlan = loadPlan,
             DispatchInstructions = dispatchInstructions,

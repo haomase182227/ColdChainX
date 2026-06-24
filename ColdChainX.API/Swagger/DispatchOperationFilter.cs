@@ -88,9 +88,15 @@ var rawOrders = (from r in db.WarehouseReceipts
                     catch (Exception) { /* Silence */ }
                 }
 
+                // Một số endpoint cần NHẬP TAY tripId (không dùng dropdown) — FE lấy id từ
+                // GET trips/can-start-picking hoặc GET trips/ready-to-seal rồi nhập vào.
+                var freeTextTripId =
+                    path.Contains("start-picking", StringComparison.OrdinalIgnoreCase) ||
+                    path.Contains("seal-and-dispatch", StringComparison.OrdinalIgnoreCase);
+
                 // Path parameter dropdowns
                 var tripIdParam = operation.Parameters?.FirstOrDefault(p => string.Equals(p.Name, "tripId", StringComparison.OrdinalIgnoreCase));
-                if (tripIdParam != null)
+                if (tripIdParam != null && !freeTextTripId)
                 {
                     try
                     {

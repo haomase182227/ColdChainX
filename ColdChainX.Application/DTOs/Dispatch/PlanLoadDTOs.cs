@@ -213,6 +213,12 @@ public class ManualDispatchResult
     /// <summary>Hướng dẫn đường đi từ Goong Directions API.</summary>
     public NavigationInfo Navigation { get; set; } = null!;
 
+    /// <summary>
+    /// Hướng dẫn lộ trình đầy đủ, đóng gói sẵn cho FE vẽ trực tiếp lên Goong Map:
+    /// điểm xuất phát, các waypoint (marker), polyline encode + decode, và turn-by-turn.
+    /// </summary>
+    public RouteGuidance MapRoute { get; set; } = null!;
+
     /// <summary>Kế hoạch xếp hàng LIFO.</summary>
     public List<LoadInstruction> LoadPlan { get; set; } = new();
 
@@ -281,6 +287,61 @@ public class NavigationStep
     public decimal DistanceKm { get; set; }
     public int DurationSeconds { get; set; }
     public string? Maneuver { get; set; } // "turn-right", "turn-left", "straight", etc.
+}
+
+// ─────────────────────────────────────────────
+//  ROUTE GUIDANCE — gói sẵn cho FE vẽ Goong Map
+// ─────────────────────────────────────────────
+
+/// <summary>
+/// Hướng dẫn lộ trình hoàn chỉnh để FE vẽ trực tiếp lên Goong Map mà không cần gọi lại API.
+/// Bao gồm: điểm đầu/cuối, danh sách waypoint (marker), polyline (cả dạng encode để Goong render
+/// và dạng decode lat/lng để vẽ tay), tổng quãng đường/thời gian và turn-by-turn.
+/// </summary>
+public class RouteGuidance
+{
+    public decimal OriginLat { get; set; }
+    public decimal OriginLng { get; set; }
+    public string OriginAddress { get; set; } = null!;
+
+    public decimal DestinationLat { get; set; }
+    public decimal DestinationLng { get; set; }
+    public string DestinationAddress { get; set; } = null!;
+
+    public decimal TotalDistanceKm { get; set; }
+    public int TotalDurationMinutes { get; set; }
+
+    /// <summary>Polyline encode (thuật toán Google/Goong) — dùng cho Goong Map render trực tiếp.</summary>
+    public string? OverviewPolyline { get; set; }
+
+    /// <summary>Các điểm marker theo đúng thứ tự lộ trình (origin → stops → destination).</summary>
+    public List<RouteWaypoint> Waypoints { get; set; } = new();
+
+    /// <summary>Polyline đã decode thành danh sách toạ độ — FE vẽ đường đi không cần thư viện decode.</summary>
+    public List<RoutePathPoint> Path { get; set; } = new();
+
+    /// <summary>Chỉ dẫn turn-by-turn gộp từ tất cả các chặng (đánh số liên tục).</summary>
+    public List<NavigationStep> Steps { get; set; } = new();
+}
+
+/// <summary>Một điểm marker trên bản đồ Goong.</summary>
+public class RouteWaypoint
+{
+    public int Sequence { get; set; }
+    public string Type { get; set; } = null!; // ORIGIN | STOP | DESTINATION
+    public decimal Lat { get; set; }
+    public decimal Lng { get; set; }
+    public string Address { get; set; } = null!;
+
+    /// <summary>Số LPN sẽ được dỡ tại điểm này (0 với điểm xuất phát).</summary>
+    public int LpnCount { get; set; }
+}
+
+/// <summary>Một toạ độ trên polyline lộ trình.</summary>
+public class RoutePathPoint
+{
+    public decimal Lat { get; set; }
+    public decimal Lng { get; set; }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
