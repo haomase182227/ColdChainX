@@ -650,6 +650,40 @@ public class DispatchService : IDispatchService
 
     private static double ToRad(double deg) => deg * Math.PI / 180.0;
 
+    /// <summary>
+    /// Decode encoded polyline (thuật toán Google/Goong) → danh sách toạ độ lat/lng.
+    /// Cho phép FE vẽ thẳng đường đi lên Goong Map mà không cần thư viện decode.
+    /// </summary>
+    private static List<RoutePathPoint> DecodePolyline(string? encoded)
+    {
+        var path = new List<RoutePathPoint>();
+        if (string.IsNullOrEmpty(encoded)) return path;
+
+        int index = 0, len = encoded.Length;
+        int lat = 0, lng = 0;
+
+        while (index < len)
+        {
+            int b, shift = 0, result = 0;
+            do { b = encoded[index++] - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+            var dlat = (result & 1) != 0 ? ~(result >> 1) : (result >> 1);
+            lat += dlat;
+
+            shift = 0; result = 0;
+            do { b = encoded[index++] - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+            var dlng = (result & 1) != 0 ? ~(result >> 1) : (result >> 1);
+            lng += dlng;
+
+            path.Add(new RoutePathPoint
+            {
+                Lat = lat / 100000m,
+                Lng = lng / 100000m
+            });
+        }
+
+        return path;
+    }
+
     // ── Internal result types ────────────────────────────────────────────────
 
     private class RouteCalculationResult
@@ -883,6 +917,63 @@ public class DispatchService : IDispatchService
             Zone = li.Zone
         }).OrderBy(d => d.LoadOrder).ToList();
 
+        // 10b. Build RouteGuidance — gói sẵn cho FE vẽ Goong Map (marker + polyline + turn-by-turn)
+        var guidanceWaypoints = new List<RouteWaypoint>
+        {
+            new()
+            {
+                Sequence = 0,
+                Type     = "ORIGIN",
+                Lat      = originLocation.Latitude,
+                Lng      = originLocation.Longitude,
+                Address  = originLocation.Address,
+                LpnCount = 0
+            }
+        };
+        foreach (var s in routeResult.StopSequence)
+        {
+            var isLast = s.Sequence == routeResult.StopSequence.Count;
+            guidanceWaypoints.Add(new RouteWaypoint
+            {
+                Sequence = s.Sequence,
+                Type     = isLast ? "DESTINATION" : "STOP",
+                Lat      = s.Latitude,
+                Lng      = s.Longitude,
+                Address  = s.Address,
+                LpnCount = lpns.Count(l => l.Order?.DestLocation == s.LocationId)
+            });
+        }
+
+        var flatSteps = new List<NavigationStep>();
+        var stepNo = 1;
+        foreach (var leg in directionsResult.Legs)
+            foreach (var st in leg.Steps)
+                flatSteps.Add(new NavigationStep
+                {
+                    StepIndex       = stepNo++,
+                    Instruction     = st.Instruction,
+                    DistanceKm      = st.DistanceKm,
+                    DurationSeconds = st.DurationSeconds,
+                    Maneuver        = st.Maneuver
+                });
+
+        var lastStop = routeResult.StopSequence.Last();
+        var mapRoute = new RouteGuidance
+        {
+            OriginLat          = originLocation.Latitude,
+            OriginLng          = originLocation.Longitude,
+            OriginAddress      = originLocation.Address,
+            DestinationLat     = lastStop.Latitude,
+            DestinationLng     = lastStop.Longitude,
+            DestinationAddress = lastStop.Address,
+            TotalDistanceKm    = directionsResult.TotalDistanceKm,
+            TotalDurationMinutes = directionsResult.TotalDurationSeconds / 60,
+            OverviewPolyline   = directionsResult.OverviewPolyline,
+            Waypoints          = guidanceWaypoints,
+            Path               = DecodePolyline(directionsResult.OverviewPolyline),
+            Steps              = flatSteps
+        };
+
         var daysToExpiry = activeLicense.ExpiryDate.DayNumber - today.DayNumber;
         var licenseStatus = daysToExpiry <= 30 ? "EXPIRING_SOON" : "VALID";
 
@@ -893,6 +984,7 @@ public class DispatchService : IDispatchService
             Driver = new DriverInfo { DriverId = vehicle.Driver.DriverId, FullName = vehicle.Driver.FullName, PhoneNumber = vehicle.Driver.PhoneNumber, IdentityNumber = vehicle.Driver.IdentityNumber, LicenseClass = activeLicense.LicenseClass, LicenseExpiry = activeLicense.ExpiryDate, LicenseStatus = licenseStatus },
             SelectedLpns = lpns.Select(l => new LpnSummary { LpnId = l.LpnId, LpnCode = l.LpnCode, OrderId = l.OrderId, OrderTrackingCode = l.Order?.TrackingCode ?? string.Empty, ItemName = l.Order?.ItemName ?? string.Empty, Quantity = l.Quantity, WeightKg = l.ActualWeightKg, Cbm = l.ActualCbm, TempCondition = l.Order?.TempCondition ?? "AMBIENT" }).ToList(),
             Route = routeInfo,
+            MapRoute = mapRoute,
             Navigation = new NavigationInfo { TotalDistanceKm = directionsResult.TotalDistanceKm, TotalDurationMinutes = directionsResult.TotalDurationSeconds / 60, GoongRouteOverview = directionsResult.OverviewPolyline ?? "", Legs = directionsResult.Legs.Select((leg, idx) => new NavigationLeg { LegIndex = idx + 1, FromAddress = leg.StartAddress ?? "N/A", ToAddress = leg.EndAddress ?? "N/A", DistanceKm = leg.DistanceKm, DurationMinutes = leg.DurationSeconds / 60, Steps = leg.Steps.Select((step, sIdx) => new NavigationStep { StepIndex = sIdx + 1, Instruction = step.Instruction, DistanceKm = step.DistanceKm, DurationSeconds = step.DurationSeconds, Maneuver = step.Maneuver }).ToList() }).ToList() },
             LoadPlan = loadPlan,
             DispatchInstructions = dispatchInstructions,
@@ -959,6 +1051,155 @@ public class DispatchService : IDispatchService
         }
 
         return new StartPickingResult(tripId, "PICKING", lpnCount);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  CANCEL TRIP — Hủy chuyến đã ghép, reset toàn bộ về trạng thái free
+    // ══════════════════════════════════════════════════════════════════════
+
+    public async Task<CancelTripResult> CancelTripAsync(Guid tripId)
+    {
+        var trip = await _context.MasterTrips
+            .Include(t => t.Vehicle)
+            .Include(t => t.Driver)
+            .Include(t => t.TransportOrders)
+            .Include(t => t.Seals)
+            .Include(t => t.TripStops)
+            .FirstOrDefaultAsync(t => t.TripId == tripId)
+            ?? throw new KeyNotFoundException("Không tìm thấy chuyến hàng.");
+
+        if (trip.Status == "CANCELLED")
+            throw new InvalidOperationException("Chuyến hàng đã bị hủy trước đó.");
+
+        // Lấy toàn bộ LPN của chuyến
+        var lpns = await _context.Lpns
+            .Include(l => l.Order)
+            .Where(l => l.TripId == tripId)
+            .ToListAsync();
+
+        // ĐIỀU KIỆN HỦY: không được có LPN nào đang ở trạng thái SHIPPING (hàng đã xuất phát)
+        var shippingLpns = lpns.Where(l => l.State == LpnState.SHIPPING).ToList();
+        if (shippingLpns.Any())
+            throw new InvalidOperationException(
+                $"Không thể hủy chuyến — có {shippingLpns.Count} LPN đã ở trạng thái SHIPPING (hàng đã xuất phát): " +
+                $"{string.Join(", ", shippingLpns.Select(l => l.LpnCode))}. " +
+                "Chỉ hủy được khi chưa có LPN nào SHIPPING.");
+
+        var previousStatus = trip.Status ?? "UNKNOWN";
+        var now = DateTime.UtcNow;
+
+        // 1. Reset LPN → IN_STOCK, gỡ khỏi chuyến (hàng trở về kho)
+        foreach (var lpn in lpns)
+        {
+            lpn.State = LpnState.IN_STOCK;
+            lpn.TripId = null;
+            lpn.UpdatedAt = now;
+        }
+
+        // 2. Reset đơn hàng → IN_STOCK, gỡ khỏi chuyến
+        var resetOrderCount = 0;
+        var orders = lpns.Where(l => l.Order != null).Select(l => l.Order!).Distinct().ToList();
+        foreach (var order in orders)
+        {
+            order.Status = "IN_STOCK";
+            order.MasterTripId = null;
+            resetOrderCount++;
+        }
+        // Bao gồm cả các TransportOrder gắn trực tiếp với trip (nếu có khác biệt)
+        foreach (var order in trip.TransportOrders)
+        {
+            order.Status = "IN_STOCK";
+            order.MasterTripId = null;
+        }
+
+        // 3. Hủy seal
+        var cancelledSealCount = 0;
+        foreach (var seal in trip.Seals.Where(s => s.Status != "CANCELLED"))
+        {
+            seal.Status = "CANCELLED";
+            seal.RemovedAt = now;
+            cancelledSealCount++;
+        }
+        trip.SealNumber = null;
+
+        // 4. Vô hiệu các chứng từ E-Waybill đã phát hành cho chuyến (best-effort, theo tripId trong URL)
+        var tripIdStr = tripId.ToString();
+        var documents = await _context.TransportDocuments
+            .Where(d => d.ImageUrl.Contains(tripIdStr) && d.Status != "CANCELLED")
+            .ToListAsync();
+        foreach (var doc in documents)
+            doc.Status = "CANCELLED";
+
+        // 5. Hủy các OutboundOrder đã sinh ra (chỉ tồn tại nếu đã từng seal — best-effort)
+        var lpnCodes = lpns.Select(l => l.LpnCode).ToList();
+        if (lpnCodes.Count > 0)
+        {
+            var relatedOrderIds = await _context.OutboundOrderItems
+                .Where(i => lpnCodes.Contains(i.ItemCode))
+                .Select(i => i.OutboundOrderId)
+                .Distinct()
+                .ToListAsync();
+            if (relatedOrderIds.Count > 0)
+            {
+                var outboundOrders = await _context.OutboundOrders
+                    .Where(o => relatedOrderIds.Contains(o.OutboundOrderId)
+                             && o.Status != OutboundOrderStatus.CANCELLED
+                             && o.Status != OutboundOrderStatus.SHIPPED)
+                    .ToListAsync();
+                foreach (var oo in outboundOrders)
+                {
+                    oo.Status = OutboundOrderStatus.CANCELLED;
+                    oo.UpdatedAt = now;
+                }
+            }
+        }
+
+        // 6. Hủy các điểm dừng
+        foreach (var stop in trip.TripStops.Where(s => s.Status != "CANCELLED"))
+            stop.Status = "CANCELLED";
+
+        // 7. Reset xe và tài xế → ACTIVE (free)
+        if (trip.Vehicle != null)
+            trip.Vehicle.Status = "ACTIVE";
+        if (trip.Driver != null)
+            trip.Driver.Status = "ACTIVE";
+
+        // 8. Đánh dấu chuyến CANCELLED
+        trip.Status = "CANCELLED";
+
+        await _context.SaveChangesAsync();
+
+        try
+        {
+            await _hubContext.Clients.Groups("Group_Loader", "Group_WarehouseMonitor", "Group_Admin")
+                .SendAsync("TripCancelled", new
+                {
+                    TripId = tripId,
+                    PreviousStatus = previousStatus,
+                    Status = "CANCELLED",
+                    ResetLpnCount = lpns.Count
+                });
+        }
+        catch (Exception)
+        {
+            // Fail-safe — không block API nếu SignalR lỗi
+        }
+
+        return new CancelTripResult
+        {
+            TripId              = tripId,
+            PreviousStatus      = previousStatus,
+            NewStatus           = "CANCELLED",
+            ResetLpnCount       = lpns.Count,
+            ResetOrderCount     = resetOrderCount,
+            CancelledSealCount  = cancelledSealCount,
+            VoidedDocumentCount = documents.Count,
+            VehiclePlate        = trip.Vehicle?.TruckPlate,
+            DriverName          = trip.Driver?.FullName,
+            CancelledAt         = now,
+            Message             = $"Đã hủy chuyến {tripId}. {lpns.Count} LPN đã trở về kho (IN_STOCK), " +
+                                  $"xe và tài xế đã được giải phóng."
+        };
     }
 
     // ═══════════════════════════════════════════════════════════════════════
