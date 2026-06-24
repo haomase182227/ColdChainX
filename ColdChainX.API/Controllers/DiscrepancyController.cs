@@ -1,6 +1,7 @@
 using ColdChainX.Application.Features.Discrepancy.Commands;
 using ColdChainX.Application.Features.Discrepancy.Queries;
 using ColdChainX.Application.Interfaces;
+using ColdChainX.Core.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -115,6 +116,29 @@ public class DiscrepancyController : ControllerBase
                 
                 receipt.PdfUrl = pdfUrl;
                 count++;
+
+                // Create or update TransportDocument for discrepancy report
+                var doc = await _context.TransportDocuments
+                    .FirstOrDefaultAsync(d => d.OrderId == receipt.OrderId && d.DocType == "DISCREPANCY_REPORT");
+                if (doc == null)
+                {
+                    _context.TransportDocuments.Add(new TransportDocument
+                    {
+                        DocId = Guid.NewGuid(),
+                        OrderId = receipt.OrderId,
+                        DocType = "DISCREPANCY_REPORT",
+                        ImageUrl = pdfUrl,
+                        Status = "PENDING",
+                        UploadedBy = receipt.ReceiverId,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+                else
+                {
+                    doc.ImageUrl = pdfUrl;
+                    doc.Status = "PENDING";
+                    doc.CreatedAt = DateTime.UtcNow;
+                }
 
                 // Load the appendix for this order to inject the raw HTML
                 var appendix = await _context.ContractAppendices

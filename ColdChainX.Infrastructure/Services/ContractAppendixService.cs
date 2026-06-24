@@ -197,6 +197,31 @@ namespace ColdChainX.Infrastructure.Services
                 appendix.OrderId,
                 new { Appendix_Number = appendix.AppendixNumber, Tracking_Code = appendix.Order.TrackingCode });
 
+            // Create or update TransportDocument for the order with DocType = "CONTRACT_APPENDIX"
+            var existingDoc = await _db.TransportDocuments
+                .FirstOrDefaultAsync(d => d.OrderId == appendix.OrderId && d.DocType == "CONTRACT_APPENDIX");
+
+            if (existingDoc == null)
+            {
+                _db.TransportDocuments.Add(new TransportDocument
+                {
+                    DocId = Guid.NewGuid(),
+                    OrderId = appendix.OrderId,
+                    DocType = "CONTRACT_APPENDIX",
+                    ImageUrl = pdfUrl,
+                    Status = "PENDING",
+                    UploadedBy = salesUserId,
+                    CreatedAt = DbNow()
+                });
+            }
+            else
+            {
+                existingDoc.ImageUrl = pdfUrl;
+                existingDoc.Status = "PENDING";
+                existingDoc.UploadedBy = salesUserId;
+                existingDoc.CreatedAt = DbNow();
+            }
+
             await _db.SaveChangesAsync();
 
             await _hubContext.Clients.User(appendix.Order.CustomerId.ToString()!).SendAsync("AppendixPendingSignature", new
@@ -247,6 +272,19 @@ namespace ColdChainX.Infrastructure.Services
                 "NOTI_APPENDIX_ACCEPTED",
                 appendix.OrderId,
                 new { Appendix_Number = appendix.AppendixNumber, Tracking_Code = appendix.Order.TrackingCode });
+
+            // Update TransportDocument status for the order with DocType = "CONTRACT_APPENDIX"
+            var doc = await _db.TransportDocuments
+                .FirstOrDefaultAsync(d => d.OrderId == appendix.OrderId && d.DocType == "CONTRACT_APPENDIX");
+            if (doc != null)
+            {
+                doc.Status = "APPROVED";
+                doc.VerifiedAt = DbNow();
+                if (customerUserId.HasValue)
+                {
+                    doc.VerifiedBy = customerUserId.Value;
+                }
+            }
 
             await _db.SaveChangesAsync();
 
@@ -351,6 +389,19 @@ namespace ColdChainX.Infrastructure.Services
                     "NOTI_APPENDIX_EXECUTED",
                     appendix.OrderId,
                     new { Appendix_Number = appendix.AppendixNumber, Tracking_Code = appendix.Order.TrackingCode });
+
+                // Update CONTRACT_APPENDIX TransportDocument to REJECTED status
+                var doc = await _db.TransportDocuments
+                    .FirstOrDefaultAsync(d => d.OrderId == appendix.OrderId && d.DocType == "CONTRACT_APPENDIX");
+                if (doc != null)
+                {
+                    doc.Status = "REJECTED";
+                    doc.VerifiedAt = DbNow();
+                    if (customerUserId.HasValue)
+                    {
+                        doc.VerifiedBy = customerUserId.Value;
+                    }
+                }
 
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();

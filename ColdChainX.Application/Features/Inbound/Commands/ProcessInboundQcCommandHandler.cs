@@ -183,6 +183,32 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
             pdfUrl = await _fileService.UploadFileAsync(pdfBytes, pdfFileName);
             
             receipt.PdfUrl = pdfUrl;
+
+            // Create or update TransportDocument for discrepancy report
+            var existingDoc = await _context.TransportDocuments
+                .FirstOrDefaultAsync(d => d.OrderId == order.OrderId && d.DocType == "DISCREPANCY_REPORT", cancellationToken);
+
+            if (existingDoc == null)
+            {
+                _context.TransportDocuments.Add(new TransportDocument
+                {
+                    DocId = Guid.NewGuid(),
+                    OrderId = order.OrderId,
+                    DocType = "DISCREPANCY_REPORT",
+                    ImageUrl = pdfUrl,
+                    Status = "PENDING",
+                    UploadedBy = request.ReceiverId,
+                    CreatedAt = now
+                });
+            }
+            else
+            {
+                existingDoc.ImageUrl = pdfUrl;
+                existingDoc.Status = "PENDING";
+                existingDoc.UploadedBy = request.ReceiverId;
+                existingDoc.CreatedAt = now;
+            }
+
             await _context.SaveChangesAsync(cancellationToken);
 
             // Automatically generate a pre-tax contract appendix in DRAFT status
