@@ -232,8 +232,8 @@ public class DispatchController : ControllerBase
             // Sinh file PDF Lệnh điều động + Load Plan
             var goongKey = Environment.GetEnvironmentVariable("key") ?? "xV6YBygCVRIQYybUrDAfaqYuuVfO9qvQBqQSA7uK";
             var html = ManifestTemplateBuilder.BuildHtml(result, goongKey);
-            var pdfUrl = await _pdfService.SaveWaybillPdfAsync(html, result.TripId.ToString());
-            
+            var pdfUrl = await _pdfService.SaveLifoMapPdfAsync(html, result.TripId.ToString());
+
             result.LifoPdfUrl = pdfUrl;
 
             return Ok(new { Success = true, Data = result });
@@ -264,6 +264,24 @@ public class DispatchController : ControllerBase
         // Trả về trực tiếp link Cloudinary có chữ ký (Signed URL) để bypass lỗi 401
         var url = _fileService.GetSignedUrl($"coldchainx/lifo_{id}");
         return Ok(new { Success = true, LifoPdfUrl = url });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  API 1.3: LẤY LẠI LINK GIẤY ĐI ĐƯỜNG (E-WAYBILL) THEO TRIP ID
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [HttpGet("trip/{tripId}/waybill-url")]
+    [ProducesResponseType(typeof(object), 200)]
+    [ProducesResponseType(typeof(object), 404)]
+    public IActionResult GetWaybillUrl(string tripId)
+    {
+        var rawId = ExtractGuid(tripId);
+        if (!Guid.TryParse(rawId, out var id))
+            return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
+
+        // Giấy đi đường lưu với prefix "waybill_" (tách biệt hoàn toàn với sơ đồ LIFO "lifo_")
+        var url = _fileService.GetSignedUrl($"coldchainx/waybill_{id}");
+        return Ok(new { Success = true, WaybillPdfUrl = url });
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -323,6 +341,39 @@ public class DispatchController : ControllerBase
     // ═══════════════════════════════════════════════════════════════════════
 
     /// <summary>
+    /// [STEP 2/5 - LOOKUP] Danh sách chuyến ĐÃ GHÉP và sẵn sàng bốc hàng (Status = PLANNED).
+    /// </summary>
+    /// <remarks>
+    /// Dùng để FE biết nên nhập tripId nào vào POST /api/Dispatch/trip/{tripId}/start-picking.
+    /// Chỉ trả về các chuyến đã ghép (PLANNED) — tức đã qua bước manual-dispatch.
+    /// </remarks>
+    [HttpGet("trips/can-start-picking")]
+    [ProducesResponseType(typeof(object), 200)]
+    public async Task<IActionResult> GetTripsCanStartPicking()
+    {
+        var trips = await _db.MasterTrips
+            .Include(t => t.Vehicle)
+            .Include(t => t.Driver)
+            .Where(t => t.Status == "PLANNED")
+            .OrderByDescending(t => t.CreatedAt)
+            .Select(t => new
+            {
+                t.TripId,
+                t.Status,
+                Vehicle = t.Vehicle != null ? t.Vehicle.TruckPlate : "N/A",
+                Driver  = t.Driver != null ? t.Driver.FullName : "N/A",
+                t.PlannedStartTime,
+                t.PlannedEndTime,
+                TotalLpns     = _db.Lpns.Count(l => l.TripId == t.TripId),
+                AllocatedLpns = _db.Lpns.Count(l => l.TripId == t.TripId && l.State == LpnState.ALLOCATED),
+                Label = $"{t.TripId} | Xe {(t.Vehicle != null ? t.Vehicle.TruckPlate : "N/A")} | {_db.Lpns.Count(l => l.TripId == t.TripId)} LPN"
+            })
+            .ToListAsync();
+
+        return Ok(new { Success = true, Count = trips.Count, Data = trips });
+    }
+
+    /// <summary>
     /// [STEP 2/5] Bat dau lenh boc hang — chuyen LPN tu ALLOCATED sang LOADING.
     /// </summary>
     /// <remarks>
@@ -361,6 +412,54 @@ public class DispatchController : ControllerBase
     }
 
     // ═══════════════════════════════════════════════════════════════════════
+    //  API 2.1: CANCEL TRIP — Hủy chuyến đã ghép, reset toàn bộ về free
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Hủy một chuyến đã ghép (planning) — kể cả đã bốc hàng / xếp hàng / kẹp chì.
+    /// </summary>
+    /// <remarks>
+    /// ĐIỀU KIỆN: không được có LPN nào ở trạng thái SHIPPING (hàng đã xuất phát).
+    ///
+    /// Sau khi hủy, toàn bộ trở về như trước khi gọi manual-dispatch:
+    ///   - LPN.State → IN_STOCK (hàng trở lại kho), gỡ TripId
+    ///   - Đơn hàng → IN_STOCK, gỡ MasterTripId
+    ///   - Seal → CANCELLED, gỡ SealNumber
+    ///   - E-Waybill (TransportDocument) → CANCELLED
+    ///   - Vehicle.Status / Driver.Status → ACTIVE (giải phóng)
+    ///   - Trip.Status → CANCELLED
+    ///
+    /// Xe sau khi hủy có thể được ghép chuyến mới qua POST /api/Dispatch/manual-dispatch.
+    /// </remarks>
+    /// <param name="tripId">ID chuyến cần hủy</param>
+    [HttpPost("trip/{tripId}/cancel")]
+    [ProducesResponseType(typeof(CancelTripResult), 200)]
+    public async Task<IActionResult> CancelTrip(string tripId)
+    {
+        var rawId = ExtractGuid(tripId);
+        if (!Guid.TryParse(rawId, out var parsedTripId))
+            return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
+
+        try
+        {
+            var result = await _dispatchService.CancelTripAsync(parsedTripId);
+            return Ok(new { Success = true, Data = result });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { Success = false, Error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Success = false, Error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { Success = false, Error = "Lỗi hệ thống khi hủy chuyến.", Detail = ex.Message });
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
     //  API 3: IOT CHECK — Kiểm tra tín hiệu IoT xe
     // ═══════════════════════════════════════════════════════════════════════
 
@@ -389,6 +488,58 @@ public class DispatchController : ControllerBase
     // ═══════════════════════════════════════════════════════════════════════
     //  API 4: SEAL & DISPATCH — Kẹp chì + kiểm tra chất hàng
     // ═══════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// [STEP 5/5 - LOOKUP] Danh sách chuyến đã xếp xong và ĐỦ ĐIỀU KIỆN kẹp chì.
+    /// </summary>
+    /// <remarks>
+    /// Trả về các chuyến có Status = LOADING_COMPLETED và TẤT CẢ LPN đã ở trạng thái RELEASED.
+    /// Dùng để FE biết nên nhập tripId nào vào POST /api/Dispatch/seal-and-dispatch/{tripId}.
+    /// </remarks>
+    [HttpGet("trips/ready-to-seal")]
+    [ProducesResponseType(typeof(object), 200)]
+    public async Task<IActionResult> GetTripsReadyToSeal()
+    {
+        var candidates = await _db.MasterTrips
+            .Include(t => t.Vehicle)
+            .Include(t => t.Driver)
+            .Where(t => t.Status == "LOADING_COMPLETED")
+            .OrderByDescending(t => t.CreatedAt)
+            .Select(t => new
+            {
+                t.TripId,
+                t.Status,
+                Vehicle = t.Vehicle != null ? t.Vehicle.TruckPlate : "N/A",
+                Driver  = t.Driver != null ? t.Driver.FullName : "N/A",
+                t.PlannedStartTime,
+                t.PlannedEndTime,
+                t.SealNumber,
+                TotalLpns    = _db.Lpns.Count(l => l.TripId == t.TripId),
+                ReleasedLpns = _db.Lpns.Count(l => l.TripId == t.TripId && l.State == LpnState.RELEASED)
+            })
+            .ToListAsync();
+
+        // Chỉ giữ các chuyến đã đầy đủ LPN ở trạng thái RELEASED và chưa kẹp chì
+        var ready = candidates
+            .Where(t => t.TotalLpns > 0
+                     && t.ReleasedLpns == t.TotalLpns
+                     && string.IsNullOrEmpty(t.SealNumber))
+            .Select(t => new
+            {
+                t.TripId,
+                t.Status,
+                t.Vehicle,
+                t.Driver,
+                t.PlannedStartTime,
+                t.PlannedEndTime,
+                t.TotalLpns,
+                t.ReleasedLpns,
+                Label = $"{t.TripId} | Xe {t.Vehicle} | {t.ReleasedLpns}/{t.TotalLpns} LPN RELEASED"
+            })
+            .ToList();
+
+        return Ok(new { Success = true, Count = ready.Count, Data = ready });
+    }
 
     /// <summary>
     /// [STEP 5/5] Kep chi + cap giay di duong (E-Waybill).

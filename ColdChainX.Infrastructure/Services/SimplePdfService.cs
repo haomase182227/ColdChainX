@@ -41,7 +41,10 @@ namespace ColdChainX.Infrastructure.Services
             => await SavePdfAsync(htmlContent, receiptCode, "receipt");
 
         public async Task<string> SaveWaybillPdfAsync(string htmlContent, string fileCode)
-            => await SavePdfAsync(htmlContent, fileCode, "lifo");
+            => await SavePdfAsync(htmlContent, fileCode, "waybill");
+
+        public async Task<string> SaveLifoMapPdfAsync(string htmlContent, string tripId)
+            => await SavePdfAsync(htmlContent, tripId, "lifo");
 
         public async Task<string> SaveLoadPlanPdfAsync(string htmlContent, string tripId)
             => await SavePdfAsync(htmlContent, tripId, "loadplan");

@@ -27,6 +27,13 @@ public interface IDispatchService
     /// <summary>Chuyển trip PLANNED → PICKING, thông báo loader bắt đầu lấy hàng.</summary>
     Task<StartPickingResult> StartPickingAsync(Guid tripId);
 
+    /// <summary>
+    /// Hủy chuyến đã ghép (ở bất kỳ giai đoạn nào trước khi hàng SHIPPING):
+    /// reset LPN về IN_STOCK (hàng về kho), đơn hàng về IN_STOCK, xe/tài xế về ACTIVE,
+    /// hủy seal và vô hiệu giấy đi đường. Chặn nếu có LPN đã ở trạng thái SHIPPING.
+    /// </summary>
+    Task<CancelTripResult> CancelTripAsync(Guid tripId);
+
     // ═══════════════════════════════════════════════════════════════════════
     //  API 3: IOT CHECK — Kiểm tra tín hiệu IoT xe
     // ═══════════════════════════════════════════════════════════════════════
