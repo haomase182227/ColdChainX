@@ -1,0 +1,51 @@
+{
+  "defaultProfile": {
+    "category": "UNKNOWN",
+    "minTempC": 0,
+    "maxTempC": 25,
+    "strictMaxSlopeCPerMin": 0.35,
+    "description": "Generic cold-chain cargo"
+  },
+  "profiles": [
+    {
+      "category": "FROZEN_FRUITS",
+      "aliases": [ "FRUIT", "FRUITS", "VEG", "VEGETABLE", "RAU", "TRAI_CAY" ],
+      "minTempC": -25,
+      "maxTempC": -18,
+      "strictMaxSlopeCPerMin": 0.18,
+      "description": "Frozen fruit and vegetable cargo"
+    },
+    {
+      "category": "FROZEN_MEAT_SEAFOOD",
+      "aliases": [ "MEAT", "SEAFOOD", "THIT", "CA", "HAI_SAN" ],
+      "minTempC": -25,
+      "maxTempC": -18,
+      "strictMaxSlopeCPerMin": 0.15,
+      "description": "Frozen meat and seafood cargo"
+    },
+    {
+      "category": "ICE_CREAM_JUICE",
+      "aliases": [ "ICE", "ICE_CREAM", "KEM", "JUICE" ],
+      "minTempC": -25,
+      "maxTempC": -20,
+      "strictMaxSlopeCPerMin": 0.1,
+      "description": "Ice cream and frozen juice cargo"
+    },
+    {
+      "category": "CHILLED_FOOD",
+      "aliases": [ "CHILLED", "COOL", "MAT", "FOOD" ],
+      "minTempC": 2,
+      "maxTempC": 8,
+      "strictMaxSlopeCPerMin": 0.25,
+      "description": "Chilled food cargo"
+    },
+    {
+      "category": "PHARMA_VACCINE",
+      "aliases": [ "PHARMA", "VACCINE", "MEDICINE", "THUOC" ],
+      "minTempC": 2,
+      "maxTempC": 8,
+      "strictMaxSlopeCPerMin": 0.08,
+      "description": "Pharmaceutical and vaccine cargo"
+    }
+  ]
+}
