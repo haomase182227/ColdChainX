@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -1160,11 +1160,16 @@ public class DispatchService : IDispatchService
                 CreatedAt = DateTime.UtcNow,
                 UploadedBy = documentUploader
             });
-            trip.Status = "DISPATCHED";
+            trip.Status = "IN_TRANSIT";
+            trip.StartedAt ??= DateTime.UtcNow;
             if (trip.Vehicle != null)
                 trip.Vehicle.Status = "OnTrip";
             if (trip.Driver != null)
                 trip.Driver.Status = "OnTrip";
+            foreach (var order in trip.TransportOrders)
+            {
+                order.Status = "IN_TRANSIT";
+            }
         }
         catch (Exception ex)
         {

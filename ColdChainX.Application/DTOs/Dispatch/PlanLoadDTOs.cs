@@ -429,6 +429,90 @@ public class GoongDirectionsResult
     public List<GoongLeg> Legs { get; set; } = new();
 }
 
+/// <summary>Response route tối ưu cho frontend vẽ bản đồ và danh sách điểm giao.</summary>
+public sealed class TripRouteResponse
+{
+    public Guid TripId { get; set; }
+
+    public string? OverviewPolyline { get; set; }
+
+    public int TotalDistanceMeters { get; set; }
+
+    public int TotalDurationSeconds { get; set; }
+
+    public TripRoutePointDto Origin { get; set; } = null!;
+
+    public TripRoutePointDto Destination { get; set; } = null!;
+
+    public IReadOnlyList<int> WaypointOrder { get; set; } = Array.Empty<int>();
+
+    public List<OptimizedTripStopDto> OptimizedStops { get; set; } = new();
+}
+
+public sealed class TripRoutePointDto
+{
+    public Guid LocationId { get; set; }
+
+    public string Address { get; set; } = string.Empty;
+
+    public decimal Lat { get; set; }
+
+    public decimal Lon { get; set; }
+}
+
+public sealed class OptimizedTripStopDto
+{
+    public Guid StopId { get; set; }
+
+    public Guid LocationId { get; set; }
+
+    public int OriginalStopSequence { get; set; }
+
+    public int OptimizedSequence { get; set; }
+
+    public string StopType { get; set; } = string.Empty;
+
+    public string Address { get; set; } = string.Empty;
+
+    public decimal Lat { get; set; }
+
+    public decimal Lon { get; set; }
+
+    public List<TripRouteOrderDto> Orders { get; set; } = new();
+
+    public List<LpnSummary> Lpns { get; set; } = new();
+}
+
+public sealed class TripRouteOrderDto
+{
+    public Guid OrderId { get; set; }
+
+    public string TrackingCode { get; set; } = string.Empty;
+
+    public string ItemName { get; set; } = string.Empty;
+
+    public string Category { get; set; } = string.Empty;
+
+    public int Quantity { get; set; }
+
+    public decimal WeightKg { get; set; }
+
+    public decimal Cbm { get; set; }
+
+    public string TempCondition { get; set; } = string.Empty;
+}
+
+public sealed class GoongOptimizedRouteResult
+{
+    public string? OverviewPolyline { get; set; }
+
+    public int TotalDistanceMeters { get; set; }
+
+    public int TotalDurationSeconds { get; set; }
+
+    public IReadOnlyList<int> WaypointOrder { get; set; } = Array.Empty<int>();
+}
+
 public class GoongLeg
 {
     public decimal DistanceKm { get; set; }
