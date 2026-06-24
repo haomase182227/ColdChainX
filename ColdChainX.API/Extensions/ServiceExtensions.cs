@@ -111,9 +111,14 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IAsnService, AsnService>();
             services.AddScoped<IPdfService, SimplePdfService>();
             services.AddScoped<IContractService, ContractService>();
+            services.AddScoped<IContractAppendixService, ContractAppendixService>();
             services.AddScoped<IChatService, ChatService>();
             services.AddScoped<INotificationService, NotificationService>();
             services.AddScoped<IWarehouseReceiptService, WarehouseReceiptService>();
+            services.AddScoped<IInvoiceService, InvoiceService>();
+            services.AddScoped<IInventoryAnalysisService, InventoryAnalysisService>();
+            services.AddScoped<IIncidentReportService, IncidentReportService>();
+            services.AddScoped<IClaimService, ClaimService>();
             services.AddScoped<IOutboundOrderService, OutboundOrderService>();
             services.AddScoped<IFleetManagementService, FleetManagementService>();
             services.AddScoped<IPdfGeneratorService, PdfGeneratorService>();

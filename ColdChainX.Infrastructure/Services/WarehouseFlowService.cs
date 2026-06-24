@@ -55,11 +55,14 @@ public class WarehouseFlowService : IWarehouseFlowService
             Quantity = order.Quantity,
             ActualWeightKg = request.ActualWeightKg,
             ActualCbm = actualCbm,
+            LengthCm = request.LengthCm,
+            WidthCm = request.WidthCm,
+            HeightCm = request.HeightCm,
             RequiredTemperature = ParseTemperature(order.TempCondition),
             RecordedTemperature = request.RecordedTemperature,
             State = hasDiscrepancy ? LpnState.DISCREPANCY_HOLD : LpnState.RECEIVING,
             DiscrepancyReason = hasDiscrepancy
-                ? $"Actual cargo differs from expected by {maxDiff:0.##}% (weight {weightDiff:0.##}%, cbm {cbmDiff:0.##}%)."
+                ? $"Actual cargo differs from expected by {maxDiff:0.##}% (weight {weightDiff:0.##}%, cbm {cbmDiff:0.##}%). Actual dimensions: {request.LengthCm:0.##} x {request.WidthCm:0.##} x {request.HeightCm:0.##} cm."
                 : null,
             SlaDeadline = CalculateSlaDeadline(order.Route),
             CreatedAt = now

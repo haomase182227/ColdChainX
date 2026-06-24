@@ -298,6 +298,8 @@ namespace ColdChainX.Application.Services
                         .OrderByDescending(q => q.CreatedAt)
                         .FirstOrDefaultAsync();
 
+                    string? billingWarning = null;
+
                     if (originalQuotation != null && order.DestLocationNavigation != null)
                     {
                         var pricing = await ResolvePricingAsync(order);
@@ -356,9 +358,34 @@ namespace ColdChainX.Application.Services
                                     TaxRate = VatRate
                                 };
 
-                                _db.Invoices.Add(adjustmentInvoice);
-                                _db.InvoiceLines.Add(adjustmentLine);
+                                 // Generate PDF for the adjustment invoice
+                                 try
+                                 {
+                                     adjustmentInvoice.PdfUrl = await GenerateInvoicePdfAsync(order, adjustmentInvoice, adjustmentLine, warehouseName);
+                                 }
+                                 catch (Exception pdfEx)
+                                 {
+                                     billingWarning = $"[PDF ERROR] Failed to generate adjustment invoice PDF: {pdfEx.Message}";
+                                 }
+
+                                 _db.Invoices.Add(adjustmentInvoice);
+                                 _db.InvoiceLines.Add(adjustmentLine);
                             }
+                        }
+                        else
+                        {
+                            billingWarning = $"[BILLING WARNING] Route pricing not found from '{DefaultOriginCity}' to '{order.DestLocationNavigation.Address ?? "Unknown Address"}'. Pricing recalculation skipped.";
+                        }
+                    }
+                    else
+                    {
+                        if (originalQuotation == null)
+                        {
+                            billingWarning = "[BILLING WARNING] Original quotation not found. Pricing recalculation skipped.";
+                        }
+                        else if (order.DestLocationNavigation == null)
+                        {
+                            billingWarning = "[BILLING WARNING] Destination location not found. Pricing recalculation skipped.";
                         }
                     }
 
@@ -419,17 +446,25 @@ namespace ColdChainX.Application.Services
                             .FromSqlRaw("SELECT * FROM warehouse_locations WHERE location_id = {0} FOR UPDATE", receivingLocation.LocationId)
                             .FirstOrDefaultAsync();
                     }
-
                     // Inventory module has been removed. No stock will be recorded.
 
                     // Generate HTML and PDF Receipt
-                    receipt.PdfUrl = await GenerateReceiptPdfAsync(order, receipt, warehouseName, clerkName);
+                    try
+                    {
+                        receipt.PdfUrl = await GenerateReceiptPdfAsync(order, receipt, warehouseName, clerkName);
+                    }
+                    catch (Exception pdfEx)
+                    {
+                        billingWarning = billingWarning == null 
+                            ? $"[PDF ERROR] Failed to generate e-receipt PDF: {pdfEx.Message}"
+                            : $"{billingWarning} [PDF ERROR] Failed to generate e-receipt PDF: {pdfEx.Message}";
+                    }
                     receipt.ReferenceDocNo = "COMPLETED";
 
                     await _db.SaveChangesAsync();
                     await transaction.CommitAsync();
 
-                    var response = MapToResponse(receipt, order.TrackingCode, warehouseName, null);
+                    var response = MapToResponse(receipt, order.TrackingCode, warehouseName, billingWarning);
                     return ApiResponse<WarehouseReceiptResponse>.SuccessResponse(response, "Inbound completed and e-Warehouse Receipt PDF generated successfully");
                 }
                 catch (Exception ex)
@@ -502,6 +537,50 @@ namespace ColdChainX.Application.Services
                 html = html.Replace($"{{{{{replacement.Key}}}}}", replacement.Value ?? string.Empty);
 
             return await _pdfService.SaveWarehouseReceiptPdfAsync(html, receipt.ReceiptCode);
+        }
+
+        private async Task<string> GenerateInvoicePdfAsync(
+            TransportOrder order,
+            Invoice invoice,
+            InvoiceLine line,
+            string warehouseName)
+        {
+            var templatePath = Path.Combine(_environment.ContentRootPath, "Templates", "InvoiceTemplate.html");
+            if (!File.Exists(templatePath))
+                throw new InvalidOperationException("InvoiceTemplate.html template was not found");
+
+            var html = await File.ReadAllTextAsync(templatePath);
+
+            var linesRows = $@"
+            <tr>
+                 <td>{line.ChargeType}</td>
+                 <td>{line.Description}</td>
+                 <td>{line.Quantity:0.##}</td>
+                 <td>{line.UnitPrice.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)}</td>
+                 <td>{line.Amount.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)}</td>
+            </tr>";
+
+            var replacements = new Dictionary<string, string?>
+            {
+                ["Invoice_Code"] = invoice.InvoiceCode,
+                ["Issued_Date"] = invoice.IssuedDate.ToString("dd/MM/yyyy"),
+                ["Due_Date"] = invoice.DueDate.ToString("dd/MM/yyyy"),
+                ["Customer_Name"] = order.Customer?.CompanyName ?? "Khách hàng vãng lai",
+                ["Order_Tracking_Code"] = order.TrackingCode,
+                ["Warehouse_Name"] = warehouseName,
+                ["Status"] = invoice.Status == "UNPAID" ? "Chưa thanh toán" : "Đã thanh toán",
+                ["Status_Class"] = invoice.Status == "UNPAID" ? "status-unpaid" : "status-paid",
+                ["Sub_Total"] = invoice.SubTotal.ToString("N0", System.Globalization.CultureInfo.InvariantCulture),
+                ["Tax_Rate"] = ((invoice.TaxRate ?? 0) * 100).ToString("0"),
+                ["Tax_Amount"] = invoice.TaxAmount.ToString("N0", System.Globalization.CultureInfo.InvariantCulture),
+                ["Grand_Total"] = invoice.GrandTotal.ToString("N0", System.Globalization.CultureInfo.InvariantCulture),
+                ["Invoice_Lines_Table_Rows"] = linesRows
+            };
+
+            foreach (var replacement in replacements)
+                html = html.Replace($"{{{{{replacement.Key}}}}}", replacement.Value ?? string.Empty);
+
+            return await _pdfService.SaveInvoicePdfAsync(html, invoice.InvoiceCode);
         }
 
         private async Task<RoutePricing?> ResolvePricingAsync(TransportOrder order)

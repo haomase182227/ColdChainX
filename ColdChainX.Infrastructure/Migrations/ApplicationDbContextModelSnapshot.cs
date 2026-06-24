@@ -537,6 +537,80 @@ namespace ColdChainX.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ColdChainX.Core.Entities.ContractAppendix", b =>
+                {
+                    b.Property<Guid>("AppendixId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("appendix_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<decimal>("AdjustedPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("adjusted_price");
+
+                    b.Property<string>("AppendixNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("appendix_number");
+
+                    b.Property<Guid?>("ContractId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("contract_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("DraftHtmlContent")
+                        .HasColumnType("text")
+                        .HasColumnName("draft_html_content");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_id");
+
+                    b.Property<string>("PdfUrl")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("pdf_url");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("text")
+                        .HasColumnName("reason");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("resolved_at");
+
+                    b.Property<DateTime?>("SentAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("sent_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("status");
+
+                    b.HasKey("AppendixId")
+                        .HasName("contract_appendices_pkey");
+
+                    b.HasIndex("AppendixNumber")
+                        .IsUnique()
+                        .HasDatabaseName("uq_contract_appendices_number");
+
+                    b.HasIndex("ContractId");
+
+                    b.HasIndex("OrderId");
+
+                    b.ToTable("contract_appendices", "public");
+                });
+
             modelBuilder.Entity("ColdChainX.Core.Entities.Customer", b =>
                 {
                     b.Property<Guid>("CustomerId")
@@ -1139,6 +1213,71 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.ToTable("inbound_asn", "public");
                 });
 
+            modelBuilder.Entity("ColdChainX.Core.Entities.InboundReturnSlip", b =>
+                {
+                    b.Property<Guid>("ReturnSlipId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("return_slip_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<Guid>("LpnId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lpn_id");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_id");
+
+                    b.Property<string>("PdfUrl")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("pdf_url");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("text")
+                        .HasColumnName("reason");
+
+                    b.Property<decimal>("ReturnedCbm")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)")
+                        .HasColumnName("returned_cbm");
+
+                    b.Property<int>("ReturnedQty")
+                        .HasColumnType("integer")
+                        .HasColumnName("returned_qty");
+
+                    b.Property<decimal>("ReturnedWeightKg")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("returned_weight_kg");
+
+                    b.Property<string>("SlipCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("slip_code");
+
+                    b.HasKey("ReturnSlipId")
+                        .HasName("inbound_return_slips_pkey");
+
+                    b.HasIndex("LpnId");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("SlipCode")
+                        .IsUnique()
+                        .HasDatabaseName("uq_inbound_return_slips_code");
+
+                    b.ToTable("inbound_return_slips", "public");
+                });
+
             modelBuilder.Entity("ColdChainX.Core.Entities.IncidentReport", b =>
                 {
                     b.Property<Guid>("IncidentId")
@@ -1502,9 +1641,19 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("evidence_image_url");
 
+                    b.Property<decimal?>("HeightCm")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("height_cm");
+
                     b.Property<DateTime?>("InboundTime")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("inbound_time");
+
+                    b.Property<decimal?>("LengthCm")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("length_cm");
 
                     b.Property<string>("LpnCode")
                         .IsRequired()
@@ -1560,6 +1709,11 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("updated_at");
+
+                    b.Property<decimal?>("WidthCm")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("width_cm");
 
                     b.HasKey("LpnId")
                         .HasName("lpns_pkey");
@@ -2721,11 +2875,21 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("numeric(10,2)")
                         .HasColumnName("expected_weight_kg");
 
+                    b.Property<decimal>("HeightCm")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("height_cm");
+
                     b.Property<string>("ItemName")
                         .IsRequired()
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)")
                         .HasColumnName("item_name");
+
+                    b.Property<decimal>("LengthCm")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("length_cm");
 
                     b.Property<Guid?>("MasterTripId")
                         .HasColumnType("uuid")
@@ -2770,6 +2934,11 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)")
                         .HasColumnName("tracking_code");
+
+                    b.Property<decimal>("WidthCm")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("width_cm");
 
                     b.HasKey("OrderId")
                         .HasName("transport_orders_pkey");
@@ -3647,6 +3816,26 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.Navigation("UploadedByNavigation");
                 });
 
+            modelBuilder.Entity("ColdChainX.Core.Entities.ContractAppendix", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.CustomerContract", "Contract")
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_contract_appendices_contract");
+
+                    b.HasOne("ColdChainX.Core.Entities.TransportOrder", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_contract_appendices_order");
+
+                    b.Navigation("Contract");
+
+                    b.Navigation("Order");
+                });
+
             modelBuilder.Entity("ColdChainX.Core.Entities.CustomerContract", b =>
                 {
                     b.HasOne("ColdChainX.Core.Entities.Customer", "Customer")
@@ -3757,6 +3946,27 @@ namespace ColdChainX.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_asn_order");
+
+                    b.Navigation("Order");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.InboundReturnSlip", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.Lpn", "Lpn")
+                        .WithMany()
+                        .HasForeignKey("LpnId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_inbound_return_slips_lpn");
+
+                    b.HasOne("ColdChainX.Core.Entities.TransportOrder", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_inbound_return_slips_order");
+
+                    b.Navigation("Lpn");
 
                     b.Navigation("Order");
                 });

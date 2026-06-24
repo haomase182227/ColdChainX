@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Phụ lục hợp đồng điều chỉnh giá cước</title>
+    <style>
+        body { font-family: 'Times New Roman', Times, serif; font-size: 13pt; line-height: 1.5; margin: 0 auto; max-width: 800px; padding: 20px 40px; color: #000; }
+        .header-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        .header-table td { border: none; vertical-align: top; }
+        .info-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; margin-left: 20px; }
+        .info-table td { border: none; padding: 4px 0; vertical-align: top; }
+        .col-label { width: 150px; font-weight: bold; }
+        .title { text-align: center; font-size: 16pt; font-weight: bold; margin: 25px 0 15px 0; text-transform: uppercase; }
+        .italic-text { font-style: italic; }
+        .bold { font-weight: bold; }
+        .justify { text-align: justify; }
+        .section-title { font-weight: bold; margin-top: 25px; margin-bottom: 8px; font-size: 13pt; }
+        .section-content { margin-left: 20px; text-align: justify; }
+        .section-content p { margin: 6px 0; }
+        .data-table { width: 100%; border-collapse: collapse; margin-top: 15px; margin-bottom: 15px; }
+        .data-table th, .data-table td { border: 1px solid #333; padding: 8px; text-align: left; font-size: 12pt; }
+        .data-table th { background-color: #f2f2f2; font-weight: bold; text-align: center; }
+        .highlight-row { background-color: #f9f9f9; font-weight: bold; }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+    </style>
+</head>
+<body>
+    <table class="header-table">
+        <tr>
+            <td style="width: 45%; text-align: center; vertical-align: top;">
+                <div style="font-weight: bold; font-size: 12pt; text-transform: uppercase;">CÔNG TY CỔ PHẦN PROSHIP</div>
+                <div style="font-size: 10pt; font-style: italic; margin-top: 3px;">Số: {{Appendix_Number}}/PLHĐ-PROSHIP</div>
+            </td>
+            <td style="width: 55%; text-align: center; vertical-align: top;">
+                <div style="font-weight: bold; font-size: 12pt;">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
+                <div style="font-weight: bold; font-size: 11pt; text-decoration: underline;">Độc lập - Tự do - Hạnh phúc</div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" style="text-align: right; font-style: italic; padding-top: 15px; font-size: 11pt;">
+                TP. Hồ Chí Minh, ngày {{Day}} tháng {{Month}} năm {{Year}}
+            </td>
+        </tr>
+    </table>
+
+    <div class="title">PHỤ LỤC HỢP ĐỒNG<br><span style="font-size: 14pt;">ĐIỀU CHỈNH GIÁ CƯỚC VẬN CHUYỂN</span></div>
+    
+    <div class="italic-text justify" style="margin-bottom: 20px; line-height: 1.6;">
+        <p style="margin: 3px 0;">- Căn cứ Hợp đồng vận chuyển hàng hóa số {{Contract_Number}} đã ký kết giữa hai bên;</p>
+        <p style="margin: 3px 0;">- Căn cứ Biên bản ghi nhận hàng hóa bất thường thực tế tại Hub vận hành đối với đơn hàng {{Tracking_Code}};</p>
+        <p style="margin: 3px 0;">- Căn cứ vào thỏa thuận thống nhất giữa hai bên về việc điều chỉnh giá cước vận chuyển do thay đổi tải trọng/thể tích hàng hóa thực tế.</p>
+    </div>
+
+    <div style="margin-bottom: 10px;"><span class="bold">Bên A (Khách hàng): <span style="text-transform: uppercase;">{{Customer_CompanyName}}</span></span></div>
+    <table class="info-table">
+        <tr><td class="col-label">Địa chỉ:</td><td colspan="3">{{Customer_Address}}</td></tr>
+        <tr><td class="col-label">MST:</td><td colspan="3">{{Customer_TaxCode}}</td></tr>
+        <tr>
+            <td class="col-label">Người đại diện:</td><td style="width: 40%;">{{Customer_RepName}}</td>
+            <td class="col-label" style="width: 80px;">Chức vụ:</td><td>{{Customer_RepTitle}}</td>
+        </tr>
+        <tr><td class="col-label">Điện thoại:</td><td>{{Customer_Phone}}</td><td class="col-label">Email:</td><td>{{Customer_Email}}</td></tr>
+    </table>
+
+    <div style="margin-bottom: 10px; margin-top: 15px;"><span class="bold">Bên B: CÔNG TY CỔ PHẦN PROSHIP</span></div>
+    <table class="info-table">
+        <tr><td class="col-label">Địa chỉ:</td><td colspan="3">602/45D Điện Biên Phủ, P. 22, Quận Bình Thạnh, Tp. HCM</td></tr>
+        <tr><td class="col-label">MST:</td><td colspan="3">0313214289</td></tr>
+    </table>
+
+    <p class="justify" style="margin-top: 15px;">Hai bên thống nhất ký kết Phụ lục hợp đồng về việc điều chỉnh thông tin đơn hàng và chi phí vận chuyển cụ thể như sau:</p>
+
+    <div class="section-title">ĐIỀU 1: THÔNG TIN TRUY XUẤT QUY ĐỔI HÀNG HÓA VÀ CHÊNH LỆCH</div>
+    <div class="section-content">
+        <p>Chi tiết đối chiếu thông số hàng hóa của đơn hàng <strong>{{Tracking_Code}}</strong> (Tên hàng: {{Item_Name}}) giữa khai báo ban đầu và đo đạc thực tế tại Hub như sau:</p>
+        
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Thông số hàng hóa</th>
+                    <th style="width: 25%;">Khai báo (Expected)</th>
+                    <th style="width: 25%;">Thực tế (Actual)</th>
+                    <th style="width: 20%;">Chênh lệch (%)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="bold">Số lượng (Quantity)</td>
+                    <td>{{Expected_Qty}} {{Packing_Type}}</td>
+                    <td>{{Actual_Qty}} {{Packing_Type}}</td>
+                    <td class="text-center">0%</td>
+                </tr>
+                <tr>
+                    <td class="bold">Chiều Dài (Length)</td>
+                    <td>{{Expected_Length}} cm</td>
+                    <td>{{Actual_Length}} cm</td>
+                    <td class="text-center bold">{{Length_Diff}}%</td>
+                </tr>
+                <tr>
+                    <td class="bold">Chiều Rộng (Width)</td>
+                    <td>{{Expected_Width}} cm</td>
+                    <td>{{Actual_Width}} cm</td>
+                    <td class="text-center bold">{{Width_Diff}}%</td>
+                </tr>
+                <tr>
+                    <td class="bold">Chiều Cao (Height)</td>
+                    <td>{{Expected_Height}} cm</td>
+                    <td>{{Actual_Height}} cm</td>
+                    <td class="text-center bold">{{Height_Diff}}%</td>
+                </tr>
+                <tr>
+                    <td class="bold">Thể tích (Volume)</td>
+                    <td>{{Expected_Cbm}} CBM</td>
+                    <td>{{Actual_Cbm}} CBM</td>
+                    <td class="text-center bold">{{Cbm_Diff}}%</td>
+                </tr>
+                <tr>
+                    <td class="bold">Trọng lượng quy đổi (Volumetric weight)</td>
+                    <td>{{Expected_Volumetric_Weight}} KG</td>
+                    <td>{{Actual_Volumetric_Weight}} KG</td>
+                    <td class="text-center bold">{{Volumetric_Weight_Diff}}%</td>
+                </tr>
+                <tr>
+                    <td class="bold">Trọng lượng thực tế (Actual Weight)</td>
+                    <td>{{Expected_Weight}} KG</td>
+                    <td>{{Actual_Weight}} KG</td>
+                    <td class="text-center bold">{{Weight_Diff}}%</td>
+                </tr>
+                <tr class="highlight-row" style="color: #1a56db;">
+                    <td class="bold">Trọng lượng tính cước (Chargeable Weight)</td>
+                    <td>{{Expected_Chargeable_Weight}} KG</td>
+                    <td>{{Actual_Chargeable_Weight}} KG</td>
+                    <td class="text-center bold">{{Chargeable_Weight_Diff}}%</td>
+                </tr>
+            </tbody>
+        </table>
+        <p style="font-size: 11pt; font-style: italic;">* Ghi chú: Trọng lượng tính cước là giá trị lớn nhất giữa Trọng lượng thực tế, Trọng lượng quy đổi (tính theo hệ số quy chuẩn hệ thống {{Volumetric_Rate}} kg/CBM) và trọng lượng tối thiểu 30 kg.</p>
+    </div>
+
+    <div class="section-title">ĐIỀU 2: ĐIỀU CHỈNH GIÁ CƯỚC CƠ BẢN (BASE FREIGHT)</div>
+    <div class="section-content">
+        <p>Do thông số hàng hóa thực tế vượt ngưỡng chênh lệch cho phép (>5%), giá cước vận chuyển cơ bản (Base Freight) ban đầu được điều chỉnh dựa trên biểu giá lũy tiến (Weight Tiers) tương ứng:</p>
+        
+        <table class="info-table" style="margin-left: 0; width: 100%;">
+            <tr>
+                <td class="col-label" style="width: 320px;">1. Cước cơ bản gốc trong Quotation (chưa VAT):</td>
+                <td class="bold">{{Original_Price}} VNĐ</td>
+            </tr>
+            <tr>
+                <td class="col-label" style="width: 320px;">2. Cước cơ bản điều chỉnh tăng thêm (chưa VAT):</td>
+                <td class="bold" style="color: red;">+ {{Adjusted_Price}} VNĐ</td>
+            </tr>
+            <tr style="border-top: 1px double #333;">
+                <td class="col-label" style="width: 320px;">3. Tổng cước cơ bản mới sau điều chỉnh (chưa VAT):</td>
+                <td class="bold">{{New_Price}} VNĐ</td>
+            </tr>
+            <tr>
+                <td class="col-label" style="width: 320px;">Lý do điều chỉnh:</td>
+                <td>{{Reason}}</td>
+            </tr>
+        </table>
+        <p style="font-style: italic; font-size: 11pt;">(Khoản điều chỉnh trên chỉ áp dụng đối với cước cơ bản của chặng vận chuyển. Thuế GTGT (8%) và các phụ phí phát sinh liên quan sẽ được tự động kết chuyển và thể hiện đầy đủ trên hóa đơn quyết toán tài chính cuối cùng của đơn hàng sau khi Bên A chấp thuận phụ lục này).</p>
+
+        <div class="bold" style="margin-top: 15px; margin-bottom: 5px;">* Chi tiết phương pháp tính toán và truy xuất cước cơ bản:</div>
+        <table class="data-table" style="font-size: 11pt; margin-top: 5px;">
+            <thead>
+                <tr>
+                    <th>Các bước quy đổi và tính toán</th>
+                    <th>Thông số thực tế</th>
+                    <th>Công thức & Cơ sở áp dụng</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Hệ số quy đổi thể tích</td>
+                    <td class="bold">{{Volumetric_Rate}} kg/CBM</td>
+                    <td>Quy chuẩn hệ thống cấu hình chung</td>
+                </tr>
+                <tr>
+                    <td>Trọng lượng quy đổi thực tế</td>
+                    <td class="bold">{{Actual_Volumetric_Weight}} kg</td>
+                    <td>Thể tích thực tế ({{Actual_Cbm}} CBM) x {{Volumetric_Rate}} kg/CBM</td>
+                </tr>
+                <tr>
+                    <td>Trọng lượng tính cước thực tế</td>
+                    <td class="bold">{{Actual_Chargeable_Weight}} kg</td>
+                    <td>Max(Trọng lượng thực tế {{Actual_Weight}} kg, Trọng lượng quy đổi {{Actual_Volumetric_Weight}} kg)</td>
+                </tr>
+                <tr>
+                    <td>Đơn giá theo biểu cước (Weight Tier)</td>
+                    <td class="bold">{{Unit_Price}} VNĐ/kg</td>
+                    <td>Tra cứu theo Trọng lượng tính cước thực tế ({{Actual_Chargeable_Weight}} kg) cho tuyến vận chuyển</td>
+                </tr>
+                <tr>
+                    <td>Cước cơ bản mới (chưa VAT)</td>
+                    <td class="bold">{{New_Base_Price}} VNĐ</td>
+                    <td>Trọng lượng tính cước thực tế ({{Actual_Chargeable_Weight}} kg) x Đơn giá ({{Unit_Price}} VNĐ/kg)</td>
+                </tr>
+                <tr>
+                    <td>Cước cơ bản ban đầu trong Quotation</td>
+                    <td class="bold">{{Original_Base_Price}} VNĐ</td>
+                    <td>Cước cơ bản gốc trong báo giá được duyệt ban đầu</td>
+                </tr>
+                <tr class="highlight-row">
+                    <td style="color: red;">Phí chênh lệch cước cơ bản tăng thêm</td>
+                    <td style="color: red; font-size: 12pt;">{{Adjusted_Price}} VNĐ</td>
+                    <td>Cước cơ bản mới ({{New_Base_Price}} VNĐ) - Cước cơ bản ban đầu ({{Original_Base_Price}} VNĐ)</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section-title">ĐIỀU 3: HIỆU LỰC THI HÀNH</div>
+    <div class="section-content">
+        <p>1. Phụ lục này là văn bản bổ sung, là bộ phận cấu thành không thể tách rời của Hợp đồng số {{Contract_Number}}.</p>
+        <p>2. Các nội dung và điều khoản khác của Hợp đồng số {{Contract_Number}} không được sửa đổi, bổ sung tại Phụ lục này vẫn tiếp tục giữ nguyên hiệu lực thi hành.</p>
+        <p>3. Phụ lục này có hiệu lực kể từ ngày đại diện có thẩm quyền của hai bên ký tên và đóng dấu hợp pháp. Phụ lục được lập thành hai (02) bản tiếng Việt có giá trị pháp lý tương đương, mỗi bên giữ một (01) bản để thực hiện.</p>
+    </div>
+
+    <table style="width: 100%; margin-top: 50px; text-align: center; page-break-inside: avoid;">
+        <tr>
+            <td style="width: 50%; vertical-align: top;">
+                <span class="bold">ĐẠI DIỆN BÊN A</span><br>
+                <span style="font-style: italic; font-size: 11pt;">(Ký, ghi rõ họ tên và đóng dấu)</span>
+                <br><br><br><br><br>
+                <span class="bold">{{Customer_CompanyName}}</span>
+            </td>
+            <td style="width: 50%; vertical-align: top;">
+                <span class="bold">ĐẠI DIỆN BÊN B</span><br>
+                <span style="font-style: italic; font-size: 11pt;">(Ký, đóng dấu và ghi rõ họ tên)</span>
+                <br><br><br><br><br>
+                <span class="bold">CÔNG TY CỔ PHẦN PROSHIP</span>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

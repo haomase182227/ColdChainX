@@ -4,6 +4,7 @@ using ColdChainX.Core.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 namespace ColdChainX.Application.Features.Inbound.Commands;
 
@@ -15,13 +16,20 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
     private readonly ILogger<ProcessInboundQcCommandHandler> _logger;
     private readonly IFileService _fileService;
     private readonly IMediator _mediator;
+    private readonly IContractAppendixService _appendixService;
 
-    public ProcessInboundQcCommandHandler(IApplicationDbContext context, ILogger<ProcessInboundQcCommandHandler> logger, IFileService fileService, IMediator mediator)
+    public ProcessInboundQcCommandHandler(
+        IApplicationDbContext context,
+        ILogger<ProcessInboundQcCommandHandler> logger,
+        IFileService fileService,
+        IMediator mediator,
+        IContractAppendixService appendixService)
     {
         _context = context;
         _logger = logger;
         _fileService = fileService;
         _mediator = mediator;
+        _appendixService = appendixService;
     }
 
     public async Task<ProcessInboundQcResponse> Handle(ProcessInboundQcCommand request, CancellationToken cancellationToken)
@@ -142,11 +150,14 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
             Quantity = order.Quantity,
             ActualWeightKg = request.ActualWeightKg,
             ActualCbm = actualCbm,
+            LengthCm = request.LengthCm,
+            WidthCm = request.WidthCm,
+            HeightCm = request.HeightCm,
             RequiredTemperature = ParseTemperature(order.TempCondition),
             RecordedTemperature = request.Temperature,
             State = hasDiscrepancy ? LpnState.DISCREPANCY_HOLD : LpnState.RECEIVING,
             DiscrepancyReason = hasDiscrepancy
-                ? $"Actual cargo differs from expected by {maxDiff:0.##}% (weight {weightDiff:0.##}%, cbm {cbmDiff:0.##}%)."
+                ? $"Actual cargo differs from expected by {maxDiff:0.##}% (weight {weightDiff:0.##}%, cbm {cbmDiff:0.##}%). Actual dimensions: {request.LengthCm:0.##} x {request.WidthCm:0.##} x {request.HeightCm:0.##} cm."
                 : null,
             EvidenceImageUrl = evidenceImageUrl,
             SlaDeadline = now.AddHours(24),
@@ -172,6 +183,102 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
             pdfUrl = await _fileService.UploadFileAsync(pdfBytes, pdfFileName);
             
             receipt.PdfUrl = pdfUrl;
+
+            // Create or update TransportDocument for discrepancy report
+            var existingDoc = await _context.TransportDocuments
+                .FirstOrDefaultAsync(d => d.OrderId == order.OrderId && d.DocType == "DISCREPANCY_REPORT", cancellationToken);
+
+            if (existingDoc == null)
+            {
+                _context.TransportDocuments.Add(new TransportDocument
+                {
+                    DocId = Guid.NewGuid(),
+                    OrderId = order.OrderId,
+                    DocType = "DISCREPANCY_REPORT",
+                    ImageUrl = pdfUrl,
+                    Status = "PENDING",
+                    UploadedBy = request.ReceiverId,
+                    CreatedAt = now
+                });
+            }
+            else
+            {
+                existingDoc.ImageUrl = pdfUrl;
+                existingDoc.Status = "PENDING";
+                existingDoc.UploadedBy = request.ReceiverId;
+                existingDoc.CreatedAt = now;
+            }
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+            // Automatically generate a pre-tax contract appendix in DRAFT status
+            var salesUserId = await _context.Users
+                .Include(u => u.Role)
+                .Where(u => u.Role != null && u.Role.RoleName.ToLower() == "sales")
+                .Select(u => u.UserId)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (salesUserId == Guid.Empty)
+            {
+                salesUserId = await _context.Users
+                    .Include(u => u.Role)
+                    .Where(u => u.Role != null && (u.Role.RoleName.ToLower() == "admin" || u.Role.RoleName.ToLower() == "manager"))
+                    .Select(u => u.UserId)
+                    .FirstOrDefaultAsync(cancellationToken);
+            }
+
+            if (salesUserId == Guid.Empty)
+            {
+                salesUserId = request.ReceiverId;
+            }
+
+            var isWeightHigher = request.ActualWeightKg > order.ExpectedWeightKg;
+            var isCbmHigher = actualCbm > order.ExpectedCbm;
+            var weightSign = isWeightHigher ? "+" : "-";
+            var cbmSign = isCbmHigher ? "+" : "-";
+
+            var appendixReason = $"Phát hiện chênh lệch thực tế khi kiểm đếm QC tại Hub (Trọng lượng chênh lệch: {weightSign}{weightDiff:0.##}%, Thể tích chênh lệch: {cbmSign}{cbmDiff:0.##}%).";
+
+            var appendixResult = await _appendixService.GenerateAppendixAsync(
+                order.OrderId,
+                null,
+                appendixReason,
+                salesUserId);
+
+            if (!appendixResult.Success)
+            {
+                _logger.LogError("Failed to automatically generate contract appendix: {Message}", appendixResult.Message);
+            }
+
+            var appendixIdStr = appendixResult.Success ? appendixResult.Data!.AppendixId.ToString() : "";
+            var appendixNumberStr = appendixResult.Success ? appendixResult.Data!.AppendixNumber : "";
+
+            // Send notification to Sales, Admin, and Manager
+            await EnsureNotificationTemplateAsync("NOTI_QC_DISCREPANCY", cancellationToken);
+            var salesUsers = await _context.Users
+                .Include(u => u.Role)
+                .Where(u => u.Role != null && (u.Role.RoleName.ToLower() == "sales" || u.Role.RoleName.ToLower() == "admin" || u.Role.RoleName.ToLower() == "manager"))
+                .ToListAsync(cancellationToken);
+
+            foreach (var user in salesUsers)
+            {
+                _context.Notifications.Add(new Notification
+                {
+                    NotiId = Guid.NewGuid(),
+                    UserId = user.UserId,
+                    SenderId = request.ReceiverId,
+                    TemplateId = "NOTI_QC_DISCREPANCY",
+                    Params = JsonSerializer.Serialize(new { 
+                        Tracking_Code = order.TrackingCode, 
+                        Pdf_URL = pdfUrl ?? "",
+                        Appendix_Id = appendixIdStr,
+                        Appendix_Number = appendixNumberStr
+                    }),
+                    OrderId = order.OrderId,
+                    IsRead = false,
+                    CreatedAt = now
+                });
+            }
             await _context.SaveChangesAsync(cancellationToken);
         }
 
@@ -197,6 +304,55 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
             DiffPercent = maxDiff,
             PdfUrl = pdfUrl
         };
+    }
+
+    private async Task EnsureNotificationTemplateAsync(string templateId, CancellationToken cancellationToken)
+    {
+        var existing = await _context.NotificationTemplates.FirstOrDefaultAsync(t => t.TemplateId == templateId, cancellationToken);
+
+        var typeId = await _context.Messagetypes
+            .Where(t => t.TypeName == "ORDER_STATUS")
+            .Select(t => (Guid?)t.TypeId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (!typeId.HasValue)
+        {
+            var type = new Messagetype
+            {
+                TypeId = Guid.NewGuid(),
+                TypeName = "ORDER_STATUS",
+                Description = "Cập nhật trạng thái đơn hàng, báo giá, hợp đồng"
+            };
+            _context.Messagetypes.Add(type);
+            await _context.SaveChangesAsync(cancellationToken);
+            typeId = type.TypeId;
+        }
+
+        var expectedTitle = "Đơn hàng {{Tracking_Code}} bị giữ lại do chênh lệch QC";
+        var expectedBody = "Phát hiện chênh lệch >5% tại Inbound QC. Biên bản bất thường: {{Pdf_URL}}. Phụ lục hợp đồng nháp: {{Appendix_Number}} (ID: {{Appendix_Id}})";
+
+        if (existing != null)
+        {
+            if (existing.BodyTemplate != expectedBody || existing.TitleTemplate != expectedTitle)
+            {
+                existing.TitleTemplate = expectedTitle;
+                existing.BodyTemplate = expectedBody;
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+        }
+        else
+        {
+            _context.NotificationTemplates.Add(new NotificationTemplate
+            {
+                TemplateId = templateId,
+                TypeId = typeId.Value,
+                TitleTemplate = expectedTitle,
+                BodyTemplate = expectedBody,
+                Channel = "IN_APP",
+                Status = "ACTIVE"
+            });
+            await _context.SaveChangesAsync(cancellationToken);
+        }
     }
 
     private static ProcessInboundQcResponse Failure(string message)

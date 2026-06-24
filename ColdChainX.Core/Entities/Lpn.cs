@@ -24,6 +24,12 @@ public partial class Lpn
 
     public decimal ActualCbm { get; set; }
 
+    public decimal? LengthCm { get; set; }
+
+    public decimal? WidthCm { get; set; }
+
+    public decimal? HeightCm { get; set; }
+
     public decimal? RequiredTemperature { get; set; }
 
     public decimal? RecordedTemperature { get; set; }
