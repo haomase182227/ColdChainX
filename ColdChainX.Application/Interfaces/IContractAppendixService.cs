@@ -17,5 +17,6 @@ namespace ColdChainX.Application.Interfaces
         Task<ApiResponse<ContractAppendixResponse>> GetAppendixByIdAsync(Guid appendixId);
         Task<ApiResponse<ContractAppendixResponse>> GetAppendixByOrderIdAsync(Guid orderId);
         Task<ApiResponse<string>> GetAppendixHtmlAsync(Guid appendixId);
+        Task<ApiResponse<int>> ResetAllAppendicesHtmlAsync();
     }
 }

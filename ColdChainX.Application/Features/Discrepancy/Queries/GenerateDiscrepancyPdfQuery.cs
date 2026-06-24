@@ -52,14 +52,70 @@ public class GenerateDiscrepancyPdfQueryHandler : IRequestHandler<GenerateDiscre
             DriverName = receipt.DelivererName ?? "N/A",
             VehiclePlateNumber = "N/A", // Truck plate is usually on trip
             OrderCode = receipt.Order?.TrackingCode ?? "N/A",
-            DiscrepancyItems = discrepancyItems.Select((item, index) => new
-            {
-                Index = index + 1,
-                LpnCode = item.LpnCode,
-                ItemName = item.Order?.ItemName ?? "Unknown",
-                ExpectedValue = item.Order?.Quantity ?? 0,
-                ActualValue = item.Quantity,
-                Reason = item.DiscrepancyReason ?? item.State.ToString()
+            DiscrepancyItems = discrepancyItems.Select((item, index) => {
+                var expectedQty = item.Order?.Quantity ?? 0;
+                var actualQty = item.Quantity;
+                var expectedWeight = item.Order?.ExpectedWeightKg ?? 0m;
+                var actualWeight = item.ActualWeightKg;
+                var expectedCbm = item.Order?.ExpectedCbm ?? 0m;
+                var actualCbm = item.ActualCbm;
+                var expectedLength = item.Order?.LengthCm ?? 0m;
+                var actualLength = item.LengthCm ?? 0m;
+                var expectedWidth = item.Order?.WidthCm ?? 0m;
+                var actualWidth = item.WidthCm ?? 0m;
+                var expectedHeight = item.Order?.HeightCm ?? 0m;
+                var actualHeight = item.HeightCm ?? 0m;
+
+                var isQtyDiff = expectedQty != actualQty;
+                var isWeightDiff = Math.Abs(expectedWeight - actualWeight) > 0.01m;
+                var isCbmDiff = Math.Abs(expectedCbm - actualCbm) > 0.0001m;
+                var isLengthDiff = Math.Abs(expectedLength - actualLength) > 0.01m;
+                var isWidthDiff = Math.Abs(expectedWidth - actualWidth) > 0.01m;
+                var isHeightDiff = Math.Abs(expectedHeight - actualHeight) > 0.01m;
+
+                Func<decimal, decimal, decimal> calculateDiff = (exp, act) => {
+                    if (exp <= 0) return act > 0 ? 100m : 0m;
+                    return Math.Round(Math.Abs(act - exp) / exp * 100m, 2);
+                };
+
+                return new
+                {
+                    Index = index + 1,
+                    LpnCode = item.LpnCode,
+                    ItemName = item.Order?.ItemName ?? "Unknown",
+                    
+                    ExpectedQty = expectedQty,
+                    ActualQty = actualQty,
+                    IsQtyDiff = isQtyDiff,
+                    QtyDiffPercent = calculateDiff(expectedQty, actualQty).ToString("0.##"),
+
+                    ExpectedWeight = expectedWeight.ToString("0.##"),
+                    ActualWeight = actualWeight.ToString("0.##"),
+                    IsWeightDiff = isWeightDiff,
+                    WeightDiffPercent = calculateDiff(expectedWeight, actualWeight).ToString("0.##"),
+
+                    ExpectedCbm = expectedCbm.ToString("0.####"),
+                    ActualCbm = actualCbm.ToString("0.####"),
+                    IsCbmDiff = isCbmDiff,
+                    CbmDiffPercent = calculateDiff(expectedCbm, actualCbm).ToString("0.##"),
+
+                    ExpectedLength = expectedLength.ToString("0.##"),
+                    ActualLength = actualLength.ToString("0.##"),
+                    IsLengthDiff = isLengthDiff,
+                    LengthDiffPercent = calculateDiff(expectedLength, actualLength).ToString("0.##"),
+
+                    ExpectedWidth = expectedWidth.ToString("0.##"),
+                    ActualWidth = actualWidth.ToString("0.##"),
+                    IsWidthDiff = isWidthDiff,
+                    WidthDiffPercent = calculateDiff(expectedWidth, actualWidth).ToString("0.##"),
+
+                    ExpectedHeight = expectedHeight.ToString("0.##"),
+                    ActualHeight = actualHeight.ToString("0.##"),
+                    IsHeightDiff = isHeightDiff,
+                    HeightDiffPercent = calculateDiff(expectedHeight, actualHeight).ToString("0.##"),
+
+                    Reason = item.DiscrepancyReason ?? item.State.ToString()
+                };
             }),
             AdditionalNotes = receipt.Note ?? "Không có"
         };
