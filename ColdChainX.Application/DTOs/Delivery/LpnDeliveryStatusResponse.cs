@@ -1,0 +1,17 @@
+using System;
+
+namespace ColdChainX.Application.DTOs.Delivery;
+
+public class LpnDeliveryStatusResponse
+{
+    public Guid LpnId { get; set; }
+    public string LpnCode { get; set; } = null!;
+    public string State { get; set; } = null!; // LPN current state
+    public string? OutcomeType { get; set; } // "DELIVERED" | "REJECTED"
+    public string? ReceiverName { get; set; }
+    public string? ReceiverPhone { get; set; }
+    public string? RejectReason { get; set; }
+    public string? RejectNote { get; set; }
+    public string? EvidenceImageUrl { get; set; }
+    public DateTime? ConfirmedAt { get; set; }
+}
