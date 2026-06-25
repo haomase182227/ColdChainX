@@ -114,6 +114,8 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
 
     public virtual DbSet<ComplianceZoningRule> ComplianceZoningRules { get; set; }
 
+    public virtual DbSet<LpnDeliveryConfirmation> LpnDeliveryConfirmations { get; set; }
+
 
 
 
@@ -2381,6 +2383,73 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasForeignKey(e => e.LpnId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_inbound_return_slips_lpn");
+        });
+
+        modelBuilder.Entity<LpnDeliveryConfirmation>(entity =>
+        {
+            entity.HasKey(e => e.ConfirmationId).HasName("lpn_delivery_confirmations_pkey");
+            entity.ToTable("lpn_delivery_confirmations");
+
+            entity.Property(e => e.ConfirmationId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("confirmation_id");
+
+            entity.Property(e => e.LpnId).HasColumnName("lpn_id");
+            entity.Property(e => e.TripId).HasColumnName("trip_id");
+            entity.Property(e => e.OrderId).HasColumnName("order_id");
+
+            entity.Property(e => e.OutcomeType)
+                .HasMaxLength(20)
+                .HasColumnName("outcome_type");
+
+            entity.Property(e => e.ReceiverName)
+                .HasMaxLength(200)
+                .HasColumnName("receiver_name");
+
+            entity.Property(e => e.ReceiverPhone)
+                .HasMaxLength(20)
+                .HasColumnName("receiver_phone");
+
+            entity.Property(e => e.RejectReason)
+                .HasMaxLength(50)
+                .HasColumnName("reject_reason");
+
+            entity.Property(e => e.RejectNote)
+                .HasColumnType("text")
+                .HasColumnName("reject_note");
+
+            entity.Property(e => e.EvidenceImageUrl)
+                .HasMaxLength(500)
+                .HasColumnName("evidence_image_url");
+
+            entity.Property(e => e.ConfirmedByDriverId).HasColumnName("confirmed_by");
+
+            entity.Property(e => e.ConfirmedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("confirmed_at");
+
+            entity.HasIndex(e => e.LpnId).IsUnique().HasDatabaseName("uq_lpn_delivery_confirmations_lpn_id");
+
+            entity.HasOne(d => d.Lpn).WithMany()
+                .HasForeignKey(d => d.LpnId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_lpn_delivery_confirmations_lpn");
+
+            entity.HasOne(d => d.Trip).WithMany()
+                .HasForeignKey(d => d.TripId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_lpn_delivery_confirmations_trip");
+
+            entity.HasOne(d => d.Order).WithMany()
+                .HasForeignKey(d => d.OrderId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_lpn_delivery_confirmations_order");
+
+            entity.HasOne(d => d.ConfirmedByDriver).WithMany()
+                .HasForeignKey(d => d.ConfirmedByDriverId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_lpn_delivery_confirmations_driver");
         });
 
         OnModelCreatingPartial(modelBuilder);

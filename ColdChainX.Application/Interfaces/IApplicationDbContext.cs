@@ -35,6 +35,7 @@ namespace ColdChainX.Application.Interfaces
         DbSet<DeliveryEpod> DeliveryEpods { get; }
         DbSet<ContractAppendix> ContractAppendices { get; }
         DbSet<InboundReturnSlip> InboundReturnSlips { get; }
+        DbSet<LpnDeliveryConfirmation> LpnDeliveryConfirmations { get; }
         DbSet<Notification> Notifications { get; }
         DbSet<NotificationTemplate> NotificationTemplates { get; }
         DbSet<Messagetype> Messagetypes { get; }
