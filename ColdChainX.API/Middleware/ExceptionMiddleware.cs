@@ -38,6 +38,10 @@ namespace ColdChainX.API.Middleware
             {
                 statusCode = apiEx.StatusCode;
             }
+            else if (exception is InvalidOperationException)
+            {
+                statusCode = (int)HttpStatusCode.BadRequest;
+            }
 
             var response = ApiResponse<object>.Failure(message);
             context.Response.ContentType = "application/json";

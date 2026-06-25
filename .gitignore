@@ -413,3 +413,12 @@ walkthrough.md
 ColdChainX.API/wwwroot/uploads/
 ColdChainX.API/wwwroot/appendices/
 ColdChainX.API/wwwroot/returnslips/
+
+# ColdChainX Local Documentation (AI-generated, local only — do NOT push to git)
+docs/
+GEMINI.md
+API_ENDPOINTS_SUMMARY.md
+FINAL_API_SUMMARY.md
+DATABASE_FIX_REQUIRED.md
+Motasoluoc.md
+discrepancy_flow_documentation.md

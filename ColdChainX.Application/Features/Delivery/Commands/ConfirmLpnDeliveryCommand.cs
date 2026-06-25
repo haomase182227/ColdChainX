@@ -110,60 +110,64 @@ public class ConfirmLpnDeliveryCommandHandler : IRequestHandler<ConfirmLpnDelive
         if (string.IsNullOrEmpty(imageUrl))
             throw new ExternalServiceException("Image upload returned empty URL. Please try again.");
 
-        // 9. Database transaction and save
-        using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
-        try
+        // 9. Database transaction and save using execution strategy
+        var strategy = _context.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
         {
-            var confirmation = new LpnDeliveryConfirmation
+            using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            try
             {
-                ConfirmationId = Guid.NewGuid(),
-                LpnId = request.LpnId,
-                TripId = request.TripId,
-                OrderId = lpn.OrderId,
-                OutcomeType = "DELIVERED",
-                ReceiverName = request.ReceiverName,
-                ReceiverPhone = request.ReceiverPhone,
-                EvidenceImageUrl = imageUrl,
-                ConfirmedByDriverId = request.UserId,
-                ConfirmedAt = DateTime.UtcNow
-            };
+                var confirmation = new LpnDeliveryConfirmation
+                {
+                    ConfirmationId = Guid.NewGuid(),
+                    LpnId = request.LpnId,
+                    TripId = request.TripId,
+                    OrderId = lpn.OrderId,
+                    OutcomeType = "DELIVERED",
+                    ReceiverName = request.ReceiverName,
+                    ReceiverPhone = request.ReceiverPhone,
+                    EvidenceImageUrl = imageUrl,
+                    ConfirmedByDriverId = request.UserId,
+                    ConfirmedAt = DateTime.UtcNow
+                };
 
-            _context.LpnDeliveryConfirmations.Add(confirmation);
+                _context.LpnDeliveryConfirmations.Add(confirmation);
 
-            lpn.State = LpnState.DELIVERED;
-            lpn.EvidenceImageUrl = imageUrl;
-            lpn.UpdatedAt = DateTime.UtcNow;
+                lpn.State = LpnState.DELIVERED;
+                lpn.EvidenceImageUrl = imageUrl;
+                lpn.UpdatedAt = DateTime.UtcNow;
 
-            await _context.SaveChangesAsync(cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
 
-            // Sync Order status
-            await SyncOrderDeliveryStatusAsync(lpn.OrderId, cancellationToken);
+                // Sync Order status
+                await SyncOrderDeliveryStatusAsync(lpn.OrderId, cancellationToken);
 
-            // Sync Trip status
-            await TryCompleteTripAsync(request.TripId, cancellationToken);
+                // Sync Trip status
+                await TryCompleteTripAsync(request.TripId, cancellationToken);
 
-            await _context.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
 
-            var response = new LpnDeliveryStatusResponse
+                var response = new LpnDeliveryStatusResponse
+                {
+                    LpnId = lpn.LpnId,
+                    LpnCode = lpn.LpnCode,
+                    State = lpn.State.ToString(),
+                    OutcomeType = confirmation.OutcomeType,
+                    ReceiverName = confirmation.ReceiverName,
+                    ReceiverPhone = confirmation.ReceiverPhone,
+                    EvidenceImageUrl = confirmation.EvidenceImageUrl,
+                    ConfirmedAt = confirmation.ConfirmedAt
+                };
+
+                return ApiResponse<LpnDeliveryStatusResponse>.SuccessResponse(response, "LPN delivery confirmed successfully.");
+            }
+            catch (Exception)
             {
-                LpnId = lpn.LpnId,
-                LpnCode = lpn.LpnCode,
-                State = lpn.State.ToString(),
-                OutcomeType = confirmation.OutcomeType,
-                ReceiverName = confirmation.ReceiverName,
-                ReceiverPhone = confirmation.ReceiverPhone,
-                EvidenceImageUrl = confirmation.EvidenceImageUrl,
-                ConfirmedAt = confirmation.ConfirmedAt
-            };
-
-            return ApiResponse<LpnDeliveryStatusResponse>.SuccessResponse(response, "LPN delivery confirmed successfully.");
-        }
-        catch (Exception)
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            throw;
-        }
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
+        });
     }
 
     private async Task SyncOrderDeliveryStatusAsync(Guid orderId, CancellationToken ct)
