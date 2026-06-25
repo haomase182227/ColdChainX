@@ -32,6 +32,7 @@ public class DispatchController : ControllerBase
     private readonly IWebHostEnvironment _env;
     private readonly IFileService _fileService;
     private readonly IMediator _mediator;
+    private readonly IDriverAvailabilityService _driverAvailability;
 
     public DispatchController(
         IDispatchService dispatchService,
@@ -43,7 +44,8 @@ public class DispatchController : ControllerBase
         IGoongMapService goongMapService,
         IWebHostEnvironment env,
         IFileService fileService,
-        IMediator mediator)
+        IMediator mediator,
+        IDriverAvailabilityService driverAvailability)
     {
         _dispatchService = dispatchService;
         _vehicleService = vehicleService;
@@ -55,6 +57,7 @@ public class DispatchController : ControllerBase
         _env = env;
         _fileService = fileService;
         _mediator = mediator;
+        _driverAvailability = driverAvailability;
     }
 
     private Guid GetCurrentUserId()
@@ -88,6 +91,55 @@ public class DispatchController : ControllerBase
             })
             .ToList();
         return Ok(new { Success = true, Data = items });
+    }
+
+    /// <summary>
+    /// [Lookup] Danh sách tài xế khả dụng — dùng để chọn 1–2 tài xế cho manual-dispatch.
+    /// </summary>
+    /// <remarks>
+    /// Tự động gỡ trạng thái RELAX nếu đã qua ngày/tuần giới hạn, sau đó chỉ trả về
+    /// các tài xế có thể gán chuyến (không RELAX/Offline/Inactive và còn bằng lái hạn).
+    /// </remarks>
+    [HttpGet("lookup/drivers")]
+    [ProducesResponseType(typeof(object), 200)]
+    public async Task<IActionResult> LookupDrivers()
+    {
+        var candidates = await _db.Drivers
+            .Include(d => d.DriverLicenses)
+            .Where(d => d.Status != "Offline" && d.Status != "Inactive" && d.Status != "DELETED")
+            .ToListAsync();
+
+        // Tự động gỡ RELAX đã hết hạn (cập nhật Status tại chỗ)
+        foreach (var d in candidates)
+            await _driverAvailability.ReconcileStatusAsync(d);
+        await _db.SaveChangesAsync();
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var items = candidates
+            .Where(d => d.Status != "RELAX")
+            .Select(d =>
+            {
+                var lic = d.DriverLicenses
+                    .Where(l => l.ExpiryDate >= today && (l.Status == null || l.Status == "ACTIVE"))
+                    .OrderByDescending(l => l.ExpiryDate)
+                    .FirstOrDefault();
+                return new
+                {
+                    d.DriverId,
+                    d.FullName,
+                    d.PhoneNumber,
+                    d.Status,
+                    LicenseClass = lic?.LicenseClass,
+                    LicenseExpiry = lic?.ExpiryDate,
+                    HasValidLicense = lic != null,
+                    Label = $"{d.FullName} — {d.PhoneNumber}" + (lic != null ? $" | Bằng {lic.LicenseClass}" : " | ⚠ Hết hạn bằng lái")
+                };
+            })
+            .Where(x => x.HasValidLicense)
+            .OrderBy(x => x.FullName)
+            .ToList();
+
+        return Ok(new { Success = true, Count = items.Count, Data = items });
     }
 
     /// <summary>
@@ -195,6 +247,18 @@ public class DispatchController : ControllerBase
         if (form.PlannedStartTime >= form.PlannedEndTime)
             return BadRequest(new { Success = false, Error = "PlannedStartTime phải nhỏ hơn PlannedEndTime." });
 
+        // Tài xế: 1–2 người, gán theo chuyến qua TripDriver
+        var driverIds = (form.DriverIds ?? new List<string>())
+            .Where(d => !string.IsNullOrWhiteSpace(d))
+            .Select(d => ExtractGuid(d))
+            .Where(d => Guid.TryParse(d, out _))
+            .Select(Guid.Parse)
+            .Distinct()
+            .ToList();
+
+        if (driverIds.Count < 1 || driverIds.Count > 2)
+            return BadRequest(new { Success = false, Error = "Vui lòng chọn 1 hoặc 2 tài xế cho chuyến." });
+
         var parsedLpnIds = lpnIds.Select(id => Guid.Parse(ExtractGuid(id))).ToList();
 
         // Tự động tìm kho xuất phát từ LPN đầu tiên
@@ -223,7 +287,7 @@ public class DispatchController : ControllerBase
         {
             LpnIds = parsedLpnIds,
             VehicleId = Guid.Parse(ExtractGuid(form.VehicleId)),
-            DriverId = string.IsNullOrWhiteSpace(form.DriverId) ? Guid.Empty : Guid.Parse(ExtractGuid(form.DriverId)),
+            DriverIds = driverIds,
             OriginWarehouseLocationId = originLocId,
             PlannedStartTime          = form.PlannedStartTime,
             PlannedEndTime            = form.PlannedEndTime
@@ -360,7 +424,8 @@ public class DispatchController : ControllerBase
     {
         var trips = await _db.MasterTrips
             .Include(t => t.Vehicle)
-            .Include(t => t.Driver)
+            .Include(t => t.TripDrivers)
+                .ThenInclude(td => td.Driver)
             .Where(t => t.Status == "PLANNED")
             .OrderByDescending(t => t.CreatedAt)
             .Select(t => new
@@ -368,9 +433,10 @@ public class DispatchController : ControllerBase
                 t.TripId,
                 t.Status,
                 Vehicle = t.Vehicle != null ? t.Vehicle.TruckPlate : "N/A",
-                Driver  = t.Driver != null ? t.Driver.FullName : "N/A",
+                Driver  = t.TripDrivers.Count > 0 ? string.Join(", ", t.TripDrivers.Select(td => td.Driver.FullName)) : "N/A",
                 t.PlannedStartTime,
                 t.PlannedEndTime,
+                t.EstimatedDurationHours,
                 TotalLpns     = _db.Lpns.Count(l => l.TripId == t.TripId),
                 AllocatedLpns = _db.Lpns.Count(l => l.TripId == t.TripId && l.State == LpnState.ALLOCATED),
                 Label = $"{t.TripId} | Xe {(t.Vehicle != null ? t.Vehicle.TruckPlate : "N/A")} | {_db.Lpns.Count(l => l.TripId == t.TripId)} LPN"
@@ -509,7 +575,8 @@ public class DispatchController : ControllerBase
     {
         var candidates = await _db.MasterTrips
             .Include(t => t.Vehicle)
-            .Include(t => t.Driver)
+            .Include(t => t.TripDrivers)
+                .ThenInclude(td => td.Driver)
             .Where(t => t.Status == "LOADING_COMPLETED")
             .OrderByDescending(t => t.CreatedAt)
             .Select(t => new
@@ -517,7 +584,7 @@ public class DispatchController : ControllerBase
                 t.TripId,
                 t.Status,
                 Vehicle = t.Vehicle != null ? t.Vehicle.TruckPlate : "N/A",
-                Driver  = t.Driver != null ? t.Driver.FullName : "N/A",
+                Driver  = t.TripDrivers.Count > 0 ? string.Join(", ", t.TripDrivers.Select(td => td.Driver.FullName)) : "N/A",
                 t.PlannedStartTime,
                 t.PlannedEndTime,
                 t.SealNumber,

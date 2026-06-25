@@ -3,6 +3,7 @@ using System;
 using ColdChainX.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ColdChainX.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260625045906_RefactorDispatchDriverModel")]
+    partial class RefactorDispatchDriverModel
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1565,11 +1568,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("DeviceCode")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("device_code");
-
                     b.Property<DateTime?>("LastPingTime")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("last_ping_time");
@@ -1589,10 +1587,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasName("iot_devices_pkey");
 
                     b.HasIndex("VehicleId");
-
-                    b.HasIndex(new[] { "DeviceCode" }, "uq_iot_devices_device_code")
-                        .IsUnique()
-                        .HasFilter("device_code IS NOT NULL");
 
                     b.ToTable("iot_devices", "public");
                 });
@@ -1682,19 +1676,9 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("evidence_image_url");
 
-                    b.Property<decimal?>("HeightCm")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("height_cm");
-
                     b.Property<DateTime?>("InboundTime")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("inbound_time");
-
-                    b.Property<decimal?>("LengthCm")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("length_cm");
 
                     b.Property<string>("LpnCode")
                         .IsRequired()
@@ -1750,11 +1734,6 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("updated_at");
-
-                    b.Property<decimal?>("WidthCm")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("width_cm");
 
                     b.HasKey("LpnId")
                         .HasName("lpns_pkey");
@@ -2915,21 +2894,11 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("numeric(10,2)")
                         .HasColumnName("expected_weight_kg");
 
-                    b.Property<decimal>("HeightCm")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("height_cm");
-
                     b.Property<string>("ItemName")
                         .IsRequired()
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)")
                         .HasColumnName("item_name");
-
-                    b.Property<decimal>("LengthCm")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("length_cm");
 
                     b.Property<Guid?>("MasterTripId")
                         .HasColumnType("uuid")
@@ -2974,11 +2943,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)")
                         .HasColumnName("tracking_code");
-
-                    b.Property<decimal>("WidthCm")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("width_cm");
 
                     b.HasKey("OrderId")
                         .HasName("transport_orders_pkey");

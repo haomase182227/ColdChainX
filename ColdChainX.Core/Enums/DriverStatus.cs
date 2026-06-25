@@ -9,6 +9,12 @@ namespace ColdChainX.Core.Enums
         Planning,
         OnTrip,
         Offline,
-        Inactive
+        Inactive,
+
+        /// <summary>
+        /// Mandatory rest — the driver has exceeded the daily (10h) or weekly (48h)
+        /// driving-hour limit and cannot be assigned until the calendar day/week rolls over.
+        /// </summary>
+        RELAX
     }
 }

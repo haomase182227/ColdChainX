@@ -51,7 +51,6 @@ namespace ColdChainX.UnitTests
                 TripId = tripId,
                 Status = "DEPARTED",
                 VehicleId = Guid.NewGuid(),
-                DriverId = Guid.NewGuid(),
                 PlannedStartTime = DateTime.UtcNow,
                 PlannedEndTime = DateTime.UtcNow.AddHours(2),
                 OriginLocationId = Guid.NewGuid(),

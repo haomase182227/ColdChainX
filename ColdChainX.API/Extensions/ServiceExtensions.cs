@@ -134,6 +134,7 @@ namespace ColdChainX.API.Extensions
             // Dispatch and Load Planning
             services.AddHttpClient<ColdChainX.Infrastructure.Integration.GeminiLoadOptimizerClient>();
             services.AddScoped<IDispatchService, DispatchService>();
+            services.AddScoped<IDriverAvailabilityService, DriverAvailabilityService>();
 
             services.AddSignalR();
 

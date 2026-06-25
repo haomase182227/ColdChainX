@@ -187,11 +187,11 @@ public class ManualDispatchRequest
     /// <summary>Danh sách LpnId do người dùng chọn (IN_STOCK).</summary>
     public List<Guid> LpnIds { get; set; } = new();
 
-    /// <summary>VehicleId do người dùng chọn.</summary>
+    /// <summary>VehicleId do người dùng chọn (mỗi chuyến đúng 1 xe).</summary>
     public Guid VehicleId { get; set; }
 
-    /// <summary>DriverId do người dùng chọn (Tuỳ chọn, nếu rỗng sẽ lấy tài xế mặc định của xe).</summary>
-    public Guid DriverId { get; set; }
+    /// <summary>Danh sách tài xế được gán cho chuyến (1–2 tài xế).</summary>
+    public List<Guid> DriverIds { get; set; } = new();
 
     /// <summary>LocationId kho xuất phát.</summary>
     public Guid OriginWarehouseLocationId { get; set; }
@@ -207,7 +207,10 @@ public class ManualDispatchRequest
 public class ManualDispatchFormRequest
 {
     public string VehicleId { get; set; } = string.Empty;
-    public string DriverId { get; set; } = string.Empty;
+
+    /// <summary>1–2 tài xế được gán cho chuyến (DriverId, có thể kèm hậu tố ":label").</summary>
+    public List<string> DriverIds { get; set; } = new();
+
     public DateTime PlannedStartTime { get; set; }
     public DateTime PlannedEndTime { get; set; }
 }
@@ -217,7 +220,12 @@ public class ManualDispatchResult
 {
     public Guid TripId { get; set; }
     public VehicleInfo Vehicle { get; set; } = null!;
-    public DriverInfo Driver { get; set; } = null!;
+
+    /// <summary>Tài xế được gán cho chuyến (1–2 người). Với 2 tài xế, thời lượng chuyến được chia đều.</summary>
+    public List<DriverInfo> Drivers { get; set; } = new();
+
+    /// <summary>Tổng thời lượng lái xe ước tính của chuyến (giờ), lấy từ Goong route.</summary>
+    public decimal EstimatedDurationHours { get; set; }
 
     /// <summary>Danh sách LPN được chọn.</summary>
     public List<LpnSummary> SelectedLpns { get; set; } = new();
@@ -287,6 +295,12 @@ public class DriverInfo
     public string? LicenseClass { get; set; }
     public DateOnly? LicenseExpiry { get; set; }
     public string LicenseStatus { get; set; } = null!; // VALID, EXPIRING_SOON, EXPIRED
+
+    /// <summary>PRIMARY (tài xế chính) hoặc SECONDARY (tài xế phụ).</summary>
+    public string DriverRole { get; set; } = "PRIMARY";
+
+    /// <summary>Số giờ lái được phân bổ cho tài xế này (EstimatedDurationHours / số tài xế).</summary>
+    public decimal AssignedDurationHours { get; set; }
 }
 
 // DTO routing classes replaced with RouteDetailsDto

@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Net;
 using System.Text;
 using ColdChainX.Application.DTOs.Dispatch;
@@ -207,7 +208,7 @@ namespace ColdChainX.Infrastructure.Services
     <td class='info-label'>Biển số xe:</td>
     <td>{H(result.Vehicle?.TruckPlate ?? "N/A")}</td>
     <td class='info-label'>Tài xế:</td>
-    <td>{H(result.Driver?.FullName ?? "N/A")}</td>
+    <td>{H(result.Drivers != null && result.Drivers.Count > 0 ? string.Join(", ", result.Drivers.Select(d => d.FullName)) : "N/A")}</td>
   </tr>
   <tr>
     <td class='info-label'>Tổng tải trọng (kg):</td>

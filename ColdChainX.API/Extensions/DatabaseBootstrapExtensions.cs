@@ -318,7 +318,97 @@ END $$;";
                 logger.LogError(ex, "Failed to seed default users.");
             }
 
+            // Seed fleet sample data (Vehicle + Drivers) for the new TripDriver dispatch flow.
+            try
+            {
+                var vehicleId = Guid.Parse("77777777-7777-7777-7777-777777777777");
+                if (!await db.Vehicles.AnyAsync(v => v.VehicleId == vehicleId))
+                {
+                    logger.LogInformation("Seeding sample vehicle (decoupled from driver)...");
+                    db.Vehicles.Add(new Vehicle
+                    {
+                        VehicleId = vehicleId,
+                        TruckPlate = "51C-99999",
+                        Brand = "Hyundai",
+                        VehicleType = "REEFER_TRUCK",
+                        MaxWeight = 5000m,
+                        MaxCbm = 30m,
+                        MinTemp = -20m,
+                        MaxTemp = 8m,
+                        CurrentOdometer = 0,
+                        NextMaintenanceOdometer = 10000,
+                        Status = "ACTIVE",
+                        CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
+                    });
+                }
 
+                var today = DateOnly.FromDateTime(DateTime.UtcNow);
+                var driverSeeds = new[]
+                {
+                    new
+                    {
+                        DriverId = Guid.Parse("55555555-5555-5555-5555-555555555555"),
+                        UserId = (Guid?)Guid.Parse("44444444-4444-4444-4444-444444444444"),
+                        FullName = "Nguyen Van Tai",
+                        Identity = "079200000001",
+                        Phone = "0900000001",
+                        LicenseId = Guid.Parse("5a000000-0000-0000-0000-000000000001"),
+                        LicenseNumber = "B2-000001"
+                    },
+                    new
+                    {
+                        DriverId = Guid.Parse("66666666-6666-6666-6666-666666666666"),
+                        UserId = (Guid?)null,
+                        FullName = "Tran Van Phu",
+                        Identity = "079200000002",
+                        Phone = "0900000002",
+                        LicenseId = Guid.Parse("6a000000-0000-0000-0000-000000000002"),
+                        LicenseNumber = "B2-000002"
+                    }
+                };
+
+                foreach (var s in driverSeeds)
+                {
+                    if (await db.Drivers.AnyAsync(d => d.DriverId == s.DriverId)) continue;
+
+                    // Avoid linking to a user already taken by another driver.
+                    var userId = s.UserId.HasValue && !await db.Drivers.AnyAsync(d => d.UserId == s.UserId)
+                        ? s.UserId
+                        : null;
+
+                    db.Drivers.Add(new Driver
+                    {
+                        DriverId = s.DriverId,
+                        UserId = userId,
+                        FullName = s.FullName,
+                        IdentityNumber = s.Identity,
+                        PhoneNumber = s.Phone,
+                        DateOfBirth = new DateOnly(1990, 1, 1),
+                        JoinDate = today,
+                        Status = "Available",
+                        CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
+                    });
+
+                    db.DriverLicenses.Add(new DriverLicense
+                    {
+                        LicenseId = s.LicenseId,
+                        DriverId = s.DriverId,
+                        LicenseNumber = s.LicenseNumber,
+                        LicenseClass = "FC",
+                        IssueDate = today.AddYears(-2),
+                        ExpiryDate = today.AddYears(3),
+                        Status = "ACTIVE",
+                        CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
+                    });
+                }
+
+                await db.SaveChangesAsync();
+                logger.LogInformation("Fleet sample data ensured.");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to seed fleet sample data.");
+            }
         }
     }
 }

@@ -43,6 +43,26 @@ namespace ColdChainX.Infrastructure.Repositories
                 .FirstOrDefaultAsync(x => x.UserId == userId);
         }
 
+        public async Task<List<Driver>> GetAvailableAsync()
+        {
+            return await _db.Drivers
+                .Include(d => d.User)
+                .Include(d => d.DriverLicenses)
+                .Where(d => d.Status != "RELAX"
+                         && d.Status != "Offline"
+                         && d.Status != "Inactive"
+                         && d.Status != "DELETED")
+                .OrderBy(d => d.FullName)
+                .ToListAsync();
+        }
+
+        public async Task<List<DriverWorkLog>> GetWorkLogsAsync(Guid driverId, DateOnly fromDate, DateOnly toDate)
+        {
+            return await _db.DriverWorkLogs
+                .Where(w => w.DriverId == driverId && w.WorkDate >= fromDate && w.WorkDate <= toDate)
+                .ToListAsync();
+        }
+
         public async Task AddAsync(Driver driver)
         {
             await _db.Drivers.AddAsync(driver);

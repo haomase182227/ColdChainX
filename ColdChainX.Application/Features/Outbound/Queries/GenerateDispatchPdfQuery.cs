@@ -28,7 +28,8 @@ public class GenerateDispatchPdfQueryHandler : IRequestHandler<GenerateDispatchP
     public async Task<byte[]> Handle(GenerateDispatchPdfQuery request, CancellationToken cancellationToken)
     {
         var trip = await _context.MasterTrips
-            .Include(x => x.Driver)
+            .Include(x => x.TripDrivers)
+                .ThenInclude(td => td.Driver)
             .Include(x => x.Vehicle)
             .Include(x => x.OriginLocation)
             .Include(x => x.DestinationLocation)
@@ -49,7 +50,9 @@ public class GenerateDispatchPdfQueryHandler : IRequestHandler<GenerateDispatchP
             DispatchDate = trip.PlannedStartTime.ToString("dd/MM/yyyy"),
             HubName = trip.OriginLocation?.Address ?? "N/A",
             HubAddress = trip.OriginLocation?.Address ?? "N/A",
-            DriverName = trip.Driver?.FullName ?? "N/A",
+            DriverName = trip.TripDrivers.Count > 0
+                ? string.Join(", ", trip.TripDrivers.Select(td => td.Driver != null ? td.Driver.FullName : null).Where(n => !string.IsNullOrEmpty(n)))
+                : "N/A",
             VehiclePlateNumber = trip.Vehicle?.TruckPlate ?? "N/A",
             SealNumber = trip.SealNumber ?? "N/A",
             CreatedDay = DateTime.Now.Day.ToString("00"),

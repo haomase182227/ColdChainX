@@ -9,8 +9,6 @@ public partial class MasterTrip
 
     public Guid? VehicleId { get; set; }
 
-    public Guid? DriverId { get; set; }
-
     public Guid OriginLocationId { get; set; }
 
     public Guid DestinationLocationId { get; set; }
@@ -18,6 +16,9 @@ public partial class MasterTrip
     public string? SealNumber { get; set; }
 
     public decimal? TotalDistanceKm { get; set; }
+
+    /// <summary>Estimated total driving duration (hours), from the Goong route. Split across drivers for 2-driver trips.</summary>
+    public decimal? EstimatedDurationHours { get; set; }
 
     public decimal TargetTemperature { get; set; }
 
@@ -37,7 +38,7 @@ public partial class MasterTrip
 
     public virtual Location DestinationLocation { get; set; } = null!;
 
-    public virtual Driver? Driver { get; set; }
+    public virtual ICollection<TripDriver> TripDrivers { get; set; } = new List<TripDriver>();
 
     public virtual ICollection<ExpenseAdvance> ExpenseAdvances { get; set; } = new List<ExpenseAdvance>();
 
