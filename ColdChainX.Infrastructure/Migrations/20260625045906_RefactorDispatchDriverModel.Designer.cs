@@ -3,6 +3,7 @@ using System;
 using ColdChainX.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ColdChainX.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260625045906_RefactorDispatchDriverModel")]
+    partial class RefactorDispatchDriverModel
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1673,19 +1676,9 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("evidence_image_url");
 
-                    b.Property<decimal?>("HeightCm")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("height_cm");
-
                     b.Property<DateTime?>("InboundTime")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("inbound_time");
-
-                    b.Property<decimal?>("LengthCm")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("length_cm");
 
                     b.Property<string>("LpnCode")
                         .IsRequired()
@@ -1742,11 +1735,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("updated_at");
 
-                    b.Property<decimal?>("WidthCm")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("width_cm");
-
                     b.HasKey("LpnId")
                         .HasName("lpns_pkey");
 
@@ -1772,83 +1760,6 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.HasIndex("TripId");
 
                     b.ToTable("lpns", "public");
-                });
-
-            modelBuilder.Entity("ColdChainX.Core.Entities.LpnDeliveryConfirmation", b =>
-                {
-                    b.Property<Guid>("ConfirmationId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("confirmation_id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<DateTime>("ConfirmedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("confirmed_at")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<Guid>("ConfirmedByDriverId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("confirmed_by");
-
-                    b.Property<string>("EvidenceImageUrl")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("evidence_image_url");
-
-                    b.Property<Guid>("LpnId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("lpn_id");
-
-                    b.Property<Guid>("OrderId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("order_id");
-
-                    b.Property<string>("OutcomeType")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("outcome_type");
-
-                    b.Property<string>("ReceiverName")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("receiver_name");
-
-                    b.Property<string>("ReceiverPhone")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("receiver_phone");
-
-                    b.Property<string>("RejectNote")
-                        .HasColumnType("text")
-                        .HasColumnName("reject_note");
-
-                    b.Property<string>("RejectReason")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("reject_reason");
-
-                    b.Property<Guid>("TripId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("trip_id");
-
-                    b.HasKey("ConfirmationId")
-                        .HasName("lpn_delivery_confirmations_pkey");
-
-                    b.HasIndex("ConfirmedByDriverId");
-
-                    b.HasIndex("LpnId")
-                        .IsUnique()
-                        .HasDatabaseName("uq_lpn_delivery_confirmations_lpn_id");
-
-                    b.HasIndex("OrderId");
-
-                    b.HasIndex("TripId");
-
-                    b.ToTable("lpn_delivery_confirmations", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.MaintenanceTicket", b =>
@@ -2983,21 +2894,11 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("numeric(10,2)")
                         .HasColumnName("expected_weight_kg");
 
-                    b.Property<decimal>("HeightCm")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("height_cm");
-
                     b.Property<string>("ItemName")
                         .IsRequired()
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)")
                         .HasColumnName("item_name");
-
-                    b.Property<decimal>("LengthCm")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("length_cm");
 
                     b.Property<Guid?>("MasterTripId")
                         .HasColumnType("uuid")
@@ -3042,11 +2943,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)")
                         .HasColumnName("tracking_code");
-
-                    b.Property<decimal>("WidthCm")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("width_cm");
 
                     b.HasKey("OrderId")
                         .HasName("transport_orders_pkey");
@@ -4247,45 +4143,6 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.Navigation("Receipt");
 
                     b.Navigation("Route");
-
-                    b.Navigation("Trip");
-                });
-
-            modelBuilder.Entity("ColdChainX.Core.Entities.LpnDeliveryConfirmation", b =>
-                {
-                    b.HasOne("ColdChainX.Core.Entities.User", "ConfirmedByDriver")
-                        .WithMany()
-                        .HasForeignKey("ConfirmedByDriverId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_lpn_delivery_confirmations_driver");
-
-                    b.HasOne("ColdChainX.Core.Entities.Lpn", "Lpn")
-                        .WithMany()
-                        .HasForeignKey("LpnId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_lpn_delivery_confirmations_lpn");
-
-                    b.HasOne("ColdChainX.Core.Entities.TransportOrder", "Order")
-                        .WithMany()
-                        .HasForeignKey("OrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_lpn_delivery_confirmations_order");
-
-                    b.HasOne("ColdChainX.Core.Entities.MasterTrip", "Trip")
-                        .WithMany()
-                        .HasForeignKey("TripId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_lpn_delivery_confirmations_trip");
-
-                    b.Navigation("ConfirmedByDriver");
-
-                    b.Navigation("Lpn");
-
-                    b.Navigation("Order");
 
                     b.Navigation("Trip");
                 });

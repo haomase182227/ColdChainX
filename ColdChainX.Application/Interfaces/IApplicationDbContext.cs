@@ -23,6 +23,8 @@ namespace ColdChainX.Application.Interfaces
         DbSet<Customer> Customers { get; }
         DbSet<Driver> Drivers { get; }
         DbSet<MasterTrip> MasterTrips { get; }
+        DbSet<TripDriver> TripDrivers { get; }
+        DbSet<DriverWorkLog> DriverWorkLogs { get; }
         DbSet<Invoice> Invoices { get; }
         DbSet<InvoiceLine> InvoiceLines { get; }
         DbSet<Quotation> Quotations { get; }

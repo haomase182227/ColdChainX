@@ -66,27 +66,11 @@ public class FleetManagementService : IFleetManagementService
         if (await _db.Vehicles.AnyAsync(v => v.TruckPlate.ToUpper() == plate.ToUpper() && v.Status != "DELETED"))
             return ApiResponse<VehicleFleetResponse>.Failure("Truck plate already exists");
 
-        // Resolve DriverName → DriverId (ưu tiên DriverName nếu có)
-        var resolvedDriverId = request.DriverId;
-        if (!string.IsNullOrWhiteSpace(request.DriverName))
-        {
-            var name = request.DriverName.Trim();
-            var matchedDriver = await _db.Drivers
-                .Where(d => d.Status != "DELETED" && d.FullName.ToLower() == name.ToLower())
-                .FirstOrDefaultAsync();
-            if (matchedDriver == null)
-                return ApiResponse<VehicleFleetResponse>.Failure($"Driver '{name}' not found");
-            resolvedDriverId = matchedDriver.DriverId;
-        }
-        else if (resolvedDriverId.HasValue && !await _db.Drivers.AnyAsync(d => d.DriverId == resolvedDriverId.Value && d.Status != "DELETED"))
-        {
-            return ApiResponse<VehicleFleetResponse>.Failure("Driver not found");
-        }
+        // Tài xế không còn gắn trực tiếp với xe — tài xế được gán theo từng chuyến (TripDriver).
 
         var vehicle = new Vehicle
         {
             VehicleId = Guid.NewGuid(),
-            DriverId = resolvedDriverId,
             TruckPlate = plate,
             Brand = TrimOrNull(request.Brand),
             StandardFuelLiters = request.StandardFuelLiters,
@@ -175,18 +159,7 @@ public class FleetManagementService : IFleetManagementService
                 vehicle.CurrentOdometer = GetDouble(row, vehicle.CurrentOdometer, "CurrentOdometer", "Odometer");
                 vehicle.NextMaintenanceOdometer = GetDouble(row, vehicle.NextMaintenanceOdometer, "NextMaintenanceOdometer", "MocBaoDuongTiepTheo");
 
-                // Gán DriverId theo tên tài xế
-                var driverName = TrimOrNull(Get(row, "DriverName", "Ten tai xe", "Ho ten tai xe"));
-                if (!string.IsNullOrWhiteSpace(driverName))
-                {
-                    var matched = await _db.Drivers
-                        .Where(d => d.Status != "DELETED" && d.FullName.ToLower() == driverName.ToLower())
-                        .FirstOrDefaultAsync();
-                    if (matched != null)
-                        vehicle.DriverId = matched.DriverId;
-                    else
-                        result.Errors = result.Errors.Append($"Plate {plate}: Driver '{driverName}' not found — DriverId not assigned").ToList();
-                }
+                // Tài xế không còn gắn trực tiếp với xe — gán theo từng chuyến (TripDriver).
 
                 UpsertVehicleDocumentFromImport(vehicle, row, "REGISTRATION", "Registration", "DangKiem");
                 UpsertVehicleDocumentFromImport(vehicle, row, "INSURANCE", "Insurance", "BaoHiem");
@@ -797,7 +770,6 @@ public class FleetManagementService : IFleetManagementService
         var plate = NormalizeRequired(truckPlate);
         var vehicle = await _db.Vehicles
             .Include(v => v.VehicleDocuments)
-            .Include(v => v.Driver)
             .FirstOrDefaultAsync(v => v.TruckPlate.ToUpper() == plate.ToUpper() && v.Status != "DELETED");
 
         if (vehicle == null) return ApiResponse<VehicleFleetResponse>.Failure("Vehicle not found");
@@ -808,7 +780,7 @@ public class FleetManagementService : IFleetManagementService
         if (vehicle.Status == "ACTIVE" && vehicle.CurrentOdometer >= vehicle.NextMaintenanceOdometer)
         {
             var message = $"Xe {vehicle.TruckPlate} đã chạy {vehicle.CurrentOdometer:0.#} KM, vượt mốc bảo dưỡng định kỳ.";
-            var driverUserId = vehicle.Driver?.UserId;
+            Guid? driverUserId = null; // Xe không còn gắn trực tiếp tài xế — chỉ thông báo cho Admin/Dispatcher.
             await AddNotificationsAsync(
                 new[] { "Admin", "Dispatcher" }, driverUserId,
                 "NOTI_MAINTENANCE_ODOMETER",
@@ -894,7 +866,6 @@ public class FleetManagementService : IFleetManagementService
 
         var docs = await _db.VehicleDocuments
             .Include(d => d.Vehicle)
-                .ThenInclude(v => v!.Driver)
             .Where(d => d.Status == "ACTIVE" && d.ExpireDate != null)
             .ToListAsync(cancellationToken);
 
@@ -907,7 +878,7 @@ public class FleetManagementService : IFleetManagementService
             {
                 doc.Status = "EXPIRED";
                 doc.Vehicle.Status = "SUSPENDED_DOCS";
-                var driverUserId = doc.Vehicle.Driver?.UserId;
+                Guid? driverUserId = null; // Xe không còn gắn trực tiếp tài xế.
                 await AddNotificationsAsync(
                     new[] { "Admin", "Dispatcher" }, driverUserId,
                     "NOTI_FLEET_DOC_EXPIRED",
@@ -922,7 +893,7 @@ public class FleetManagementService : IFleetManagementService
             }
             else if (days <= 15)
             {
-                var driverUserId = doc.Vehicle.Driver?.UserId;
+                Guid? driverUserId = null; // Xe không còn gắn trực tiếp tài xế.
                 await AddNotificationsAsync(
                     new[] { "Admin", "Dispatcher" }, driverUserId,
                     "NOTI_FLEET_DOC_EXPIRING",
@@ -1173,7 +1144,6 @@ public class FleetManagementService : IFleetManagementService
     private static VehicleFleetResponse ToVehicleResponse(Vehicle vehicle) => new()
     {
         VehicleId = vehicle.VehicleId,
-        DriverId = vehicle.DriverId,
         TruckPlate = vehicle.TruckPlate,
         Brand = vehicle.Brand,
         StandardFuelLiters = vehicle.StandardFuelLiters,

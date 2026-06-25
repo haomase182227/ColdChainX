@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using ColdChainX.Application.Interfaces;
@@ -62,7 +63,7 @@ namespace ColdChainX.Infrastructure.Services
         {
             var trip = await _context.MasterTrips
                 .Include(t => t.Vehicle)
-                .Include(t => t.Driver)
+                .Include(t => t.TripDrivers).ThenInclude(td => td.Driver)
                 .Include(t => t.OriginLocation)
                 .Include(t => t.DestinationLocation)
                 .Include(t => t.TripStops).ThenInclude(ts => ts.Location)
@@ -93,7 +94,9 @@ namespace ColdChainX.Infrastructure.Services
             sb.AppendLine($"<tr><td><b>Số chuyến:</b></td><td>{tripId.ToString()[..8].ToUpper()}</td>");
             sb.AppendLine($"<td><b>Ngày lập:</b></td><td>{issuedAt}</td></tr>");
             sb.AppendLine($"<tr><td><b>Xe:</b></td><td>{trip.Vehicle?.TruckPlate ?? "N/A"} ({trip.Vehicle?.VehicleType ?? ""})</td>");
-            sb.AppendLine($"<td><b>Tài xế:</b></td><td>{trip.Driver?.FullName ?? "N/A"} — {trip.Driver?.PhoneNumber ?? ""}</td></tr>");
+            var manifestPrimary = trip.TripDrivers.OrderBy(td => td.DriverRole == "PRIMARY" ? 0 : 1).Select(td => td.Driver).FirstOrDefault(d => d != null);
+            var manifestDriverNames = trip.TripDrivers.Count > 0 ? string.Join(", ", trip.TripDrivers.Select(td => td.Driver != null ? td.Driver.FullName : null).Where(n => !string.IsNullOrEmpty(n))) : "N/A";
+            sb.AppendLine($"<td><b>Tài xế:</b></td><td>{manifestDriverNames} — {manifestPrimary?.PhoneNumber ?? ""}</td></tr>");
             sb.AppendLine($"<tr><td><b>Kho xuất:</b></td><td>{trip.OriginLocation?.Address ?? "N/A"}</td>");
             sb.AppendLine($"<td><b>Điểm đến:</b></td><td>{trip.DestinationLocation?.Address ?? "N/A"}</td></tr>");
             sb.AppendLine($"<tr><td><b>Số seal:</b></td><td>{trip.SealNumber ?? "—"}</td>");
@@ -127,7 +130,7 @@ namespace ColdChainX.Infrastructure.Services
         {
             var trip = await _context.MasterTrips
                 .Include(t => t.Vehicle)
-                .Include(t => t.Driver)
+                .Include(t => t.TripDrivers).ThenInclude(td => td.Driver)
                 .Include(t => t.OriginLocation)
                 .FirstOrDefaultAsync(t => t.TripId == tripId)
                 ?? throw new KeyNotFoundException($"Không tìm thấy chuyến hàng {tripId}.");
@@ -158,7 +161,7 @@ namespace ColdChainX.Infrastructure.Services
             sb.AppendLine("<table class='info'>");
             sb.AppendLine($"<tr><td><b>Kho xuất:</b></td><td>{trip.OriginLocation?.Address ?? "N/A"}</td>");
             sb.AppendLine($"<td><b>Biển số xe:</b></td><td>{trip.Vehicle?.TruckPlate ?? "N/A"}</td></tr>");
-            sb.AppendLine($"<tr><td><b>Tài xế:</b></td><td>{trip.Driver?.FullName ?? "N/A"}</td>");
+            sb.AppendLine($"<tr><td><b>Tài xế:</b></td><td>{(trip.TripDrivers.Count > 0 ? string.Join(", ", trip.TripDrivers.Select(td => td.Driver != null ? td.Driver.FullName : null).Where(n => !string.IsNullOrEmpty(n))) : "N/A")}</td>");
             sb.AppendLine($"<td><b>Số seal:</b></td><td>{trip.SealNumber ?? "—"}</td></tr>");
             sb.AppendLine($"<tr><td><b>Giờ xuất:</b></td><td>{issuedAt}</td>");
             sb.AppendLine($"<td><b>Tổng LPN:</b></td><td>{lpns.Count}</td></tr>");

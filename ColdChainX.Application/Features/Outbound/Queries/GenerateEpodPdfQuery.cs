@@ -34,7 +34,8 @@ public class GenerateEpodPdfQueryHandler : IRequestHandler<GenerateEpodPdfQuery,
                 .ThenInclude(o => o.DestLocationNavigation)
             .Include(x => x.Order)
                 .ThenInclude(o => o.MasterTrip)
-                    .ThenInclude(mt => mt.Driver)
+                    .ThenInclude(mt => mt.TripDrivers)
+                        .ThenInclude(td => td.Driver)
             .Include(x => x.Order)
                 .ThenInclude(o => o.MasterTrip)
                     .ThenInclude(mt => mt.Vehicle)
@@ -55,7 +56,9 @@ public class GenerateEpodPdfQueryHandler : IRequestHandler<GenerateEpodPdfQuery,
             DestinationAddress = epod.Order?.DestLocationNavigation?.Address ?? "N/A",
             CompanyName = "ColdChainX Logistics",
             VehiclePlateNumber = epod.Order?.MasterTrip?.Vehicle?.TruckPlate ?? "N/A",
-            DriverName = epod.Order?.MasterTrip?.Driver?.FullName ?? "N/A",
+            DriverName = epod.Order?.MasterTrip?.TripDrivers != null && epod.Order.MasterTrip.TripDrivers.Count > 0
+                ? string.Join(", ", epod.Order.MasterTrip.TripDrivers.Select(td => td.Driver != null ? td.Driver.FullName : null).Where(n => !string.IsNullOrEmpty(n)))
+                : "N/A",
             CustomerName = epod.Order?.Customer?.CompanyName ?? "N/A",
             OrderCode = epod.Order?.TrackingCode ?? "N/A",
             Items = lpns.Select((item, index) => new

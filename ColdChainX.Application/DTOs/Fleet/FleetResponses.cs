@@ -3,7 +3,6 @@ namespace ColdChainX.Application.DTOs.Fleet;
 public class VehicleFleetResponse
 {
     public Guid VehicleId { get; set; }
-    public Guid? DriverId { get; set; }
     public string TruckPlate { get; set; } = null!;
     public string? Brand { get; set; }
     public decimal? StandardFuelLiters { get; set; }

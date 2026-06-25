@@ -32,6 +32,10 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
 
     public virtual DbSet<DriverLicense> DriverLicenses { get; set; }
 
+    public virtual DbSet<TripDriver> TripDrivers { get; set; }
+
+    public virtual DbSet<DriverWorkLog> DriverWorkLogs { get; set; }
+
     public virtual DbSet<ExpenseAdvance> ExpenseAdvances { get; set; }
 
     public virtual DbSet<ExpenseReceipt> ExpenseReceipts { get; set; }
@@ -948,8 +952,10 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
             entity.Property(e => e.DestinationLocationId).HasColumnName("destination_location_id");
-            entity.Property(e => e.DriverId).HasColumnName("driver_id");
             entity.Property(e => e.OriginLocationId).HasColumnName("origin_location_id");
+            entity.Property(e => e.EstimatedDurationHours)
+                .HasPrecision(8, 2)
+                .HasColumnName("estimated_duration_hours");
             entity.Property(e => e.PlannedEndTime)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("planned_end_time");
@@ -979,10 +985,6 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("fk_mtrip_dest");
 
-            entity.HasOne(d => d.Driver).WithMany(p => p.MasterTrips)
-                .HasForeignKey(d => d.DriverId)
-                .HasConstraintName("fk_mtrip_drivers");
-
             entity.HasOne(d => d.OriginLocation).WithMany(p => p.MasterTripOriginLocations)
                 .HasForeignKey(d => d.OriginLocationId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
@@ -991,6 +993,74 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.HasOne(d => d.Vehicle).WithMany(p => p.MasterTrips)
                 .HasForeignKey(d => d.VehicleId)
                 .HasConstraintName("fk_mtrip_vehicles");
+        });
+
+        modelBuilder.Entity<TripDriver>(entity =>
+        {
+            entity.HasKey(e => e.TripDriverId).HasName("trip_drivers_pkey");
+
+            entity.ToTable("trip_drivers");
+
+            entity.HasIndex(e => new { e.TripId, e.DriverId }, "trip_drivers_trip_driver_key").IsUnique();
+
+            entity.Property(e => e.TripDriverId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("trip_driver_id");
+            entity.Property(e => e.TripId).HasColumnName("trip_id");
+            entity.Property(e => e.DriverId).HasColumnName("driver_id");
+            entity.Property(e => e.DriverRole)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'PRIMARY'::character varying")
+                .HasColumnName("driver_role");
+            entity.Property(e => e.AssignedDurationHours)
+                .HasPrecision(8, 2)
+                .HasColumnName("assigned_duration_hours");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+
+            entity.HasOne(d => d.Trip).WithMany(p => p.TripDrivers)
+                .HasForeignKey(d => d.TripId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_trip_drivers_trip");
+
+            entity.HasOne(d => d.Driver).WithMany(p => p.TripDrivers)
+                .HasForeignKey(d => d.DriverId)
+                .HasConstraintName("fk_trip_drivers_driver");
+        });
+
+        modelBuilder.Entity<DriverWorkLog>(entity =>
+        {
+            entity.HasKey(e => e.WorkLogId).HasName("driver_work_logs_pkey");
+
+            entity.ToTable("driver_work_logs");
+
+            entity.HasIndex(e => new { e.DriverId, e.WorkDate }, "ix_driver_work_logs_driver_date");
+
+            entity.Property(e => e.WorkLogId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("work_log_id");
+            entity.Property(e => e.DriverId).HasColumnName("driver_id");
+            entity.Property(e => e.TripId).HasColumnName("trip_id");
+            entity.Property(e => e.WorkDate).HasColumnName("work_date");
+            entity.Property(e => e.DrivingHours)
+                .HasPrecision(8, 2)
+                .HasColumnName("driving_hours");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+
+            entity.HasOne(d => d.Driver).WithMany(p => p.WorkLogs)
+                .HasForeignKey(d => d.DriverId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_driver_work_logs_driver");
+
+            entity.HasOne(d => d.Trip).WithMany()
+                .HasForeignKey(d => d.TripId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_driver_work_logs_trip");
         });
 
         modelBuilder.Entity<Messagetype>(entity =>
@@ -1648,7 +1718,6 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasMaxLength(255)
                 .HasColumnName("current_location");
             entity.Property(e => e.CurrentOdometer).HasColumnName("current_odometer");
-            entity.Property(e => e.DriverId).HasColumnName("driver_id");
             entity.Property(e => e.EngineNumber)
                 .HasMaxLength(50)
                 .HasColumnName("engine_number");
@@ -1679,10 +1748,6 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.VehicleType)
                 .HasMaxLength(50)
                 .HasColumnName("vehicle_type");
-
-            entity.HasOne(d => d.Driver).WithMany(p => p.Vehicles)
-                .HasForeignKey(d => d.DriverId)
-                .HasConstraintName("fk_vehicles_drivers");
         });
 
         modelBuilder.Entity<VehicleDocument>(entity =>

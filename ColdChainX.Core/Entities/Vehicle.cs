@@ -7,8 +7,6 @@ public partial class Vehicle
 {
     public Guid VehicleId { get; set; }
 
-    public Guid? DriverId { get; set; }
-
     public string TruckPlate { get; set; } = null!;
 
     public string? Brand { get; set; }
@@ -48,6 +46,4 @@ public partial class Vehicle
     public virtual ICollection<MasterTrip> MasterTrips { get; set; } = new List<MasterTrip>();
 
     public virtual ICollection<VehicleDocument> VehicleDocuments { get; set; } = new List<VehicleDocument>();
-
-    public virtual Driver? Driver { get; set; }
 }

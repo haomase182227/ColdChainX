@@ -27,9 +27,9 @@ public partial class Driver
 
     public virtual ICollection<ExpenseAdvance> ExpenseAdvances { get; set; } = new List<ExpenseAdvance>();
 
-    public virtual ICollection<MasterTrip> MasterTrips { get; set; } = new List<MasterTrip>();
+    public virtual ICollection<TripDriver> TripDrivers { get; set; } = new List<TripDriver>();
+
+    public virtual ICollection<DriverWorkLog> WorkLogs { get; set; } = new List<DriverWorkLog>();
 
     public virtual User? User { get; set; }
-
-    public virtual ICollection<Vehicle> Vehicles { get; set; } = new List<Vehicle>();
 }
