@@ -28,5 +28,7 @@ public enum LpnState
     LOADING_COMPLETED = 9,
     RELEASED          = 7,
     SHIPPING          = 8,
-    DELETED           = 10
+    DELETED           = 10,
+    DELIVERED         = 11,
+    DELIVERY_RETURNED = 12
 }
