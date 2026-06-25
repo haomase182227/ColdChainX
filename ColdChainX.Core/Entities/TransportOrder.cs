@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace ColdChainX.Core.Entities;
@@ -28,6 +28,12 @@ public partial class TransportOrder
     public decimal ExpectedCbm { get; set; }
 
     public decimal? ActualCbm { get; set; }
+
+    public decimal LengthCm { get; set; }
+
+    public decimal WidthCm { get; set; }
+
+    public decimal HeightCm { get; set; }
 
     public Guid? PickupLocation { get; set; }
 

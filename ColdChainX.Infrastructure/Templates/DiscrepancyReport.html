@@ -10,6 +10,11 @@
         table { width: 100%; border-collapse: collapse; margin-top: 15px; }
         th, td { border: 1px solid #000; padding: 8px; text-align: left; }
         .sig-container { display: flex; justify-content: space-around; margin-top: 40px; text-align: center; }
+        .diff-highlight {
+            background-color: #ffebee;
+            color: #c62828;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -34,23 +39,87 @@
     <table>
         <thead>
             <tr>
-                <th>STT</th>
-                <th>Mã LPN bị giữ</th>
-                <th>Tên Hàng Hóa</th>
-                <th>Khai báo (Kg/Cbm)</th>
-                <th>Thực tế (Kg/Cbm)</th>
-                <th>Lý do / Tình trạng bất thường</th>
+                <th rowspan="2" style="text-align: center; vertical-align: middle;">STT</th>
+                <th rowspan="2" style="text-align: center; vertical-align: middle;">Mã LPN / Tên hàng</th>
+                <th colspan="3" style="text-align: center;">Số lượng (Kiện)</th>
+                <th colspan="3" style="text-align: center;">Trọng lượng (Kg)</th>
+                <th colspan="3" style="text-align: center;">Thể tích (CBM)</th>
+            </tr>
+            <tr>
+                <th style="text-align: center;">Khai báo</th>
+                <th style="text-align: center;">Thực tế</th>
+                <th style="text-align: center;">Lệch (%)</th>
+                <th style="text-align: center;">Khai báo</th>
+                <th style="text-align: center;">Thực tế</th>
+                <th style="text-align: center;">Lệch (%)</th>
+                <th style="text-align: center;">Khai báo</th>
+                <th style="text-align: center;">Thực tế</th>
+                <th style="text-align: center;">Lệch (%)</th>
             </tr>
         </thead>
         <tbody>
             {{#each DiscrepancyItems}}
             <tr>
-                <td>{{Index}}</td>
-                <td>{{LpnCode}}</td>
-                <td>{{ItemName}}</td>
-                <td>{{ExpectedValue}}</td>
-                <td>{{ActualValue}}</td>
-                <td>{{Reason}}</td>
+                <td style="text-align: center; vertical-align: middle;">{{Index}}</td>
+                <td style="vertical-align: middle;">
+                    <b>{{LpnCode}}</b><br>
+                    <small>{{ItemName}}</small>
+                </td>
+                
+                <!-- Qty -->
+                <td style="text-align: center; vertical-align: middle;">{{ExpectedQty}}</td>
+                <td style="text-align: center; vertical-align: middle;" class="{{#if IsQtyDiff}}diff-highlight{{/if}}">{{ActualQty}}</td>
+                <td style="text-align: center; vertical-align: middle;" class="{{#if IsQtyDiff}}diff-highlight{{/if}}">{{QtyDiffPercent}}%</td>
+                
+                <!-- Weight -->
+                <td style="text-align: center; vertical-align: middle;">{{ExpectedWeight}}</td>
+                <td style="text-align: center; vertical-align: middle;" class="{{#if IsWeightDiff}}diff-highlight{{/if}}">{{ActualWeight}}</td>
+                <td style="text-align: center; vertical-align: middle;" class="{{#if IsWeightDiff}}diff-highlight{{/if}}">{{WeightDiffPercent}}%</td>
+                
+                <!-- Cbm -->
+                <td style="text-align: center; vertical-align: middle;">{{ExpectedCbm}}</td>
+                <td style="text-align: center; vertical-align: middle;" class="{{#if IsCbmDiff}}diff-highlight{{/if}}">{{ActualCbm}}</td>
+                <td style="text-align: center; vertical-align: middle;" class="{{#if IsCbmDiff}}diff-highlight{{/if}}">{{CbmDiffPercent}}%</td>
+            </tr>
+            <tr>
+                <td colspan="11" style="background-color: #fafafa; font-size: 13px; padding: 10px; line-height: 1.5;">
+                    <div style="margin-bottom: 8px;">
+                        <b style="color: #333;">Thông số kích thước (Dài x Rộng x Cao):</b>
+                        <table style="width: 100%; border-collapse: collapse; margin-top: 6px; margin-bottom: 6px; font-size: 12px; background-color: #ffffff; border: 1px solid #ddd;">
+                            <thead>
+                                <tr style="background-color: #f5f5f5;">
+                                    <th style="border: 1px solid #ddd; padding: 6px; text-align: center; font-weight: bold; color: #555;">Kích thước</th>
+                                    <th style="border: 1px solid #ddd; padding: 6px; text-align: center; font-weight: bold; color: #555;">Khai báo (cm)</th>
+                                    <th style="border: 1px solid #ddd; padding: 6px; text-align: center; font-weight: bold; color: #555;">Thực tế (cm)</th>
+                                    <th style="border: 1px solid #ddd; padding: 6px; text-align: center; font-weight: bold; color: #555;">Lệch (%)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td style="border: 1px solid #ddd; padding: 6px; font-weight: bold; text-align: center;">Chiều Dài</td>
+                                    <td style="border: 1px solid #ddd; padding: 6px; text-align: center;">{{ExpectedLength}}</td>
+                                    <td style="border: 1px solid #ddd; padding: 6px; text-align: center;" class="{{#if IsLengthDiff}}diff-highlight{{/if}}">{{ActualLength}}</td>
+                                    <td style="border: 1px solid #ddd; padding: 6px; text-align: center;" class="{{#if IsLengthDiff}}diff-highlight{{/if}}">{{LengthDiffPercent}}%</td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid #ddd; padding: 6px; font-weight: bold; text-align: center;">Chiều Rộng</td>
+                                    <td style="border: 1px solid #ddd; padding: 6px; text-align: center;">{{ExpectedWidth}}</td>
+                                    <td style="border: 1px solid #ddd; padding: 6px; text-align: center;" class="{{#if IsWidthDiff}}diff-highlight{{/if}}">{{ActualWidth}}</td>
+                                    <td style="border: 1px solid #ddd; padding: 6px; text-align: center;" class="{{#if IsWidthDiff}}diff-highlight{{/if}}">{{WidthDiffPercent}}%</td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid #ddd; padding: 6px; font-weight: bold; text-align: center;">Chiều Cao</td>
+                                    <td style="border: 1px solid #ddd; padding: 6px; text-align: center;">{{ExpectedHeight}}</td>
+                                    <td style="border: 1px solid #ddd; padding: 6px; text-align: center;" class="{{#if IsHeightDiff}}diff-highlight{{/if}}">{{ActualHeight}}</td>
+                                    <td style="border: 1px solid #ddd; padding: 6px; text-align: center;" class="{{#if IsHeightDiff}}diff-highlight{{/if}}">{{HeightDiffPercent}}%</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div style="margin-top: 6px; font-style: italic;">
+                        <b>Chi tiết bất thường:</b> {{Reason}}
+                    </div>
+                </td>
             </tr>
             {{/each}}
         </tbody>

@@ -158,7 +158,10 @@ namespace ColdChainX.Infrastructure.Services
                     RouteId = route.RouteId,
                     CargoValue = 0,
                     Status = PendingReview,
-                    CreatedAt = DbNow()
+                    CreatedAt = DbNow(),
+                    LengthCm = request.LengthCm,
+                    WidthCm = request.WidthCm,
+                    HeightCm = request.HeightCm
                 };
                 _db.TransportOrders.Add(order);
 

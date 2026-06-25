@@ -38,6 +38,15 @@ public class ResolveDiscrepancyCommandHandler : IRequestHandler<ResolveDiscrepan
             {
                 lpn.Order.Status = "RECEIVING";
             }
+
+            // Update TransportDocument status to APPROVED
+            var doc = await _context.TransportDocuments
+                .FirstOrDefaultAsync(d => d.OrderId == lpn.OrderId && d.DocType == "DISCREPANCY_REPORT", cancellationToken);
+            if (doc != null)
+            {
+                doc.Status = "APPROVED";
+                doc.VerifiedAt = DateTime.UtcNow;
+            }
             
             await _context.SaveChangesAsync(cancellationToken);
 
@@ -73,6 +82,16 @@ public class ResolveDiscrepancyCommandHandler : IRequestHandler<ResolveDiscrepan
             };
 
             _context.PenaltyBills.Add(bill);
+
+            // Update TransportDocument status to REJECTED
+            var doc = await _context.TransportDocuments
+                .FirstOrDefaultAsync(d => d.OrderId == lpn.OrderId && d.DocType == "DISCREPANCY_REPORT", cancellationToken);
+            if (doc != null)
+            {
+                doc.Status = "REJECTED";
+                doc.VerifiedAt = DateTime.UtcNow;
+            }
+
             await _context.SaveChangesAsync(cancellationToken);
 
             return new ResolveDiscrepancyResponse 

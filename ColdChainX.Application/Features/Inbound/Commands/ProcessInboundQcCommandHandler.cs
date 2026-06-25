@@ -150,11 +150,14 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
             Quantity = order.Quantity,
             ActualWeightKg = request.ActualWeightKg,
             ActualCbm = actualCbm,
+            LengthCm = request.LengthCm,
+            WidthCm = request.WidthCm,
+            HeightCm = request.HeightCm,
             RequiredTemperature = ParseTemperature(order.TempCondition),
             RecordedTemperature = request.Temperature,
             State = hasDiscrepancy ? LpnState.DISCREPANCY_HOLD : LpnState.RECEIVING,
             DiscrepancyReason = hasDiscrepancy
-                ? $"Actual cargo differs from expected by {maxDiff:0.##}% (weight {weightDiff:0.##}%, cbm {cbmDiff:0.##}%)."
+                ? $"Actual cargo differs from expected by {maxDiff:0.##}% (weight {weightDiff:0.##}%, cbm {cbmDiff:0.##}%). Actual dimensions: {request.LengthCm:0.##} x {request.WidthCm:0.##} x {request.HeightCm:0.##} cm."
                 : null,
             EvidenceImageUrl = evidenceImageUrl,
             SlaDeadline = now.AddHours(24),
@@ -180,6 +183,32 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
             pdfUrl = await _fileService.UploadFileAsync(pdfBytes, pdfFileName);
             
             receipt.PdfUrl = pdfUrl;
+
+            // Create or update TransportDocument for discrepancy report
+            var existingDoc = await _context.TransportDocuments
+                .FirstOrDefaultAsync(d => d.OrderId == order.OrderId && d.DocType == "DISCREPANCY_REPORT", cancellationToken);
+
+            if (existingDoc == null)
+            {
+                _context.TransportDocuments.Add(new TransportDocument
+                {
+                    DocId = Guid.NewGuid(),
+                    OrderId = order.OrderId,
+                    DocType = "DISCREPANCY_REPORT",
+                    ImageUrl = pdfUrl,
+                    Status = "PENDING",
+                    UploadedBy = request.ReceiverId,
+                    CreatedAt = now
+                });
+            }
+            else
+            {
+                existingDoc.ImageUrl = pdfUrl;
+                existingDoc.Status = "PENDING";
+                existingDoc.UploadedBy = request.ReceiverId;
+                existingDoc.CreatedAt = now;
+            }
+
             await _context.SaveChangesAsync(cancellationToken);
 
             // Automatically generate a pre-tax contract appendix in DRAFT status

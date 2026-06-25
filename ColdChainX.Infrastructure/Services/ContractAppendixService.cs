@@ -197,6 +197,31 @@ namespace ColdChainX.Infrastructure.Services
                 appendix.OrderId,
                 new { Appendix_Number = appendix.AppendixNumber, Tracking_Code = appendix.Order.TrackingCode });
 
+            // Create or update TransportDocument for the order with DocType = "CONTRACT_APPENDIX"
+            var existingDoc = await _db.TransportDocuments
+                .FirstOrDefaultAsync(d => d.OrderId == appendix.OrderId && d.DocType == "CONTRACT_APPENDIX");
+
+            if (existingDoc == null)
+            {
+                _db.TransportDocuments.Add(new TransportDocument
+                {
+                    DocId = Guid.NewGuid(),
+                    OrderId = appendix.OrderId,
+                    DocType = "CONTRACT_APPENDIX",
+                    ImageUrl = pdfUrl,
+                    Status = "PENDING",
+                    UploadedBy = salesUserId,
+                    CreatedAt = DbNow()
+                });
+            }
+            else
+            {
+                existingDoc.ImageUrl = pdfUrl;
+                existingDoc.Status = "PENDING";
+                existingDoc.UploadedBy = salesUserId;
+                existingDoc.CreatedAt = DbNow();
+            }
+
             await _db.SaveChangesAsync();
 
             await _hubContext.Clients.User(appendix.Order.CustomerId.ToString()!).SendAsync("AppendixPendingSignature", new
@@ -247,6 +272,19 @@ namespace ColdChainX.Infrastructure.Services
                 "NOTI_APPENDIX_ACCEPTED",
                 appendix.OrderId,
                 new { Appendix_Number = appendix.AppendixNumber, Tracking_Code = appendix.Order.TrackingCode });
+
+            // Update TransportDocument status for the order with DocType = "CONTRACT_APPENDIX"
+            var doc = await _db.TransportDocuments
+                .FirstOrDefaultAsync(d => d.OrderId == appendix.OrderId && d.DocType == "CONTRACT_APPENDIX");
+            if (doc != null)
+            {
+                doc.Status = "APPROVED";
+                doc.VerifiedAt = DbNow();
+                if (customerUserId.HasValue)
+                {
+                    doc.VerifiedBy = customerUserId.Value;
+                }
+            }
 
             await _db.SaveChangesAsync();
 
@@ -351,6 +389,19 @@ namespace ColdChainX.Infrastructure.Services
                     "NOTI_APPENDIX_EXECUTED",
                     appendix.OrderId,
                     new { Appendix_Number = appendix.AppendixNumber, Tracking_Code = appendix.Order.TrackingCode });
+
+                // Update CONTRACT_APPENDIX TransportDocument to REJECTED status
+                var doc = await _db.TransportDocuments
+                    .FirstOrDefaultAsync(d => d.OrderId == appendix.OrderId && d.DocType == "CONTRACT_APPENDIX");
+                if (doc != null)
+                {
+                    doc.Status = "REJECTED";
+                    doc.VerifiedAt = DbNow();
+                    if (customerUserId.HasValue)
+                    {
+                        doc.VerifiedBy = customerUserId.Value;
+                    }
+                }
 
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
@@ -641,6 +692,31 @@ namespace ColdChainX.Infrastructure.Services
             return ApiResponse<string>.SuccessResponse(html, "Contract appendix HTML retrieved");
         }
 
+        public async Task<ApiResponse<int>> ResetAllAppendicesHtmlAsync()
+        {
+            var appendices = await _db.ContractAppendices.ToListAsync();
+            int count = 0;
+            foreach (var appendix in appendices)
+            {
+                var data = await LoadAppendixDataAsync(appendix.OrderId);
+                if (data == null) continue;
+
+                try
+                {
+                    var template = await LoadAppendixTemplateAsync();
+                    var html = await RenderAppendixTemplateAsync(template, data, appendix.AppendixNumber, appendix.AdjustedPrice, appendix.Reason ?? string.Empty);
+                    appendix.DraftHtmlContent = html;
+                    count++;
+                }
+                catch (Exception)
+                {
+                    // Ignore and proceed
+                }
+            }
+            await _db.SaveChangesAsync();
+            return ApiResponse<int>.SuccessResponse(count, $"Successfully reset and regenerated HTML for {count} contract appendices.");
+        }
+
         private async Task<string> GenerateUniqueAppendixNumberAsync()
         {
             for (var i = 0; i < 10; i++)
@@ -763,6 +839,28 @@ namespace ColdChainX.Infrastructure.Services
 
             var maxDiff = Math.Max(Math.Abs(weightDiff), Math.Abs(cbmDiff));
 
+            var lpn = await _db.Lpns
+                .AsNoTracking()
+                .FirstOrDefaultAsync(l => l.OrderId == data.Order.OrderId);
+
+            var expectedLength = data.Order.LengthCm;
+            var expectedWidth = data.Order.WidthCm;
+            var expectedHeight = data.Order.HeightCm;
+
+            var actualLength = lpn?.LengthCm ?? 0m;
+            var actualWidth = lpn?.WidthCm ?? 0m;
+            var actualHeight = lpn?.HeightCm ?? 0m;
+
+            var lengthDiff = expectedLength > 0
+                ? Math.Round((actualLength - expectedLength) / expectedLength * 100m, 2)
+                : 0m;
+            var widthDiff = expectedWidth > 0
+                ? Math.Round((actualWidth - expectedWidth) / expectedWidth * 100m, 2)
+                : 0m;
+            var heightDiff = expectedHeight > 0
+                ? Math.Round((actualHeight - expectedHeight) / expectedHeight * 100m, 2)
+                : 0m;
+
             var replacements = new Dictionary<string, string?>
             {
                 ["Appendix_Number"] = appendixNumber,
@@ -805,7 +903,17 @@ namespace ColdChainX.Infrastructure.Services
                 ["Weight_Diff"] = (weightDiff >= 0 ? "+" : "") + weightDiff.ToString("0.##", CultureInfo.InvariantCulture),
                 ["Cbm_Diff"] = (cbmDiff >= 0 ? "+" : "") + cbmDiff.ToString("0.##", CultureInfo.InvariantCulture),
                 ["Volumetric_Weight_Diff"] = (volumetricWeightDiff >= 0 ? "+" : "") + volumetricWeightDiff.ToString("0.##", CultureInfo.InvariantCulture),
-                ["Chargeable_Weight_Diff"] = (chargeableWeightDiff >= 0 ? "+" : "") + chargeableWeightDiff.ToString("0.##", CultureInfo.InvariantCulture)
+                ["Chargeable_Weight_Diff"] = (chargeableWeightDiff >= 0 ? "+" : "") + chargeableWeightDiff.ToString("0.##", CultureInfo.InvariantCulture),
+
+                ["Expected_Length"] = expectedLength.ToString("0.##", CultureInfo.InvariantCulture),
+                ["Expected_Width"] = expectedWidth.ToString("0.##", CultureInfo.InvariantCulture),
+                ["Expected_Height"] = expectedHeight.ToString("0.##", CultureInfo.InvariantCulture),
+                ["Actual_Length"] = actualLength.ToString("0.##", CultureInfo.InvariantCulture),
+                ["Actual_Width"] = actualWidth.ToString("0.##", CultureInfo.InvariantCulture),
+                ["Actual_Height"] = actualHeight.ToString("0.##", CultureInfo.InvariantCulture),
+                ["Length_Diff"] = (lengthDiff >= 0 ? "+" : "") + lengthDiff.ToString("0.##", CultureInfo.InvariantCulture),
+                ["Width_Diff"] = (widthDiff >= 0 ? "+" : "") + widthDiff.ToString("0.##", CultureInfo.InvariantCulture),
+                ["Height_Diff"] = (heightDiff >= 0 ? "+" : "") + heightDiff.ToString("0.##", CultureInfo.InvariantCulture)
             };
 
             foreach (var replacement in replacements)

@@ -1527,6 +1527,9 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.ExpectedCbm)
                 .HasPrecision(8, 2)
                 .HasColumnName("expected_cbm");
+            entity.Property(e => e.LengthCm).HasPrecision(10, 2).HasColumnName("length_cm");
+            entity.Property(e => e.WidthCm).HasPrecision(10, 2).HasColumnName("width_cm");
+            entity.Property(e => e.HeightCm).HasPrecision(10, 2).HasColumnName("height_cm");
             entity.Property(e => e.ExpectedWeightKg)
                 .HasPrecision(10, 2)
                 .HasColumnName("expected_weight_kg");
@@ -2237,6 +2240,9 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.Quantity).HasColumnName("quantity");
             entity.Property(e => e.ActualWeightKg).HasPrecision(18, 2).HasColumnName("actual_weight_kg");
             entity.Property(e => e.ActualCbm).HasPrecision(18, 4).HasColumnName("actual_cbm");
+            entity.Property(e => e.LengthCm).HasPrecision(10, 2).HasColumnName("length_cm");
+            entity.Property(e => e.WidthCm).HasPrecision(10, 2).HasColumnName("width_cm");
+            entity.Property(e => e.HeightCm).HasPrecision(10, 2).HasColumnName("height_cm");
             entity.Property(e => e.RequiredTemperature).HasPrecision(8, 2).HasColumnName("required_temperature");
             entity.Property(e => e.RecordedTemperature).HasPrecision(8, 2).HasColumnName("recorded_temperature");
 

@@ -127,6 +127,42 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
         var pdfUrl = await _fileService.UploadFileAsync(pdfBytes, pdfFileName);
         
         receipt.PdfUrl = pdfUrl;
+
+        // Create, update, or resolve TransportDocument for discrepancy report depending on hasDiscrepancy
+        var existingDoc = await _context.TransportDocuments
+            .FirstOrDefaultAsync(d => d.OrderId == order.OrderId && d.DocType == "DISCREPANCY_REPORT", cancellationToken);
+
+        if (hasDiscrepancy)
+        {
+            if (existingDoc == null)
+            {
+                _context.TransportDocuments.Add(new TransportDocument
+                {
+                    DocId = Guid.NewGuid(),
+                    OrderId = order.OrderId,
+                    DocType = "DISCREPANCY_REPORT",
+                    ImageUrl = pdfUrl,
+                    Status = "PENDING",
+                    UploadedBy = receipt.ReceiverId,
+                    CreatedAt = now
+                });
+            }
+            else
+            {
+                existingDoc.ImageUrl = pdfUrl;
+                existingDoc.Status = "PENDING";
+                existingDoc.CreatedAt = now;
+            }
+        }
+        else
+        {
+            if (existingDoc != null)
+            {
+                existingDoc.Status = "APPROVED";
+                existingDoc.VerifiedAt = now;
+            }
+        }
+
         await _context.SaveChangesAsync(cancellationToken);
 
         if (hasDiscrepancy)

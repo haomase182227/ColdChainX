@@ -9,11 +9,25 @@ public class DiscrepancyDetailsResponse
     public Guid OrderId { get; set; }
     public string TrackingCode { get; set; } = null!;
     public string ItemName { get; set; } = null!;
+    public int ExpectedQuantity { get; set; }
+    public int ActualQuantity { get; set; }
     public int Quantity { get; set; }
     public decimal ExpectedWeightKg { get; set; }
     public decimal ActualWeightKg { get; set; }
     public decimal ExpectedCbm { get; set; }
     public decimal ActualCbm { get; set; }
+    public decimal ExpectedLengthCm { get; set; }
+    public decimal ActualLengthCm { get; set; }
+    public decimal ExpectedWidthCm { get; set; }
+    public decimal ActualWidthCm { get; set; }
+    public decimal ExpectedHeightCm { get; set; }
+    public decimal ActualHeightCm { get; set; }
+    public bool IsQuantityDifferent { get; set; }
+    public bool IsWeightDifferent { get; set; }
+    public bool IsCbmDifferent { get; set; }
+    public bool IsLengthDifferent { get; set; }
+    public bool IsWidthDifferent { get; set; }
+    public bool IsHeightDifferent { get; set; }
     public decimal? RequiredTemperature { get; set; }
     public decimal? RecordedTemperature { get; set; }
     public string? EvidenceImageUrl { get; set; }

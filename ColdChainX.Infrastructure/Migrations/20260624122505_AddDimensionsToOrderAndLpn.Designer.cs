@@ -3,6 +3,7 @@ using System;
 using ColdChainX.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ColdChainX.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260624122505_AddDimensionsToOrderAndLpn")]
+    partial class AddDimensionsToOrderAndLpn
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -952,47 +955,6 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.ToTable("driver_licenses", "public");
                 });
 
-            modelBuilder.Entity("ColdChainX.Core.Entities.DriverWorkLog", b =>
-                {
-                    b.Property<Guid>("WorkLogId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("work_log_id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<DateTime?>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<Guid>("DriverId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("driver_id");
-
-                    b.Property<decimal>("DrivingHours")
-                        .HasPrecision(8, 2)
-                        .HasColumnType("numeric(8,2)")
-                        .HasColumnName("driving_hours");
-
-                    b.Property<Guid?>("TripId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("trip_id");
-
-                    b.Property<DateOnly>("WorkDate")
-                        .HasColumnType("date")
-                        .HasColumnName("work_date");
-
-                    b.HasKey("WorkLogId")
-                        .HasName("driver_work_logs_pkey");
-
-                    b.HasIndex("TripId");
-
-                    b.HasIndex(new[] { "DriverId", "WorkDate" }, "ix_driver_work_logs_driver_date");
-
-                    b.ToTable("driver_work_logs", "public");
-                });
-
             modelBuilder.Entity("ColdChainX.Core.Entities.ExpenseAdvance", b =>
                 {
                     b.Property<Guid>("AdvanceId")
@@ -1880,10 +1842,9 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("destination_location_id");
 
-                    b.Property<decimal?>("EstimatedDurationHours")
-                        .HasPrecision(8, 2)
-                        .HasColumnType("numeric(8,2)")
-                        .HasColumnName("estimated_duration_hours");
+                    b.Property<Guid?>("DriverId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("driver_id");
 
                     b.Property<Guid>("OriginLocationId")
                         .HasColumnType("uuid")
@@ -1931,6 +1892,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasName("master_trips_pkey");
 
                     b.HasIndex("DestinationLocationId");
+
+                    b.HasIndex("DriverId");
 
                     b.HasIndex("OriginLocationId");
 
@@ -2990,52 +2953,6 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.ToTable("transport_orders", "public");
                 });
 
-            modelBuilder.Entity("ColdChainX.Core.Entities.TripDriver", b =>
-                {
-                    b.Property<Guid>("TripDriverId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("trip_driver_id")
-                        .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<decimal>("AssignedDurationHours")
-                        .HasPrecision(8, 2)
-                        .HasColumnType("numeric(8,2)")
-                        .HasColumnName("assigned_duration_hours");
-
-                    b.Property<DateTime?>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<Guid>("DriverId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("driver_id");
-
-                    b.Property<string>("DriverRole")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("driver_role")
-                        .HasDefaultValueSql("'PRIMARY'::character varying");
-
-                    b.Property<Guid>("TripId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("trip_id");
-
-                    b.HasKey("TripDriverId")
-                        .HasName("trip_drivers_pkey");
-
-                    b.HasIndex("DriverId");
-
-                    b.HasIndex(new[] { "TripId", "DriverId" }, "trip_drivers_trip_driver_key")
-                        .IsUnique();
-
-                    b.ToTable("trip_drivers", "public");
-                });
-
             modelBuilder.Entity("ColdChainX.Core.Entities.TripStop", b =>
                 {
                     b.Property<Guid>("StopId")
@@ -3234,6 +3151,10 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("double precision")
                         .HasColumnName("current_odometer");
 
+                    b.Property<Guid?>("DriverId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("driver_id");
+
                     b.Property<string>("EngineNumber")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)")
@@ -3293,6 +3214,8 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.HasKey("VehicleId")
                         .HasName("vehicles_pkey");
+
+                    b.HasIndex("DriverId");
 
                     b.HasIndex(new[] { "ChassisNumber" }, "vehicles_chassis_number_key")
                         .IsUnique();
@@ -3954,26 +3877,6 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.Navigation("Driver");
                 });
 
-            modelBuilder.Entity("ColdChainX.Core.Entities.DriverWorkLog", b =>
-                {
-                    b.HasOne("ColdChainX.Core.Entities.Driver", "Driver")
-                        .WithMany("WorkLogs")
-                        .HasForeignKey("DriverId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_driver_work_logs_driver");
-
-                    b.HasOne("ColdChainX.Core.Entities.MasterTrip", "Trip")
-                        .WithMany()
-                        .HasForeignKey("TripId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_driver_work_logs_trip");
-
-                    b.Navigation("Driver");
-
-                    b.Navigation("Trip");
-                });
-
             modelBuilder.Entity("ColdChainX.Core.Entities.ExpenseAdvance", b =>
                 {
                     b.HasOne("ColdChainX.Core.Entities.User", "ApprovedByNavigation")
@@ -4200,6 +4103,11 @@ namespace ColdChainX.Infrastructure.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_mtrip_dest");
 
+                    b.HasOne("ColdChainX.Core.Entities.Driver", "Driver")
+                        .WithMany("MasterTrips")
+                        .HasForeignKey("DriverId")
+                        .HasConstraintName("fk_mtrip_drivers");
+
                     b.HasOne("ColdChainX.Core.Entities.Location", "OriginLocation")
                         .WithMany("MasterTripOriginLocations")
                         .HasForeignKey("OriginLocationId")
@@ -4212,6 +4120,8 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasConstraintName("fk_mtrip_vehicles");
 
                     b.Navigation("DestinationLocation");
+
+                    b.Navigation("Driver");
 
                     b.Navigation("OriginLocation");
 
@@ -4455,27 +4365,6 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.Navigation("Route");
                 });
 
-            modelBuilder.Entity("ColdChainX.Core.Entities.TripDriver", b =>
-                {
-                    b.HasOne("ColdChainX.Core.Entities.Driver", "Driver")
-                        .WithMany("TripDrivers")
-                        .HasForeignKey("DriverId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_trip_drivers_driver");
-
-                    b.HasOne("ColdChainX.Core.Entities.MasterTrip", "Trip")
-                        .WithMany("TripDrivers")
-                        .HasForeignKey("TripId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_trip_drivers_trip");
-
-                    b.Navigation("Driver");
-
-                    b.Navigation("Trip");
-                });
-
             modelBuilder.Entity("ColdChainX.Core.Entities.TripStop", b =>
                 {
                     b.HasOne("ColdChainX.Core.Entities.Location", "Location")
@@ -4501,6 +4390,16 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasConstraintName("fk_users_roles");
 
                     b.Navigation("Role");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.Vehicle", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.Driver", "Driver")
+                        .WithMany("Vehicles")
+                        .HasForeignKey("DriverId")
+                        .HasConstraintName("fk_vehicles_drivers");
+
+                    b.Navigation("Driver");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.VehicleDocument", b =>
@@ -4623,9 +4522,9 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.Navigation("ExpenseAdvances");
 
-                    b.Navigation("TripDrivers");
+                    b.Navigation("MasterTrips");
 
-                    b.Navigation("WorkLogs");
+                    b.Navigation("Vehicles");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.ExpenseAdvance", b =>
@@ -4676,8 +4575,6 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.Navigation("TelemetryLogs");
 
                     b.Navigation("TransportOrders");
-
-                    b.Navigation("TripDrivers");
 
                     b.Navigation("TripStops");
                 });

@@ -142,6 +142,14 @@ namespace ColdChainX.API.Controllers
             return Content(result.Data!, "text/html; charset=utf-8");
         }
 
+        [HttpPost("reset-all-html")]
+        [AllowAnonymous]
+        public async Task<IActionResult> ResetAllAppendicesHtml()
+        {
+            var result = await _appendixService.ResetAllAppendicesHtmlAsync();
+            return Ok(result);
+        }
+
         private static string ReadEditedHtmlContent(string body, string contentType, out string? error)
         {
             error = null;
