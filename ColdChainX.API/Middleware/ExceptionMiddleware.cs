@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using ColdChainX.Shared.Responses;
+using ColdChainX.Shared.Exceptions;
 
 namespace ColdChainX.API.Middleware
 {
@@ -30,9 +31,17 @@ namespace ColdChainX.API.Middleware
 
         private static Task HandleExceptionAsync(HttpContext context, Exception exception)
         {
-            var response = ApiResponse<object>.Failure(exception.Message ?? "An error occurred");
+            var statusCode = (int)HttpStatusCode.InternalServerError;
+            var message = exception.Message ?? "An error occurred";
+
+            if (exception is ApiException apiEx)
+            {
+                statusCode = apiEx.StatusCode;
+            }
+
+            var response = ApiResponse<object>.Failure(message);
             context.Response.ContentType = "application/json";
-            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+            context.Response.StatusCode = statusCode;
             var result = JsonSerializer.Serialize(response);
             return context.Response.WriteAsync(result);
         }
