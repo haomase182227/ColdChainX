@@ -42,8 +42,8 @@ public class PlanLoadResult
 
     public VehicleInfo Vehicle { get; set; } = null!;
 
-    /// <summary>Lộ trình tổng hợp từ Goong API.</summary>
-    public RouteInfo Route { get; set; } = null!;
+    /// <summary>Chi tiết lộ trình tối ưu và hướng dẫn đường đi.</summary>
+    public RouteDetailsDto RouteDetails { get; set; } = null!;
 
     /// <summary>Kế hoạch xếp hàng theo thuật toán LIFO nội bộ.</summary>
     public List<LoadInstruction> LoadPlan { get; set; } = new();
@@ -67,19 +67,30 @@ public class VehicleInfo
     public decimal CbmUtilizationPct { get; set; }
 }
 
-public class RouteInfo
+public class RouteDetailsDto
 {
-    public decimal TotalDistanceKm { get; set; }
-    public int TotalStops { get; set; }
-    
-    // Lưu tọa độ kho xuất phát để vẽ bản đồ
+    public double TotalDistanceKm { get; set; }
+    public int TotalDurationMinutes { get; set; }
+    public string OverviewPolyline { get; set; } = null!;
     public decimal OriginLat { get; set; }
     public decimal OriginLng { get; set; }
-    
-    public List<RouteStop> Stops { get; set; } = new();
+    public string OriginAddress { get; set; } = null!;
+    public decimal DestinationLat { get; set; }
+    public decimal DestinationLng { get; set; }
+    public string DestinationAddress { get; set; } = null!;
+    public List<StopDto> Stops { get; set; } = new();
+    public List<StepDto> Steps { get; set; } = new();
 }
 
-public class RouteStop
+public class StepDto
+{
+    public string Instruction { get; set; } = null!;
+    public decimal DistanceKm { get; set; }
+    public int DurationSeconds { get; set; }
+    public string? Maneuver { get; set; }
+}
+
+public class StopDto
 {
     public int Sequence { get; set; }
     public Guid LocationId { get; set; }
@@ -179,6 +190,9 @@ public class ManualDispatchRequest
     /// <summary>VehicleId do người dùng chọn.</summary>
     public Guid VehicleId { get; set; }
 
+    /// <summary>DriverId do người dùng chọn (Tuỳ chọn, nếu rỗng sẽ lấy tài xế mặc định của xe).</summary>
+    public Guid DriverId { get; set; }
+
     /// <summary>LocationId kho xuất phát.</summary>
     public Guid OriginWarehouseLocationId { get; set; }
 
@@ -193,6 +207,7 @@ public class ManualDispatchRequest
 public class ManualDispatchFormRequest
 {
     public string VehicleId { get; set; } = string.Empty;
+    public string DriverId { get; set; } = string.Empty;
     public DateTime PlannedStartTime { get; set; }
     public DateTime PlannedEndTime { get; set; }
 }
@@ -207,17 +222,8 @@ public class ManualDispatchResult
     /// <summary>Danh sách LPN được chọn.</summary>
     public List<LpnSummary> SelectedLpns { get; set; } = new();
 
-    /// <summary>Lộ trình tối ưu.</summary>
-    public RouteInfo Route { get; set; } = null!;
-
-    /// <summary>Hướng dẫn đường đi từ Goong Directions API.</summary>
-    public NavigationInfo Navigation { get; set; } = null!;
-
-    /// <summary>
-    /// Hướng dẫn lộ trình đầy đủ, đóng gói sẵn cho FE vẽ trực tiếp lên Goong Map:
-    /// điểm xuất phát, các waypoint (marker), polyline encode + decode, và turn-by-turn.
-    /// </summary>
-    public RouteGuidance MapRoute { get; set; } = null!;
+    /// <summary>Chi tiết lộ trình tối ưu và hướng dẫn đường đi.</summary>
+    public RouteDetailsDto RouteDetails { get; set; } = null!;
 
     /// <summary>Kế hoạch xếp hàng LIFO.</summary>
     public List<LoadInstruction> LoadPlan { get; set; } = new();
@@ -283,94 +289,7 @@ public class DriverInfo
     public string LicenseStatus { get; set; } = null!; // VALID, EXPIRING_SOON, EXPIRED
 }
 
-/// <summary>Hướng dẫn đường đi (Goong Directions API).</summary>
-public class NavigationInfo
-{
-    public decimal TotalDistanceKm { get; set; }
-    public int TotalDurationMinutes { get; set; }
-    public string GoongRouteOverview { get; set; } = null!; // Encoded polyline overview
-
-    /// <summary>Danh sách các bước di chuyển theo thứ tự.</summary>
-    public List<NavigationLeg> Legs { get; set; } = new();
-}
-
-/// <summary>Một đoạn đường (leg) giữa 2 điểm dừng.</summary>
-public class NavigationLeg
-{
-    public int LegIndex { get; set; }
-    public string FromAddress { get; set; } = null!;
-    public string ToAddress { get; set; } = null!;
-    public decimal DistanceKm { get; set; }
-    public int DurationMinutes { get; set; }
-
-    /// <summary>Các bước rẽ/chỉ dẫn chi tiết trong đoạn đường này.</summary>
-    public List<NavigationStep> Steps { get; set; } = new();
-}
-
-/// <summary>Một bước chỉ dẫn trong navigation (turn-by-turn).</summary>
-public class NavigationStep
-{
-    public int StepIndex { get; set; }
-    public string Instruction { get; set; } = null!; // "Rẽ phải vào đường X"
-    public decimal DistanceKm { get; set; }
-    public int DurationSeconds { get; set; }
-    public string? Maneuver { get; set; } // "turn-right", "turn-left", "straight", etc.
-}
-
-// ─────────────────────────────────────────────
-//  ROUTE GUIDANCE — gói sẵn cho FE vẽ Goong Map
-// ─────────────────────────────────────────────
-
-/// <summary>
-/// Hướng dẫn lộ trình hoàn chỉnh để FE vẽ trực tiếp lên Goong Map mà không cần gọi lại API.
-/// Bao gồm: điểm đầu/cuối, danh sách waypoint (marker), polyline (cả dạng encode để Goong render
-/// và dạng decode lat/lng để vẽ tay), tổng quãng đường/thời gian và turn-by-turn.
-/// </summary>
-public class RouteGuidance
-{
-    public decimal OriginLat { get; set; }
-    public decimal OriginLng { get; set; }
-    public string OriginAddress { get; set; } = null!;
-
-    public decimal DestinationLat { get; set; }
-    public decimal DestinationLng { get; set; }
-    public string DestinationAddress { get; set; } = null!;
-
-    public decimal TotalDistanceKm { get; set; }
-    public int TotalDurationMinutes { get; set; }
-
-    /// <summary>Polyline encode (thuật toán Google/Goong) — dùng cho Goong Map render trực tiếp.</summary>
-    public string? OverviewPolyline { get; set; }
-
-    /// <summary>Các điểm marker theo đúng thứ tự lộ trình (origin → stops → destination).</summary>
-    public List<RouteWaypoint> Waypoints { get; set; } = new();
-
-    /// <summary>Polyline đã decode thành danh sách toạ độ — FE vẽ đường đi không cần thư viện decode.</summary>
-    public List<RoutePathPoint> Path { get; set; } = new();
-
-    /// <summary>Chỉ dẫn turn-by-turn gộp từ tất cả các chặng (đánh số liên tục).</summary>
-    public List<NavigationStep> Steps { get; set; } = new();
-}
-
-/// <summary>Một điểm marker trên bản đồ Goong.</summary>
-public class RouteWaypoint
-{
-    public int Sequence { get; set; }
-    public string Type { get; set; } = null!; // ORIGIN | STOP | DESTINATION
-    public decimal Lat { get; set; }
-    public decimal Lng { get; set; }
-    public string Address { get; set; } = null!;
-
-    /// <summary>Số LPN sẽ được dỡ tại điểm này (0 với điểm xuất phát).</summary>
-    public int LpnCount { get; set; }
-}
-
-/// <summary>Một toạ độ trên polyline lộ trình.</summary>
-public class RoutePathPoint
-{
-    public decimal Lat { get; set; }
-    public decimal Lng { get; set; }
-}
+// DTO routing classes replaced with RouteDetailsDto
 
 // ═══════════════════════════════════════════════════════════════════════
 //  API 2: WAREHOUSE ORDER — Lệnh bốc xếp cho kho

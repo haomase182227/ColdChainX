@@ -223,6 +223,7 @@ public class DispatchController : ControllerBase
         {
             LpnIds = parsedLpnIds,
             VehicleId = Guid.Parse(ExtractGuid(form.VehicleId)),
+            DriverId = string.IsNullOrWhiteSpace(form.DriverId) ? Guid.Empty : Guid.Parse(ExtractGuid(form.DriverId)),
             OriginWarehouseLocationId = originLocId,
             PlannedStartTime          = form.PlannedStartTime,
             PlannedEndTime            = form.PlannedEndTime
