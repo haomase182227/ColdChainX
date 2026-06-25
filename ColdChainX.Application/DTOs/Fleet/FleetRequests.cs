@@ -26,12 +26,6 @@ public class CreateVehicleRequest
     /// <summary>Biển số xe (bắt buộc)</summary>
     public string TruckPlate { get; set; } = null!;
 
-    /// <summary>Tên tài xế (tìm theo FullName). Ưu tiên hơn DriverId nếu cả 2 đều được cung cấp.</summary>
-    public string? DriverName { get; set; }
-
-    /// <summary>ID tài xế (tùy chọn, thay thế được bằng DriverName)</summary>
-    public Guid? DriverId { get; set; }
-
     public string? Brand { get; set; }
     public decimal? StandardFuelLiters { get; set; }
     public string VehicleType { get; set; } = null!;

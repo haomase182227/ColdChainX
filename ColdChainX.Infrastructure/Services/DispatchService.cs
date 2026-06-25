@@ -27,6 +27,7 @@ public class DispatchService : IDispatchService
     private readonly IPdfService _pdfService;
     private readonly IWebHostEnvironment _environment;
     private readonly IHubContext<NotificationHub> _hubContext;
+    private readonly IDriverAvailabilityService _driverAvailability;
     private readonly ILogger<DispatchService> _logger;
 
     // Tên role điều phối viên
@@ -42,6 +43,7 @@ public class DispatchService : IDispatchService
         IPdfService pdfService,
         IWebHostEnvironment environment,
         IHubContext<NotificationHub> hubContext,
+        IDriverAvailabilityService driverAvailability,
         ILogger<DispatchService> logger)
     {
         _context = context;
@@ -50,6 +52,7 @@ public class DispatchService : IDispatchService
         _pdfService = pdfService;
         _environment = environment;
         _hubContext = hubContext;
+        _driverAvailability = driverAvailability;
         _logger = logger;
     }
 
@@ -738,10 +741,8 @@ public class DispatchService : IDispatchService
         // 3. Check nhiệt độ — cho phép nhiều nhóm nhiệt độ khác nhau vì LIFO chia 3 vùng:
         // REAR (frozen) / MID (chilled) / FRONT (ambient)
 
-        // 4. Validate xe + tài xế
+        // 4. Validate xe (mỗi chuyến đúng 1 xe)
         var vehicle = await _context.Vehicles
-            .Include(v => v.Driver)
-                .ThenInclude(d => d!.DriverLicenses)
             .FirstOrDefaultAsync(v => v.VehicleId == request.VehicleId)
             ?? throw new InvalidOperationException("Không tìm thấy xe (Vehicle) đã chọn.");
 
@@ -750,17 +751,49 @@ public class DispatchService : IDispatchService
                 $"Xe {vehicle.TruckPlate} không thể ghép chuyến — trạng thái hiện tại: '{vehicle.Status}'. " +
                 $"Chỉ xe ACTIVE mới có thể được ghép chuyến.");
 
-        if (vehicle.DriverId == null || vehicle.Driver == null)
-            throw new InvalidOperationException($"Xe {vehicle.TruckPlate} chưa được gán tài xế.");
+        // 4b. Validate tài xế (1–2 người, gán theo chuyến qua TripDriver)
+        var driverIds = request.DriverIds.Distinct().ToList();
+        if (driverIds.Count < 1 || driverIds.Count > 2)
+            throw new InvalidOperationException("Phải chọn 1 hoặc 2 tài xế cho chuyến (mỗi chuyến tối đa 2 tài xế).");
+
+        var drivers = await _context.Drivers
+            .Include(d => d.DriverLicenses)
+            .Where(d => driverIds.Contains(d.DriverId))
+            .ToListAsync();
+
+        var missingDrivers = driverIds.Except(drivers.Select(d => d.DriverId)).ToList();
+        if (missingDrivers.Any())
+            throw new InvalidOperationException($"Không tìm thấy tài xế: {string.Join(", ", missingDrivers)}");
+        // Giữ nguyên thứ tự người dùng chọn (tài xế đầu = PRIMARY)
+        drivers = driverIds.Select(id => drivers.First(d => d.DriverId == id)).ToList();
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var activeLicense = vehicle.Driver.DriverLicenses
-            .Where(l => l.ExpiryDate >= today && (l.Status == null || l.Status == "ACTIVE"))
-            .OrderByDescending(l => l.ExpiryDate)
-            .FirstOrDefault();
+        var driverLicenses = new Dictionary<Guid, DriverLicense>();
+        foreach (var driver in drivers)
+        {
+            // Bằng lái còn hạn
+            var activeLicense = driver.DriverLicenses
+                .Where(l => l.ExpiryDate >= today && (l.Status == null || l.Status == "ACTIVE"))
+                .OrderByDescending(l => l.ExpiryDate)
+                .FirstOrDefault()
+                ?? throw new InvalidOperationException($"Tài xế {driver.FullName} không có bằng lái còn hạn.");
+            driverLicenses[driver.DriverId] = activeLicense;
 
-        if (activeLicense == null)
-            throw new InvalidOperationException($"Tài xế {vehicle.Driver.FullName} không có bằng lái còn hạn.");
+            // Tự động gỡ RELAX nếu đã qua ngày/tuần giới hạn; chặn nếu vẫn đang RELAX
+            await _driverAvailability.ReconcileStatusAsync(driver);
+            if (driver.Status == "RELAX")
+                throw new InvalidOperationException(
+                    $"Tài xế {driver.FullName} đang trong thời gian nghỉ bắt buộc (RELAX) do vượt giới hạn giờ lái. Chưa thể gán chuyến.");
+
+            // Chặn double-book: tài xế đang gắn với một chuyến khác còn hoạt động
+            var driverBusy = await _context.TripDrivers
+                .AnyAsync(td => td.DriverId == driver.DriverId
+                    && (td.Trip.Status == "PLANNED" || td.Trip.Status == "PICKING"
+                     || td.Trip.Status == "LOADING" || td.Trip.Status == "LOADING_COMPLETED"
+                     || td.Trip.Status == "SEALED" || td.Trip.Status == "DISPATCHED"));
+            if (driverBusy)
+                throw new InvalidOperationException($"Tài xế {driver.FullName} hiện đang bận một chuyến khác.");
+        }
 
         // SLA check — không chặn, chỉ cảnh báo
         var lateLpns = lpns.Where(l => l.SlaDeadline.HasValue && l.SlaDeadline.Value < DateTime.UtcNow).ToList();
@@ -818,15 +851,20 @@ public class DispatchService : IDispatchService
             };
         }
 
+        // 8b. Thời lượng lái xe ước tính (giờ) — lấy từ Goong route, fallback theo quãng đường / 40 km/h
+        var estimatedDurationHours = directionsResult.TotalDurationSeconds > 0
+            ? Math.Round((decimal)directionsResult.TotalDurationSeconds / 3600m, 2)
+            : Math.Round(routeResult.TotalDistanceKm / 40m, 2);
+
         // 9. Tạo Trip và lưu DB
         var masterTrip = new MasterTrip
         {
             TripId              = Guid.NewGuid(),
             VehicleId           = vehicle.VehicleId,
-            DriverId            = vehicle.DriverId,
             OriginLocationId    = originLocation.LocationId,
             DestinationLocationId = routeResult.StopSequence.Last().LocationId,
             TotalDistanceKm     = routeResult.TotalDistanceKm,
+            EstimatedDurationHours = estimatedDurationHours,
             TargetTemperature   = requiredMinTemp,
             PlannedStartTime    = request.PlannedStartTime,
             PlannedEndTime      = request.PlannedEndTime,
@@ -867,10 +905,48 @@ public class DispatchService : IDispatchService
             }
         }
 
-        // Cập nhật trạng thái xe và tài xế → Planning (đã ghép chuyến, chờ xuất phát)
+        // Phân bổ thời lượng lái xe đều cho các tài xế (1–2 người) và kiểm tra giới hạn giờ lái
+        var perDriverHours = Math.Round(estimatedDurationHours / driverIds.Count, 2);
+        var startDay = DateOnly.FromDateTime(request.PlannedStartTime);
+
+        foreach (var driver in drivers)
+        {
+            var availability = await _driverAvailability.CheckAsync(driver.DriverId, perDriverHours, startDay);
+            if (!availability.CanAssign)
+            {
+                // Vượt giới hạn → chuyển RELAX và chặn gán chuyến
+                driver.Status = "RELAX";
+                await _context.SaveChangesAsync();
+                throw new InvalidOperationException(
+                    $"Không thể gán tài xế {driver.FullName}: {availability.Reason} " +
+                    $"Tài xế được chuyển sang trạng thái RELAX (nghỉ bắt buộc).");
+            }
+        }
+
+        // Tạo TripDriver + ghi nhận giờ lái + cập nhật trạng thái
+        var assignedDrivers = new List<(Driver Driver, string Role)>();
+        for (int i = 0; i < drivers.Count; i++)
+        {
+            var driver = drivers[i];
+            var role = i == 0 ? "PRIMARY" : "SECONDARY";
+
+            _context.TripDrivers.Add(new TripDriver
+            {
+                TripDriverId          = Guid.NewGuid(),
+                TripId                = masterTrip.TripId,
+                DriverId              = driver.DriverId,
+                DriverRole            = role,
+                AssignedDurationHours = perDriverHours,
+                CreatedAt             = DateTime.UtcNow
+            });
+
+            await _driverAvailability.RecordWorkAsync(driver.DriverId, masterTrip.TripId, perDriverHours, startDay);
+            driver.Status = "Planning";
+            assignedDrivers.Add((driver, role));
+        }
+
+        // Cập nhật trạng thái xe → Planning (đã ghép chuyến, chờ xuất phát)
         vehicle.Status = "Planning";
-        if (vehicle.Driver != null)
-            vehicle.Driver.Status = "Planning";
         await _context.SaveChangesAsync();
 
         var notifiedCount = 0;
@@ -974,14 +1050,30 @@ public class DispatchService : IDispatchService
             Steps              = flatSteps
         };
 
-        var daysToExpiry = activeLicense.ExpiryDate.DayNumber - today.DayNumber;
-        var licenseStatus = daysToExpiry <= 30 ? "EXPIRING_SOON" : "VALID";
+        var driverInfos = assignedDrivers.Select(ad =>
+        {
+            var lic = driverLicenses[ad.Driver.DriverId];
+            var daysToExpiry = lic.ExpiryDate.DayNumber - today.DayNumber;
+            return new DriverInfo
+            {
+                DriverId              = ad.Driver.DriverId,
+                FullName              = ad.Driver.FullName,
+                PhoneNumber           = ad.Driver.PhoneNumber,
+                IdentityNumber        = ad.Driver.IdentityNumber,
+                LicenseClass          = lic.LicenseClass,
+                LicenseExpiry         = lic.ExpiryDate,
+                LicenseStatus         = daysToExpiry <= 30 ? "EXPIRING_SOON" : "VALID",
+                DriverRole            = ad.Role,
+                AssignedDurationHours = perDriverHours
+            };
+        }).ToList();
 
         return new ManualDispatchResult
         {
             TripId = masterTrip.TripId,
             Vehicle = new VehicleInfo { VehicleId = vehicle.VehicleId, TruckPlate = vehicle.TruckPlate, MaxWeightKg = vehicle.MaxWeight, MaxCbm = vehicle.MaxCbm, TotalOrderWeightKg = totalWeight, TotalOrderCbm = totalCbm, WeightUtilizationPct = Math.Round(totalWeight / vehicle.MaxWeight * 100, 1), CbmUtilizationPct = Math.Round(totalCbm / vehicle.MaxCbm * 100, 1) },
-            Driver = new DriverInfo { DriverId = vehicle.Driver.DriverId, FullName = vehicle.Driver.FullName, PhoneNumber = vehicle.Driver.PhoneNumber, IdentityNumber = vehicle.Driver.IdentityNumber, LicenseClass = activeLicense.LicenseClass, LicenseExpiry = activeLicense.ExpiryDate, LicenseStatus = licenseStatus },
+            Drivers = driverInfos,
+            EstimatedDurationHours = estimatedDurationHours,
             SelectedLpns = lpns.Select(l => new LpnSummary { LpnId = l.LpnId, LpnCode = l.LpnCode, OrderId = l.OrderId, OrderTrackingCode = l.Order?.TrackingCode ?? string.Empty, ItemName = l.Order?.ItemName ?? string.Empty, Quantity = l.Quantity, WeightKg = l.ActualWeightKg, Cbm = l.ActualCbm, TempCondition = l.Order?.TempCondition ?? "AMBIENT" }).ToList(),
             Route = routeInfo,
             MapRoute = mapRoute,
@@ -1061,7 +1153,8 @@ public class DispatchService : IDispatchService
     {
         var trip = await _context.MasterTrips
             .Include(t => t.Vehicle)
-            .Include(t => t.Driver)
+            .Include(t => t.TripDrivers)
+                .ThenInclude(td => td.Driver)
             .Include(t => t.TransportOrders)
             .Include(t => t.Seals)
             .Include(t => t.TripStops)
@@ -1158,11 +1251,20 @@ public class DispatchService : IDispatchService
         foreach (var stop in trip.TripStops.Where(s => s.Status != "CANCELLED"))
             stop.Status = "CANCELLED";
 
-        // 7. Reset xe và tài xế → ACTIVE (free)
+        // 7. Reset xe → ACTIVE và tài xế → ACTIVE (free); giải phóng giờ lái đã ghi nhận cho chuyến
         if (trip.Vehicle != null)
             trip.Vehicle.Status = "ACTIVE";
-        if (trip.Driver != null)
-            trip.Driver.Status = "ACTIVE";
+        foreach (var td in trip.TripDrivers)
+        {
+            if (td.Driver != null)
+                td.Driver.Status = "ACTIVE";
+        }
+        // Xóa các bản ghi giờ lái của chuyến này để trả lại quota cho tài xế
+        var workLogs = await _context.DriverWorkLogs
+            .Where(w => w.TripId == tripId)
+            .ToListAsync();
+        if (workLogs.Count > 0)
+            _context.DriverWorkLogs.RemoveRange(workLogs);
 
         // 8. Đánh dấu chuyến CANCELLED
         trip.Status = "CANCELLED";
@@ -1195,7 +1297,9 @@ public class DispatchService : IDispatchService
             CancelledSealCount  = cancelledSealCount,
             VoidedDocumentCount = documents.Count,
             VehiclePlate        = trip.Vehicle?.TruckPlate,
-            DriverName          = trip.Driver?.FullName,
+            DriverName          = trip.TripDrivers.Count > 0
+                                    ? string.Join(", ", trip.TripDrivers.Select(td => td.Driver?.FullName).Where(n => n != null))
+                                    : null,
             CancelledAt         = now,
             Message             = $"Đã hủy chuyến {tripId}. {lpns.Count} LPN đã trở về kho (IN_STOCK), " +
                                   $"xe và tài xế đã được giải phóng."
@@ -1282,7 +1386,9 @@ public class DispatchService : IDispatchService
     {
         var trip = await _context.MasterTrips
             .Include(t => t.Vehicle)
-            .Include(t => t.Driver)
+            .Include(t => t.TripDrivers)
+                .ThenInclude(td => td.Driver)
+                    .ThenInclude(d => d.User)
             .Include(t => t.TransportOrders)
             .Include(t => t.Seals)
             .Include(t => t.OriginLocation)
@@ -1397,9 +1503,15 @@ public class DispatchService : IDispatchService
         {
             waybillUrl = await GenerateWaybillPdfAsync(trip);
             var documentUploader = sealedBy;
-            if (trip.DriverId.HasValue && await _context.Users.AnyAsync(u => u.UserId == trip.DriverId.Value))
+            // Người tải chứng từ = tài khoản User của tài xế chính (nếu có), fallback người kẹp chì
+            var primaryDriverUserId = trip.TripDrivers
+                .OrderBy(td => td.DriverRole == "PRIMARY" ? 0 : 1)
+                .Select(td => td.Driver?.User?.UserId)
+                .FirstOrDefault(uid => uid.HasValue);
+            if (primaryDriverUserId.HasValue
+                && await _context.Users.AnyAsync(u => u.UserId == primaryDriverUserId.Value))
             {
-                documentUploader = trip.DriverId.Value;
+                documentUploader = primaryDriverUserId.Value;
             }
             _context.TransportDocuments.Add(new TransportDocument
             {
@@ -1413,8 +1525,11 @@ public class DispatchService : IDispatchService
             trip.Status = "DISPATCHED";
             if (trip.Vehicle != null)
                 trip.Vehicle.Status = "OnTrip";
-            if (trip.Driver != null)
-                trip.Driver.Status = "OnTrip";
+            foreach (var td in trip.TripDrivers)
+            {
+                if (td.Driver != null)
+                    td.Driver.Status = "OnTrip";
+            }
         }
         catch (Exception ex)
         {
@@ -1557,7 +1672,9 @@ public class DispatchService : IDispatchService
     {
         var trip = await _context.MasterTrips
             .Include(t => t.Vehicle)
-            .Include(t => t.Driver)
+            .Include(t => t.TripDrivers)
+                .ThenInclude(td => td.Driver)
+                    .ThenInclude(d => d.User)
             .Include(t => t.OriginLocation)
             .Include(t => t.DestinationLocation)
             .Include(t => t.TransportOrders)
@@ -1568,9 +1685,13 @@ public class DispatchService : IDispatchService
         var pdfUrl = await GenerateWaybillPdfAsync(trip);
 
         var documentUploader = issuerId ?? Guid.Empty;
-        if (trip.DriverId.HasValue && await _context.Users.AnyAsync(u => u.UserId == trip.DriverId.Value))
+        var primaryDriverUserId = trip.TripDrivers
+            .OrderBy(td => td.DriverRole == "PRIMARY" ? 0 : 1)
+            .Select(td => td.Driver?.User?.UserId)
+            .FirstOrDefault(uid => uid.HasValue);
+        if (primaryDriverUserId.HasValue && await _context.Users.AnyAsync(u => u.UserId == primaryDriverUserId.Value))
         {
-            documentUploader = trip.DriverId.Value;
+            documentUploader = primaryDriverUserId.Value;
         }
         else if (documentUploader == Guid.Empty || !await _context.Users.AnyAsync(u => u.UserId == documentUploader))
         {
@@ -1626,15 +1747,24 @@ public class DispatchService : IDispatchService
             no++;
         }
 
+        // Tài xế lấy từ junction TripDriver (1–2 người); tài xế chính (PRIMARY) ưu tiên cho SĐT/CCCD.
+        var tripDriversOrdered = trip.TripDrivers
+            .OrderBy(td => td.DriverRole == "PRIMARY" ? 0 : 1)
+            .ToList();
+        var primaryDriver = tripDriversOrdered.Select(td => td.Driver).FirstOrDefault(d => d != null);
+        var driverNames = tripDriversOrdered.Count > 0
+            ? string.Join(", ", tripDriversOrdered.Select(td => td.Driver?.FullName).Where(n => !string.IsNullOrEmpty(n)))
+            : null;
+
         var replacements = new Dictionary<string, string?>
         {
             ["Trip_Id"] = trip.TripId.ToString(),
             ["Issue_Date"] = DateTime.UtcNow.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture),
             ["Truck_Plate"] = trip.Vehicle?.TruckPlate ?? "N/A",
             ["Vehicle_Type"] = trip.Vehicle?.VehicleType ?? "N/A",
-            ["Driver_Name"] = trip.Driver?.FullName ?? "N/A",
-            ["Driver_Phone"] = trip.Driver?.PhoneNumber ?? "N/A",
-            ["Driver_Identity"] = trip.Driver?.IdentityNumber ?? "N/A",
+            ["Driver_Name"] = string.IsNullOrEmpty(driverNames) ? "N/A" : driverNames,
+            ["Driver_Phone"] = primaryDriver?.PhoneNumber ?? "N/A",
+            ["Driver_Identity"] = primaryDriver?.IdentityNumber ?? "N/A",
             ["Origin_Address"] = trip.OriginLocation?.Address ?? "N/A",
             ["Dest_Address"] = trip.DestinationLocation?.Address ?? "N/A",
             ["Total_Distance"] = trip.TotalDistanceKm?.ToString("F1", CultureInfo.InvariantCulture) ?? "0",
@@ -1680,7 +1810,8 @@ public class DispatchService : IDispatchService
     {
         var trip = await _context.MasterTrips
             .Include(t => t.Vehicle)
-            .Include(t => t.Driver)
+            .Include(t => t.TripDrivers)
+                .ThenInclude(td => td.Driver)
             .Include(t => t.OriginLocation)
             .Include(t => t.DestinationLocation)
             .FirstOrDefaultAsync(t => t.TripId == tripId)
@@ -1838,7 +1969,7 @@ public class DispatchService : IDispatchService
 
 <div class='info-grid'>
   <div class='info-card'><div class='label'>🚛 Phương tiện</div><div class='value'>{System.Net.WebUtility.HtmlEncode(trip.Vehicle?.TruckPlate ?? "N/A")} — {System.Net.WebUtility.HtmlEncode(trip.Vehicle?.VehicleType ?? "N/A")}</div></div>
-  <div class='info-card'><div class='label'>👤 Tài xế</div><div class='value'>{System.Net.WebUtility.HtmlEncode(trip.Driver?.FullName ?? "N/A")}</div></div>
+  <div class='info-card'><div class='label'>👤 Tài xế</div><div class='value'>{System.Net.WebUtility.HtmlEncode(trip.TripDrivers.Count > 0 ? string.Join(", ", trip.TripDrivers.Select(td => td.Driver?.FullName).Where(n => !string.IsNullOrEmpty(n))) : "N/A")}</div></div>
   <div class='info-card'><div class='label'>📅 Xuất phát dự kiến</div><div class='value'>{trip.PlannedStartTime.AddHours(7).ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)}</div></div>
   <div class='info-card'><div class='label'>📍 Kho xuất phát</div><div class='value'>{System.Net.WebUtility.HtmlEncode(trip.OriginLocation?.Address ?? "N/A")}</div></div>
   <div class='info-card'><div class='label'>⚖️ Tổng trọng lượng</div><div class='value'>{totalWeight:0.##} kg</div></div>
