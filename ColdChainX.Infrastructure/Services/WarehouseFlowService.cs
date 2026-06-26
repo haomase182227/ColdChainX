@@ -373,6 +373,7 @@ public class WarehouseFlowService : IWarehouseFlowService
             OrderId = lpn.OrderId,
             TrackingCode = trackingCode,
             ItemName = lpn.Order.ItemName,
+            WarehouseId = lpn.WarehouseId,
             StorageLocation = lpn.StorageLocation,
             Quantity = lpn.Quantity,
             ExpectedWeightKg = lpn.Order.ExpectedWeightKg,

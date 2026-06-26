@@ -14,6 +14,8 @@ public partial class Lpn
 
     public Guid ReceiptId { get; set; }
 
+    public Guid? WarehouseId { get; set; }
+
     public Guid? RouteId { get; set; }
 
     public Guid? TripId { get; set; }
@@ -59,6 +61,8 @@ public partial class Lpn
     public virtual MasterTrip? Trip { get; set; }
 
     public virtual WarehouseReceipt Receipt { get; set; } = null!;
+
+    public virtual Warehouse? Warehouse { get; set; }
 
     public virtual ICollection<PenaltyBill> PenaltyBills { get; set; } = new List<PenaltyBill>();
 }

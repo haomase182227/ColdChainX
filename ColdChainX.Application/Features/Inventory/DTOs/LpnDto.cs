@@ -8,6 +8,8 @@ public class LpnDto
     public string LpnCode { get; set; } = null!;
     public string ItemName { get; set; } = null!;
     public string? BatchNumber { get; set; }
+    public Guid? WarehouseId { get; set; }
+    public string? WarehouseName { get; set; }
     public string? StorageLocation { get; set; }
     public int Quantity { get; set; }
     public decimal ExpectedWeightKg { get; set; }
