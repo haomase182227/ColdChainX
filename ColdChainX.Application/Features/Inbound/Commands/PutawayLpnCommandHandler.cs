@@ -34,7 +34,20 @@ public class PutawayLpnCommandHandler : IRequestHandler<PutawayLpnCommand, Putaw
             return new PutawayLpnResponse { Success = false, Message = "StorageLocation is required." };
         }
 
+        if (request.WarehouseId == Guid.Empty)
+        {
+            return new PutawayLpnResponse { Success = false, Message = "WarehouseId is required." };
+        }
+
+        // Kho được chọn từ danh sách kho hiện có — chỉ kiểm tra tồn tại để tránh lỗi khóa ngoại.
+        var warehouseExists = await _context.Warehouses.AnyAsync(w => w.WarehouseId == request.WarehouseId, cancellationToken);
+        if (!warehouseExists)
+        {
+            return new PutawayLpnResponse { Success = false, Message = "Warehouse not found." };
+        }
+
         lpn.StorageLocation = request.StorageLocation;
+        lpn.WarehouseId = request.WarehouseId;
         lpn.InboundTime = DateTime.UtcNow;
         lpn.State = LpnState.IN_STOCK;
         lpn.UpdatedAt = DateTime.UtcNow;
