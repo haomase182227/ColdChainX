@@ -61,7 +61,9 @@ public class RejectLpnDeliveryCommandHandler : IRequestHandler<RejectLpnDelivery
         if (driver == null)
             throw new ForbiddenException("Driver profile not found for current user.");
 
-        if (trip.DriverId != driver.DriverId)
+        var isAssignedDriver = await _context.TripDrivers
+            .AnyAsync(td => td.TripId == request.TripId && td.DriverId == driver.DriverId, cancellationToken);
+        if (!isAssignedDriver)
             throw new ForbiddenException("You are not authorized to confirm deliveries for this trip.");
 
         // 5. Check LPN state (Only SHIPPING allowed, handle double-submit Conflict)
