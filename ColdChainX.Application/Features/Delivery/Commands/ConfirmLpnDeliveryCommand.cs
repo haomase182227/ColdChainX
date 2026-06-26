@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using MediatR;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Application.DTOs.Delivery;
 using ColdChainX.Core.Entities;
@@ -35,11 +36,13 @@ public class ConfirmLpnDeliveryCommandHandler : IRequestHandler<ConfirmLpnDelive
 {
     private readonly IApplicationDbContext _context;
     private readonly IFileService _fileService;
+    private readonly IConfiguration _configuration;
 
-    public ConfirmLpnDeliveryCommandHandler(IApplicationDbContext context, IFileService fileService)
+    public ConfirmLpnDeliveryCommandHandler(IApplicationDbContext context, IFileService fileService, IConfiguration configuration)
     {
         _context = context;
         _fileService = fileService;
+        _configuration = configuration;
     }
 
     public async Task<ApiResponse<LpnDeliveryStatusResponse>> Handle(ConfirmLpnDeliveryCommand request, CancellationToken cancellationToken)
@@ -57,6 +60,7 @@ public class ConfirmLpnDeliveryCommandHandler : IRequestHandler<ConfirmLpnDelive
 
         // 3. Fetch Trip and validate existence
         var trip = await _context.MasterTrips
+            .Include(t => t.Seals)
             .FirstOrDefaultAsync(t => t.TripId == request.TripId, cancellationToken);
         if (trip == null)
             throw new NotFoundException($"Trip with ID '{request.TripId}' was not found.");
@@ -96,6 +100,49 @@ public class ConfirmLpnDeliveryCommandHandler : IRequestHandler<ConfirmLpnDelive
         if (!allowedTypes.Contains(request.EvidenceImage.ContentType.ToLower()))
             throw new ValidationException($"Invalid file type '{request.EvidenceImage.ContentType}'. Only image files are accepted (jpg, jpeg, png, webp).");
 
+        // Validate COD payment details
+        if (!string.IsNullOrWhiteSpace(request.CodPaymentMethod))
+        {
+            var methodUpper = request.CodPaymentMethod.ToUpper();
+            if (methodUpper != "CASH" && methodUpper != "BANK_TRANSFER")
+            {
+                throw new ValidationException($"Invalid COD payment method '{request.CodPaymentMethod}'. Allowed values: CASH, BANK_TRANSFER.");
+            }
+
+            if (methodUpper == "BANK_TRANSFER")
+            {
+                if (request.CodReceiptImage == null || request.CodReceiptImage.Length == 0)
+                {
+                    throw new ValidationException("Cod receipt image is required for BANK_TRANSFER payment method.");
+                }
+            }
+        }
+
+        if (request.CodAmount < 0)
+        {
+            throw new ValidationException("COD amount cannot be negative.");
+        }
+
+        // Validate SignatureImage if provided
+        if (request.SignatureImage != null && request.SignatureImage.Length > 0)
+        {
+            if (request.SignatureImage.Length > MaxFileSizeBytes)
+                throw new ValidationException($"Signature image file size ({request.SignatureImage.Length / 1024.0 / 1024.0:F2}MB) exceeds the 10MB limit.");
+
+            if (!allowedTypes.Contains(request.SignatureImage.ContentType.ToLower()))
+                throw new ValidationException($"Invalid signature image file type '{request.SignatureImage.ContentType}'. Only image files are accepted (jpg, jpeg, png, webp).");
+        }
+
+        // Validate CodReceiptImage if provided
+        if (request.CodReceiptImage != null && request.CodReceiptImage.Length > 0)
+        {
+            if (request.CodReceiptImage.Length > MaxFileSizeBytes)
+                throw new ValidationException($"COD receipt image file size ({request.CodReceiptImage.Length / 1024.0 / 1024.0:F2}MB) exceeds the 10MB limit.");
+
+            if (!allowedTypes.Contains(request.CodReceiptImage.ContentType.ToLower()))
+                throw new ValidationException($"Invalid COD receipt image file type '{request.CodReceiptImage.ContentType}'. Only image files are accepted (jpg, jpeg, png, webp).");
+        }
+
         // 7. Validate Receiver info
         if (string.IsNullOrWhiteSpace(request.ReceiverName))
             throw new ValidationException("Receiver name is required.");
@@ -118,6 +165,38 @@ public class ConfirmLpnDeliveryCommandHandler : IRequestHandler<ConfirmLpnDelive
         if (string.IsNullOrEmpty(imageUrl))
             throw new ExternalServiceException("Image upload returned empty URL. Please try again.");
 
+        string? signatureImageUrl = null;
+        if (request.SignatureImage != null && request.SignatureImage.Length > 0)
+        {
+            try
+            {
+                signatureImageUrl = await _fileService.UploadFileAsync(request.SignatureImage);
+            }
+            catch (Exception)
+            {
+                throw new ExternalServiceException("Signature image upload service is temporarily unavailable. Please try again.");
+            }
+
+            if (string.IsNullOrEmpty(signatureImageUrl))
+                throw new ExternalServiceException("Signature image upload returned empty URL. Please try again.");
+        }
+
+        string? codReceiptImageUrl = null;
+        if (request.CodReceiptImage != null && request.CodReceiptImage.Length > 0)
+        {
+            try
+            {
+                codReceiptImageUrl = await _fileService.UploadFileAsync(request.CodReceiptImage);
+            }
+            catch (Exception)
+            {
+                throw new ExternalServiceException("COD receipt image upload service is temporarily unavailable. Please try again.");
+            }
+
+            if (string.IsNullOrEmpty(codReceiptImageUrl))
+                throw new ExternalServiceException("COD receipt image upload returned empty URL. Please try again.");
+        }
+
         // 9. Database transaction and save using execution strategy
         var strategy = _context.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync(async () =>
@@ -136,7 +215,13 @@ public class ConfirmLpnDeliveryCommandHandler : IRequestHandler<ConfirmLpnDelive
                     ReceiverPhone = request.ReceiverPhone,
                     EvidenceImageUrl = imageUrl,
                     ConfirmedByDriverId = request.UserId,
-                    ConfirmedAt = DateTime.UtcNow
+                    ConfirmedAt = DateTime.UtcNow,
+                    CheckinAt = request.CheckinAt,
+                    SignatureImageUrl = signatureImageUrl,
+                    CodAmount = request.CodAmount,
+                    CodPaymentMethod = request.CodPaymentMethod?.ToUpper(),
+                    CodReceiptImageUrl = codReceiptImageUrl,
+                    NewSealNumber = request.NewSealNumber
                 };
 
                 _context.LpnDeliveryConfirmations.Add(confirmation);
@@ -144,6 +229,34 @@ public class ConfirmLpnDeliveryCommandHandler : IRequestHandler<ConfirmLpnDelive
                 lpn.State = LpnState.DELIVERED;
                 lpn.EvidenceImageUrl = imageUrl;
                 lpn.UpdatedAt = DateTime.UtcNow;
+
+                // Sync New Seal if provided
+                if (!string.IsNullOrWhiteSpace(request.NewSealNumber))
+                {
+                    var now = DateTime.UtcNow;
+                    foreach (var oldSeal in trip.Seals.Where(s => s.Status == "APPLIED" || s.Status != "CANCELLED"))
+                    {
+                        if (oldSeal.RemovedAt == null)
+                        {
+                            oldSeal.Status = "CANCELLED";
+                            oldSeal.RemovedAt = now;
+                        }
+                    }
+
+                    var newSeal = new Seal
+                    {
+                        SealId = Guid.NewGuid(),
+                        TripId = request.TripId,
+                        SealCode = request.NewSealNumber.Trim(),
+                        Status = "APPLIED",
+                        AppliedAt = now,
+                        CreatedAt = now,
+                        Note = $"Applied during delivery check-in/out for LPN {lpn.LpnCode}"
+                    };
+                    _context.Seals.Add(newSeal);
+
+                    trip.SealNumber = request.NewSealNumber.Trim();
+                }
 
                 await _context.SaveChangesAsync(cancellationToken);
 
@@ -156,6 +269,20 @@ public class ConfirmLpnDeliveryCommandHandler : IRequestHandler<ConfirmLpnDelive
                 await _context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
 
+                // VietQR Generation in Response
+                var bankId = _configuration?["PaymentSettings:BankId"] ?? "vietinbank";
+                var bankAccount = _configuration?["PaymentSettings:BankAccount"] ?? "1111111111";
+                var bankAccountName = _configuration?["PaymentSettings:BankAccountName"] ?? "NGUYEN VAN A";
+
+                var codAmount = confirmation.CodAmount;
+                string? vietQrUrl = null;
+                if (codAmount > 0)
+                {
+                    var memo = Uri.EscapeDataString($"ColdChainX LPN {lpn.LpnCode}");
+                    var accName = Uri.EscapeDataString(bankAccountName);
+                    vietQrUrl = $"https://img.vietqr.io/image/{bankId}-{bankAccount}-compact.png?amount={(int)codAmount}&addInfo={memo}&accountName={accName}";
+                }
+
                 var response = new LpnDeliveryStatusResponse
                 {
                     LpnId = lpn.LpnId,
@@ -165,7 +292,14 @@ public class ConfirmLpnDeliveryCommandHandler : IRequestHandler<ConfirmLpnDelive
                     ReceiverName = confirmation.ReceiverName,
                     ReceiverPhone = confirmation.ReceiverPhone,
                     EvidenceImageUrl = confirmation.EvidenceImageUrl,
-                    ConfirmedAt = confirmation.ConfirmedAt
+                    ConfirmedAt = confirmation.ConfirmedAt,
+                    CheckinAt = confirmation.CheckinAt,
+                    SignatureImageUrl = confirmation.SignatureImageUrl,
+                    CodAmount = confirmation.CodAmount,
+                    CodPaymentMethod = confirmation.CodPaymentMethod,
+                    CodReceiptImageUrl = confirmation.CodReceiptImageUrl,
+                    NewSealNumber = confirmation.NewSealNumber,
+                    VietQrUrl = vietQrUrl
                 };
 
                 return ApiResponse<LpnDeliveryStatusResponse>.SuccessResponse(response, "LPN delivery confirmed successfully.");

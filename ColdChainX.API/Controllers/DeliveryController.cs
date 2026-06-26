@@ -77,7 +77,13 @@ public class DeliveryController : ControllerBase
             ReceiverName = request.ReceiverName,
             ReceiverPhone = request.ReceiverPhone,
             EvidenceImage = request.EvidenceImage,
-            UserId = userId
+            UserId = userId,
+            CheckinAt = request.CheckinAt,
+            SignatureImage = request.SignatureImage,
+            CodAmount = request.CodAmount,
+            CodPaymentMethod = request.CodPaymentMethod,
+            CodReceiptImage = request.CodReceiptImage,
+            NewSealNumber = request.NewSealNumber
         };
 
         var result = await _mediator.Send(command);

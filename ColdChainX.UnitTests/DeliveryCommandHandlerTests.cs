@@ -13,6 +13,7 @@ using ColdChainX.Core.Entities;
 using ColdChainX.Core.Enums;
 using ColdChainX.Infrastructure.Persistence;
 using ColdChainX.Shared.Exceptions;
+using Microsoft.Extensions.Configuration;
 using Xunit;
 
 namespace ColdChainX.UnitTests
@@ -21,6 +22,7 @@ namespace ColdChainX.UnitTests
     {
         private readonly ApplicationDbContext _db;
         private readonly IFileService _fileService;
+        private readonly IConfiguration _configuration;
         private readonly Guid _userId = Guid.NewGuid();
         private readonly Guid _driverId = Guid.NewGuid();
         private readonly Guid _tripId = Guid.NewGuid();
@@ -36,6 +38,14 @@ namespace ColdChainX.UnitTests
 
             _db = new ApplicationDbContext(options);
             _fileService = new FakeFileService();
+
+            var settings = new System.Collections.Generic.Dictionary<string, string>
+            {
+                { "PaymentSettings:BankId", "vietinbank" },
+                { "PaymentSettings:BankAccount", "1111111111" },
+                { "PaymentSettings:BankAccountName", "NGUYEN VAN A" }
+            };
+            _configuration = new FakeConfiguration(settings);
 
             // Seed Role & User
             var driverRole = new Role
@@ -121,7 +131,7 @@ namespace ColdChainX.UnitTests
         public async Task Confirm_ValidRequest_ShouldSucceed()
         {
             // Arrange
-            var handler = new ConfirmLpnDeliveryCommandHandler(_db, _fileService);
+            var handler = new ConfirmLpnDeliveryCommandHandler(_db, _fileService, _configuration);
             var image = new FakeFormFile(new byte[] { 1, 2, 3, 4 }, "image/jpeg", "evidence.jpg");
             var command = new ConfirmLpnDeliveryCommand
             {
@@ -157,6 +167,96 @@ namespace ColdChainX.UnitTests
         }
 
         [Fact]
+        public async Task Confirm_BankTransferWithoutReceipt_ShouldThrowValidationException()
+        {
+            // Arrange
+            var handler = new ConfirmLpnDeliveryCommandHandler(_db, _fileService, _configuration);
+            var image = new FakeFormFile(new byte[] { 1, 2, 3, 4 }, "image/jpeg", "evidence.jpg");
+            var command = new ConfirmLpnDeliveryCommand
+            {
+                TripId = _tripId,
+                LpnId = _lpnId,
+                ReceiverName = "Nguyen Van A",
+                ReceiverPhone = "0901234567",
+                EvidenceImage = image,
+                UserId = _userId,
+                CodAmount = 500000,
+                CodPaymentMethod = "BANK_TRANSFER",
+                CodReceiptImage = null // Missing receipt image
+            };
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<ValidationException>(() => handler.Handle(command, CancellationToken.None));
+            Assert.Equal("Cod receipt image is required for BANK_TRANSFER payment method.", ex.Message);
+        }
+
+        [Fact]
+        public async Task Confirm_BankTransferWithReceipt_ShouldSucceed()
+        {
+            // Arrange
+            var handler = new ConfirmLpnDeliveryCommandHandler(_db, _fileService, _configuration);
+            var image = new FakeFormFile(new byte[] { 1, 2, 3, 4 }, "image/jpeg", "evidence.jpg");
+            var receiptImage = new FakeFormFile(new byte[] { 5, 6, 7, 8 }, "image/png", "receipt.png");
+            var command = new ConfirmLpnDeliveryCommand
+            {
+                TripId = _tripId,
+                LpnId = _lpnId,
+                ReceiverName = "Nguyen Van A",
+                ReceiverPhone = "0901234567",
+                EvidenceImage = image,
+                UserId = _userId,
+                CodAmount = 500000,
+                CodPaymentMethod = "BANK_TRANSFER",
+                CodReceiptImage = receiptImage
+            };
+
+            // Act
+            var result = await handler.Handle(command, CancellationToken.None);
+
+            // Assert
+            Assert.True(result.Success);
+            Assert.NotNull(result.Data);
+            Assert.Equal("DELIVERED", result.Data.OutcomeType);
+            Assert.Equal("BANK_TRANSFER", result.Data.CodPaymentMethod);
+            Assert.Equal(500000, result.Data.CodAmount);
+            Assert.Equal("https://res.cloudinary.com/test/image.jpg", result.Data.CodReceiptImageUrl);
+            Assert.NotNull(result.Data.VietQrUrl);
+            Assert.Contains("amount=500000", result.Data.VietQrUrl);
+        }
+
+        [Fact]
+        public async Task Confirm_WithNewSeal_ShouldUpdateTripSeal()
+        {
+            // Arrange
+            var handler = new ConfirmLpnDeliveryCommandHandler(_db, _fileService, _configuration);
+            var image = new FakeFormFile(new byte[] { 1, 2, 3, 4 }, "image/jpeg", "evidence.jpg");
+            var command = new ConfirmLpnDeliveryCommand
+            {
+                TripId = _tripId,
+                LpnId = _lpnId,
+                ReceiverName = "Nguyen Van A",
+                ReceiverPhone = "0901234567",
+                EvidenceImage = image,
+                UserId = _userId,
+                NewSealNumber = "SEAL-NEW-1234"
+            };
+
+            // Act
+            var result = await handler.Handle(command, CancellationToken.None);
+
+            // Assert
+            Assert.True(result.Success);
+            Assert.NotNull(result.Data);
+            Assert.Equal("SEAL-NEW-1234", result.Data.NewSealNumber);
+
+            // Verify Trip seal code updated
+            var trip = await _db.MasterTrips.Include(t => t.Seals).FirstOrDefaultAsync(t => t.TripId == _tripId);
+            Assert.NotNull(trip);
+            Assert.Equal("SEAL-NEW-1234", trip.SealNumber);
+            Assert.Contains(trip.Seals, s => s.SealCode == "SEAL-NEW-1234" && s.Status == "APPLIED");
+        }
+
+        [Fact]
         public async Task Confirm_DriverNotAssigned_ShouldThrowForbidden()
         {
             // Arrange
@@ -187,7 +287,7 @@ namespace ColdChainX.UnitTests
             });
             await _db.SaveChangesAsync();
 
-            var handler = new ConfirmLpnDeliveryCommandHandler(_db, _fileService);
+            var handler = new ConfirmLpnDeliveryCommandHandler(_db, _fileService, _configuration);
             var image = new FakeFormFile(new byte[] { 1, 2, 3, 4 }, "image/jpeg", "evidence.jpg");
             var command = new ConfirmLpnDeliveryCommand
             {
@@ -210,7 +310,7 @@ namespace ColdChainX.UnitTests
             lpn!.State = LpnState.DELIVERED;
             await _db.SaveChangesAsync();
 
-            var handler = new ConfirmLpnDeliveryCommandHandler(_db, _fileService);
+            var handler = new ConfirmLpnDeliveryCommandHandler(_db, _fileService, _configuration);
             var image = new FakeFormFile(new byte[] { 1, 2, 3, 4 }, "image/jpeg", "evidence.jpg");
             var command = new ConfirmLpnDeliveryCommand
             {
@@ -314,5 +414,25 @@ namespace ColdChainX.UnitTests
         public Task<string> UploadFileAsync(Stream stream, string fileName) => Task.FromResult("https://res.cloudinary.com/test/image.jpg");
         public Task<string> UploadFileAsync(byte[] fileBytes, string fileName) => Task.FromResult("https://res.cloudinary.com/test/image.jpg");
         public string GetSignedUrl(string publicId) => "https://res.cloudinary.com/test/image.jpg";
+    }
+
+    public class FakeConfiguration : IConfiguration
+    {
+        private readonly System.Collections.Generic.Dictionary<string, string> _values = new();
+
+        public FakeConfiguration(System.Collections.Generic.Dictionary<string, string> values)
+        {
+            _values = values;
+        }
+
+        public string? this[string key]
+        {
+            get => _values.TryGetValue(key, out var val) ? val : null;
+            set => _values[key] = value!;
+        }
+
+        public System.Collections.Generic.IEnumerable<IConfigurationSection> GetChildren() => System.Linq.Enumerable.Empty<IConfigurationSection>();
+        public Microsoft.Extensions.Primitives.IChangeToken GetReloadToken() => throw new NotImplementedException();
+        public IConfigurationSection GetSection(string key) => null!;
     }
 }
