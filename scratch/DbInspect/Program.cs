@@ -67,9 +67,10 @@ class Program
                     SET status = 'DISPATCHED', completed_at = NULL 
                     WHERE trip_id = '77777777-7777-7777-7777-777777777777';
 
-                    -- 8. Reset Order status to SHIPPING
+                    -- 8. Reset Order status to SHIPPING and set cargo value to 2000
                     UPDATE public.transport_orders 
-                    SET status = 'SHIPPING' 
+                    SET status = 'SHIPPING',
+                        cargo_value = 2000.00
                     WHERE order_id = '56c5cf5b-e403-4ab7-bc8e-b686dea7675b';
                 ";
                 int rows = cmd.ExecuteNonQuery();
