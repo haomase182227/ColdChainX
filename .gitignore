@@ -413,6 +413,10 @@ walkthrough.md
 ColdChainX.API/wwwroot/uploads/
 ColdChainX.API/wwwroot/appendices/
 ColdChainX.API/wwwroot/returnslips/
+ColdChainX.API/appsettings.json
+ColdChainX.API/appsettings.Development.json
+appsettings.json
+appsettings.Development.json
 
 # ColdChainX Local Documentation (AI-generated, local only — do NOT push to git)
 docs/
