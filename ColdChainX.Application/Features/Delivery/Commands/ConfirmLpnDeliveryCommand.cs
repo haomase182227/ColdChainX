@@ -23,6 +23,12 @@ public class ConfirmLpnDeliveryCommand : IRequest<ApiResponse<LpnDeliveryStatusR
     public string? ReceiverPhone { get; set; }
     public IFormFile EvidenceImage { get; set; } = null!;
     public Guid UserId { get; set; } // Set from JWT token by Controller
+    public DateTime? CheckinAt { get; set; }
+    public IFormFile? SignatureImage { get; set; }
+    public decimal CodAmount { get; set; }
+    public string? CodPaymentMethod { get; set; }
+    public IFormFile? CodReceiptImage { get; set; }
+    public string? NewSealNumber { get; set; }
 }
 
 public class ConfirmLpnDeliveryCommandHandler : IRequestHandler<ConfirmLpnDeliveryCommand, ApiResponse<LpnDeliveryStatusResponse>>

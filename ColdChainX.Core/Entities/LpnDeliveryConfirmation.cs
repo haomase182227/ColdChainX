@@ -28,6 +28,18 @@ public partial class LpnDeliveryConfirmation
 
     public DateTime ConfirmedAt { get; set; }
 
+    public DateTime? CheckinAt { get; set; }
+
+    public string? SignatureImageUrl { get; set; }
+
+    public decimal CodAmount { get; set; }
+
+    public string? CodPaymentMethod { get; set; }
+
+    public string? CodReceiptImageUrl { get; set; }
+
+    public string? NewSealNumber { get; set; }
+
     public virtual Lpn Lpn { get; set; } = null!;
 
     public virtual MasterTrip Trip { get; set; } = null!;

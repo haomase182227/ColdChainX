@@ -2494,6 +2494,30 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("confirmed_at");
 
+            entity.Property(e => e.CheckinAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("checkin_at");
+
+            entity.Property(e => e.SignatureImageUrl)
+                .HasMaxLength(500)
+                .HasColumnName("signature_image_url");
+
+            entity.Property(e => e.CodAmount)
+                .HasPrecision(15, 2)
+                .HasColumnName("cod_amount");
+
+            entity.Property(e => e.CodPaymentMethod)
+                .HasMaxLength(20)
+                .HasColumnName("cod_payment_method");
+
+            entity.Property(e => e.CodReceiptImageUrl)
+                .HasMaxLength(500)
+                .HasColumnName("cod_receipt_image_url");
+
+            entity.Property(e => e.NewSealNumber)
+                .HasMaxLength(50)
+                .HasColumnName("new_seal_number");
+
             entity.HasIndex(e => e.LpnId).IsUnique().HasDatabaseName("uq_lpn_delivery_confirmations_lpn_id");
 
             entity.HasOne(d => d.Lpn).WithMany()

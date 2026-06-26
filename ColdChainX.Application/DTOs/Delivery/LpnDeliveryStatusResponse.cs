@@ -14,4 +14,11 @@ public class LpnDeliveryStatusResponse
     public string? RejectNote { get; set; }
     public string? EvidenceImageUrl { get; set; }
     public DateTime? ConfirmedAt { get; set; }
+    public DateTime? CheckinAt { get; set; }
+    public string? SignatureImageUrl { get; set; }
+    public decimal CodAmount { get; set; }
+    public string? CodPaymentMethod { get; set; }
+    public string? CodReceiptImageUrl { get; set; }
+    public string? NewSealNumber { get; set; }
+    public string? VietQrUrl { get; set; }
 }

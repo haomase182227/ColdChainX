@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Application.DTOs.Delivery;
 using ColdChainX.Core.Enums;
@@ -21,10 +22,12 @@ public class GetTripDeliveryProgressQuery : IRequest<ApiResponse<TripDeliveryPro
 public class GetTripDeliveryProgressQueryHandler : IRequestHandler<GetTripDeliveryProgressQuery, ApiResponse<TripDeliveryProgressResponse>>
 {
     private readonly IApplicationDbContext _context;
+    private readonly IConfiguration _configuration;
 
-    public GetTripDeliveryProgressQueryHandler(IApplicationDbContext context)
+    public GetTripDeliveryProgressQueryHandler(IApplicationDbContext context, IConfiguration configuration)
     {
         _context = context;
+        _configuration = configuration;
     }
 
     public async Task<ApiResponse<TripDeliveryProgressResponse>> Handle(GetTripDeliveryProgressQuery request, CancellationToken cancellationToken)
@@ -35,8 +38,9 @@ public class GetTripDeliveryProgressQueryHandler : IRequestHandler<GetTripDelive
         if (!tripExists)
             throw new NotFoundException($"Trip with ID '{request.TripId}' was not found.");
 
-        // 2. Fetch all LPNs of the trip
+        // 2. Fetch all LPNs of the trip (including Order for CargoValue)
         var lpns = await _context.Lpns
+            .Include(l => l.Order)
             .Where(l => l.TripId == request.TripId)
             .ToListAsync(cancellationToken);
 
@@ -45,11 +49,27 @@ public class GetTripDeliveryProgressQueryHandler : IRequestHandler<GetTripDelive
             .Where(c => c.TripId == request.TripId)
             .ToDictionaryAsync(c => c.LpnId, cancellationToken);
 
+        // Read bank configurations for VietQR
+        var bankId = _configuration?["PaymentSettings:BankId"] ?? "vietinbank";
+        var bankAccount = _configuration?["PaymentSettings:BankAccount"] ?? "1111111111";
+        var bankAccountName = _configuration?["PaymentSettings:BankAccountName"] ?? "NGUYEN VAN A";
+
         // 4. Map to LpnStatuses
         var lpnStatuses = new List<LpnDeliveryStatusResponse>();
         foreach (var lpn in lpns)
         {
             confirmations.TryGetValue(lpn.LpnId, out var conf);
+
+            // Default COD amount is order's CargoValue if not confirmed yet
+            var codAmount = conf != null ? conf.CodAmount : lpn.Order.CargoValue;
+
+            string? vietQrUrl = null;
+            if (lpn.State == LpnState.SHIPPING && codAmount > 0)
+            {
+                var memo = Uri.EscapeDataString($"ColdChainX LPN {lpn.LpnCode}");
+                var accName = Uri.EscapeDataString(bankAccountName);
+                vietQrUrl = $"https://img.vietqr.io/image/{bankId}-{bankAccount}-compact.png?amount={(int)codAmount}&addInfo={memo}&accountName={accName}";
+            }
 
             lpnStatuses.Add(new LpnDeliveryStatusResponse
             {
@@ -62,7 +82,14 @@ public class GetTripDeliveryProgressQueryHandler : IRequestHandler<GetTripDelive
                 RejectReason = conf?.RejectReason,
                 RejectNote = conf?.RejectNote,
                 EvidenceImageUrl = conf?.EvidenceImageUrl,
-                ConfirmedAt = conf?.ConfirmedAt
+                ConfirmedAt = conf?.ConfirmedAt,
+                CheckinAt = conf?.CheckinAt,
+                SignatureImageUrl = conf?.SignatureImageUrl,
+                CodAmount = codAmount,
+                CodPaymentMethod = conf?.CodPaymentMethod,
+                CodReceiptImageUrl = conf?.CodReceiptImageUrl,
+                NewSealNumber = conf?.NewSealNumber,
+                VietQrUrl = vietQrUrl
             });
         }
 
