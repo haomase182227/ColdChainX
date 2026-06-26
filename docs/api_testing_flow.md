@@ -143,6 +143,51 @@ Outbound shipment of `SEAFOOD` requires verified evidence documentation:
 
 ---
 
+## 📦 Flow 4: Partial Delivery with Mandatory Evidence Images
+
+Verify confirmation and rejection of delivery at the LPN level.
+
+### Step 4.1: View Trip Delivery Progress
+- **Endpoint**: `GET /api/Delivery/trips/{tripId}/lpns`
+- *Verify*: Retrieve all LPNs assigned to the trip, showing their code, current state, outcome type, and confirmation details.
+
+### Step 4.2: Confirm LPN Delivery (Accept)
+- **Endpoint**: `POST /api/Delivery/trips/{tripId}/lpns/{lpnId}/confirm` (multipart/form-data)
+- **Request Parameters**:
+  - `ReceiverName`: "Nguyen Van A"
+  - `ReceiverPhone`: "0901234567" (optional)
+  - `EvidenceImage`: `<File Upload>` (mandatory image)
+- *Verify*:
+  - API returns `200 OK` with confirmation details.
+  - LPN state in DB becomes `DELIVERED` (11).
+  - Calling confirm again on the same LPN returns `409 Conflict`.
+  - Calling confirm without `EvidenceImage` returns `400 Bad Request`.
+
+### Step 4.3: Reject LPN Delivery
+- **Endpoint**: `POST /api/Delivery/trips/{tripId}/lpns/{lpnId}/reject` (multipart/form-data)
+- **Request Parameters**:
+  - `RejectReason`: "DAMAGED" (or WRONG_ITEM, REFUSED_BY_CUSTOMER, TEMPERATURE_DEVIATION, OTHER)
+  - `RejectNote`: "Box is crushed" (mandatory if RejectReason is OTHER)
+  - `EvidenceImage`: `<File Upload>` (mandatory image)
+- *Verify*:
+  - API returns `200 OK` with rejection details.
+  - LPN state in DB becomes `DELIVERY_RETURNED` (12).
+  - Calling reject with reason `OTHER` but no `RejectNote` returns `400 Bad Request`.
+
+### Step 4.4: View Single LPN Delivery Details
+- **Endpoint**: `GET /api/Delivery/trips/{tripId}/lpns/{lpnId}`
+- *Verify*: Retrieve details of the confirmed or rejected LPN delivery.
+
+### Step 4.5: Verify Auto-Completion & Order Status Sync
+- When all LPNs on a trip are processed (state is either `DELIVERED` or `DELIVERY_RETURNED`):
+  - **Trip Status**: The trip is automatically updated to `COMPLETED` and `completed_at` is set.
+  - **Order Status**: The parent `TransportOrder` status is synchronized:
+    - `"DELIVERED"` if all LPNs were accepted.
+    - `"RETURNED"` if all LPNs were rejected.
+    - `"PARTIALLY_DELIVERED"` if there is a mix of accepted and rejected LPNs.
+
+---
+
 ## 📈 Execution & Progress Tracking
 
 | Step ID | Description | Tested (Y/N) | Status / Notes |
@@ -157,3 +202,8 @@ Outbound shipment of `SEAFOOD` requires verified evidence documentation:
 | **3.2** | Allocate Outbound Stock | **Y** | Allocated FEFO stock, assigned picker, and completed picking successfully. |
 | **3.3** | Verify Compliance Evidence | **Y** | Blocked shipment without documents; uploaded and verified WAREHOUSE_ISSUE_NOTE, GOODS_CONDITION_PHOTO, and TEMPERATURE_PHOTO successfully. |
 | **3.4** | Execute Outbound Shipment | **Y** | Completed shipment successfully and verified that stock decremented from 100.00 to 60.00. |
+| **4.1** | View Trip Delivery Progress | **Y** | Retrieve LPN status summary and progress of a trip. |
+| **4.2** | Confirm LPN Delivery (Accept) | **Y** | Confirm LPN delivery with receiver info and mandatory image; double-confirm blocked. |
+| **4.3** | Reject LPN Delivery | **Y** | Reject LPN delivery with reason and mandatory image; OTHER reason requires note. |
+| **4.4** | View Single LPN Delivery Details | **Y** | Retrieve single confirmation detail by LPN ID. |
+| **4.5** | Verify Trip Auto-Completion & Order Sync | **Y** | Trip status auto-completes; Order status syncs to DELIVERED/PARTIALLY_DELIVERED/RETURNED. |
