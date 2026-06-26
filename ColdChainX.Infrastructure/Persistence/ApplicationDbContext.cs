@@ -2518,6 +2518,17 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasMaxLength(50)
                 .HasColumnName("new_seal_number");
 
+            entity.Property(e => e.IsCodVerified)
+                .HasDefaultValue(false)
+                .HasColumnName("is_cod_verified");
+
+            entity.Property(e => e.CodVerifiedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("cod_verified_at");
+
+            entity.Property(e => e.CodVerifiedByUserId)
+                .HasColumnName("cod_verified_by");
+
             entity.HasIndex(e => e.LpnId).IsUnique().HasDatabaseName("uq_lpn_delivery_confirmations_lpn_id");
 
             entity.HasOne(d => d.Lpn).WithMany()
@@ -2539,6 +2550,11 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasForeignKey(d => d.ConfirmedByDriverId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_lpn_delivery_confirmations_driver");
+
+            entity.HasOne(d => d.CodVerifiedByUser).WithMany()
+                .HasForeignKey(d => d.CodVerifiedByUserId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_lpn_delivery_confirmations_verified_by");
         });
 
         OnModelCreatingPartial(modelBuilder);

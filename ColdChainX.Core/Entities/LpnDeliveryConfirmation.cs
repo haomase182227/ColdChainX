@@ -40,6 +40,12 @@ public partial class LpnDeliveryConfirmation
 
     public string? NewSealNumber { get; set; }
 
+    public bool IsCodVerified { get; set; }
+
+    public DateTime? CodVerifiedAt { get; set; }
+
+    public Guid? CodVerifiedByUserId { get; set; }
+
     public virtual Lpn Lpn { get; set; } = null!;
 
     public virtual MasterTrip Trip { get; set; } = null!;
@@ -47,4 +53,6 @@ public partial class LpnDeliveryConfirmation
     public virtual TransportOrder Order { get; set; } = null!;
 
     public virtual User ConfirmedByDriver { get; set; } = null!;
+
+    public virtual User? CodVerifiedByUser { get; set; }
 }
