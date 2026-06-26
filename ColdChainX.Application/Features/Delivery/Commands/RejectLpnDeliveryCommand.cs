@@ -121,6 +121,13 @@ public class RejectLpnDeliveryCommandHandler : IRequestHandler<RejectLpnDelivery
         if (string.IsNullOrEmpty(imageUrl))
             throw new ExternalServiceException("Image upload returned empty URL. Please try again.");
 
+        // Fetch latest temperature from TelemetryLogs or fallback to 4.5
+        var latestTelemetry = await _context.TelemetryLogs
+            .Where(t => t.TripId == request.TripId)
+            .OrderByDescending(t => t.Timestamp)
+            .FirstOrDefaultAsync(cancellationToken);
+        var recordedTemp = latestTelemetry != null ? latestTelemetry.Temperature : 4.5m;
+
         // 9. Database transaction and save using execution strategy
         var strategy = _context.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync(async () =>
@@ -139,13 +146,15 @@ public class RejectLpnDeliveryCommandHandler : IRequestHandler<RejectLpnDelivery
                     RejectNote = request.RejectNote,
                     EvidenceImageUrl = imageUrl,
                     ConfirmedByDriverId = request.UserId,
-                    ConfirmedAt = DateTime.UtcNow
+                    ConfirmedAt = DateTime.UtcNow,
+                    RecordedTemperature = recordedTemp
                 };
 
                 _context.LpnDeliveryConfirmations.Add(confirmation);
 
                 lpn.State = LpnState.DELIVERY_RETURNED;
                 lpn.EvidenceImageUrl = imageUrl;
+                lpn.RecordedTemperature = recordedTemp;
                 lpn.UpdatedAt = DateTime.UtcNow;
 
                 await _context.SaveChangesAsync(cancellationToken);
@@ -168,7 +177,8 @@ public class RejectLpnDeliveryCommandHandler : IRequestHandler<RejectLpnDelivery
                     RejectReason = confirmation.RejectReason,
                     RejectNote = confirmation.RejectNote,
                     EvidenceImageUrl = confirmation.EvidenceImageUrl,
-                    ConfirmedAt = confirmation.ConfirmedAt
+                    ConfirmedAt = confirmation.ConfirmedAt,
+                    RecordedTemperature = confirmation.RecordedTemperature
                 };
 
                 return ApiResponse<LpnDeliveryStatusResponse>.SuccessResponse(response, "LPN delivery rejected successfully.");

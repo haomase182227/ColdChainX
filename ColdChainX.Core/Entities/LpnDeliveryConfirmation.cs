@@ -40,6 +40,8 @@ public partial class LpnDeliveryConfirmation
 
     public string? NewSealNumber { get; set; }
 
+    public decimal? RecordedTemperature { get; set; }
+
     public bool IsCodVerified { get; set; }
 
     public DateTime? CodVerifiedAt { get; set; }

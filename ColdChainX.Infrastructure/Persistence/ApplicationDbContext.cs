@@ -2518,6 +2518,10 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasMaxLength(50)
                 .HasColumnName("new_seal_number");
 
+            entity.Property(e => e.RecordedTemperature)
+                .HasPrecision(8, 2)
+                .HasColumnName("recorded_temperature");
+
             entity.Property(e => e.IsCodVerified)
                 .HasDefaultValue(false)
                 .HasColumnName("is_cod_verified");

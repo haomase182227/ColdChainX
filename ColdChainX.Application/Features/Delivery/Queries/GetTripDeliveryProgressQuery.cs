@@ -91,7 +91,8 @@ public class GetTripDeliveryProgressQueryHandler : IRequestHandler<GetTripDelive
                 NewSealNumber = conf?.NewSealNumber,
                 VietQrUrl = vietQrUrl,
                 IsCodVerified = conf?.IsCodVerified ?? false,
-                CodVerifiedAt = conf?.CodVerifiedAt
+                CodVerifiedAt = conf?.CodVerifiedAt,
+                RecordedTemperature = conf?.RecordedTemperature ?? lpn.RecordedTemperature
             });
         }
 

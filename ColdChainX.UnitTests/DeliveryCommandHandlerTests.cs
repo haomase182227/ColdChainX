@@ -517,6 +517,96 @@ namespace ColdChainX.UnitTests
             // Act & Assert
             await Assert.ThrowsAsync<InvalidOperationException>(() => handler.Handle(command, CancellationToken.None));
         }
+
+        [Fact]
+        public async Task ConfirmLpnDelivery_ShouldUse4_5TemperatureFallback_WhenNoTelemetryLogsExist()
+        {
+            // Arrange
+            var handler = new ConfirmLpnDeliveryCommandHandler(_db, _fileService, _configuration);
+            var command = new ConfirmLpnDeliveryCommand
+            {
+                TripId = _tripId,
+                LpnId = _lpnId,
+                ReceiverName = "Nguyen Van A",
+                ReceiverPhone = "0901234567",
+                EvidenceImage = new FakeFormFile(new byte[] { 1, 2, 3 }),
+                UserId = _userId
+            };
+
+            // Act
+            var result = await handler.Handle(command, CancellationToken.None);
+
+            // Assert
+            Assert.True(result.Success);
+            Assert.Equal(4.5m, result.Data.RecordedTemperature);
+
+            var confirmation = await _db.LpnDeliveryConfirmations.FirstOrDefaultAsync(c => c.LpnId == _lpnId);
+            Assert.NotNull(confirmation);
+            Assert.Equal(4.5m, confirmation.RecordedTemperature);
+
+            var lpn = await _db.Lpns.FirstOrDefaultAsync(l => l.LpnId == _lpnId);
+            Assert.NotNull(lpn);
+            Assert.Equal(4.5m, lpn.RecordedTemperature);
+        }
+
+        [Fact]
+        public async Task ConfirmLpnDelivery_ShouldUseLatestTelemetryLogTemperature_WhenTelemetryLogsExist()
+        {
+            // Arrange
+            var lpnIdForTelemetry = Guid.NewGuid();
+            _db.Lpns.Add(new Lpn
+            {
+                LpnId = lpnIdForTelemetry,
+                LpnCode = "LPN-TELEMETRY-TEST",
+                OrderId = _orderId,
+                ReceiptId = Guid.NewGuid(),
+                TripId = _tripId,
+                Quantity = 10,
+                State = LpnState.SHIPPING
+            });
+
+            _db.TelemetryLogs.Add(new TelemetryLog
+            {
+                LogId = Guid.NewGuid(),
+                TripId = _tripId,
+                Temperature = 3.8m,
+                Timestamp = DateTime.UtcNow.AddMinutes(-5)
+            });
+            _db.TelemetryLogs.Add(new TelemetryLog
+            {
+                LogId = Guid.NewGuid(),
+                TripId = _tripId,
+                Temperature = 2.5m, // This is the latest telemetry log
+                Timestamp = DateTime.UtcNow
+            });
+            await _db.SaveChangesAsync();
+
+            var handler = new ConfirmLpnDeliveryCommandHandler(_db, _fileService, _configuration);
+            var command = new ConfirmLpnDeliveryCommand
+            {
+                TripId = _tripId,
+                LpnId = lpnIdForTelemetry,
+                ReceiverName = "Nguyen Van B",
+                ReceiverPhone = "0901234567",
+                EvidenceImage = new FakeFormFile(new byte[] { 1, 2, 3 }),
+                UserId = _userId
+            };
+
+            // Act
+            var result = await handler.Handle(command, CancellationToken.None);
+
+            // Assert
+            Assert.True(result.Success);
+            Assert.Equal(2.5m, result.Data.RecordedTemperature);
+
+            var confirmation = await _db.LpnDeliveryConfirmations.FirstOrDefaultAsync(c => c.LpnId == lpnIdForTelemetry);
+            Assert.NotNull(confirmation);
+            Assert.Equal(2.5m, confirmation.RecordedTemperature);
+
+            var lpn = await _db.Lpns.FirstOrDefaultAsync(l => l.LpnId == lpnIdForTelemetry);
+            Assert.NotNull(lpn);
+            Assert.Equal(2.5m, lpn.RecordedTemperature);
+        }
     }
 
     public class FakeFormFile : IFormFile

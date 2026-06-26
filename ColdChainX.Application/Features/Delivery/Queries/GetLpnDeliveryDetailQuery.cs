@@ -82,7 +82,8 @@ public class GetLpnDeliveryDetailQueryHandler : IRequestHandler<GetLpnDeliveryDe
             NewSealNumber = confirmation?.NewSealNumber,
             VietQrUrl = vietQrUrl,
             IsCodVerified = confirmation?.IsCodVerified ?? false,
-            CodVerifiedAt = confirmation?.CodVerifiedAt
+            CodVerifiedAt = confirmation?.CodVerifiedAt,
+            RecordedTemperature = confirmation?.RecordedTemperature ?? lpn.RecordedTemperature
         };
 
         return ApiResponse<LpnDeliveryStatusResponse>.SuccessResponse(response, "LPN delivery detail retrieved successfully.");

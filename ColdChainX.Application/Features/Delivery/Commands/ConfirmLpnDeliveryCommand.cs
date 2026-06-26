@@ -197,6 +197,13 @@ public class ConfirmLpnDeliveryCommandHandler : IRequestHandler<ConfirmLpnDelive
                 throw new ExternalServiceException("COD receipt image upload returned empty URL. Please try again.");
         }
 
+        // Fetch latest temperature from TelemetryLogs or fallback to 4.5
+        var latestTelemetry = await _context.TelemetryLogs
+            .Where(t => t.TripId == request.TripId)
+            .OrderByDescending(t => t.Timestamp)
+            .FirstOrDefaultAsync(cancellationToken);
+        var recordedTemp = latestTelemetry != null ? latestTelemetry.Temperature : 4.5m;
+
         // 9. Database transaction and save using execution strategy
         var strategy = _context.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync(async () =>
@@ -221,13 +228,15 @@ public class ConfirmLpnDeliveryCommandHandler : IRequestHandler<ConfirmLpnDelive
                     CodAmount = request.CodAmount,
                     CodPaymentMethod = request.CodPaymentMethod?.ToUpper(),
                     CodReceiptImageUrl = codReceiptImageUrl,
-                    NewSealNumber = request.NewSealNumber
+                    NewSealNumber = request.NewSealNumber,
+                    RecordedTemperature = recordedTemp
                 };
 
                 _context.LpnDeliveryConfirmations.Add(confirmation);
 
                 lpn.State = LpnState.DELIVERED;
                 lpn.EvidenceImageUrl = imageUrl;
+                lpn.RecordedTemperature = recordedTemp;
                 lpn.UpdatedAt = DateTime.UtcNow;
 
                 // Sync New Seal if provided
@@ -299,7 +308,8 @@ public class ConfirmLpnDeliveryCommandHandler : IRequestHandler<ConfirmLpnDelive
                     CodPaymentMethod = confirmation.CodPaymentMethod,
                     CodReceiptImageUrl = confirmation.CodReceiptImageUrl,
                     NewSealNumber = confirmation.NewSealNumber,
-                    VietQrUrl = vietQrUrl
+                    VietQrUrl = vietQrUrl,
+                    RecordedTemperature = confirmation.RecordedTemperature
                 };
 
                 return ApiResponse<LpnDeliveryStatusResponse>.SuccessResponse(response, "LPN delivery confirmed successfully.");

@@ -39,6 +39,7 @@ namespace ColdChainX.Application.Interfaces
         DbSet<ContractAppendix> ContractAppendices { get; }
         DbSet<InboundReturnSlip> InboundReturnSlips { get; }
         DbSet<LpnDeliveryConfirmation> LpnDeliveryConfirmations { get; }
+        DbSet<TelemetryLog> TelemetryLogs { get; }
         DbSet<Seal> Seals { get; }
         DbSet<Notification> Notifications { get; }
         DbSet<NotificationTemplate> NotificationTemplates { get; }

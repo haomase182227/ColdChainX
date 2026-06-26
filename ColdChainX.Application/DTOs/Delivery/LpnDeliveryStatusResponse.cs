@@ -23,4 +23,5 @@ public class LpnDeliveryStatusResponse
     public string? VietQrUrl { get; set; }
     public bool IsCodVerified { get; set; }
     public DateTime? CodVerifiedAt { get; set; }
+    public decimal? RecordedTemperature { get; set; }
 }

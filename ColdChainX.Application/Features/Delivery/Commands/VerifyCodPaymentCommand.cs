@@ -109,7 +109,8 @@ public class VerifyCodPaymentCommandHandler : IRequestHandler<VerifyCodPaymentCo
                     NewSealNumber = confirmation.NewSealNumber,
                     VietQrUrl = vietQrUrl,
                     IsCodVerified = confirmation.IsCodVerified,
-                    CodVerifiedAt = confirmation.CodVerifiedAt
+                    CodVerifiedAt = confirmation.CodVerifiedAt,
+                    RecordedTemperature = confirmation.RecordedTemperature
                 };
 
                 return ApiResponse<LpnDeliveryStatusResponse>.SuccessResponse(response, "COD payment verified successfully.");
