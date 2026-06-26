@@ -607,6 +607,159 @@ namespace ColdChainX.UnitTests
             Assert.NotNull(lpn);
             Assert.Equal(2.5m, lpn.RecordedTemperature);
         }
+
+        [Fact]
+        public async Task Checkin_WithinRadius_ShouldSucceed()
+        {
+            // Arrange
+            var stopId = Guid.NewGuid();
+            var locationId = Guid.NewGuid();
+            _db.Locations.Add(new Location
+            {
+                LocationId = locationId,
+                Address = "Test Destination",
+                Latitude = 10.8465m,
+                Longitude = 106.8042m
+            });
+            _db.TripStops.Add(new TripStop
+            {
+                StopId = stopId,
+                TripId = _tripId,
+                LocationId = locationId,
+                StopSequence = 10,
+                StopType = "DELIVERY",
+                PlannedArrivalTime = DateTime.UtcNow,
+                PlannedDepartureTime = DateTime.UtcNow.AddHours(1),
+                Status = "PLANNED"
+            });
+            await _db.SaveChangesAsync();
+
+            var handler = new CheckinDriverCommandHandler(_db, _configuration);
+            var command = new CheckinDriverCommand
+            {
+                TripId = _tripId,
+                StopId = stopId,
+                Latitude = 10.8466m,
+                Longitude = 106.8043m,
+                UserId = _userId
+            };
+
+            // Act
+            var result = await handler.Handle(command, CancellationToken.None);
+
+            // Assert
+            Assert.True(result.Success);
+            Assert.NotNull(result.Data);
+            Assert.Equal(stopId, result.Data.StopId);
+            Assert.True(result.Data.DistanceInMeters < 50);
+
+            var dbStop = await _db.TripStops.FindAsync(stopId);
+            Assert.NotNull(dbStop);
+            Assert.NotNull(dbStop.ActualArrivalTime);
+            Assert.Equal("ARRIVED", dbStop.Status);
+        }
+
+        [Fact]
+        public async Task Checkin_TooFar_ShouldThrowValidationException()
+        {
+            // Arrange
+            var stopId = Guid.NewGuid();
+            var locationId = Guid.NewGuid();
+            _db.Locations.Add(new Location
+            {
+                LocationId = locationId,
+                Address = "Test Destination",
+                Latitude = 10.8465m,
+                Longitude = 106.8042m
+            });
+            _db.TripStops.Add(new TripStop
+            {
+                StopId = stopId,
+                TripId = _tripId,
+                LocationId = locationId,
+                StopSequence = 11,
+                StopType = "DELIVERY",
+                PlannedArrivalTime = DateTime.UtcNow,
+                PlannedDepartureTime = DateTime.UtcNow.AddHours(1),
+                Status = "PLANNED"
+            });
+            await _db.SaveChangesAsync();
+
+            var handler = new CheckinDriverCommandHandler(_db, _configuration);
+            var command = new CheckinDriverCommand
+            {
+                TripId = _tripId,
+                StopId = stopId,
+                Latitude = 11.0000m,
+                Longitude = 107.0000m,
+                UserId = _userId
+            };
+
+            // Act & Assert
+            await Assert.ThrowsAsync<ValidationException>(() => handler.Handle(command, CancellationToken.None));
+        }
+
+        [Fact]
+        public async Task Confirm_WithoutCheckin_ShouldThrowValidationException()
+        {
+            // Arrange
+            var locationId = Guid.NewGuid();
+            var lpnId = Guid.NewGuid();
+            var orderId = Guid.NewGuid();
+
+            _db.Locations.Add(new Location
+            {
+                LocationId = locationId,
+                Address = "Test Delivery Address",
+                Latitude = 10.8465m,
+                Longitude = 106.8042m
+            });
+            _db.TransportOrders.Add(new TransportOrder
+            {
+                OrderId = orderId,
+                TrackingCode = "TRK-CHECKIN-TEST",
+                ItemName = "Milk",
+                Category = "DAIRY",
+                PackingType = "BOX",
+                TempCondition = "COLD",
+                DestLocation = locationId,
+                Status = "SHIPPING"
+            });
+            _db.Lpns.Add(new Lpn
+            {
+                LpnId = lpnId,
+                LpnCode = "LPN-CHECKIN-TEST",
+                OrderId = orderId,
+                TripId = _tripId,
+                State = LpnState.SHIPPING
+            });
+            _db.TripStops.Add(new TripStop
+            {
+                StopId = Guid.NewGuid(),
+                TripId = _tripId,
+                LocationId = locationId,
+                StopSequence = 12,
+                StopType = "DELIVERY",
+                Status = "PLANNED",
+                ActualArrivalTime = null
+            });
+            await _db.SaveChangesAsync();
+
+            var handler = new ConfirmLpnDeliveryCommandHandler(_db, _fileService, _configuration);
+            var command = new ConfirmLpnDeliveryCommand
+            {
+                TripId = _tripId,
+                LpnId = lpnId,
+                ReceiverName = "Nguyen Van A",
+                ReceiverPhone = "0901234567",
+                EvidenceImage = new FakeFormFile(new byte[] { 1, 2, 3 }),
+                UserId = _userId
+            };
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<ValidationException>(() => handler.Handle(command, CancellationToken.None));
+            Assert.Contains("must check in", ex.Message);
+        }
     }
 
     public class FakeFormFile : IFormFile

@@ -45,6 +45,8 @@ namespace ColdChainX.Application.Interfaces
         DbSet<NotificationTemplate> NotificationTemplates { get; }
         DbSet<Messagetype> Messagetypes { get; }
         DbSet<TransportDocument> TransportDocuments { get; }
+        DbSet<TripStop> TripStops { get; }
+        DbSet<Location> Locations { get; }
 
         DatabaseFacade Database { get; }
         Microsoft.EntityFrameworkCore.ChangeTracking.ChangeTracker ChangeTracker { get; }

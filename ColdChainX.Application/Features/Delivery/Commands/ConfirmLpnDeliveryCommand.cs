@@ -88,6 +88,25 @@ public class ConfirmLpnDeliveryCommandHandler : IRequestHandler<ConfirmLpnDelive
             throw new InvalidOperationException($"LPN '{lpn.LpnCode}' is not eligible for delivery confirmation. Current state: {lpn.State}. Only SHIPPING LPNs can be confirmed.");
         }
 
+        // Verify stop check-in
+        DateTime? stopCheckinAt = null;
+        if (lpn.Order?.DestLocation != null)
+        {
+            var stop = await _context.TripStops
+                .FirstOrDefaultAsync(ts => ts.TripId == request.TripId && ts.LocationId == lpn.Order.DestLocation, cancellationToken);
+            if (stop != null)
+            {
+                if (stop.ActualArrivalTime == null)
+                {
+                    var location = await _context.Locations
+                        .FirstOrDefaultAsync(l => l.LocationId == stop.LocationId, cancellationToken);
+                    var addressName = location != null ? location.Address : "the destination";
+                    throw new ValidationException($"Cannot confirm delivery. You must check in at the delivery stop '{addressName}' first.");
+                }
+                stopCheckinAt = stop.ActualArrivalTime;
+            }
+        }
+
         // 6. Validate evidence image
         if (request.EvidenceImage == null || request.EvidenceImage.Length == 0)
             throw new ValidationException("Evidence image is required. Please attach a photo of the delivery.");
@@ -223,7 +242,7 @@ public class ConfirmLpnDeliveryCommandHandler : IRequestHandler<ConfirmLpnDelive
                     EvidenceImageUrl = imageUrl,
                     ConfirmedByDriverId = request.UserId,
                     ConfirmedAt = DateTime.UtcNow,
-                    CheckinAt = request.CheckinAt,
+                    CheckinAt = stopCheckinAt ?? request.CheckinAt,
                     SignatureImageUrl = signatureImageUrl,
                     CodAmount = request.CodAmount,
                     CodPaymentMethod = request.CodPaymentMethod?.ToUpper(),

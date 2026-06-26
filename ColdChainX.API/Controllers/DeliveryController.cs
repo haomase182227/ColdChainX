@@ -51,6 +51,36 @@ public class DeliveryController : ControllerBase
     }
 
     /// <summary>
+    /// Driver thực hiện check-in tại Stop đích (đối chiếu tọa độ GPS).
+    /// </summary>
+    [HttpPost("trips/{tripId:guid}/check-in")]
+    [Authorize(Roles = "Driver")]
+    [ProducesResponseType(typeof(ApiResponse<CheckinDriverResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CheckinDriver(Guid tripId, [FromBody] CheckinDriverRequest request)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
+        {
+            return Unauthorized(ApiResponse<object>.Failure("Unauthorized."));
+        }
+
+        var command = new CheckinDriverCommand
+        {
+            TripId = tripId,
+            Latitude = request.Latitude,
+            Longitude = request.Longitude,
+            StopId = request.StopId,
+            UserId = userId
+        };
+
+        var result = await _mediator.Send(command);
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Driver xác nhận giao hàng thành công (Accepted) cho một LPN cụ thể.
     /// </summary>
     [HttpPost("trips/{tripId:guid}/lpns/{lpnId:guid}/confirm")]

@@ -67,6 +67,7 @@ public class RejectLpnDeliveryCommandHandler : IRequestHandler<RejectLpnDelivery
             throw new ForbiddenException("You are not authorized to confirm deliveries for this trip.");
 
         // 5. Check LPN state (Only SHIPPING allowed, handle double-submit Conflict)
+        // 5. Check LPN state (Only SHIPPING allowed, handle double-submit Conflict)
         if (lpn.State != LpnState.SHIPPING)
         {
             var existing = await _context.LpnDeliveryConfirmations
@@ -76,6 +77,25 @@ public class RejectLpnDeliveryCommandHandler : IRequestHandler<RejectLpnDelivery
                 throw new ConflictException($"LPN '{lpn.LpnCode}' has already been confirmed as {existing.OutcomeType} at {existing.ConfirmedAt:yyyy-MM-ddTHH:mm:ssZ}. Cannot confirm again.");
             }
             throw new InvalidOperationException($"LPN '{lpn.LpnCode}' is not eligible for delivery confirmation. Current state: {lpn.State}. Only SHIPPING LPNs can be confirmed.");
+        }
+
+        // Verify stop check-in
+        DateTime? stopCheckinAt = null;
+        if (lpn.Order?.DestLocation != null)
+        {
+            var stop = await _context.TripStops
+                .FirstOrDefaultAsync(ts => ts.TripId == request.TripId && ts.LocationId == lpn.Order.DestLocation, cancellationToken);
+            if (stop != null)
+            {
+                if (stop.ActualArrivalTime == null)
+                {
+                    var location = await _context.Locations
+                        .FirstOrDefaultAsync(l => l.LocationId == stop.LocationId, cancellationToken);
+                    var addressName = location != null ? location.Address : "the destination";
+                    throw new ValidationException($"Cannot reject delivery. You must check in at the delivery stop '{addressName}' first.");
+                }
+                stopCheckinAt = stop.ActualArrivalTime;
+            }
         }
 
         // 6. Validate evidence image
@@ -147,6 +167,7 @@ public class RejectLpnDeliveryCommandHandler : IRequestHandler<RejectLpnDelivery
                     EvidenceImageUrl = imageUrl,
                     ConfirmedByDriverId = request.UserId,
                     ConfirmedAt = DateTime.UtcNow,
+                    CheckinAt = stopCheckinAt,
                     RecordedTemperature = recordedTemp
                 };
 
