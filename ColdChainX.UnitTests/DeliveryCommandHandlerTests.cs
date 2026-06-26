@@ -382,6 +382,141 @@ namespace ColdChainX.UnitTests
             // Act & Assert
             await Assert.ThrowsAsync<ValidationException>(() => handler.Handle(command, CancellationToken.None));
         }
+
+        [Fact]
+        public async Task VerifyCod_ValidRequest_ShouldSucceedAndSyncOrderStatus()
+        {
+            // Arrange: We need the LPN to be DELIVERED, and have a delivery confirmation with CodAmount > 0 and IsCodVerified = false
+            var lpn = await _db.Lpns.FindAsync(_lpnId);
+            lpn!.State = LpnState.DELIVERED;
+
+            var confirmation = new LpnDeliveryConfirmation
+            {
+                ConfirmationId = Guid.NewGuid(),
+                LpnId = _lpnId,
+                TripId = _tripId,
+                OrderId = _orderId,
+                OutcomeType = "DELIVERED",
+                ReceiverName = "Nguyen Van A",
+                EvidenceImageUrl = "https://res.cloudinary.com/test/image.jpg",
+                ConfirmedByDriverId = _userId,
+                ConfirmedAt = DateTime.UtcNow,
+                CodAmount = 2000,
+                CodPaymentMethod = "BANK_TRANSFER",
+                IsCodVerified = false
+            };
+            _db.LpnDeliveryConfirmations.Add(confirmation);
+            await _db.SaveChangesAsync();
+
+            var handler = new VerifyCodPaymentCommandHandler(_db, _configuration);
+            var command = new VerifyCodPaymentCommand
+            {
+                TripId = _tripId,
+                LpnId = _lpnId,
+                UserId = _userId
+            };
+
+            // Act
+            var result = await handler.Handle(command, CancellationToken.None);
+
+            // Assert
+            Assert.True(result.Success);
+            Assert.True(result.Data.IsCodVerified);
+            Assert.NotNull(result.Data.CodVerifiedAt);
+
+            // Check Order status is synced to DELIVERED now because all LPNs are DELIVERED and COD is verified
+            var order = await _db.TransportOrders.FindAsync(_orderId);
+            Assert.Equal("DELIVERED", order!.Status);
+        }
+
+        [Fact]
+        public async Task VerifyCod_AlreadyVerified_ShouldThrowConflict()
+        {
+            // Arrange: Create a verified confirmation
+            var lpnId2 = Guid.NewGuid();
+            var lpn2 = new Lpn
+            {
+                LpnId = lpnId2,
+                LpnCode = "LPN-002",
+                OrderId = _orderId,
+                TripId = _tripId,
+                State = LpnState.DELIVERED
+            };
+            _db.Lpns.Add(lpn2);
+
+            var confirmation = new LpnDeliveryConfirmation
+            {
+                ConfirmationId = Guid.NewGuid(),
+                LpnId = lpnId2,
+                TripId = _tripId,
+                OrderId = _orderId,
+                OutcomeType = "DELIVERED",
+                ReceiverName = "Nguyen Van A",
+                EvidenceImageUrl = "https://res.cloudinary.com/test/image.jpg",
+                ConfirmedByDriverId = _userId,
+                ConfirmedAt = DateTime.UtcNow,
+                CodAmount = 2000,
+                CodPaymentMethod = "BANK_TRANSFER",
+                IsCodVerified = true, // already verified
+                CodVerifiedAt = DateTime.UtcNow
+            };
+            _db.LpnDeliveryConfirmations.Add(confirmation);
+            await _db.SaveChangesAsync();
+
+            var handler = new VerifyCodPaymentCommandHandler(_db, _configuration);
+            var command = new VerifyCodPaymentCommand
+            {
+                TripId = _tripId,
+                LpnId = lpnId2,
+                UserId = _userId
+            };
+
+            // Act & Assert
+            await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(command, CancellationToken.None));
+        }
+
+        [Fact]
+        public async Task VerifyCod_OutcomeNotDelivered_ShouldThrowInvalidOperation()
+        {
+            // Arrange: Create a REJECTED confirmation
+            var lpnId3 = Guid.NewGuid();
+            var lpn3 = new Lpn
+            {
+                LpnId = lpnId3,
+                LpnCode = "LPN-003",
+                OrderId = _orderId,
+                TripId = _tripId,
+                State = LpnState.DELIVERY_RETURNED
+            };
+            _db.Lpns.Add(lpn3);
+
+            var confirmation = new LpnDeliveryConfirmation
+            {
+                ConfirmationId = Guid.NewGuid(),
+                LpnId = lpnId3,
+                TripId = _tripId,
+                OrderId = _orderId,
+                OutcomeType = "REJECTED", // not DELIVERED
+                RejectReason = "DAMAGED",
+                EvidenceImageUrl = "https://res.cloudinary.com/test/image.jpg",
+                ConfirmedByDriverId = _userId,
+                ConfirmedAt = DateTime.UtcNow,
+                IsCodVerified = false
+            };
+            _db.LpnDeliveryConfirmations.Add(confirmation);
+            await _db.SaveChangesAsync();
+
+            var handler = new VerifyCodPaymentCommandHandler(_db, _configuration);
+            var command = new VerifyCodPaymentCommand
+            {
+                TripId = _tripId,
+                LpnId = lpnId3,
+                UserId = _userId
+            };
+
+            // Act & Assert
+            await Assert.ThrowsAsync<InvalidOperationException>(() => handler.Handle(command, CancellationToken.None));
+        }
     }
 
     public class FakeFormFile : IFormFile

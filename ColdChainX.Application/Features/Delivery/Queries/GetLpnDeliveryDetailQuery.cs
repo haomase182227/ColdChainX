@@ -80,7 +80,9 @@ public class GetLpnDeliveryDetailQueryHandler : IRequestHandler<GetLpnDeliveryDe
             CodPaymentMethod = confirmation?.CodPaymentMethod,
             CodReceiptImageUrl = confirmation?.CodReceiptImageUrl,
             NewSealNumber = confirmation?.NewSealNumber,
-            VietQrUrl = vietQrUrl
+            VietQrUrl = vietQrUrl,
+            IsCodVerified = confirmation?.IsCodVerified ?? false,
+            CodVerifiedAt = confirmation?.CodVerifiedAt
         };
 
         return ApiResponse<LpnDeliveryStatusResponse>.SuccessResponse(response, "LPN delivery detail retrieved successfully.");

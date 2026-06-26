@@ -89,7 +89,9 @@ public class GetTripDeliveryProgressQueryHandler : IRequestHandler<GetTripDelive
                 CodPaymentMethod = conf?.CodPaymentMethod,
                 CodReceiptImageUrl = conf?.CodReceiptImageUrl,
                 NewSealNumber = conf?.NewSealNumber,
-                VietQrUrl = vietQrUrl
+                VietQrUrl = vietQrUrl,
+                IsCodVerified = conf?.IsCodVerified ?? false,
+                CodVerifiedAt = conf?.CodVerifiedAt
             });
         }
 

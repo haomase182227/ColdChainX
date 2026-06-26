@@ -21,4 +21,6 @@ public class LpnDeliveryStatusResponse
     public string? CodReceiptImageUrl { get; set; }
     public string? NewSealNumber { get; set; }
     public string? VietQrUrl { get; set; }
+    public bool IsCodVerified { get; set; }
+    public DateTime? CodVerifiedAt { get; set; }
 }

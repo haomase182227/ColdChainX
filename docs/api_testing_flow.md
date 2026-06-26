@@ -314,7 +314,7 @@ Retrieve the confirmation details for a specific processed LPN.
   }
   ```
 
-#### Step 4.5: Verify Trip Auto-Completion & Order Sync
+#### Step 4.5: Verify Trip Auto-Completion & Order Status Gating
 Once both LPNs in the trip are processed, verify the trip status and order status.
 - **Trip Status Verification**:
   - Run the progress check again:
@@ -328,12 +328,42 @@ Once both LPNs in the trip are processed, verify the trip status and order statu
     SELECT status, completed_at FROM master_trips WHERE trip_id = 'TRIP_ID_HERE';
     -- Expect: status = 'COMPLETED', completed_at is populated
     ```
-- **Order Status Verification**:
-  - In Database:
+- **Order Status Verification (Gating Logic)**:
+  - If any of the delivered LPNs has a `CodAmount > 0` and has not been verified yet (`IsCodVerified = false`), the parent order status **remains as SHIPPING** in the database:
     ```sql
     SELECT status FROM transport_orders WHERE order_id = 'ORDER_ID_HERE';
-    -- Expect: status = 'PARTIALLY_DELIVERED' (since 1 LPN was DELIVERED and 1 was DELIVERY_RETURNED)
+    -- Expect: status = 'SHIPPING' (even though all LPNs are processed, because COD verification is pending)
     ```
+
+#### Step 4.6: COD Payment Verification by Backoffice (Accountant/Manager)
+Once the driver has uploaded COD details (such as the bank receipt image or cash notes), the backoffice accountant or manager must verify it to finalize the order status.
+- **Get Admin/Manager Token**:
+  Login using an administrator or manager account to retrieve the JWT token.
+- **Command**:
+  ```bash
+  curl -X POST "http://localhost:5244/api/Delivery/trips/TRIP_ID_HERE/lpns/LPN_ID_1_HERE/verify-cod" \
+       -H "Authorization: Bearer PASTE_ADMIN_JWT_TOKEN"
+  ```
+- **Expected Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "data": {
+      "lpnId": "LPN_ID_1_HERE",
+      "lpnCode": "LPN-001",
+      "state": "DELIVERED",
+      "outcomeType": "DELIVERED",
+      "isCodVerified": true,
+      "codVerifiedAt": "2026-06-27T10:00:00Z"
+    }
+  }
+  ```
+- **Order Status Sync**:
+  After verification, check the order status in the database:
+  ```sql
+  SELECT status FROM transport_orders WHERE order_id = 'ORDER_ID_HERE';
+  -- Expect: status = 'PARTIALLY_DELIVERED' (since COD is now verified, order status finishes syncing)
+  ```
 
 ---
 
@@ -518,4 +548,5 @@ Using a fake or non-existent GUID for trip ID or LPN ID.
 | **4.2** | Confirm LPN Delivery (Accept) | **Y** | Confirm LPN delivery with receiver info and mandatory image; double-confirm blocked. |
 | **4.3** | Reject LPN Delivery | **Y** | Reject LPN delivery with reason and mandatory image; OTHER reason requires note. |
 | **4.4** | View Single LPN Delivery Details | **Y** | Retrieve single confirmation detail by LPN ID. |
-| **4.5** | Verify Trip Auto-Completion & Order Sync | **Y** | Trip status auto-completes; Order status syncs to DELIVERED/PARTIALLY_DELIVERED/RETURNED. |
+| **4.5** | Verify Trip Auto-Completion & Order Gating | **Y** | Trip status auto-completes; Order status remains SHIPPING if unverified COD is pending. |
+| **4.6** | COD Payment Verification | **Y** | Accountant/Manager verifies COD payments to unlock parent order status updates. |

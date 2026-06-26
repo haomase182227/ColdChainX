@@ -317,17 +317,28 @@ public class ConfirmLpnDeliveryCommandHandler : IRequestHandler<ConfirmLpnDelive
         var lpns = await _context.Lpns.Where(l => l.OrderId == orderId).ToListAsync(ct);
         if (lpns.Count == 0) return;
 
-        var allDelivered = lpns.All(l => l.State == LpnState.DELIVERED);
-        var allReturned = lpns.All(l => l.State == LpnState.DELIVERY_RETURNED);
-        var anyShipping = lpns.Any(l => l.State != LpnState.DELIVERED && l.State != LpnState.DELIVERY_RETURNED);
+        var anyShipping = lpns.Any(l => l.State == LpnState.SHIPPING);
+        if (anyShipping) return;
+
+        // Fetch confirmations to verify COD payments
+        var lpnIds = lpns.Select(l => l.LpnId).ToList();
+        var confirmations = await _context.LpnDeliveryConfirmations
+            .Where(c => lpnIds.Contains(c.LpnId))
+            .ToListAsync(ct);
+
+        var hasUnverifiedCod = lpns.Any(l => l.State == LpnState.DELIVERED &&
+            confirmations.Any(c => c.LpnId == l.LpnId && c.CodAmount > 0 && !c.IsCodVerified));
+
+        if (hasUnverifiedCod)
+        {
+            return; // Gate: keep order status as SHIPPING until accountant approves COD payments
+        }
 
         var order = await _context.TransportOrders.FirstOrDefaultAsync(o => o.OrderId == orderId, ct);
         if (order == null) return;
 
-        if (anyShipping)
-        {
-            return;
-        }
+        var allDelivered = lpns.All(l => l.State == LpnState.DELIVERED);
+        var allReturned = lpns.All(l => l.State == LpnState.DELIVERY_RETURNED);
 
         if (allDelivered)
         {

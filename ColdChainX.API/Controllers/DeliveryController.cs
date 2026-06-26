@@ -123,4 +123,33 @@ public class DeliveryController : ControllerBase
         var result = await _mediator.Send(command);
         return Ok(result);
     }
+
+    /// <summary>
+    /// Kế toán/Admin đối soát hình ảnh thanh toán COD của LPN.
+    /// </summary>
+    [HttpPost("trips/{tripId:guid}/lpns/{lpnId:guid}/verify-cod")]
+    [Authorize(Roles = "Admin,Manager")]
+    [ProducesResponseType(typeof(ApiResponse<LpnDeliveryStatusResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> VerifyCodPayment(Guid tripId, Guid lpnId)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
+        {
+            return Unauthorized(ApiResponse<object>.Failure("Unauthorized."));
+        }
+
+        var command = new VerifyCodPaymentCommand
+        {
+            TripId = tripId,
+            LpnId = lpnId,
+            UserId = userId
+        };
+
+        var result = await _mediator.Send(command);
+        return Ok(result);
+    }
 }
