@@ -43,6 +43,15 @@ public partial class DeliveryEpod
 
     public string? PaymentEvidenceImageUrl { get; set; }
 
+    /// <summary>Thời điểm bàn giao hàng xong và khách đã ký nhận (Bước 2).</summary>
+    public DateTime? HandoverConfirmedAt { get; set; }
+
+    /// <summary>Link PDF Biên bản giao nhận hàng (sinh ngay sau bước ký nhận).</summary>
+    public string? HandoverPdfUrl { get; set; }
+
+    /// <summary>Thời điểm thu tiền COD xong (Bước 3).</summary>
+    public DateTime? PaymentConfirmedAt { get; set; }
+
     public virtual TransportOrder? Order { get; set; }
 
     public virtual ICollection<ReturnedItem> ReturnedItems { get; set; } = new List<ReturnedItem>();

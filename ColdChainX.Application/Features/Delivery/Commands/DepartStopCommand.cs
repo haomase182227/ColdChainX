@@ -22,10 +22,12 @@ public class DepartStopCommand : IRequest<ApiResponse<DepartResponse>>
 public class DepartStopCommandHandler : IRequestHandler<DepartStopCommand, ApiResponse<DepartResponse>>
 {
     private readonly IApplicationDbContext _context;
+    private readonly IDeliveryEventService _deliveryEvents;
 
-    public DepartStopCommandHandler(IApplicationDbContext context)
+    public DepartStopCommandHandler(IApplicationDbContext context, IDeliveryEventService deliveryEvents)
     {
         _context = context;
+        _deliveryEvents = deliveryEvents;
     }
 
     public async Task<ApiResponse<DepartResponse>> Handle(DepartStopCommand request, CancellationToken cancellationToken)
@@ -63,6 +65,31 @@ public class DepartStopCommandHandler : IRequestHandler<DepartStopCommand, ApiRe
         if (stop.ActualDepartureTime != null)
             throw new ValidationException("This stop has already been departed.");
 
+        // 5. Validate all orders at this stop have been confirmed (ePOD HandoverConfirmedAt != null)
+        //    Prevents driver from leaving before completing handover for all orders at this location
+        var pendingOrders = await _context.TransportOrders
+            .Where(o => o.MasterTripId == trip.TripId && o.DestLocation == stop.LocationId)
+            .ToListAsync(cancellationToken);
+
+        if (pendingOrders.Any())
+        {
+            var orderIds = pendingOrders.Select(o => o.OrderId).ToList();
+            var confirmedEpodOrderIds = await _context.DeliveryEpods
+                .Where(e => e.OrderId.HasValue && orderIds.Contains(e.OrderId.Value) && e.HandoverConfirmedAt != null)
+                .Select(e => e.OrderId!.Value)
+                .ToListAsync(cancellationToken);
+
+            var unconfirmedOrders = pendingOrders
+                .Where(o => !confirmedEpodOrderIds.Contains(o.OrderId))
+                .Select(o => o.TrackingCode)
+                .ToList();
+
+            if (unconfirmedOrders.Any())
+                throw new ValidationException(
+                    $"Cannot depart. The following orders at this stop have not been handed over yet: {string.Join(", ", unconfirmedOrders)}. " +
+                    "Please complete handover (POST /api/stops/{stopId}/handover-confirmations) before departing.");
+        }
+
         var departTime = DateTime.UtcNow;
 
         var strategy = _context.Database.CreateExecutionStrategy();
@@ -71,11 +98,11 @@ public class DepartStopCommandHandler : IRequestHandler<DepartStopCommand, ApiRe
             using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
             try
             {
-                // 5. Update TripStop actual departure time and status
+                // 6. Update TripStop actual departure time and status
                 stop.ActualDepartureTime = departTime;
                 stop.Status = "DEPARTED";
 
-                // 6. Handle New Seal kẹp chì mới
+                // 7. Handle New Seal kẹp chì mới
                 if (!string.IsNullOrWhiteSpace(request.NewSealCode))
                 {
                     var newSeal = new Seal
@@ -97,7 +124,7 @@ public class DepartStopCommandHandler : IRequestHandler<DepartStopCommand, ApiRe
                 // Save stop & seal updates so we can query database state correctly
                 await _context.SaveChangesAsync(cancellationToken);
 
-                // 7. Check if all stops on this trip are completed (have ActualDepartureTime)
+                // 8. Check if all stops on this trip are completed (have ActualDepartureTime)
                 var pendingStops = await _context.TripStops
                     .AnyAsync(ts => ts.TripId == trip.TripId && ts.ActualDepartureTime == null, cancellationToken);
 
@@ -114,9 +141,7 @@ public class DepartStopCommandHandler : IRequestHandler<DepartStopCommand, ApiRe
                         var vehicle = await _context.Vehicles
                             .FirstOrDefaultAsync(v => v.VehicleId == trip.VehicleId.Value, cancellationToken);
                         if (vehicle != null)
-                        {
                             vehicle.Status = "ACTIVE";
-                        }
                     }
 
                     // Release Drivers
@@ -129,14 +154,22 @@ public class DepartStopCommandHandler : IRequestHandler<DepartStopCommand, ApiRe
                         var d = await _context.Drivers
                             .FirstOrDefaultAsync(dr => dr.DriverId == td.DriverId, cancellationToken);
                         if (d != null)
-                        {
                             d.Status = "ACTIVE";
-                        }
                     }
                 }
 
                 await _context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
+
+                // 9. SignalR — Notify trip completed (outside transaction, best-effort)
+                if (tripCompleted)
+                {
+                    await _deliveryEvents.NotifyTripCompletedAsync(
+                        trip.TripId,
+                        trip.TripCode ?? trip.TripId.ToString("N")[..8].ToUpper(),
+                        departTime,
+                        cancellationToken);
+                }
 
                 var response = new DepartResponse
                 {
@@ -146,8 +179,8 @@ public class DepartStopCommandHandler : IRequestHandler<DepartStopCommand, ApiRe
                     TripCompleted = tripCompleted
                 };
 
-                var msg = tripCompleted 
-                    ? "Departed stop and completed the entire trip successfully." 
+                var msg = tripCompleted
+                    ? "Departed stop and completed the entire trip successfully."
                     : "Departed stop successfully.";
 
                 return ApiResponse<DepartResponse>.SuccessResponse(response, msg);

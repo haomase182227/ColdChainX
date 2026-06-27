@@ -84,29 +84,77 @@ public class DeliveryController : ControllerBase
     }
 
     /// <summary>
-    /// Nghiệm thu ePOD và chốt COD của Đơn hàng (Door Delivery & COD Confirm).
+    /// [DEPRECATED] Nghiệm thu ePOD và chốt COD — dùng endpoint mới bên dưới thay thế.
     /// </summary>
     [HttpPost("/api/orders/{orderId:guid}/epods")]
     [Authorize(Roles = "Driver")]
+    [Obsolete("Use POST /api/stops/{stopId}/handover-confirmations then POST /api/epods/{epodId}/payments instead.")]
     [ProducesResponseType(typeof(ApiResponse<EpodConfirmResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ConfirmEpodDelivery(Guid orderId, [FromBody] EpodConfirmRequest request)
     {
         var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
-        {
             return Unauthorized(ApiResponse<object>.Failure("Unauthorized."));
-        }
 
         request.OrderId = orderId;
-        var command = new ConfirmEpodDeliveryCommand
+        var command = new ConfirmEpodDeliveryCommand { Request = request, UserId = userId };
+        var result = await _mediator.Send(command);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// [BƯỚC 2] Nghiệm thu hàng và ký nhận tại điểm dừng.
+    /// Khách kiểm tra hàng → ký tên → tài xế upload ảnh chữ ký + ảnh bằng chứng hàng lỗi.
+    /// Hệ thống cập nhật trạng thái LPN, sinh Biên bản Giao nhận PDF và gửi cảnh báo về kho nếu có hàng trả.
+    /// </summary>
+    [HttpPost("/api/stops/{stopId:guid}/handover-confirmations")]
+    [Authorize(Roles = "Driver")]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType(typeof(ApiResponse<HandoverConfirmResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ConfirmHandover(Guid stopId, [FromForm] HandoverConfirmRequest request)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
+            return Unauthorized(ApiResponse<object>.Failure("Unauthorized."));
+
+        var command = new ConfirmHandoverCommand
         {
+            StopId = stopId,
             Request = request,
             UserId = userId
         };
+        var result = await _mediator.Send(command);
+        return Ok(result);
+    }
 
+    /// <summary>
+    /// [BƯỚC 3] Thu tiền COD sau khi bàn giao hàng xong.
+    /// Bắt buộc gọi sau Bước 2 (handover-confirmations). Upload ảnh biên lai (bắt buộc với tiền mặt).
+    /// Sinh ePOD hoàn chỉnh và thông báo Admin/Sales/Dispatcher.
+    /// </summary>
+    [HttpPost("/api/epods/{epodId:guid}/payments")]
+    [Authorize(Roles = "Driver")]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType(typeof(ApiResponse<RecordCodPaymentResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RecordCodPayment(Guid epodId, [FromForm] RecordCodPaymentRequest request)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
+            return Unauthorized(ApiResponse<object>.Failure("Unauthorized."));
+
+        var command = new RecordCodPaymentCommand
+        {
+            EpodId = epodId,
+            Request = request,
+            UserId = userId
+        };
         var result = await _mediator.Send(command);
         return Ok(result);
     }

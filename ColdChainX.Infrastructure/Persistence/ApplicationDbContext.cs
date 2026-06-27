@@ -484,6 +484,13 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.PaymentEvidenceImageUrl)
                 .HasMaxLength(255)
                 .HasColumnName("payment_evidence_image_url");
+            entity.Property(e => e.HandoverConfirmedAt)
+                .HasColumnName("handover_confirmed_at");
+            entity.Property(e => e.HandoverPdfUrl)
+                .HasMaxLength(500)
+                .HasColumnName("handover_pdf_url");
+            entity.Property(e => e.PaymentConfirmedAt)
+                .HasColumnName("payment_confirmed_at");
 
             entity.HasOne(d => d.Order).WithMany(p => p.DeliveryEpods)
                 .HasForeignKey(d => d.OrderId)
