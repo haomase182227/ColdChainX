@@ -10,6 +10,8 @@ using ColdChainX.Application.Features.Delivery.Commands;
 using ColdChainX.Application.Features.Delivery.Queries;
 using ColdChainX.Shared.Responses;
 
+using ColdChainX.Application.Interfaces;
+
 namespace ColdChainX.API.Controllers;
 
 [ApiController]
@@ -18,10 +20,12 @@ namespace ColdChainX.API.Controllers;
 public class DeliveryController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly IFileService _fileService;
 
-    public DeliveryController(IMediator mediator)
+    public DeliveryController(IMediator mediator, IFileService fileService)
     {
         _mediator = mediator;
+        _fileService = fileService;
     }
 
     /// <summary>
@@ -161,5 +165,30 @@ public class DeliveryController : ControllerBase
 
         var result = await _mediator.Send(command);
         return Ok(result);
+    }
+
+    /// <summary>
+    /// Upload ảnh lên Cloudinary để lấy URL chèn vào ePOD / Bằng chứng lỗi.
+    /// </summary>
+    [HttpPost("/api/deliveries/upload-image")]
+    [Authorize(Roles = "Driver,Admin,Manager")]
+    [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UploadImage(IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest(ApiResponse<string>.Failure("Vui lòng chọn tệp tin ảnh."));
+        }
+
+        try
+        {
+            var url = await _fileService.UploadFileAsync(file);
+            return Ok(ApiResponse<string>.SuccessResponse(url, "Tải ảnh lên thành công."));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, ApiResponse<string>.Failure($"Lỗi khi tải ảnh: {ex.Message}"));
+        }
     }
 }
