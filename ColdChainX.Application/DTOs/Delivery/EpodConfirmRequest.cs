@@ -36,6 +36,5 @@ public class EpodConfirmRequest
 
     public string? PaymentEvidenceImageUrl { get; set; }
 
-    [Required]
     public List<EpodConfirmLpnInput> Lpns { get; set; } = new();
 }

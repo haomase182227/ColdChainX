@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
@@ -80,18 +81,7 @@ public class ConfirmEpodDeliveryCommandHandler : IRequestHandler<ConfirmEpodDeli
         var location = await _context.Locations
             .FirstOrDefaultAsync(l => l.LocationId == stop.LocationId, cancellationToken);
 
-        // 5. Decode and upload signature and payment evidence images to Cloudinary
-        string signUrl = await UploadImageAsync(request.SignImageUrl, $"signature_{order.TrackingCode}");
-        if (string.IsNullOrEmpty(signUrl))
-            throw new ValidationException("Invalid or missing customer signature image.");
-
-        string? paymentEvidenceUrl = null;
-        if (!string.IsNullOrEmpty(request.PaymentEvidenceImageUrl))
-        {
-            paymentEvidenceUrl = await UploadImageAsync(request.PaymentEvidenceImageUrl, $"evidence_payment_{order.TrackingCode}");
-        }
-
-        // 6. Fetch LPNs for this order
+        // 5. Fetch LPNs for this order
         var lpns = await _context.Lpns
             .Where(l => l.OrderId == order.OrderId && l.TripId == trip.TripId)
             .ToListAsync(cancellationToken);
@@ -117,6 +107,14 @@ public class ConfirmEpodDeliveryCommandHandler : IRequestHandler<ConfirmEpodDeli
                 throw new ValidationException($"LPN with ID '{lpnInput.LpnId}' does not belong to this order and trip.");
         }
 
+        // 6. Calculate expected COD and validate (Strict COD Validation)
+        var expectedCod = CalculateExpectedCod(order, lpns, request.Lpns);
+        var codAmountPaid = request.CodAmountPaid ?? 0m;
+        if (Math.Round(codAmountPaid, 2) != Math.Round(expectedCod, 2))
+        {
+            throw new ValidationException($"COD Amount Paid ({codAmountPaid}) does not match Expected COD ({expectedCod}) based on accepted LPNs.");
+        }
+
         // Fetch latest temperature from TelemetryLogs or fallback to 4.5
         var latestTelemetry = await _context.TelemetryLogs
             .Where(t => t.TripId == trip.TripId)
@@ -134,69 +132,8 @@ public class ConfirmEpodDeliveryCommandHandler : IRequestHandler<ConfirmEpodDeli
             using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
             try
             {
-                // Iterate through LPN inputs
-                foreach (var lpnInput in request.Lpns)
-                {
-                    var lpn = lpns.First(l => l.LpnId == lpnInput.LpnId);
-
-                    if (lpnInput.IsAccepted)
-                    {
-                        lpn.State = LpnState.DELIVERED;
-                        lpn.RecordedTemperature = recordedTemp;
-                        lpn.UpdatedAt = DateTime.UtcNow;
-                    }
-                    else
-                    {
-                        // Validate rejection fields
-                        if (string.IsNullOrWhiteSpace(lpnInput.RejectionReason))
-                            throw new ValidationException($"Rejection reason is required for LPN '{lpn.LpnCode}'.");
-
-                        lpn.State = LpnState.RETURN_PENDING;
-                        lpn.DiscrepancyReason = lpnInput.RejectionReason;
-
-                        string? lpnEvidenceUrl = null;
-                        if (!string.IsNullOrEmpty(lpnInput.EvidenceImageUrl))
-                        {
-                            lpnEvidenceUrl = await UploadImageAsync(lpnInput.EvidenceImageUrl, $"rejection_evidence_{lpn.LpnCode}");
-                        }
-                        lpn.EvidenceImageUrl = lpnEvidenceUrl;
-                        lpn.RecordedTemperature = recordedTemp;
-                        lpn.UpdatedAt = DateTime.UtcNow;
-
-                        // Create ReturnedItem record
-                        var returnedItem = new ReturnedItem
-                        {
-                            ReturnId = Guid.NewGuid(),
-                            EpodId = epodId,
-                            ItemName = order.ItemName,
-                            ItemCode = lpn.LpnCode,
-                            Unit = order.PackingType ?? "PALLET",
-                            ReturnedQty = lpn.Quantity,
-                            ReasonType = lpnInput.RejectionReason.ToUpper(),
-                            ReasonNote = lpnInput.RejectionNotes,
-                            ProcessingStatus = "PENDING",
-                            ReturnedAt = DateTime.UtcNow
-                        };
-                        _context.ReturnedItems.Add(returnedItem);
-                    }
-                }
-
-                // Determine TransportOrder overall status
-                var allDelivered = request.Lpns.All(li => li.IsAccepted);
-                var allReturned = request.Lpns.All(li => !li.IsAccepted);
-
-                if (allDelivered)
-                {
-                    order.Status = "DELIVERED";
-                }
-                else if (allReturned)
-                {
-                    order.Status = "RETURNED";
-                }
-                else
-                {
-                    order.Status = "PARTIALLY_DELIVERED";
-                }
+                // Helper method: Update LPN and Order States and create ReturnedItems
+                UpdateLpnAndOrderStates(order, lpns, request.Lpns, recordedTemp, epodId);
 
                 // Payment Status & Gated Order Status for QR payments
                 var paymentStatus = "UNPAID";
@@ -219,18 +156,18 @@ public class ConfirmEpodDeliveryCommandHandler : IRequestHandler<ConfirmEpodDeli
                     SignedAt = DateTime.UtcNow,
                     ReceiverName = request.ReceiverName,
                     ReceiverPhone = request.ReceiverPhone,
-                    SignImageUrl = signUrl,
+                    SignImageUrl = request.SignImageUrl, // Direct URL string, no base64 handling
                     SignLatitude = request.SignLatitude,
                     SignLongitude = request.SignLongitude,
                     DeliveryRating = request.DeliveryRating,
                     Note = request.Note,
                     Status = "COMPLETED",
                     CreatedAt = DateTime.UtcNow,
-                    CodAmount = order.CargoValue,
-                    CodAmountPaid = request.CodAmountPaid,
+                    CodAmount = expectedCod,
+                    CodAmountPaid = codAmountPaid,
                     PaymentMethod = request.PaymentMethod.ToUpper(),
                     PaymentStatus = paymentStatus,
-                    PaymentEvidenceImageUrl = paymentEvidenceUrl
+                    PaymentEvidenceImageUrl = request.PaymentEvidenceImageUrl // Direct URL string, no base64 handling
                 };
                 _context.DeliveryEpods.Add(epod);
 
@@ -304,26 +241,91 @@ public class ConfirmEpodDeliveryCommandHandler : IRequestHandler<ConfirmEpodDeli
         });
     }
 
-    private async Task<string> UploadImageAsync(string imageInput, string fileName)
+    /// <summary>
+    /// Calculates the expected COD amount based on ONLY the accepted LPNs proportionally.
+    /// </summary>
+    private decimal CalculateExpectedCod(TransportOrder order, List<Lpn> lpns, List<EpodConfirmLpnInput> lpnInputs)
     {
-        if (string.IsNullOrWhiteSpace(imageInput)) return string.Empty;
-        if (imageInput.StartsWith("http", StringComparison.OrdinalIgnoreCase)) return imageInput;
-
-        try
+        var acceptedLpnIds = lpnInputs.Where(li => li.IsAccepted).Select(li => li.LpnId).ToHashSet();
+        if (acceptedLpnIds.Count == 0)
         {
-            var base64Data = imageInput;
-            if (imageInput.Contains(","))
-            {
-                base64Data = imageInput.Substring(imageInput.IndexOf(",") + 1);
-            }
-
-            var bytes = Convert.FromBase64String(base64Data);
-            return await _fileService.UploadFileAsync(bytes, fileName);
+            return 0m;
         }
-        catch (Exception)
+
+        var acceptedQty = lpns.Where(l => acceptedLpnIds.Contains(l.LpnId)).Sum(l => l.Quantity);
+        if (order.Quantity <= 0)
         {
-            // Fallback to placeholder image url if it's a test string rather than valid Base64
-            return "https://res.cloudinary.com/dbt5zpage/image/upload/v1/coldchainx/mock_placeholder.png";
+            return 0m;
+        }
+
+        // Expected COD is proportional to the quantity of items in the accepted LPNs
+        return order.CargoValue * ((decimal)acceptedQty / order.Quantity);
+    }
+
+    /// <summary>
+    /// Updates states for LPNs and the order, and logs rejected LPNs as returned items.
+    /// </summary>
+    private void UpdateLpnAndOrderStates(
+        TransportOrder order,
+        List<Lpn> lpns,
+        List<EpodConfirmLpnInput> lpnInputs,
+        decimal recordedTemp,
+        Guid epodId)
+    {
+        foreach (var lpnInput in lpnInputs)
+        {
+            var lpn = lpns.First(l => l.LpnId == lpnInput.LpnId);
+
+            if (lpnInput.IsAccepted)
+            {
+                lpn.State = LpnState.DELIVERED;
+                lpn.RecordedTemperature = recordedTemp;
+                lpn.UpdatedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(lpnInput.RejectionReason))
+                    throw new ValidationException($"Rejection reason is required for LPN '{lpn.LpnCode}'.");
+
+                lpn.State = LpnState.RETURN_PENDING;
+                lpn.DiscrepancyReason = lpnInput.RejectionReason;
+                lpn.EvidenceImageUrl = lpnInput.EvidenceImageUrl; // Direct URL string
+                lpn.RecordedTemperature = recordedTemp;
+                lpn.UpdatedAt = DateTime.UtcNow;
+
+                // Create ReturnedItem record for the rejected LPN
+                var returnedItem = new ReturnedItem
+                {
+                    ReturnId = Guid.NewGuid(),
+                    EpodId = epodId,
+                    ItemName = order.ItemName,
+                    ItemCode = lpn.LpnCode,
+                    Unit = order.PackingType ?? "PALLET",
+                    ReturnedQty = lpn.Quantity,
+                    ReasonType = lpnInput.RejectionReason.ToUpper(),
+                    ReasonNote = lpnInput.RejectionNotes,
+                    ProcessingStatus = "PENDING",
+                    ReturnedAt = DateTime.UtcNow
+                };
+                _context.ReturnedItems.Add(returnedItem);
+            }
+        }
+
+        // Determine TransportOrder overall status
+        var allDelivered = lpnInputs.All(li => li.IsAccepted);
+        var allReturned = lpnInputs.All(li => !li.IsAccepted);
+
+        if (allDelivered)
+        {
+            order.Status = "DELIVERED";
+        }
+        else if (allReturned)
+        {
+            order.Status = "RETURNED";
+        }
+        else
+        {
+            order.Status = "PARTIALLY_DELIVERED";
         }
     }
 }
