@@ -53,13 +53,13 @@ public class DeliveryController : ControllerBase
     /// <summary>
     /// Driver thực hiện check-in tại Stop đích (đối chiếu tọa độ GPS và cắt chì cũ).
     /// </summary>
-    [HttpPost("check-in")]
+    [HttpPost("/api/stops/{stopId:guid}/check-ins")]
     [Authorize(Roles = "Driver")]
     [ProducesResponseType(typeof(ApiResponse<CheckinDriverResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> CheckinDriver([FromBody] CheckinDriverRequest request)
+    public async Task<IActionResult> CheckinDriver(Guid stopId, [FromBody] CheckinDriverRequest request)
     {
         var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
@@ -71,7 +71,7 @@ public class DeliveryController : ControllerBase
         {
             Latitude = request.Latitude,
             Longitude = request.Longitude,
-            StopId = request.StopId,
+            StopId = stopId,
             UserId = userId
         };
 
@@ -82,13 +82,13 @@ public class DeliveryController : ControllerBase
     /// <summary>
     /// Nghiệm thu ePOD và chốt COD của Đơn hàng (Door Delivery & COD Confirm).
     /// </summary>
-    [HttpPost("epod-confirm")]
+    [HttpPost("/api/orders/{orderId:guid}/epods")]
     [Authorize(Roles = "Driver")]
     [ProducesResponseType(typeof(ApiResponse<EpodConfirmResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> ConfirmEpodDelivery([FromBody] EpodConfirmRequest request)
+    public async Task<IActionResult> ConfirmEpodDelivery(Guid orderId, [FromBody] EpodConfirmRequest request)
     {
         var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
@@ -96,6 +96,7 @@ public class DeliveryController : ControllerBase
             return Unauthorized(ApiResponse<object>.Failure("Unauthorized."));
         }
 
+        request.OrderId = orderId;
         var command = new ConfirmEpodDeliveryCommand
         {
             Request = request,
@@ -109,13 +110,13 @@ public class DeliveryController : ControllerBase
     /// <summary>
     /// Rời điểm dừng và kẹp chì chặng mới (Depart & Re-seal).
     /// </summary>
-    [HttpPost("depart")]
+    [HttpPost("/api/stops/{stopId:guid}/departures")]
     [Authorize(Roles = "Driver")]
     [ProducesResponseType(typeof(ApiResponse<DepartResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> DepartStop([FromBody] DepartRequest request)
+    public async Task<IActionResult> DepartStop(Guid stopId, [FromBody] DepartRequest request)
     {
         var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
@@ -125,7 +126,7 @@ public class DeliveryController : ControllerBase
 
         var command = new DepartStopCommand
         {
-            StopId = request.StopId,
+            StopId = stopId,
             NewSealCode = request.NewSealCode,
             UserId = userId
         };
@@ -137,7 +138,7 @@ public class DeliveryController : ControllerBase
     /// <summary>
     /// Quyết toán COD của Tài xế (COD Handover).
     /// </summary>
-    [HttpPost("trip/{tripId:guid}/cod-handover")]
+    [HttpPost("/api/trips/{tripId:guid}/cod-handovers")]
     [Authorize(Roles = "Admin,Manager")]
     [ProducesResponseType(typeof(ApiResponse<CodHandoverResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]

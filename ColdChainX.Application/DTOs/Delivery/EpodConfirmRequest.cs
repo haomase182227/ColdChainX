@@ -6,7 +6,6 @@ namespace ColdChainX.Application.DTOs.Delivery;
 
 public class EpodConfirmRequest
 {
-    [Required]
     public Guid OrderId { get; set; }
 
     [Required]

@@ -22,7 +22,7 @@ public class PaymentController : ControllerBase
     /// <summary>
     /// Nhận thông báo thanh toán chuyển khoản thành công từ Ngân hàng (Webhook).
     /// </summary>
-    [HttpPost("bank-webhook")]
+    [HttpPost("/api/payments/bank-webhook")]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]

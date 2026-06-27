@@ -10,7 +10,4 @@ public class CheckinDriverRequest
 
     [Required]
     public decimal Longitude { get; set; }
-
-    [Required]
-    public Guid StopId { get; set; }
 }
