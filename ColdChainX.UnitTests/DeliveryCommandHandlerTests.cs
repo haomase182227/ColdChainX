@@ -637,7 +637,6 @@ namespace ColdChainX.UnitTests
             var handler = new CheckinDriverCommandHandler(_db, _configuration);
             var command = new CheckinDriverCommand
             {
-                TripId = _tripId,
                 StopId = stopId,
                 Latitude = 10.8466m,
                 Longitude = 106.8043m,
@@ -651,7 +650,6 @@ namespace ColdChainX.UnitTests
             Assert.True(result.Success);
             Assert.NotNull(result.Data);
             Assert.Equal(stopId, result.Data.StopId);
-            Assert.True(result.Data.DistanceInMeters < 50);
 
             var dbStop = await _db.TripStops.FindAsync(stopId);
             Assert.NotNull(dbStop);
@@ -688,7 +686,6 @@ namespace ColdChainX.UnitTests
             var handler = new CheckinDriverCommandHandler(_db, _configuration);
             var command = new CheckinDriverCommand
             {
-                TripId = _tripId,
                 StopId = stopId,
                 Latitude = 11.0000m,
                 Longitude = 107.0000m,

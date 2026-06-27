@@ -469,6 +469,22 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasDefaultValueSql("'PENDING'::character varying")
                 .HasColumnName("status");
 
+            entity.Property(e => e.CodAmount)
+                .HasPrecision(15, 2)
+                .HasColumnName("cod_amount");
+            entity.Property(e => e.CodAmountPaid)
+                .HasPrecision(15, 2)
+                .HasColumnName("cod_amount_paid");
+            entity.Property(e => e.PaymentMethod)
+                .HasMaxLength(20)
+                .HasColumnName("payment_method");
+            entity.Property(e => e.PaymentStatus)
+                .HasMaxLength(20)
+                .HasColumnName("payment_status");
+            entity.Property(e => e.PaymentEvidenceImageUrl)
+                .HasMaxLength(255)
+                .HasColumnName("payment_evidence_image_url");
+
             entity.HasOne(d => d.Order).WithMany(p => p.DeliveryEpods)
                 .HasForeignKey(d => d.OrderId)
                 .HasConstraintName("fk_epod_to");

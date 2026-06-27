@@ -51,15 +51,15 @@ public class DeliveryController : ControllerBase
     }
 
     /// <summary>
-    /// Driver thực hiện check-in tại Stop đích (đối chiếu tọa độ GPS).
+    /// Driver thực hiện check-in tại Stop đích (đối chiếu tọa độ GPS và cắt chì cũ).
     /// </summary>
-    [HttpPost("trips/{tripId:guid}/check-in")]
+    [HttpPost("check-in")]
     [Authorize(Roles = "Driver")]
     [ProducesResponseType(typeof(ApiResponse<CheckinDriverResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> CheckinDriver(Guid tripId, [FromBody] CheckinDriverRequest request)
+    public async Task<IActionResult> CheckinDriver([FromBody] CheckinDriverRequest request)
     {
         var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
@@ -69,7 +69,6 @@ public class DeliveryController : ControllerBase
 
         var command = new CheckinDriverCommand
         {
-            TripId = tripId,
             Latitude = request.Latitude,
             Longitude = request.Longitude,
             StopId = request.StopId,
@@ -81,18 +80,15 @@ public class DeliveryController : ControllerBase
     }
 
     /// <summary>
-    /// Driver xác nhận giao hàng thành công (Accepted) cho một LPN cụ thể.
+    /// Nghiệm thu ePOD và chốt COD của Đơn hàng (Door Delivery & COD Confirm).
     /// </summary>
-    [HttpPost("trips/{tripId:guid}/lpns/{lpnId:guid}/confirm")]
+    [HttpPost("epod-confirm")]
     [Authorize(Roles = "Driver")]
-    [Consumes("multipart/form-data")]
-    [ProducesResponseType(typeof(ApiResponse<LpnDeliveryStatusResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<EpodConfirmResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> ConfirmLpnDelivery(
-        Guid tripId, Guid lpnId, [FromForm] ConfirmLpnDeliveryRequest request)
+    public async Task<IActionResult> ConfirmEpodDelivery([FromBody] EpodConfirmRequest request)
     {
         var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
@@ -100,53 +96,9 @@ public class DeliveryController : ControllerBase
             return Unauthorized(ApiResponse<object>.Failure("Unauthorized."));
         }
 
-        var command = new ConfirmLpnDeliveryCommand
+        var command = new ConfirmEpodDeliveryCommand
         {
-            TripId = tripId,
-            LpnId = lpnId,
-            ReceiverName = request.ReceiverName,
-            ReceiverPhone = request.ReceiverPhone,
-            EvidenceImage = request.EvidenceImage,
-            UserId = userId,
-            CheckinAt = request.CheckinAt,
-            SignatureImage = request.SignatureImage,
-            CodAmount = request.CodAmount,
-            CodPaymentMethod = request.CodPaymentMethod,
-            CodReceiptImage = request.CodReceiptImage,
-            NewSealNumber = request.NewSealNumber
-        };
-
-        var result = await _mediator.Send(command);
-        return Ok(result);
-    }
-
-    /// <summary>
-    /// Driver từ chối nhận hàng (Rejected) cho một LPN cụ thể.
-    /// </summary>
-    [HttpPost("trips/{tripId:guid}/lpns/{lpnId:guid}/reject")]
-    [Authorize(Roles = "Driver")]
-    [Consumes("multipart/form-data")]
-    [ProducesResponseType(typeof(ApiResponse<LpnDeliveryStatusResponse>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> RejectLpnDelivery(
-        Guid tripId, Guid lpnId, [FromForm] RejectLpnDeliveryRequest request)
-    {
-        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
-        {
-            return Unauthorized(ApiResponse<object>.Failure("Unauthorized."));
-        }
-
-        var command = new RejectLpnDeliveryCommand
-        {
-            TripId = tripId,
-            LpnId = lpnId,
-            RejectReason = request.RejectReason,
-            RejectNote = request.RejectNote,
-            EvidenceImage = request.EvidenceImage,
+            Request = request,
             UserId = userId
         };
 
@@ -155,16 +107,15 @@ public class DeliveryController : ControllerBase
     }
 
     /// <summary>
-    /// Kế toán/Admin đối soát hình ảnh thanh toán COD của LPN.
+    /// Rời điểm dừng và kẹp chì chặng mới (Depart & Re-seal).
     /// </summary>
-    [HttpPost("trips/{tripId:guid}/lpns/{lpnId:guid}/verify-cod")]
-    [Authorize(Roles = "Admin,Manager")]
-    [ProducesResponseType(typeof(ApiResponse<LpnDeliveryStatusResponse>), StatusCodes.Status200OK)]
+    [HttpPost("depart")]
+    [Authorize(Roles = "Driver")]
+    [ProducesResponseType(typeof(ApiResponse<DepartResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> VerifyCodPayment(Guid tripId, Guid lpnId)
+    public async Task<IActionResult> DepartStop([FromBody] DepartRequest request)
     {
         var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
@@ -172,10 +123,38 @@ public class DeliveryController : ControllerBase
             return Unauthorized(ApiResponse<object>.Failure("Unauthorized."));
         }
 
-        var command = new VerifyCodPaymentCommand
+        var command = new DepartStopCommand
+        {
+            StopId = request.StopId,
+            NewSealCode = request.NewSealCode,
+            UserId = userId
+        };
+
+        var result = await _mediator.Send(command);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Quyết toán COD của Tài xế (COD Handover).
+    /// </summary>
+    [HttpPost("trip/{tripId:guid}/cod-handover")]
+    [Authorize(Roles = "Admin,Manager")]
+    [ProducesResponseType(typeof(ApiResponse<CodHandoverResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> HandoverCod(Guid tripId, [FromBody] CodHandoverRequest request)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
+        {
+            return Unauthorized(ApiResponse<object>.Failure("Unauthorized."));
+        }
+
+        var command = new HandoverCodCommand
         {
             TripId = tripId,
-            LpnId = lpnId,
+            Request = request,
             UserId = userId
         };
 

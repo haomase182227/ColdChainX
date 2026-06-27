@@ -3,14 +3,10 @@ using System.ComponentModel.DataAnnotations;
 
 namespace ColdChainX.Application.DTOs.Delivery;
 
-public class CheckinDriverRequest
+public class DepartRequest
 {
     [Required]
-    public decimal Latitude { get; set; }
-
-    [Required]
-    public decimal Longitude { get; set; }
-
-    [Required]
     public Guid StopId { get; set; }
+
+    public string? NewSealCode { get; set; }
 }

@@ -15,10 +15,9 @@ namespace ColdChainX.Application.Features.Delivery.Commands;
 
 public class CheckinDriverCommand : IRequest<ApiResponse<CheckinDriverResponse>>
 {
-    public Guid TripId { get; set; }
     public decimal Latitude { get; set; }
     public decimal Longitude { get; set; }
-    public Guid? StopId { get; set; }
+    public Guid StopId { get; set; }
     public Guid UserId { get; set; } // Set from JWT token by Controller
 }
 
@@ -35,42 +34,31 @@ public class CheckinDriverCommandHandler : IRequestHandler<CheckinDriverCommand,
 
     public async Task<ApiResponse<CheckinDriverResponse>> Handle(CheckinDriverCommand request, CancellationToken cancellationToken)
     {
-        // 1. Fetch Trip and validate existence
-        var trip = await _context.MasterTrips
-            .FirstOrDefaultAsync(t => t.TripId == request.TripId, cancellationToken);
-        if (trip == null)
-            throw new NotFoundException($"Trip with ID '{request.TripId}' was not found.");
+        // 1. Find the TripStop to check in
+        var stop = await _context.TripStops
+            .FirstOrDefaultAsync(ts => ts.StopId == request.StopId, cancellationToken);
+        if (stop == null)
+            throw new NotFoundException($"Trip stop with ID '{request.StopId}' was not found.");
 
-        // 2. Validate driver is assigned to this trip
+        if (stop.TripId == null)
+            throw new ValidationException("Stop is not assigned to any trip.");
+
+        // 2. Fetch Trip and validate existence
+        var trip = await _context.MasterTrips
+            .FirstOrDefaultAsync(t => t.TripId == stop.TripId.Value, cancellationToken);
+        if (trip == null)
+            throw new NotFoundException($"Trip with ID '{stop.TripId.Value}' was not found.");
+
+        // 3. Validate driver is assigned to this trip
         var driver = await _context.Drivers
             .FirstOrDefaultAsync(d => d.UserId == request.UserId, cancellationToken);
         if (driver == null)
             throw new ForbiddenException("Driver profile not found for current user.");
 
         var isAssignedDriver = await _context.TripDrivers
-            .AnyAsync(td => td.TripId == request.TripId && td.DriverId == driver.DriverId, cancellationToken);
+            .AnyAsync(td => td.TripId == trip.TripId && td.DriverId == driver.DriverId, cancellationToken);
         if (!isAssignedDriver)
             throw new ForbiddenException("You are not authorized to check in for this trip.");
-
-        // 3. Find the TripStop to check in
-        TripStop? stop = null;
-        if (request.StopId.HasValue)
-        {
-            stop = await _context.TripStops
-                .FirstOrDefaultAsync(ts => ts.StopId == request.StopId.Value && ts.TripId == request.TripId, cancellationToken);
-            if (stop == null)
-                throw new NotFoundException($"Trip stop with ID '{request.StopId.Value}' was not found for this trip.");
-        }
-        else
-        {
-            stop = await _context.TripStops
-                .Where(ts => ts.TripId == request.TripId && ts.ActualArrivalTime == null && ts.StopType == "DELIVERY")
-                .OrderBy(ts => ts.StopSequence)
-                .FirstOrDefaultAsync(cancellationToken);
-
-            if (stop == null)
-                throw new ValidationException("All delivery stops for this trip have already been checked in.");
-        }
 
         // 4. Retrieve the Location details for the stop
         var location = await _context.Locations
@@ -103,20 +91,47 @@ public class CheckinDriverCommandHandler : IRequestHandler<CheckinDriverCommand,
             throw new ValidationException($"Check-in failed. You are too far from the stop location '{location.Address}'. Current distance: {distance:F0} meters. Max allowed distance is {maxDistance:F0} meters.");
         }
 
-        // 8. Update TripStop arrival time and status
+        // 8. Cut the active seal associated with the trip
+        var activeSeal = await _context.Seals
+            .FirstOrDefaultAsync(s => s.TripId == trip.TripId && s.Status == "APPLIED", cancellationToken);
+        string? removedSealCode = null;
+        if (activeSeal != null)
+        {
+            activeSeal.Status = "REMOVED";
+            activeSeal.RemovedAt = DateTime.UtcNow;
+            removedSealCode = activeSeal.SealCode;
+        }
+
+        // 9. Update TripStop arrival time and status
         var checkinTime = DateTime.UtcNow;
         stop.ActualArrivalTime = checkinTime;
         stop.Status = "ARRIVED";
+
+        // 10. Fetch LPNs for this destination location stop and sort by LIFO
+        var lpns = await _context.Lpns
+            .Include(l => l.Order)
+            .Where(l => l.TripId == trip.TripId && l.Order.DestLocation == stop.LocationId)
+            .OrderByDescending(l => l.InboundTime ?? l.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        var lpnsToUnload = lpns.Select((l, idx) => new LpnUnloadInfo
+        {
+            LpnId = l.LpnId,
+            LpnCode = l.LpnCode,
+            ItemName = l.Order?.ItemName ?? "Unknown Item",
+            Quantity = l.Quantity,
+            UnloadOrder = idx + 1,
+            TempCondition = l.Order?.TempCondition ?? "NORMAL"
+        }).ToList();
 
         await _context.SaveChangesAsync(cancellationToken);
 
         var response = new CheckinDriverResponse
         {
-            TripId = request.TripId,
             StopId = stop.StopId,
-            Address = location.Address,
-            DistanceInMeters = distance,
-            CheckedinAt = checkinTime
+            CheckinTime = checkinTime,
+            RemovedSealCode = removedSealCode,
+            LpnsToUnload = lpnsToUnload
         };
 
         return ApiResponse<CheckinDriverResponse>.SuccessResponse(response, "Driver checked in successfully at the delivery location.");

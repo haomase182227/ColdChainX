@@ -4,9 +4,8 @@ namespace ColdChainX.Application.DTOs.Delivery;
 
 public class CheckinDriverResponse
 {
-    public Guid TripId { get; set; }
     public Guid StopId { get; set; }
-    public string Address { get; set; } = null!;
-    public double DistanceInMeters { get; set; }
-    public DateTime CheckedinAt { get; set; }
+    public DateTime CheckinTime { get; set; }
+    public string? RemovedSealCode { get; set; }
+    public System.Collections.Generic.List<LpnUnloadInfo> LpnsToUnload { get; set; } = new();
 }

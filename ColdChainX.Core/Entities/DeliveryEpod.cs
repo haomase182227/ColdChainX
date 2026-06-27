@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace ColdChainX.Core.Entities;
@@ -32,6 +32,16 @@ public partial class DeliveryEpod
     public string? Status { get; set; }
 
     public DateTime? CreatedAt { get; set; }
+
+    public decimal? CodAmount { get; set; }
+
+    public decimal? CodAmountPaid { get; set; }
+
+    public string? PaymentMethod { get; set; }
+
+    public string? PaymentStatus { get; set; }
+
+    public string? PaymentEvidenceImageUrl { get; set; }
 
     public virtual TransportOrder? Order { get; set; }
 
