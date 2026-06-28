@@ -295,11 +295,7 @@ public class DriverInfo
     public string? LicenseClass { get; set; }
     public DateOnly? LicenseExpiry { get; set; }
     public string LicenseStatus { get; set; } = null!; // VALID, EXPIRING_SOON, EXPIRED
-
-    /// <summary>PRIMARY (tài xế chính) hoặc SECONDARY (tài xế phụ).</summary>
-    public string DriverRole { get; set; } = "PRIMARY";
-
-    /// <summary>Số giờ lái được phân bổ cho tài xế này (EstimatedDurationHours / số tài xế).</summary>
+    public string DriverRole { get; set; } = null!; // PRIMARY, SECONDARY
     public decimal AssignedDurationHours { get; set; }
 }
 

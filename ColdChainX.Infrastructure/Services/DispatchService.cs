@@ -28,6 +28,7 @@ public class DispatchService : IDispatchService
     private readonly IWebHostEnvironment _environment;
     private readonly IHubContext<NotificationHub> _hubContext;
     private readonly IDriverAvailabilityService _driverAvailability;
+    private readonly IMqttCommandPublisher _mqttPublisher;
     private readonly ILogger<DispatchService> _logger;
 
     // Tên role điều phối viên
@@ -44,6 +45,7 @@ public class DispatchService : IDispatchService
         IWebHostEnvironment environment,
         IHubContext<NotificationHub> hubContext,
         IDriverAvailabilityService driverAvailability,
+        IMqttCommandPublisher mqttPublisher,
         ILogger<DispatchService> logger)
     {
         _context = context;
@@ -53,6 +55,7 @@ public class DispatchService : IDispatchService
         _environment = environment;
         _hubContext = hubContext;
         _driverAvailability = driverAvailability;
+        _mqttPublisher = mqttPublisher;
         _logger = logger;
     }
 
@@ -992,6 +995,7 @@ public class DispatchService : IDispatchService
             Zone = li.Zone
         }).OrderBy(d => d.LoadOrder).ToList();
 
+
         var driverInfos = assignedDrivers.Select(ad =>
         {
             var lic = driverLicenses[ad.Driver.DriverId];
@@ -1250,7 +1254,7 @@ public class DispatchService : IDispatchService
     //  API 3: IOT CHECK — Kiểm tra tín hiệu IoT xe
     // ═══════════════════════════════════════════════════════════════════════
 
-    public async Task<VehicleIoTStatus> CheckVehicleIoTAsync(Guid vehicleId)
+    public async Task<VehicleIoTStatus> CheckVehicleIoTAsync(Guid vehicleId, Guid tripId)
     {
         var vehicle = await _context.Vehicles.FindAsync(vehicleId)
             ?? throw new KeyNotFoundException("Không tìm thấy xe.");
@@ -1271,8 +1275,8 @@ public class DispatchService : IDispatchService
             };
         }
 
-        var now = DateTime.UtcNow;
         var deviceStatuses = new List<IoTDeviceStatus>();
+        bool hasOffline = false;
 
         foreach (var device in devices)
         {
@@ -1282,8 +1286,10 @@ public class DispatchService : IDispatchService
                 .OrderByDescending(t => t.Timestamp)
                 .FirstOrDefaultAsync();
 
-            var isOnline = device.LastPingTime.HasValue
-                        && (now - device.LastPingTime.Value).TotalMinutes < 10;
+            if (!device.IsOnline)
+            {
+                hasOffline = true;
+            }
 
             deviceStatuses.Add(new IoTDeviceStatus
             {
@@ -1291,7 +1297,7 @@ public class DispatchService : IDispatchService
                 BatteryLevel = device.BatteryLevel,
                 LastPingTime = device.LastPingTime,
                 Status = device.Status,
-                IsOnline = isOnline,
+                IsOnline = device.IsOnline,
                 LatestTelemetry = latestTelemetry == null ? null : new LatestTelemetry
                 {
                     Temperature = latestTelemetry.Temperature,
@@ -1302,10 +1308,39 @@ public class DispatchService : IDispatchService
             });
         }
 
-        var onlineCount = deviceStatuses.Count(d => d.IsOnline);
-        var overallStatus = onlineCount == devices.Count ? "ONLINE"
-                          : onlineCount > 0 ? "PARTIAL"
-                          : "OFFLINE";
+        var overallStatus = hasOffline ? "OFFLINE" : "ONLINE";
+
+        if (hasOffline)
+        {
+            // Nếu có thiết bị offline, cảnh báo tài xế
+            _logger.LogWarning("Vehicle {VehicleId} has offline IoT devices.", vehicleId);
+            try
+            {
+                await _hubContext.Clients.Group($"Vehicle_{vehicleId}").SendAsync("IotWarning", "Một số thiết bị IoT đang mất kết nối. Vui lòng kiểm tra lại nguồn điện.");
+            }
+            catch { }
+        }
+        else
+        {
+            // Tất cả đều online -> Cập nhật trip status và bật streaming
+            var trip = await _context.MasterTrips.FindAsync(tripId)
+                ?? throw new KeyNotFoundException("Không tìm thấy chuyến đi.");
+
+            if (trip.Status != "IN_TRANSIT" && trip.Status != "COMPLETED")
+            {
+                trip.Status = "IN_TRANSIT";
+                await _context.SaveChangesAsync();
+            }
+
+            // Gửi lệnh START_STREAMING qua MQTT bất chấp xe chưa chạy hay đã chạy (dùng làm Force Wake-up)
+            foreach (var device in devices)
+            {
+                if (!string.IsNullOrWhiteSpace(device.DeviceCode))
+                {
+                    await _mqttPublisher.StartStreamingAsync(device.DeviceCode, CancellationToken.None);
+                }
+            }
+        }
 
         return new VehicleIoTStatus
         {

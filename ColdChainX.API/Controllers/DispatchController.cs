@@ -539,17 +539,21 @@ public class DispatchController : ControllerBase
     /// <summary>
     /// Kiểm tra trạng thái kết nối, GPS, nhiệt độ, pin của các thiết bị IoT gắn trên xe.
     /// </summary>
-    [HttpGet("vehicle-iot-check/{vehicleId}")]
+    [HttpPost("vehicle-iot-check/{tripId}/{vehicleId}")]
     [ProducesResponseType(typeof(VehicleIoTStatus), 200)]
-    public async Task<IActionResult> CheckVehicleIoT(string vehicleId)
+    public async Task<IActionResult> CheckVehicleIoT(string tripId, string vehicleId)
     {
-        var rawId = ExtractGuid(vehicleId);
-        if (!Guid.TryParse(rawId, out var parsedVehicleId))
+        var rawVehicleId = ExtractGuid(vehicleId);
+        if (!Guid.TryParse(rawVehicleId, out var parsedVehicleId))
             return BadRequest(new { Success = false, Error = "VehicleId không hợp lệ." });
+
+        var rawTripId = ExtractGuid(tripId);
+        if (!Guid.TryParse(rawTripId, out var parsedTripId))
+            return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
 
         try
         {
-            var result = await _dispatchService.CheckVehicleIoTAsync(parsedVehicleId);
+            var result = await _dispatchService.CheckVehicleIoTAsync(parsedVehicleId, parsedTripId);
             return Ok(new { Success = true, Data = result });
         }
         catch (Exception ex)
