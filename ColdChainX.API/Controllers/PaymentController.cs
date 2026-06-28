@@ -12,8 +12,7 @@ using ColdChainX.Shared.Responses;
 namespace ColdChainX.API.Controllers;
 
 /// <summary>
-/// Xử lý webhook thanh toán từ PayOS.
-/// PayOS gọi endpoint này khi khách hàng thanh toán QR thành công.
+/// Handle payment webhooks from PayOS.
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
@@ -27,13 +26,8 @@ public class PaymentController : ControllerBase
     }
 
     /// <summary>
-    /// [PayOS Webhook] Nhận thông báo thanh toán QR thành công từ PayOS.
-    /// PayOS sẽ POST tới endpoint này kèm header `x-payos-signature` (HMAC-SHA256).
+    /// Receive PayOS payment webhook notification.
     /// </summary>
-    /// <remarks>
-    /// Endpoint này KHÔNG yêu cầu JWT (AllowAnonymous) vì PayOS gọi từ server-to-server.
-    /// Bảo mật được đảm bảo bằng HMAC signature verification.
-    /// </remarks>
     [HttpPost("/api/payments/bank-webhook")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
