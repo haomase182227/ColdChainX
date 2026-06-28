@@ -46,5 +46,16 @@ public class HandoverConfirmRequest
     /// Danh sách trạng thái từng kiện hàng (LPN).
     /// Nếu để trống, hệ thống tự động chấp nhận toàn bộ LPN (auto-accept all).
     /// </summary>
+    [Microsoft.AspNetCore.Mvc.ModelBinder(BinderType = typeof(ColdChainX.Application.ModelBinders.HandoverLpnsModelBinder))]
     public List<HandoverConfirmLpnInput> Lpns { get; set; } = new();
+
+    /// <summary>
+    /// Danh sách ảnh bằng chứng hỏng hóc (dành cho kiểm thử Swagger / lách giới hạn array upload).
+    /// </summary>
+    public List<IFormFile>? EvidencePhotos { get; set; }
+
+    /// <summary>
+    /// Danh sách ảnh tình trạng nhận hàng (dành cho kiểm thử Swagger / lách giới hạn array upload).
+    /// </summary>
+    public List<IFormFile>? ConditionPhotos { get; set; }
 }

@@ -28,4 +28,10 @@ public class HandoverConfirmLpnInput
 
     /// <summary>Ảnh tình trạng kiện hàng khi nhận (tùy chọn, ngay cả khi chấp nhận).</summary>
     public IFormFile? ConditionPhotoFile { get; set; }
+
+    /// <summary>Đường dẫn ảnh bằng chứng (sử dụng khi đã upload trước lấy URL).</summary>
+    public string? EvidenceImageUrl { get; set; }
+
+    /// <summary>Đường dẫn ảnh tình trạng (sử dụng khi đã upload trước lấy URL).</summary>
+    public string? ConditionImageUrl { get; set; }
 }

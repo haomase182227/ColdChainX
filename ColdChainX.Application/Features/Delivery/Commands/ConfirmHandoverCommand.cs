@@ -116,6 +116,31 @@ public class ConfirmHandoverCommandHandler : IRequestHandler<ConfirmHandoverComm
             }).ToList();
         }
 
+        // 5a. Map flat file lists from request to LPN inputs (Swagger workaround)
+        if (request.EvidencePhotos != null && request.EvidencePhotos.Count > 0)
+        {
+            var rejectedInputs = request.Lpns.Where(i => !i.IsAccepted).ToList();
+            for (int i = 0; i < rejectedInputs.Count; i++)
+            {
+                if (i < request.EvidencePhotos.Count && rejectedInputs[i].EvidencePhotoFile == null)
+                {
+                    rejectedInputs[i].EvidencePhotoFile = request.EvidencePhotos[i];
+                }
+            }
+        }
+
+        if (request.ConditionPhotos != null && request.ConditionPhotos.Count > 0)
+        {
+            var acceptedInputs = request.Lpns.Where(i => i.IsAccepted).ToList();
+            for (int i = 0; i < acceptedInputs.Count; i++)
+            {
+                if (i < request.ConditionPhotos.Count && acceptedInputs[i].ConditionPhotoFile == null)
+                {
+                    acceptedInputs[i].ConditionPhotoFile = request.ConditionPhotos[i];
+                }
+            }
+        }
+
         // 6. Validate each submitted LPN input
         foreach (var lpnInput in request.Lpns)
         {
