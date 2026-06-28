@@ -34,6 +34,8 @@ public class GetLpnDetailQueryHandler : IRequestHandler<GetLpnDetailQuery, LpnDt
                 LpnCode = x.LpnCode,
                 ItemName = x.Order.ItemName,
                 BatchNumber = "N/A",
+                WarehouseId = x.WarehouseId,
+                WarehouseName = x.Warehouse != null ? x.Warehouse.WarehouseName : null,
                 StorageLocation = x.StorageLocation,
                 Quantity = x.Quantity,
                 ExpectedWeightKg = x.Order.ExpectedWeightKg,

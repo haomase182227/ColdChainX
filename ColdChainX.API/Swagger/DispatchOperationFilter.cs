@@ -71,6 +71,15 @@ var rawOrders = (from r in db.WarehouseReceipts
                             ApplyArrayEnum(mediaType.Schema, "OrderIds", orders);
                             ApplyArrayEnum(mediaType.Schema, "orderIds", orders);
 
+                            // Kho hiện có — phải chọn trước khi ghép chuyến (manual-dispatch)
+                            var warehouses = db.Warehouses
+                                .OrderBy(w => w.WarehouseName)
+                                .Select(w => $"{w.WarehouseId}: {w.WarehouseName} ({w.WarehouseCode})")
+                                .ToList();
+
+                            ApplyEnum(mediaType.Schema, "WarehouseId", warehouses);
+                            ApplyEnum(mediaType.Schema, "warehouseId", warehouses);
+
                             var vehicles = db.Vehicles
                                 .Where(v => v.Status == "ACTIVE")
                                 .Select(v => $"{v.VehicleId}: {v.TruckPlate} — {v.VehicleType} | Tải: {v.MaxWeight}kg | Temp: {v.MinTemp}°C đến {v.MaxTemp}°C")

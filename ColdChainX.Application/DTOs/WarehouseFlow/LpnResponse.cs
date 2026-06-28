@@ -14,6 +14,8 @@ public class LpnResponse
 
     public string ItemName { get; set; } = null!;
 
+    public Guid? WarehouseId { get; set; }
+
     public string? StorageLocation { get; set; }
 
     public int Quantity { get; set; }
