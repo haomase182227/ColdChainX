@@ -13,6 +13,7 @@ using Microsoft.IdentityModel.Tokens;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Application.Mappings;
 using ColdChainX.Application.Services;
+
 using ColdChainX.API.Workers;
 using ColdChainX.Core.Entities;
 using ColdChainX.Core.Interfaces;
@@ -114,6 +115,8 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IIncidentReportService, IncidentReportService>();
             services.AddScoped<IClaimService, ClaimService>();
             services.AddScoped<IDeliveryEventService, DeliveryEventService>();
+            services.AddScoped<IPaymentGatewayService, PayOsPaymentService>();
+
 
             services.AddScoped<IOutboundOrderService, OutboundOrderService>();
             services.AddScoped<IFleetManagementService, FleetManagementService>();

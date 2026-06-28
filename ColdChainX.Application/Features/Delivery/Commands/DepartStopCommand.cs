@@ -166,7 +166,7 @@ public class DepartStopCommandHandler : IRequestHandler<DepartStopCommand, ApiRe
                 {
                     await _deliveryEvents.NotifyTripCompletedAsync(
                         trip.TripId,
-                        trip.TripCode ?? trip.TripId.ToString("N")[..8].ToUpper(),
+                        trip.TripId.ToString("N")[..8].ToUpper(),
                         departTime,
                         cancellationToken);
                 }

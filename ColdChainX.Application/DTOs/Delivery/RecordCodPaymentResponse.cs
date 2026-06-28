@@ -27,4 +27,16 @@ public class RecordCodPaymentResponse
     /// Ví dụ: "POST /api/stops/{stopId}/departures để xuất phát điểm tiếp theo"
     /// </summary>
     public string NextStep { get; set; } = null!;
+
+    /// <summary>
+    /// [QR only] URL ảnh mã QR PayOS để hiển thị trực tiếp trên màn hình driver app.
+    /// Null nếu thanh toán CASH hoặc chưa tạo link.
+    /// </summary>
+    public string? QrCodeUrl { get; set; }
+
+    /// <summary>
+    /// [QR only] URL trang thanh toán PayOS (có thể mở trên trình duyệt hoặc webview).
+    /// Null nếu thanh toán CASH.
+    /// </summary>
+    public string? CheckoutUrl { get; set; }
 }

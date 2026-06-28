@@ -30,17 +30,20 @@ public class RecordCodPaymentCommandHandler : IRequestHandler<RecordCodPaymentCo
     private readonly IFileService _fileService;
     private readonly IPdfGeneratorService _pdfGeneratorService;
     private readonly IDeliveryEventService _deliveryEvents;
+    private readonly IPaymentGatewayService _paymentGateway;
 
     public RecordCodPaymentCommandHandler(
         IApplicationDbContext context,
         IFileService fileService,
         IPdfGeneratorService pdfGeneratorService,
-        IDeliveryEventService deliveryEvents)
+        IDeliveryEventService deliveryEvents,
+        IPaymentGatewayService paymentGateway)
     {
         _context = context;
         _fileService = fileService;
         _pdfGeneratorService = pdfGeneratorService;
         _deliveryEvents = deliveryEvents;
+        _paymentGateway = paymentGateway;
     }
 
     public async Task<ApiResponse<RecordCodPaymentResponse>> Handle(
@@ -100,16 +103,39 @@ public class RecordCodPaymentCommandHandler : IRequestHandler<RecordCodPaymentCo
 
         var now = DateTime.UtcNow;
 
-        // 8. For QR payments: set AWAITING_QR status and return immediately
-        // (PayOS webhook will confirm and finalize ePOD PDF once bank confirms)
+        // 8. For QR payments: create real PayOS payment link, return QR URL to driver
         if (method == "QR")
         {
+            // Generate a unique numeric orderCode for PayOS (use timestamp + epodId suffix)
+            var payosOrderCode = Math.Abs((long)(epod.EpodId.GetHashCode()) % 9_000_000_000L + 1_000_000_000L);
+
+            // Description max 25 chars for PayOS
+            var trackingCode = epod.Order?.TrackingCode ?? epod.EpodId.ToString("N")[..8];
+            var description = $"COD {trackingCode}"[..Math.Min(25, $"COD {trackingCode}".Length)];
+
+            CreateQrResult qrResult;
+            try
+            {
+                qrResult = await _paymentGateway.CreatePaymentLinkAsync(
+                    payosOrderCode,
+                    (int)request.CodAmountPaid,
+                    description,
+                    cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException(
+                    $"PayOS payment link creation failed: {ex.Message}. Please retry or switch to CASH payment.", ex);
+            }
+
             epod.PaymentMethod = "QR";
             epod.CodAmountPaid = request.CodAmountPaid;
             epod.PaymentStatus = "AWAITING_QR";
             epod.PaymentEvidenceImageUrl = paymentEvidenceUrl;
-            if (Math.Abs(codDiscrepancy) > 0.01m)
-                epod.Note = $"{epod.Note} [COD discrepancy: {codDiscrepancy:+0.##;-0.##} VND]".Trim();
+            // Store PayOS orderCode in note so webhook handler can look it up
+            var discrepancyNote = Math.Abs(codDiscrepancy) > 0.01m
+                ? $" [COD discrepancy: {codDiscrepancy:+0.##;-0.##} VND]" : "";
+            epod.Note = $"{epod.Note} [PayOS:{payosOrderCode}]{discrepancyNote}".Trim();
             await _context.SaveChangesAsync(cancellationToken);
 
             return ApiResponse<RecordCodPaymentResponse>.SuccessResponse(new RecordCodPaymentResponse
@@ -118,8 +144,10 @@ public class RecordCodPaymentCommandHandler : IRequestHandler<RecordCodPaymentCo
                 PaymentStatus = "AWAITING_QR",
                 PaymentConfirmedAt = null,
                 EpodPdfUrl = null,
-                NextStep = "Chờ khách chuyển khoản. Webhook PayOS sẽ tự động xác nhận và sinh ePOD PDF."
-            }, "Đã ghi nhận yêu cầu thanh toán QR. Vui lòng chờ xác nhận từ PayOS.");
+                QrCodeUrl = qrResult.QrCodeUrl,
+                CheckoutUrl = qrResult.CheckoutUrl,
+                NextStep = $"Hiển thị mã QR cho khách quét. PayOS sẽ tự động xác nhận và sinh ePOD PDF khi thanh toán thành công."
+            }, "Đã tạo mã QR PayOS thành công. Vui lòng hiển thị cho khách quét.");
         }
 
         // 9. CASH payment — confirm immediately and generate final ePOD PDF

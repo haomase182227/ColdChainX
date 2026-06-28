@@ -123,6 +123,15 @@ app.UseSwaggerUI(c =>
 });
 
 app.UseRouting();
+// Enable body buffering for PayOS webhook HMAC verification
+// (applies only to the webhook endpoint to avoid memory overhead on other endpoints)
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/api/payments/bank-webhook"))
+        context.Request.EnableBuffering();
+    await next();
+});
+
 app.UseCors("CorsPolicy");
 app.UseStaticFiles();
 app.UseAuthentication();
