@@ -105,30 +105,28 @@ namespace ColdChainX.Infrastructure.Services
             //  ROUTE INFORMATION
             // ══════════════════════════════════════════════════════════════════
             var routeSb = new StringBuilder();
-            if (result.Navigation?.Legs?.Any() == true)
+            var rd = result.RouteDetails;
+            if (rd != null)
             {
-                var navInfo = result.Navigation;
-                routeSb.Append($"<p><b>Tổng quãng đường dự kiến:</b> {navInfo.TotalDistanceKm:F1} km &nbsp;|&nbsp; <b>Thời gian di chuyển:</b> {navInfo.TotalDurationMinutes} phút</p>");
-                routeSb.Append("<ul class='route-list'>");
-                foreach (var leg in navInfo.Legs)
+                if (rd.TotalDurationMinutes > 0)
                 {
-                    routeSb.Append($"<li><b>Chặng {leg.LegIndex}:</b> {H(leg.FromAddress)} &rarr; {H(leg.ToAddress)} <i>({leg.DistanceKm:F1} km)</i></li>");
+                    routeSb.Append($"<p><b>Tổng quãng đường dự kiến:</b> {rd.TotalDistanceKm:F1} km &nbsp;|&nbsp; <b>Thời gian di chuyển:</b> {rd.TotalDurationMinutes} phút</p>");
                 }
-                routeSb.Append("</ul>");
-            }
-            else
-            {
-                var originAddr = result.Route?.Stops?.FirstOrDefault()?.Address ?? "Kho trung tâm";
-                routeSb.Append($"<p><b>Điểm xuất phát:</b> {H(originAddr)}</p>");
-                if (result.Route?.Stops != null)
+                else
                 {
-                    routeSb.Append("<ul class='route-list'>");
-                    foreach (var stop in result.Route.Stops.OrderBy(s => s.Sequence))
+                    routeSb.Append($"<p><b>Tổng quãng đường dự kiến:</b> {rd.TotalDistanceKm:F1} km</p>");
+                }
+                
+                routeSb.Append("<ul class='route-list'>");
+                routeSb.Append($"<li><b>Điểm xuất phát:</b> {H(rd.OriginAddress ?? "Kho trung tâm")}</li>");
+                if (rd.Stops != null)
+                {
+                    foreach (var stop in rd.Stops.OrderBy(s => s.Sequence))
                     {
                         routeSb.Append($"<li><b>Trạm {stop.Sequence}:</b> {H(stop.Address ?? "—")} <i>(Cách {stop.DistanceFromPreviousKm:F1} km)</i></li>");
                     }
-                    routeSb.Append("</ul>");
                 }
+                routeSb.Append("</ul>");
             }
 
             // ══════════════════════════════════════════════════════════════════

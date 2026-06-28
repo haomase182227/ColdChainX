@@ -28,6 +28,7 @@ public class DispatchController : ControllerBase
     private readonly ApplicationDbContext _db;
     private readonly IPdfService _pdfService;
     private readonly ILocationService _locationService;
+    private readonly IGoongMapService _goongMapService;
     private readonly IWebHostEnvironment _env;
     private readonly IFileService _fileService;
     private readonly IMediator _mediator;
@@ -40,6 +41,7 @@ public class DispatchController : ControllerBase
         ApplicationDbContext db,
         IPdfService pdfService,
         ILocationService locationService,
+        IGoongMapService goongMapService,
         IWebHostEnvironment env,
         IFileService fileService,
         IMediator mediator,
@@ -51,6 +53,7 @@ public class DispatchController : ControllerBase
         _db = db;
         _pdfService = pdfService;
         _locationService = locationService;
+        _goongMapService = goongMapService;
         _env = env;
         _fileService = fileService;
         _mediator = mediator;
@@ -389,7 +392,7 @@ public class DispatchController : ControllerBase
     // ═══════════════════════════════════════════════════════════════════════
 
     [HttpGet("trip/{tripId}/route")]
-    [ProducesResponseType(typeof(GoongDirectionsResult), 200)]
+    [ProducesResponseType(typeof(TripRouteResponse), 200)]
     [ProducesResponseType(typeof(object), 404)]
     public async Task<IActionResult> GetTripRoute(string tripId)
     {
@@ -407,32 +410,35 @@ public class DispatchController : ControllerBase
         if (trip == null)
             return NotFound(new { Success = false, Error = "Không tìm thấy chuyến đi." });
 
-        var waypoints = new List<(decimal Lat, decimal Lon, string Address)>
-        {
-            (trip.OriginLocation.Latitude, trip.OriginLocation.Longitude, trip.OriginLocation.Address)
-        };
+        var deliveryStops = trip.TripStops
+            .Where(stop => stop.Location != null)
+            .Where(stop => !IsSameLocation(stop.Location!, trip.OriginLocation)
+                && !IsSameLocation(stop.Location!, trip.DestinationLocation))
+            .OrderBy(stop => stop.StopSequence)
+            .ToList();
 
-        foreach (var stop in trip.TripStops.OrderBy(s => s.StopSequence))
-        {
-            if (stop.Location != null)
-                waypoints.Add((stop.Location.Latitude, stop.Location.Longitude, stop.Location.Address));
-        }
-
-        // Điểm cuối cùng (DestLocation có thể đã nằm trong TripStops, nhưng cứ thêm cho chắc nếu thiếu)
-        var lastStop = waypoints.LastOrDefault();
-        if (lastStop.Lat != trip.DestinationLocation.Latitude || lastStop.Lon != trip.DestinationLocation.Longitude)
-        {
-            waypoints.Add((trip.DestinationLocation.Latitude, trip.DestinationLocation.Longitude, trip.DestinationLocation.Address));
-        }
+        var origin = GoongMapService.FormatCoordinate(
+            trip.OriginLocation.Latitude,
+            trip.OriginLocation.Longitude);
+        var destination = GoongMapService.FormatCoordinate(
+            trip.DestinationLocation.Latitude,
+            trip.DestinationLocation.Longitude);
+        var waypoints = string.Join("|", deliveryStops.Select(stop =>
+            GoongMapService.FormatCoordinate(stop.Location!.Latitude, stop.Location.Longitude)));
 
         try
         {
-            var directions = await _locationService.GetDirectionsAsync(waypoints);
-            return Ok(new { Success = true, Data = directions });
+            var optimizedRoute = await _goongMapService.GetOptimizedRouteAsync(
+                origin,
+                destination,
+                string.IsNullOrWhiteSpace(waypoints) ? null : waypoints,
+                HttpContext.RequestAborted);
+            var response = await BuildTripRouteResponseAsync(trip, deliveryStops, optimizedRoute);
+            return Ok(new { Success = true, Data = response });
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { Success = false, Error = "Lỗi khi gọi Goong API.", Detail = ex.Message });
+            return StatusCode(500, new { Success = false, Error = "Lỗi khi gọi Goong API tối ưu lộ trình.", Detail = ex.Message });
         }
     }
 
@@ -568,17 +574,21 @@ public class DispatchController : ControllerBase
     /// <summary>
     /// Kiểm tra trạng thái kết nối, GPS, nhiệt độ, pin của các thiết bị IoT gắn trên xe.
     /// </summary>
-    [HttpGet("vehicle-iot-check/{vehicleId}")]
+    [HttpPost("vehicle-iot-check/{tripId}/{vehicleId}")]
     [ProducesResponseType(typeof(VehicleIoTStatus), 200)]
-    public async Task<IActionResult> CheckVehicleIoT(string vehicleId)
+    public async Task<IActionResult> CheckVehicleIoT(string tripId, string vehicleId)
     {
-        var rawId = ExtractGuid(vehicleId);
-        if (!Guid.TryParse(rawId, out var parsedVehicleId))
+        var rawVehicleId = ExtractGuid(vehicleId);
+        if (!Guid.TryParse(rawVehicleId, out var parsedVehicleId))
             return BadRequest(new { Success = false, Error = "VehicleId không hợp lệ." });
+
+        var rawTripId = ExtractGuid(tripId);
+        if (!Guid.TryParse(rawTripId, out var parsedTripId))
+            return BadRequest(new { Success = false, Error = "TripId không hợp lệ." });
 
         try
         {
-            var result = await _dispatchService.CheckVehicleIoTAsync(parsedVehicleId);
+            var result = await _dispatchService.CheckVehicleIoTAsync(parsedVehicleId, parsedTripId);
             return Ok(new { Success = true, Data = result });
         }
         catch (Exception ex)
@@ -699,6 +709,148 @@ public class DispatchController : ControllerBase
         if (string.IsNullOrWhiteSpace(input)) return input;
         var parts = input.Split(new[] { ':', '|' });
         return parts[0].Trim();
+    }
+
+    private async Task<TripRouteResponse> BuildTripRouteResponseAsync(
+        MasterTrip trip,
+        IReadOnlyList<TripStop> deliveryStops,
+        GoongOptimizedRouteResult optimizedRoute)
+    {
+        var sortedStops = ApplyWaypointOrder(deliveryStops, optimizedRoute.WaypointOrder);
+        var destinationLocationIds = sortedStops
+            .Where(stop => stop.LocationId.HasValue)
+            .Select(stop => stop.LocationId!.Value)
+            .Distinct()
+            .ToList();
+
+        var orders = await _db.TransportOrders
+            .Where(order => order.MasterTripId == trip.TripId
+                && order.DestLocation.HasValue
+                && destinationLocationIds.Contains(order.DestLocation.Value))
+            .ToListAsync();
+
+        var lpns = await _db.Lpns
+            .Include(lpn => lpn.Order)
+            .Where(lpn => lpn.TripId == trip.TripId
+                && lpn.Order.DestLocation.HasValue
+                && destinationLocationIds.Contains(lpn.Order.DestLocation.Value))
+            .ToListAsync();
+
+        return new TripRouteResponse
+        {
+            TripId = trip.TripId,
+            OverviewPolyline = optimizedRoute.OverviewPolyline,
+            TotalDistanceMeters = optimizedRoute.TotalDistanceMeters,
+            TotalDurationSeconds = optimizedRoute.TotalDurationSeconds,
+            WaypointOrder = optimizedRoute.WaypointOrder,
+            Origin = new TripRoutePointDto
+            {
+                LocationId = trip.OriginLocation.LocationId,
+                Address = trip.OriginLocation.Address,
+                Lat = trip.OriginLocation.Latitude,
+                Lon = trip.OriginLocation.Longitude
+            },
+            Destination = new TripRoutePointDto
+            {
+                LocationId = trip.DestinationLocation.LocationId,
+                Address = trip.DestinationLocation.Address,
+                Lat = trip.DestinationLocation.Latitude,
+                Lon = trip.DestinationLocation.Longitude
+            },
+            OptimizedStops = sortedStops.Select((stop, index) =>
+            {
+                var locationId = stop.LocationId!.Value;
+                return new OptimizedTripStopDto
+                {
+                    StopId = stop.StopId,
+                    LocationId = locationId,
+                    OriginalStopSequence = stop.StopSequence,
+                    OptimizedSequence = index + 1,
+                    StopType = stop.StopType,
+                    Address = stop.Location!.Address,
+                    Lat = stop.Location.Latitude,
+                    Lon = stop.Location.Longitude,
+                    Orders = orders
+                        .Where(order => order.DestLocation == locationId)
+                        .Select(ToTripRouteOrderDto)
+                        .ToList(),
+                    Lpns = lpns
+                        .Where(lpn => lpn.Order.DestLocation == locationId)
+                        .Select(ToLpnSummary)
+                        .ToList()
+                };
+            }).ToList()
+        };
+    }
+
+    private static List<TripStop> ApplyWaypointOrder(
+        IReadOnlyList<TripStop> originalStops,
+        IReadOnlyList<int> waypointOrder)
+    {
+        if (originalStops.Count == 0)
+        {
+            return new List<TripStop>();
+        }
+
+        var ordered = new List<TripStop>(originalStops.Count);
+        var used = new HashSet<int>();
+
+        foreach (var waypointIndex in waypointOrder)
+        {
+            if (waypointIndex < 0 || waypointIndex >= originalStops.Count || !used.Add(waypointIndex))
+            {
+                continue;
+            }
+
+            ordered.Add(originalStops[waypointIndex]);
+        }
+
+        for (var i = 0; i < originalStops.Count; i++)
+        {
+            if (used.Add(i))
+            {
+                ordered.Add(originalStops[i]);
+            }
+        }
+
+        return ordered;
+    }
+
+    private static bool IsSameLocation(Location left, Location right)
+    {
+        return left.LocationId == right.LocationId
+            || (left.Latitude == right.Latitude && left.Longitude == right.Longitude);
+    }
+
+    private static TripRouteOrderDto ToTripRouteOrderDto(TransportOrder order)
+    {
+        return new TripRouteOrderDto
+        {
+            OrderId = order.OrderId,
+            TrackingCode = order.TrackingCode,
+            ItemName = order.ItemName,
+            Category = order.Category,
+            Quantity = order.Quantity,
+            WeightKg = order.ActualWeightKg,
+            Cbm = order.ActualCbm ?? order.ExpectedCbm,
+            TempCondition = order.TempCondition
+        };
+    }
+
+    private static LpnSummary ToLpnSummary(Lpn lpn)
+    {
+        return new LpnSummary
+        {
+            LpnId = lpn.LpnId,
+            LpnCode = lpn.LpnCode,
+            OrderId = lpn.OrderId,
+            OrderTrackingCode = lpn.Order.TrackingCode,
+            ItemName = lpn.Order.ItemName,
+            Quantity = lpn.Quantity,
+            WeightKg = lpn.ActualWeightKg,
+            Cbm = lpn.ActualCbm,
+            TempCondition = lpn.Order.TempCondition
+        };
     }
 
     [HttpGet("trips/{id}/export-pdf")]

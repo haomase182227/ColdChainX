@@ -859,6 +859,9 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.DeviceId)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("device_id");
+            entity.Property(e => e.DeviceCode)
+                .HasMaxLength(100)
+                .HasColumnName("device_code");
             entity.Property(e => e.BatteryLevel).HasColumnName("battery_level");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
@@ -872,6 +875,10 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasDefaultValueSql("'ACTIVE'::character varying")
                 .HasColumnName("status");
             entity.Property(e => e.VehicleId).HasColumnName("vehicle_id");
+
+            entity.HasIndex(e => e.DeviceCode, "uq_iot_devices_device_code")
+                .IsUnique()
+                .HasFilter("device_code IS NOT NULL");
 
             entity.HasOne(d => d.Vehicle).WithMany(p => p.IotDevices)
                 .HasForeignKey(d => d.VehicleId)

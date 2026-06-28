@@ -108,11 +108,11 @@ var rawOrders = (from r in db.WarehouseReceipts
                     catch (Exception) { /* Silence */ }
                 }
 
-                // Một số endpoint cần NHẬP TAY tripId (không dùng dropdown) — FE lấy id từ
-                // GET trips/can-start-picking hoặc GET trips/ready-to-seal rồi nhập vào.
+                // Một số endpoint cần NHẬP TAY tripId/vehicleId (không dùng dropdown)
                 var freeTextTripId =
                     path.Contains("start-picking", StringComparison.OrdinalIgnoreCase) ||
-                    path.Contains("seal-and-dispatch", StringComparison.OrdinalIgnoreCase);
+                    path.Contains("seal-and-dispatch", StringComparison.OrdinalIgnoreCase) ||
+                    path.Contains("vehicle-iot-check", StringComparison.OrdinalIgnoreCase);
 
                 // Path parameter dropdowns
                 var tripIdParam = operation.Parameters?.FirstOrDefault(p => string.Equals(p.Name, "tripId", StringComparison.OrdinalIgnoreCase));
@@ -141,7 +141,7 @@ var rawOrders = (from r in db.WarehouseReceipts
                 }
 
                 var vehicleIdParam = operation.Parameters?.FirstOrDefault(p => string.Equals(p.Name, "vehicleId", StringComparison.OrdinalIgnoreCase));
-                if (vehicleIdParam != null)
+                if (vehicleIdParam != null && !freeTextTripId)
                 {
                     try
                     {

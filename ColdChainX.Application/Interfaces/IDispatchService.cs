@@ -39,7 +39,7 @@ public interface IDispatchService
     // ═══════════════════════════════════════════════════════════════════════
 
     /// <summary>Kiểm tra tín hiệu IoT (GPS, nhiệt độ, battery) của xe.</summary>
-    Task<VehicleIoTStatus> CheckVehicleIoTAsync(Guid vehicleId);
+    Task<VehicleIoTStatus> CheckVehicleIoTAsync(Guid vehicleId, Guid tripId);
 
     // ═══════════════════════════════════════════════════════════════════════
     //  API 4: SEAL & DISPATCH — Kẹp chì + kiểm tra chất hàng

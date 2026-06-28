@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using Microsoft.OpenApi.Any;
@@ -14,6 +15,7 @@ using ColdChainX.API.Services;
 using ColdChainX.API.Swagger;
 using ColdChainX.API.Workers;
 using ColdChainX.Infrastructure.Hubs;
+using ColdChainX.Infrastructure.Persistence;
 using System.Threading.Channels;
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
@@ -32,9 +34,26 @@ builder.Services.AddSingleton(Channel.CreateUnbounded<TelemetryData>(new Unbound
     SingleWriter = false
 }));
 builder.Services.AddSingleton<RedisService>();
-builder.Services.AddHostedService<TelemetryMqttWorker>();
-builder.Services.AddHostedService<TelemetryProcessorWorker>();
-builder.Services.AddHostedService<InventoryAgingWorker>();
+
+if (configuration.GetValue("HostedWorkers:TelemetryMqtt", true))
+{
+    builder.Services.AddHostedService<TelemetryMqttWorker>();
+}
+
+if (configuration.GetValue("HostedWorkers:TelemetryProcessor", true))
+{
+    builder.Services.AddHostedService<TelemetryProcessorWorker>();
+}
+
+if (configuration.GetValue("HostedWorkers:IotWatchdog", true))
+{
+    builder.Services.AddHostedService<IotWatchdogWorker>();
+}
+
+if (configuration.GetValue("HostedWorkers:InventoryAging", true))
+{
+    builder.Services.AddHostedService<InventoryAgingWorker>();
+}
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -98,7 +117,14 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
-await app.Services.ApplyAuthSchemaCompatibilityPatchAsync(app.Logger);
+if (configuration.GetValue("Startup:ApplyDatabaseBootstrap", true))
+{
+    await app.Services.ApplyAuthSchemaCompatibilityPatchAsync(app.Logger);
+}
+else
+{
+    app.Logger.LogInformation("Database bootstrap skipped by Startup:ApplyDatabaseBootstrap=false.");
+}
 
 app.UseMiddleware<ExceptionMiddleware>();
 
@@ -148,7 +174,11 @@ app.MapGet("/", () => Results.Ok(new
 })).WithName("HealthCheck");
 
 app.MapControllers();
+
+
+
 app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapHub<ChatHub>("/hubs/chat");
+app.MapHub<MonitoringHub>("/hubs/monitoring");
 
 app.Run();
