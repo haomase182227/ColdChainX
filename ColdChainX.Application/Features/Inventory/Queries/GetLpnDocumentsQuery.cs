@@ -1,6 +1,10 @@
 using ColdChainX.Application.Interfaces;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace ColdChainX.Application.Features.Inventory.Queries;
 
@@ -79,7 +83,11 @@ public class GetLpnDocumentsQueryHandler : IRequestHandler<GetLpnDocumentsQuery,
         }
 
         // 5. ePOD (Proof of Delivery for the Order)
-        if (lpn.State == ColdChainX.Core.Enums.LpnState.RELEASED || lpn.State == ColdChainX.Core.Enums.LpnState.SHIPPING)
+        if (lpn.State == ColdChainX.Core.Enums.LpnState.RELEASED || 
+            lpn.State == ColdChainX.Core.Enums.LpnState.SHIPPING ||
+            lpn.State == ColdChainX.Core.Enums.LpnState.DELIVERED ||
+            lpn.State == ColdChainX.Core.Enums.LpnState.RETURN_PENDING ||
+            lpn.State == ColdChainX.Core.Enums.LpnState.DELIVERY_RETURNED)
         {
             docs.Add(new LpnDocumentDto
             {

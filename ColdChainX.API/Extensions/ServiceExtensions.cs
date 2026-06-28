@@ -13,6 +13,7 @@ using Microsoft.IdentityModel.Tokens;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Application.Mappings;
 using ColdChainX.Application.Services;
+using ColdChainX.API.Services;
 using ColdChainX.API.Workers;
 using ColdChainX.Core.Entities;
 using ColdChainX.Core.Interfaces;
@@ -97,6 +98,11 @@ namespace ColdChainX.API.Extensions
                 client.BaseAddress = new Uri("https://rsapi.goong.io/");
                 client.Timeout = TimeSpan.FromSeconds(20);
             });
+            services.AddHttpClient<IGoongMapService, GoongMapService>(client =>
+            {
+                client.BaseAddress = new Uri("https://rsapi.goong.io/");
+                client.Timeout = TimeSpan.FromSeconds(20);
+            });
             services.AddScoped<IFileService, FileService>();
             services.AddScoped<ComplianceRulesEngine>();
             services.AddScoped<IOrderService, OrderService>();
@@ -113,11 +119,21 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IInventoryAnalysisService, InventoryAnalysisService>();
             services.AddScoped<IIncidentReportService, IncidentReportService>();
             services.AddScoped<IClaimService, ClaimService>();
+            services.AddScoped<IDeliveryEventService, DeliveryEventService>();
+            services.AddScoped<IPaymentGatewayService, PayOsPaymentService>();
+
+
             services.AddScoped<IOutboundOrderService, OutboundOrderService>();
             services.AddScoped<IFleetManagementService, FleetManagementService>();
             services.AddScoped<IPdfGeneratorService, PdfGeneratorService>();
             services.AddScoped<IWarehouseFlowService, WarehouseFlowService>();
-            services.AddHostedService<FleetComplianceWorker>();
+            services.AddScoped<IColdChainMonitoringService, ColdChainMonitoringService>();
+            services.AddSingleton<IColdChainRiskService, ColdChainRiskService>();
+            services.AddScoped<IMqttCommandPublisher, MqttCommandPublisher>();
+            if (configuration.GetValue("HostedWorkers:FleetCompliance", true))
+            {
+                services.AddHostedService<FleetComplianceWorker>();
+            }
             
             // Dispatch and Load Planning
             services.AddHttpClient<ColdChainX.Infrastructure.Integration.GeminiLoadOptimizerClient>();
@@ -173,7 +189,8 @@ namespace ColdChainX.API.Extensions
 
                         if (!string.IsNullOrEmpty(accessToken)
                             && (path.StartsWithSegments(new PathString("/hubs/notifications"))
-                                || path.StartsWithSegments(new PathString("/hubs/chat"))))
+                                || path.StartsWithSegments(new PathString("/hubs/chat"))
+                                || path.StartsWithSegments(new PathString("/hubs/monitoring"))))
                         {
                             context.Token = accessToken;
                         }

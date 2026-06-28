@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -28,6 +28,7 @@ public class DispatchService : IDispatchService
     private readonly IWebHostEnvironment _environment;
     private readonly IHubContext<NotificationHub> _hubContext;
     private readonly IDriverAvailabilityService _driverAvailability;
+    private readonly IMqttCommandPublisher _mqttPublisher;
     private readonly ILogger<DispatchService> _logger;
 
     // Tên role điều phối viên
@@ -44,6 +45,7 @@ public class DispatchService : IDispatchService
         IWebHostEnvironment environment,
         IHubContext<NotificationHub> hubContext,
         IDriverAvailabilityService driverAvailability,
+        IMqttCommandPublisher mqttPublisher,
         ILogger<DispatchService> logger)
     {
         _context = context;
@@ -53,6 +55,7 @@ public class DispatchService : IDispatchService
         _environment = environment;
         _hubContext = hubContext;
         _driverAvailability = driverAvailability;
+        _mqttPublisher = mqttPublisher;
         _logger = logger;
     }
 
@@ -204,7 +207,7 @@ public class DispatchService : IDispatchService
                     TempCondition = l.Order?.TempCondition ?? "AMBIENT"
                 }).ToList();
 
-            return new RouteStop
+            return new StopDto
             {
                 Sequence               = s.Sequence,
                 LocationId             = s.LocationId,
@@ -244,11 +247,19 @@ public class DispatchService : IDispatchService
                 WeightUtilizationPct = Math.Round(totalWeight / vehicle.MaxWeight * 100, 1),
                 CbmUtilizationPct    = Math.Round(totalCbm / vehicle.MaxCbm * 100, 1)
             },
-            Route = new RouteInfo
+            RouteDetails = new RouteDetailsDto
             {
-                TotalDistanceKm = routeResult.TotalDistanceKm,
-                TotalStops      = routeStops.Count,
-                Stops           = routeStops
+                TotalDistanceKm = (double)routeResult.TotalDistanceKm,
+                TotalDurationMinutes = 0, // Auto-dispatch doesn't fetch full directions here
+                OverviewPolyline = "", 
+                OriginLat = originLocation.Latitude,
+                OriginLng = originLocation.Longitude,
+                OriginAddress = originLocation.Address,
+                DestinationLat = routeStops.LastOrDefault()?.Latitude ?? originLocation.Latitude,
+                DestinationLng = routeStops.LastOrDefault()?.Longitude ?? originLocation.Longitude,
+                DestinationAddress = routeStops.LastOrDefault()?.Address ?? originLocation.Address,
+                Stops = routeStops,
+                Steps = new List<StepDto>()
             },
             LoadPlan             = loadPlan,
             DispatchInstructions = dispatchInstructions,
@@ -653,39 +664,7 @@ public class DispatchService : IDispatchService
 
     private static double ToRad(double deg) => deg * Math.PI / 180.0;
 
-    /// <summary>
-    /// Decode encoded polyline (thuật toán Google/Goong) → danh sách toạ độ lat/lng.
-    /// Cho phép FE vẽ thẳng đường đi lên Goong Map mà không cần thư viện decode.
-    /// </summary>
-    private static List<RoutePathPoint> DecodePolyline(string? encoded)
-    {
-        var path = new List<RoutePathPoint>();
-        if (string.IsNullOrEmpty(encoded)) return path;
 
-        int index = 0, len = encoded.Length;
-        int lat = 0, lng = 0;
-
-        while (index < len)
-        {
-            int b, shift = 0, result = 0;
-            do { b = encoded[index++] - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
-            var dlat = (result & 1) != 0 ? ~(result >> 1) : (result >> 1);
-            lat += dlat;
-
-            shift = 0; result = 0;
-            do { b = encoded[index++] - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
-            var dlng = (result & 1) != 0 ? ~(result >> 1) : (result >> 1);
-            lng += dlng;
-
-            path.Add(new RoutePathPoint
-            {
-                Lat = lat / 100000m,
-                Lng = lng / 100000m
-            });
-        }
-
-        return path;
-    }
 
     // ── Internal result types ────────────────────────────────────────────────
 
@@ -965,7 +944,7 @@ public class DispatchService : IDispatchService
         var notifiedCount = 0;
 
         // 10. Build response
-        var routeStops = routeResult.StopSequence.Select(s => new RouteStop
+        var routeStops = routeResult.StopSequence.Select(s => new StopDto
         {
             Sequence = s.Sequence, LocationId = s.LocationId, Address = s.Address,
             Latitude = s.Latitude, Longitude = s.Longitude, DistanceFromPreviousKm = s.DistanceFromPreviousKm,
@@ -983,13 +962,36 @@ public class DispatchService : IDispatchService
             }).ToList()
         }).ToList();
 
-        var routeInfo = new RouteInfo 
-        { 
-            TotalDistanceKm = routeResult.TotalDistanceKm, 
-            TotalStops = routeStops.Count, 
-            OriginLat = originLocation.Latitude,
-            OriginLng = originLocation.Longitude,
-            Stops = routeStops 
+        var flatSteps = new List<StepDto>();
+        foreach (var leg in directionsResult.Legs)
+        {
+            foreach (var st in leg.Steps)
+            {
+                flatSteps.Add(new StepDto
+                {
+                    Instruction     = st.Instruction,
+                    DistanceKm      = st.DistanceKm,
+                    DurationSeconds = st.DurationSeconds,
+                    Maneuver        = st.Maneuver
+                });
+            }
+        }
+
+        var lastStop = routeResult.StopSequence.LastOrDefault();
+        
+        var routeDetails = new RouteDetailsDto
+        {
+            TotalDistanceKm    = (double)directionsResult.TotalDistanceKm,
+            TotalDurationMinutes = directionsResult.TotalDurationSeconds / 60,
+            OverviewPolyline   = directionsResult.OverviewPolyline ?? "",
+            OriginLat          = originLocation.Latitude,
+            OriginLng          = originLocation.Longitude,
+            OriginAddress      = originLocation.Address,
+            DestinationLat     = lastStop?.Latitude ?? originLocation.Latitude,
+            DestinationLng     = lastStop?.Longitude ?? originLocation.Longitude,
+            DestinationAddress = lastStop?.Address ?? originLocation.Address,
+            Stops              = routeStops,
+            Steps              = flatSteps
         };
 
         var dispatchInstructions = loadPlan.Select(li => new DispatchInstruction
@@ -1006,62 +1008,6 @@ public class DispatchService : IDispatchService
             Zone = li.Zone
         }).OrderBy(d => d.LoadOrder).ToList();
 
-        // 10b. Build RouteGuidance — gói sẵn cho FE vẽ Goong Map (marker + polyline + turn-by-turn)
-        var guidanceWaypoints = new List<RouteWaypoint>
-        {
-            new()
-            {
-                Sequence = 0,
-                Type     = "ORIGIN",
-                Lat      = originLocation.Latitude,
-                Lng      = originLocation.Longitude,
-                Address  = originLocation.Address,
-                LpnCount = 0
-            }
-        };
-        foreach (var s in routeResult.StopSequence)
-        {
-            var isLast = s.Sequence == routeResult.StopSequence.Count;
-            guidanceWaypoints.Add(new RouteWaypoint
-            {
-                Sequence = s.Sequence,
-                Type     = isLast ? "DESTINATION" : "STOP",
-                Lat      = s.Latitude,
-                Lng      = s.Longitude,
-                Address  = s.Address,
-                LpnCount = lpns.Count(l => l.Order?.DestLocation == s.LocationId)
-            });
-        }
-
-        var flatSteps = new List<NavigationStep>();
-        var stepNo = 1;
-        foreach (var leg in directionsResult.Legs)
-            foreach (var st in leg.Steps)
-                flatSteps.Add(new NavigationStep
-                {
-                    StepIndex       = stepNo++,
-                    Instruction     = st.Instruction,
-                    DistanceKm      = st.DistanceKm,
-                    DurationSeconds = st.DurationSeconds,
-                    Maneuver        = st.Maneuver
-                });
-
-        var lastStop = routeResult.StopSequence.Last();
-        var mapRoute = new RouteGuidance
-        {
-            OriginLat          = originLocation.Latitude,
-            OriginLng          = originLocation.Longitude,
-            OriginAddress      = originLocation.Address,
-            DestinationLat     = lastStop.Latitude,
-            DestinationLng     = lastStop.Longitude,
-            DestinationAddress = lastStop.Address,
-            TotalDistanceKm    = directionsResult.TotalDistanceKm,
-            TotalDurationMinutes = directionsResult.TotalDurationSeconds / 60,
-            OverviewPolyline   = directionsResult.OverviewPolyline,
-            Waypoints          = guidanceWaypoints,
-            Path               = DecodePolyline(directionsResult.OverviewPolyline),
-            Steps              = flatSteps
-        };
 
         var driverInfos = assignedDrivers.Select(ad =>
         {
@@ -1088,9 +1034,7 @@ public class DispatchService : IDispatchService
             Drivers = driverInfos,
             EstimatedDurationHours = estimatedDurationHours,
             SelectedLpns = lpns.Select(l => new LpnSummary { LpnId = l.LpnId, LpnCode = l.LpnCode, OrderId = l.OrderId, OrderTrackingCode = l.Order?.TrackingCode ?? string.Empty, ItemName = l.Order?.ItemName ?? string.Empty, Quantity = l.Quantity, WeightKg = l.ActualWeightKg, Cbm = l.ActualCbm, TempCondition = l.Order?.TempCondition ?? "AMBIENT" }).ToList(),
-            Route = routeInfo,
-            MapRoute = mapRoute,
-            Navigation = new NavigationInfo { TotalDistanceKm = directionsResult.TotalDistanceKm, TotalDurationMinutes = directionsResult.TotalDurationSeconds / 60, GoongRouteOverview = directionsResult.OverviewPolyline ?? "", Legs = directionsResult.Legs.Select((leg, idx) => new NavigationLeg { LegIndex = idx + 1, FromAddress = leg.StartAddress ?? "N/A", ToAddress = leg.EndAddress ?? "N/A", DistanceKm = leg.DistanceKm, DurationMinutes = leg.DurationSeconds / 60, Steps = leg.Steps.Select((step, sIdx) => new NavigationStep { StepIndex = sIdx + 1, Instruction = step.Instruction, DistanceKm = step.DistanceKm, DurationSeconds = step.DurationSeconds, Maneuver = step.Maneuver }).ToList() }).ToList() },
+            RouteDetails = routeDetails,
             LoadPlan = loadPlan,
             DispatchInstructions = dispatchInstructions,
             NotifiedCoordinators = notifiedCount,
@@ -1323,7 +1267,7 @@ public class DispatchService : IDispatchService
     //  API 3: IOT CHECK — Kiểm tra tín hiệu IoT xe
     // ═══════════════════════════════════════════════════════════════════════
 
-    public async Task<VehicleIoTStatus> CheckVehicleIoTAsync(Guid vehicleId)
+    public async Task<VehicleIoTStatus> CheckVehicleIoTAsync(Guid vehicleId, Guid tripId)
     {
         var vehicle = await _context.Vehicles.FindAsync(vehicleId)
             ?? throw new KeyNotFoundException("Không tìm thấy xe.");
@@ -1344,8 +1288,8 @@ public class DispatchService : IDispatchService
             };
         }
 
-        var now = DateTime.UtcNow;
         var deviceStatuses = new List<IoTDeviceStatus>();
+        bool hasOffline = false;
 
         foreach (var device in devices)
         {
@@ -1355,8 +1299,10 @@ public class DispatchService : IDispatchService
                 .OrderByDescending(t => t.Timestamp)
                 .FirstOrDefaultAsync();
 
-            var isOnline = device.LastPingTime.HasValue
-                        && (now - device.LastPingTime.Value).TotalMinutes < 10;
+            if (!device.IsOnline)
+            {
+                hasOffline = true;
+            }
 
             deviceStatuses.Add(new IoTDeviceStatus
             {
@@ -1364,7 +1310,7 @@ public class DispatchService : IDispatchService
                 BatteryLevel = device.BatteryLevel,
                 LastPingTime = device.LastPingTime,
                 Status = device.Status,
-                IsOnline = isOnline,
+                IsOnline = device.IsOnline,
                 LatestTelemetry = latestTelemetry == null ? null : new LatestTelemetry
                 {
                     Temperature = latestTelemetry.Temperature,
@@ -1375,10 +1321,39 @@ public class DispatchService : IDispatchService
             });
         }
 
-        var onlineCount = deviceStatuses.Count(d => d.IsOnline);
-        var overallStatus = onlineCount == devices.Count ? "ONLINE"
-                          : onlineCount > 0 ? "PARTIAL"
-                          : "OFFLINE";
+        var overallStatus = hasOffline ? "OFFLINE" : "ONLINE";
+
+        if (hasOffline)
+        {
+            // Nếu có thiết bị offline, cảnh báo tài xế
+            _logger.LogWarning("Vehicle {VehicleId} has offline IoT devices.", vehicleId);
+            try
+            {
+                await _hubContext.Clients.Group($"Vehicle_{vehicleId}").SendAsync("IotWarning", "Một số thiết bị IoT đang mất kết nối. Vui lòng kiểm tra lại nguồn điện.");
+            }
+            catch { }
+        }
+        else
+        {
+            // Tất cả đều online -> Cập nhật trip status và bật streaming
+            var trip = await _context.MasterTrips.FindAsync(tripId)
+                ?? throw new KeyNotFoundException("Không tìm thấy chuyến đi.");
+
+            if (trip.Status != "IN_TRANSIT" && trip.Status != "COMPLETED")
+            {
+                trip.Status = "IN_TRANSIT";
+                await _context.SaveChangesAsync();
+            }
+
+            // Gửi lệnh START_STREAMING qua MQTT bất chấp xe chưa chạy hay đã chạy (dùng làm Force Wake-up)
+            foreach (var device in devices)
+            {
+                if (!string.IsNullOrWhiteSpace(device.DeviceCode))
+                {
+                    await _mqttPublisher.StartStreamingAsync(device.DeviceCode, CancellationToken.None);
+                }
+            }
+        }
 
         return new VehicleIoTStatus
         {
@@ -1535,7 +1510,8 @@ public class DispatchService : IDispatchService
                 CreatedAt = DateTime.UtcNow,
                 UploadedBy = documentUploader
             });
-            trip.Status = "DISPATCHED";
+            trip.Status = "IN_TRANSIT";
+            trip.StartedAt ??= DateTime.UtcNow;
             if (trip.Vehicle != null)
                 trip.Vehicle.Status = "OnTrip";
             foreach (var td in trip.TripDrivers)

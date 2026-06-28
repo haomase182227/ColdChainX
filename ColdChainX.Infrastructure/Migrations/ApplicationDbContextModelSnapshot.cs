@@ -768,6 +768,16 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("checkin_time");
 
+                    b.Property<decimal?>("CodAmount")
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("cod_amount");
+
+                    b.Property<decimal?>("CodAmountPaid")
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("cod_amount_paid");
+
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp without time zone")
@@ -780,6 +790,15 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasDefaultValue(5)
                         .HasColumnName("delivery_rating");
 
+                    b.Property<DateTime?>("HandoverConfirmedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("handover_confirmed_at");
+
+                    b.Property<string>("HandoverPdfUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("handover_pdf_url");
+
                     b.Property<string>("Note")
                         .HasColumnType("text")
                         .HasColumnName("note");
@@ -787,6 +806,25 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.Property<Guid?>("OrderId")
                         .HasColumnType("uuid")
                         .HasColumnName("order_id");
+
+                    b.Property<DateTime?>("PaymentConfirmedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("payment_confirmed_at");
+
+                    b.Property<string>("PaymentEvidenceImageUrl")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("payment_evidence_image_url");
+
+                    b.Property<string>("PaymentMethod")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("payment_method");
+
+                    b.Property<string>("PaymentStatus")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("payment_status");
 
                     b.Property<string>("PdfUrl")
                         .HasMaxLength(255)
@@ -1565,6 +1603,14 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+                    b.Property<string>("DeviceCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("device_code");
+
+                    b.Property<bool>("IsOnline")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTime?>("LastPingTime")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("last_ping_time");
@@ -1584,6 +1630,10 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasName("iot_devices_pkey");
 
                     b.HasIndex("VehicleId");
+
+                    b.HasIndex(new[] { "DeviceCode" }, "uq_iot_devices_device_code")
+                        .IsUnique()
+                        .HasFilter("device_code IS NOT NULL");
 
                     b.ToTable("iot_devices", "public");
                 });
@@ -1779,6 +1829,133 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasDatabaseName("idx_lpns_warehouse_id");
 
                     b.ToTable("lpns", "public");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.LpnDeliveryConfirmation", b =>
+                {
+                    b.Property<Guid>("ConfirmationId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("confirmation_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime?>("CheckinAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("checkin_at");
+
+                    b.Property<decimal>("CodAmount")
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("cod_amount");
+
+                    b.Property<string>("CodPaymentMethod")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("cod_payment_method");
+
+                    b.Property<string>("CodReceiptImageUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("cod_receipt_image_url");
+
+                    b.Property<DateTime?>("CodVerifiedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("cod_verified_at");
+
+                    b.Property<Guid?>("CodVerifiedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("cod_verified_by");
+
+                    b.Property<DateTime>("ConfirmedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("confirmed_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<Guid>("ConfirmedByDriverId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("confirmed_by");
+
+                    b.Property<string>("EvidenceImageUrl")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("evidence_image_url");
+
+                    b.Property<bool>("IsCodVerified")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_cod_verified");
+
+                    b.Property<Guid>("LpnId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lpn_id");
+
+                    b.Property<string>("NewSealNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("new_seal_number");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_id");
+
+                    b.Property<string>("OutcomeType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("outcome_type");
+
+                    b.Property<string>("ReceiverName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("receiver_name");
+
+                    b.Property<string>("ReceiverPhone")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("receiver_phone");
+
+                    b.Property<decimal?>("RecordedTemperature")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)")
+                        .HasColumnName("recorded_temperature");
+
+                    b.Property<string>("RejectNote")
+                        .HasColumnType("text")
+                        .HasColumnName("reject_note");
+
+                    b.Property<string>("RejectReason")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("reject_reason");
+
+                    b.Property<string>("SignatureImageUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("signature_image_url");
+
+                    b.Property<Guid>("TripId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("trip_id");
+
+                    b.HasKey("ConfirmationId")
+                        .HasName("lpn_delivery_confirmations_pkey");
+
+                    b.HasIndex("CodVerifiedByUserId");
+
+                    b.HasIndex("ConfirmedByDriverId");
+
+                    b.HasIndex("LpnId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_lpn_delivery_confirmations_lpn_id");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("TripId");
+
+                    b.ToTable("lpn_delivery_confirmations", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.MaintenanceTicket", b =>
@@ -4187,6 +4364,53 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.Navigation("Trip");
 
                     b.Navigation("Warehouse");
+                });
+
+            modelBuilder.Entity("ColdChainX.Core.Entities.LpnDeliveryConfirmation", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.User", "CodVerifiedByUser")
+                        .WithMany()
+                        .HasForeignKey("CodVerifiedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_lpn_delivery_confirmations_verified_by");
+
+                    b.HasOne("ColdChainX.Core.Entities.User", "ConfirmedByDriver")
+                        .WithMany()
+                        .HasForeignKey("ConfirmedByDriverId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_lpn_delivery_confirmations_driver");
+
+                    b.HasOne("ColdChainX.Core.Entities.Lpn", "Lpn")
+                        .WithMany()
+                        .HasForeignKey("LpnId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_lpn_delivery_confirmations_lpn");
+
+                    b.HasOne("ColdChainX.Core.Entities.TransportOrder", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_lpn_delivery_confirmations_order");
+
+                    b.HasOne("ColdChainX.Core.Entities.MasterTrip", "Trip")
+                        .WithMany()
+                        .HasForeignKey("TripId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_lpn_delivery_confirmations_trip");
+
+                    b.Navigation("CodVerifiedByUser");
+
+                    b.Navigation("ConfirmedByDriver");
+
+                    b.Navigation("Lpn");
+
+                    b.Navigation("Order");
+
+                    b.Navigation("Trip");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.MaintenanceTicket", b =>

@@ -75,6 +75,18 @@ public sealed class RedisService : IAsyncDisposable
         return history;
     }
 
+    public async Task<TelemetryData?> GetLatestAsync(string deviceId)
+    {
+        var key = BuildHistoryKey(deviceId);
+        var value = await _redis.Value.GetDatabase().ListGetByIndexAsync(key, 0);
+        if (!value.HasValue)
+        {
+            return null;
+        }
+
+        return JsonSerializer.Deserialize<TelemetryData>(value!, JsonOptions);
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (!_redis.IsValueCreated)
