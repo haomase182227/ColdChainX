@@ -3,6 +3,7 @@ using System;
 using ColdChainX.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ColdChainX.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260626193020_AddWarehouseIdToLpn")]
+    partial class AddWarehouseIdToLpn
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1565,14 +1568,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("DeviceCode")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("device_code");
-
-                    b.Property<bool>("IsOnline")
-                        .HasColumnType("boolean");
-
                     b.Property<DateTime?>("LastPingTime")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("last_ping_time");
@@ -1592,10 +1587,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasName("iot_devices_pkey");
 
                     b.HasIndex("VehicleId");
-
-                    b.HasIndex(new[] { "DeviceCode" }, "uq_iot_devices_device_code")
-                        .IsUnique()
-                        .HasFilter("device_code IS NOT NULL");
 
                     b.ToTable("iot_devices", "public");
                 });

@@ -1,6 +1,7 @@
 using AutoMapper;
 using ColdChainX.Application.DTOs;
 using ColdChainX.Application.DTOs.Dispatch;
+using ColdChainX.Application.Features.Inventory.DTOs;
 using ColdChainX.Core.Entities;
 
 namespace ColdChainX.Application.Mappings
@@ -42,6 +43,17 @@ namespace ColdChainX.Application.Mappings
                 .ForMember(d => d.TotalOrderCbm, o => o.Ignore())
                 .ForMember(d => d.WeightUtilizationPct, o => o.Ignore())
                 .ForMember(d => d.CbmUtilizationPct, o => o.Ignore());
+
+            // LPN inventory projection — includes the warehouse the LPN was put away into.
+            // (Queries use manual projections; this map documents the shape and is available
+            //  for any consumer that prefers AutoMapper.)
+            CreateMap<Lpn, LpnDto>()
+                .ForMember(d => d.ItemName, o => o.MapFrom(s => s.Order != null ? s.Order.ItemName : null))
+                .ForMember(d => d.ExpectedWeightKg, o => o.MapFrom(s => s.Order != null ? s.Order.ExpectedWeightKg : 0))
+                .ForMember(d => d.WarehouseName, o => o.MapFrom(s => s.Warehouse != null ? s.Warehouse.WarehouseName : null))
+                .ForMember(d => d.Condition, o => o.MapFrom(s => s.DiscrepancyReason))
+                .ForMember(d => d.State, o => o.MapFrom(s => s.State.ToString()))
+                .ForMember(d => d.BatchNumber, o => o.Ignore());
         }
     }
 }

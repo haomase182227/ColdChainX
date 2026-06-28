@@ -2237,6 +2237,7 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
 
             entity.Property(e => e.OrderId).HasColumnName("order_id");
             entity.Property(e => e.CustomerId).HasColumnName("customer_id");
+            entity.Property(e => e.WarehouseId).HasColumnName("warehouse_id");
             entity.Property(e => e.RouteId).HasColumnName("route_id");
             entity.Property(e => e.TripId).HasColumnName("trip_id");
 
@@ -2271,6 +2272,7 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.HasIndex(e => e.StorageLocation).HasDatabaseName("idx_lpns_storage_location");
             entity.HasIndex(e => e.State).HasDatabaseName("idx_lpns_state");
             entity.HasIndex(e => e.OrderId).HasDatabaseName("idx_lpns_order_id");
+            entity.HasIndex(e => e.WarehouseId).HasDatabaseName("idx_lpns_warehouse_id");
 
             entity.HasOne(e => e.Order).WithMany()
                 .HasForeignKey(e => e.OrderId)
@@ -2291,6 +2293,11 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasForeignKey(e => e.TripId)
                 .OnDelete(DeleteBehavior.SetNull)
                 .HasConstraintName("fk_lpns_trip");
+
+            entity.HasOne(e => e.Warehouse).WithMany(w => w.Lpns)
+                .HasForeignKey(e => e.WarehouseId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_lpns_warehouse");
         });
 
         modelBuilder.Entity<PenaltyBill>(entity =>

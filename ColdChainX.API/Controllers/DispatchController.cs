@@ -166,18 +166,46 @@ public class DispatchController : ControllerBase
     }
 
     /// <summary>
+    /// [Lookup] Danh sách kho hiện có — dùng để chọn kho trước khi ghép chuyến (manual-dispatch).
+    /// </summary>
+    [HttpGet("lookup/warehouses")]
+    [ProducesResponseType(typeof(object), 200)]
+    public async Task<IActionResult> LookupWarehouses()
+    {
+        var items = await _db.Warehouses
+            .OrderBy(w => w.WarehouseName)
+            .Select(w => new
+            {
+                w.WarehouseId,
+                w.WarehouseCode,
+                w.WarehouseName,
+                w.Address,
+                Label = $"{w.WarehouseName} ({w.WarehouseCode})"
+            })
+            .ToListAsync();
+
+        return Ok(new { Success = true, Count = items.Count, Data = items });
+    }
+
+    /// <summary>
     /// [Lookup] Danh sách LPN đang ở trạng thái IN_STOCK — dùng để chọn LPN cho manual-dispatch.
     /// </summary>
+    /// <remarks>
+    /// Truyền <paramref name="warehouseId"/> để chỉ lấy các LPN thuộc kho đã chọn
+    /// (Lpn.WarehouseId == warehouseId). Đây là bước bắt buộc của luồng manual-dispatch:
+    /// người dùng chọn kho trước, sau đó chỉ thấy LPN của kho đó.
+    /// </remarks>
     [HttpGet("lookup/lpns-ready")]
     [ProducesResponseType(typeof(object), 200)]
-    public async Task<IActionResult> LookupLpnsReady()
+    public async Task<IActionResult> LookupLpnsReady([FromQuery] Guid? warehouseId)
     {
         var rawLpns = await (from l in _db.Lpns
                              join o in _db.TransportOrders on l.OrderId equals o.OrderId
-                             join w in _db.Warehouses on l.Receipt.WarehouseId equals w.WarehouseId
+                             join w in _db.Warehouses on l.WarehouseId equals w.WarehouseId
                              join c in _db.Customers on o.CustomerId equals c.CustomerId into cg
                              from cust in cg.DefaultIfEmpty()
                              where l.State == LpnState.IN_STOCK
+                                && (warehouseId == null || l.WarehouseId == warehouseId)
                              select new
                              {
                                  l.LpnId,
@@ -221,6 +249,8 @@ public class DispatchController : ControllerBase
     /// TRANG THAI LPN: IN_STOCK → ALLOCATED
     ///
     /// Dieu kien:
+    ///   - Phai chon Kho (WarehouseId) truoc; chi cac LPN thuoc kho do moi duoc ghep chuyen
+    ///   - Tat ca LPN phai cung mot kho — khong duoc tron LPN tu nhieu kho khac nhau
     ///   - Cac LPN duoc chon phai o trang thai IN_STOCK
     ///   - Xe phai ACTIVE va chua duoc gan chuyen nao
     ///   - Tai xe phai co bang lai con han
@@ -246,6 +276,10 @@ public class DispatchController : ControllerBase
 
         if (form.PlannedStartTime >= form.PlannedEndTime)
             return BadRequest(new { Success = false, Error = "PlannedStartTime phải nhỏ hơn PlannedEndTime." });
+
+        // Bắt buộc chọn kho trước — chỉ các LPN thuộc kho này mới được ghép chuyến.
+        if (!Guid.TryParse(ExtractGuid(form.WarehouseId), out var selectedWarehouseId) || selectedWarehouseId == Guid.Empty)
+            return BadRequest(new { Success = false, Error = "Vui lòng chọn kho (WarehouseId) trước khi ghép chuyến." });
 
         // Tài xế: 1–2 người, gán theo chuyến qua TripDriver
         var driverIds = (form.DriverIds ?? new List<string>())
@@ -285,6 +319,7 @@ public class DispatchController : ControllerBase
 
         var request = new ManualDispatchRequest
         {
+            WarehouseId = selectedWarehouseId,
             LpnIds = parsedLpnIds,
             VehicleId = Guid.Parse(ExtractGuid(form.VehicleId)),
             DriverIds = driverIds,

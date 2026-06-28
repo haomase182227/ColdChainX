@@ -711,6 +711,19 @@ public class DispatchService : IDispatchService
         if (lpns.Any(l => l.State != LpnState.IN_STOCK))
             throw new InvalidOperationException("Chỉ được ghép chuyến các LPN có trạng thái IN_STOCK.");
 
+        // 2b. Ràng buộc kho — phải chọn kho trước, và mọi LPN phải cùng thuộc kho đã chọn.
+        // Không cho phép trộn LPN từ nhiều kho khác nhau vào một chuyến.
+        if (request.WarehouseId == Guid.Empty)
+            throw new InvalidOperationException("Vui lòng chọn kho (WarehouseId) trước khi ghép chuyến.");
+
+        var lpnsNotInWarehouse = lpns
+            .Where(l => l.WarehouseId != request.WarehouseId)
+            .ToList();
+        if (lpnsNotInWarehouse.Any())
+            throw new InvalidOperationException(
+                $"Chỉ được ghép chuyến các LPN cùng thuộc kho đã chọn. " +
+                $"Các LPN sau không thuộc kho này (hoặc chưa được putaway vào kho): " +
+                $"{string.Join(", ", lpnsNotInWarehouse.Select(l => l.LpnCode))}.");
 
         var orders = lpns
             .GroupBy(l => l.OrderId)

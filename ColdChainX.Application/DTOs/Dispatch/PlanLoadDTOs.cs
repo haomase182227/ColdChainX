@@ -184,7 +184,10 @@ public class DispatchInstruction
 /// </summary>
 public class ManualDispatchRequest
 {
-    /// <summary>Danh sách LpnId do người dùng chọn (IN_STOCK).</summary>
+    /// <summary>Kho được chọn — chỉ các LPN thuộc kho này mới được ghép chuyến.</summary>
+    public Guid WarehouseId { get; set; }
+
+    /// <summary>Danh sách LpnId do người dùng chọn (IN_STOCK, cùng một kho).</summary>
     public List<Guid> LpnIds { get; set; } = new();
 
     /// <summary>VehicleId do người dùng chọn (mỗi chuyến đúng 1 xe).</summary>
@@ -206,6 +209,9 @@ public class ManualDispatchRequest
 /// <summary>Form request cho manual-dispatch endpoint (multipart/form-data).</summary>
 public class ManualDispatchFormRequest
 {
+    /// <summary>Kho được chọn (WarehouseId, có thể kèm hậu tố ":label"). Bắt buộc chọn trước.</summary>
+    public string WarehouseId { get; set; } = string.Empty;
+
     public string VehicleId { get; set; } = string.Empty;
 
     /// <summary>1–2 tài xế được gán cho chuyến (DriverId, có thể kèm hậu tố ":label").</summary>
