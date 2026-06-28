@@ -61,6 +61,17 @@ public class PayOsPaymentService : IPaymentGatewayService
             CancelUrl = _cancelUrl
         };
 
+        if (_checksumKey.Contains("REPLACE_ME"))
+        {
+            // Mock fallback for local development/testing when keys are placeholder values
+            return new CreateQrResult
+            {
+                CheckoutUrl = $"https://checkout-mock.payos.vn/payment/{orderCode}",
+                QrCodeUrl = $"https://img.vietqr.io/image/vietcombank-1039812355-compact.png?amount={amount}&addInfo=ColdChainX%20Order%20{orderCode}&accountName=TRAN%20LE%20SI%20QUYNH",
+                OrderCode = orderCode
+            };
+        }
+
         // PayOS v2.1.0 CreateAsync accepts CreatePaymentLinkRequest directly (no CancellationToken overload)
         var response = await _payOsClient.PaymentRequests.CreateAsync(paymentRequest);
 
