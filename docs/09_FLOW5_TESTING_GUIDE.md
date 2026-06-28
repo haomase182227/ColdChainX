@@ -103,6 +103,28 @@ Khách hàng nhận **LPN 1** và từ chối **LPN 2** (do bị móp rách vỏ
   ```
 * **Hành động hệ thống:** Ghi nhận tiền thành công, chuyển trạng thái ePOD thành `PAID` và trạng thái đơn hàng thành `PARTIALLY_DELIVERED`, xuất hóa đơn ePOD PDF hoàn chỉnh và bắn tín hiệu qua SignalR.
 
+> [!IMPORTANT]
+> **LƯU Ý KHI DEPLOY (HỆ THỐNG THANH TOÁN TỰ ĐỘNG KHÔNG CẦN GIẢ LẬP):**
+> 
+> Khi ứng dụng được deploy lên môi trường Production/Staging (có tên miền public dạng HTTPS, ví dụ: `https://api.coldchainx.com`), luồng thanh toán QR sẽ chạy hoàn toàn **tự động** thông qua PayOS Webhook mà **không cần** thực hiện Bước 3.1 giả lập bằng tay nữa.
+>
+> **Các bước cấu hình để kích hoạt thanh toán tự động:**
+> 1. **Cấu hình Webhook trên PayOS Portal**:
+>    - Truy cập trang quản trị [PayOS Business](https://business.payos.vn).
+>    - Vào phần **Cấu hình kênh thanh toán** -> **Cài đặt Webhook** (hoặc Webhook Settings).
+>    - Nhập địa chỉ webhook của server đã deploy: `https://<DOMAIN_CỦA_BẠN>/api/payments/bank-webhook`.
+>    - Nhấn lưu. PayOS sẽ tự động gửi một request test để kiểm tra xem server có hoạt động và trả về HTTP 200 hay không.
+> 2. **Cập nhật cấu hình Credentials**:
+>    - Đảm bảo file cấu hình ứng dụng (`appsettings.json` hoặc Environment Variables trên server deploy) đã điền đúng các thông tin:
+>      - `PayOS:ClientId`
+>      - `PayOS:ApiKey`
+>      - `PayOS:ChecksumKey`
+>      (Trùng khớp với tài khoản PayOS nơi bạn cấu hình Webhook URL ở bước trên).
+> 3. **Cơ chế hoạt động tự động**:
+>    - Khi khách hàng quét mã VietQR và thực hiện chuyển khoản thành công.
+>    - Hệ thống PayOS ghi nhận giao dịch và tự động gọi (POST) về endpoint `/api/payments/bank-webhook` trên server của bạn.
+>    - Server tự động xác thực chữ ký bảo mật (`x-payos-signature`) của request, cập nhật trạng thái đơn hàng sang `DELIVERED`/`PARTIALLY_DELIVERED`, hoàn tất ePOD và gửi SignalR thông báo theo thời gian thực tới tài xế/dispatcher mà không cần bất kỳ sự can thiệp thủ công nào.
+
 ---
 
 ### 🚚 BƯỚC 4: Rời Điểm Giao Hàng & Kẹp Chì Mới
