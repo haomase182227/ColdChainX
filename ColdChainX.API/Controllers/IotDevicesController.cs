@@ -87,8 +87,8 @@ public sealed class IotDevicesController : ControllerBase
             DeviceId = Guid.NewGuid(),
             DeviceCode = request.DeviceCode.Trim(),
             VehicleId = request.VehicleId,
-            BatteryLevel = request.BatteryLevel ?? 100,
-            Status = string.IsNullOrWhiteSpace(request.Status) ? "INACTIVE" : request.Status.Trim(),
+            BatteryLevel = 100,
+            Status = "Available",
             CreatedAt = DateTime.UtcNow
         };
 
@@ -128,9 +128,6 @@ public sealed class IotDevicesController : ControllerBase
             device.VehicleId = null;
         }
 
-        if (request.BatteryLevel.HasValue)
-            device.BatteryLevel = request.BatteryLevel.Value;
-
         if (!string.IsNullOrWhiteSpace(request.Status))
             device.Status = request.Status.Trim();
 
@@ -157,8 +154,6 @@ public sealed class CreateIotDeviceRequest
 {
     public string DeviceCode { get; set; } = string.Empty;
     public Guid? VehicleId { get; set; }
-    public int? BatteryLevel { get; set; }
-    public string? Status { get; set; }
 }
 
 public sealed class UpdateIotDeviceRequest
@@ -166,6 +161,5 @@ public sealed class UpdateIotDeviceRequest
     public string? DeviceCode { get; set; }
     public Guid? VehicleId { get; set; }
     public bool RemoveVehicle { get; set; }
-    public int? BatteryLevel { get; set; }
     public string? Status { get; set; }
 }

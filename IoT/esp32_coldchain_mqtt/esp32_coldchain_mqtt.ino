@@ -1,6 +1,8 @@
-#define TINY_GSM_MODEM_SIM7600 // Dùng profile SIM7600 cho mạch SIMCOM A7680C
+#define TINY_GSM_MODEM_BG96 // Profile chuẩn cho Quectel EG800K
 #define TINY_GSM_RX_BUFFER 1024
 
+#include <WiFi.h>
+#include <ArduinoHttpClient.h>
 #include <TinyGsmClient.h>
 #include <PubSubClient.h>
 #include <OneWire.h>
@@ -14,10 +16,11 @@
 #define DS18B20_PIN             13 
 #define SIREN_PIN               25
 
-// ===== CẤU HÌNH NHÀ MẠNG 4G VIETTEL =====
-const char apn[]      = "v-internet"; 
-const char gprsUser[] = "";
-const char gprsPass[] = "";
+// ===== CẤU HÌNH API & NHÀ MẠNG =====
+const char* HERE_API_KEY = "iAy6vvB_FN35Lsa7gTo6E-CuaokXx7MqSCXBW4Xg8sk";
+const char apn[]         = "v-internet";
+const char gprsUser[]    = "";
+const char gprsPass[]    = "";
 
 // ===== CẤU HÌNH MQTT BROKER =====
 const char* MQTT_HOST = "coldchainx-mqtt-demo.hycub5daehamhke8.southeastasia.azurecontainer.io";
@@ -25,192 +28,365 @@ const uint16_t MQTT_PORT = 1883;
 const char* MQTT_USERNAME = "esp32user";
 const char* MQTT_PASSWORD = "123456";
 
-// ===== THÔNG SỐ THIẾT BỊ =====
+// ===== THÔNG SỐ THIẾT BỊ & CHU KỲ =====
 const char* DEVICE_ID = "ESP32-COLDCHAIN-001";
-const uint32_t TELEMETRY_INTERVAL_MS = 15000; // 15 giây gửi nhiệt độ 1 lần
-const uint32_t GPS_INTERVAL_MS = 120000;      // 2 phút (120s) lấy GPS 1 lần
-const uint32_t SIREN_DURATION_MS = 10000;     // 10 giây bật còi khi có cảnh báo
+const uint32_t TELEMETRY_INTERVAL_MS = 90000;   // 1 phút 30 giây gửi 1 lần (LUÔN GỬI BẤT KỂ DỮ LIỆU CÓ ĐỔI HAY KHÔNG)
+const uint32_t GPS_INTERVAL_MS = 120000;      // 2 phút quét tọa độ 1 lần (giãn ra cho đỡ tốn pin/data)
+const uint32_t HEARTBEAT_INTERVAL_MS = 240000; // 4 phút ép gửi điểm danh 1 lần dù không có gì thay đổi
+const uint32_t SIREN_DURATION_MS = 10000;
 const uint8_t MQTT_PUBLISH_QOS = 1;
 
-// Khởi tạo các đối tượng
+// ===== KHỞI TẠO ĐỐI TƯỢNG =====
+// ===== KHỞI TẠO ĐỐI TƯỢNG =====
 HardwareSerial SerialAT(2);
 TinyGsm modem(SerialAT);
-TinyGsmClient gsmClient(modem);
+
+// ÉP MQTT SỬ DỤNG SOCKET 0
+TinyGsmClient gsmClient(modem, 0); 
 PubSubClient mqttClient(gsmClient);
+
 OneWire oneWire(DS18B20_PIN);
 DallasTemperature sensors(&oneWire);
 
-// Biến lưu trữ trạng thái
+// ===== BIẾN TRẠNG THÁI TOÀN CỤC =====
 uint32_t lastTelemetryMs = 0;
 uint32_t lastGpsMs = 0;
-uint16_t nextPacketId = 1;
+uint32_t lastHeartbeatMs = 0; 
 bool doorOpen = false;
 bool sirenActive = false;
 uint32_t sirenUntilMs = 0;
+bool is_streaming = false;
 
-// Biến lưu GPS hiện tại
+// Tọa độ hiện tại
 float currentLat = 0.0;
 float currentLon = 0.0;
+float lastSentTemp = -999.0;
+float lastSentLat = -999.0;
 
 // Khai báo hàm
 void connect4G();
 void connectMqtt();
-void publishTelemetry();
-void updateLBSLocation();
+void publishTelemetry(float currentTemp);
+void updateHybridLocation();
 String getIsoTimestamp();
 void handleMqttMessage(char* topic, byte* payload, unsigned int length);
 void handleCommandPayload(const uint8_t* payload, size_t length);
 void activateSiren(uint32_t durationMs);
 void updateSiren();
-bool publishMqttQos1(const char* topic, const uint8_t* payload, size_t payloadLength);
-bool waitForPubAck(uint16_t packetId, uint32_t timeoutMs);
-bool readMqttRemainingLength(uint32_t& remainingLength, uint32_t timeoutMs);
-bool readMqttByte(uint8_t& value, uint32_t timeoutMs);
-bool readMqttBytes(uint8_t* buffer, size_t length, uint32_t timeoutMs);
-bool writeMqttRemainingLength(uint32_t remainingLength);
-bool writeAll(const uint8_t* data, size_t length);
-bool processIncomingPublishPacket(uint8_t fixedHeader, uint32_t remainingLength, uint32_t timeoutMs);
-bool sendPubAck(uint16_t packetId);
 
 void setup() {
   Serial.begin(115200);
   delay(500);
 
-  Serial.println("\n--- KHỞI ĐỘNG HỆ THỐNG COLD CHAIN 4G ---");
+  // KHỞI TẠO WI-FI NGAY TỪ ĐẦU ĐỂ KHÔNG BỊ TREO LÚC QUÉT
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect();
+  delay(100);
+
+  Serial.println("\n--- HỆ THỐNG COLD CHAIN AIoT (3-LAYER HYBRID) ---");
   
-  // Khởi động cảm biến nhiệt độ
   sensors.begin();
   pinMode(SIREN_PIN, OUTPUT);
   digitalWrite(SIREN_PIN, LOW);
 
-  // Khởi động giao tiếp với Module SIM
   SerialAT.begin(MCU_SIM_BAUDRATE, SERIAL_8N1, MCU_SIM_RX_PIN, MCU_SIM_TX_PIN);
   delay(3000);
 
-  Serial.println("Đang khởi tạo Module SIM...");
+  Serial.println("Đang khởi tạo Module Quectel...");
   modem.restart();
   
-  // Kết nối mạng 4G
   connect4G();
 
-  // Cấu hình MQTT
+  Serial.println("Đang kích hoạt GNSS (Vệ tinh)...");
+  modem.sendAT("+QGPS=1");
+  modem.waitResponse(1000); 
+
   mqttClient.setServer(MQTT_HOST, MQTT_PORT);
   mqttClient.setCallback(handleMqttMessage);
   mqttClient.setKeepAlive(90);
-  mqttClient.setSocketTimeout(10);
   
-  // Cập nhật GPS lần đầu tiên ngay khi khởi động
-  updateLBSLocation();
+  // MỞ RỘNG BỘ ĐỆM ĐỂ TRÁNH LỖI OVERFLOW MQTT
+  mqttClient.setBufferSize(512);
+
+  // KẾT NỐI MQTT TRƯỚC
+  connectMqtt();
+
+  // ĐỊNH VỊ SAU KHI ĐÃ ONLINE
+  updateHybridLocation();
 }
 
 void loop() {
-  // 1. Giữ kết nối mạng 4G
   if (!modem.isNetworkConnected() || !modem.isGprsConnected()) {
     connect4G();
   }
 
-  // 2. Giữ kết nối MQTT Broker
   if (!mqttClient.connected()) {
     connectMqtt();
   }
 
   mqttClient.loop();
   updateSiren();
+  
   const uint32_t now = millis();
 
-  // 3. Cập nhật tọa độ LBS mỗi 2 phút
+  // 1. Cập nhật tọa độ định kỳ
   if (now - lastGpsMs >= GPS_INTERVAL_MS) {
     lastGpsMs = now;
-    updateLBSLocation();
+    updateHybridLocation(); 
   }
 
-  // 4. Gửi dữ liệu Telemetry mỗi 15 giây
+  // 2. Kiểm tra & Gửi Telemetry
   if (now - lastTelemetryMs >= TELEMETRY_INTERVAL_MS) {
     lastTelemetryMs = now;
-    publishTelemetry();
-    doorOpen = !doorOpen; // Mô phỏng trạng thái đóng mở cửa cho demo
+
+    if (is_streaming) {
+      sensors.requestTemperatures();
+      float currentTemp = sensors.getTempCByIndex(0);
+
+      if (currentTemp == DEVICE_DISCONNECTED_C) {
+        Serial.println("Lỗi: Mất kết nối cảm biến DS18B20!");
+        return;
+      }
+
+      // Luôn luôn gửi dữ liệu lên MQTT mỗi chu kỳ (90s)
+      publishTelemetry(currentTemp); 
+      lastSentTemp = currentTemp;    
+      lastSentLat = currentLat;
+      lastHeartbeatMs = now;
+    } else {
+      Serial.println("[Zzz] Đang chế độ chờ... (Streaming OFF)");
+    }
   }
 }
 
-// ================= CÁC HÀM XỬ LÝ CHÍNH =================
+// ==========================================
+// HÀM ĐỊNH VỊ 3 LỚP ĐÃ TỐI ƯU
+// ==========================================
+void updateHybridLocation() {
+  Serial.println("\n--- ĐANG ĐỊNH VỊ (GPS -> Wi-Fi -> LBS) ---");
+  
+  // =====================================
+  // [LỚP 1]: GPS VỆ TINH
+  // =====================================
+  modem.sendAT("+QGPSLOC=0");
+  int res = modem.waitResponse(2000, "+QGPSLOC: ", "ERROR");
+
+  if (res == 1) { 
+    String timeStr = modem.stream.readStringUntil(',');
+    String latStr = modem.stream.readStringUntil(',');  
+    String lonStr = modem.stream.readStringUntil(',');  
+    modem.waitResponse(); 
+
+    int dotLat = latStr.indexOf('.');
+    if(dotLat >= 2) {
+      currentLat = latStr.substring(0, dotLat - 2).toFloat() + (latStr.substring(dotLat - 2, latStr.length() - 1).toFloat() / 60.0);
+      if (latStr.endsWith("S")) currentLat = -currentLat;
+    }
+    int dotLon = lonStr.indexOf('.');
+    if(dotLon >= 2) {
+      currentLon = lonStr.substring(0, dotLon - 2).toFloat() + (lonStr.substring(dotLon - 2, lonStr.length() - 1).toFloat() / 60.0);
+      if (lonStr.endsWith("W")) currentLon = -currentLon;
+    }
+    Serial.printf("=> [GPS] Thành công: %.6f, %.6f\n", currentLat, currentLon);
+    return;
+  }
+
+  // =====================================
+  // [LỚP 2]: WI-FI HERE API
+  // =====================================
+  Serial.println("=> [GPS] Mất sóng. Đang quét Wi-Fi...");
+  
+  // Dùng chế độ quét bất đồng bộ để chống kẹt driver
+  int n = WiFi.scanNetworks(false, true); 
+  
+  Serial.printf("=> [DEBUG Wi-Fi] Mã trả về từ lệnh quét (n) = %d\n", n);
+  
+  if (n < 0) {
+      Serial.println("=> [LỖI] Chip Wi-Fi của ESP32 báo lỗi (Có thể chưa bật mode STA hoặc lỗi Anten)!");
+  } else if (n >= 2) { 
+    Serial.println("=> [Wi-Fi] Bắt đầu lấy tọa độ từ HERE API...");
+    String payload = "{\"wlan\":[";
+    int limit = (n > 2) ? 2 : n;
+    for (int i = 0; i < limit; ++i) { 
+      payload += "{\"mac\":\"" + WiFi.BSSIDstr(i) + "\"}";
+      if (i < limit - 1) payload += ",";
+    }
+    payload += "]}";
+
+    // ÉP HTTPS SỬ DỤNG SOCKET 1 ĐỂ TRÁNH XUNG ĐỘT VỚI MQTT
+    TinyGsmClientSecure secureClient(modem, 1); 
+    HttpClient http(secureClient, "pos.ls.hereapi.com", 443);
+    
+    String url = String("/positioning/v1/locate?apiKey=") + HERE_API_KEY;
+    http.beginRequest();
+    http.post(url);
+    http.sendHeader("Content-Type", "application/json");
+    http.sendHeader("Content-Length", payload.length());
+    http.beginBody();
+    http.print(payload);
+    http.endRequest();
+    
+    int statusCode = http.responseStatusCode();
+    Serial.printf("=> [DEBUG HERE API] HTTP Status Code = %d\n", statusCode);
+
+    if (statusCode == 200) {
+      StaticJsonDocument<512> doc;
+      deserializeJson(doc, http.responseBody());
+      currentLat = doc["location"]["lat"];
+      currentLon = doc["location"]["lng"];
+      Serial.printf("=> [Wi-Fi HERE] Thành công (Sai số %dm): %.6f, %.6f\n", (int)doc["location"]["accuracy"], currentLat, currentLon);
+      
+      http.stop();
+      secureClient.stop(); 
+      delay(3000); 
+      WiFi.scanDelete();
+      return;
+    } else {
+      Serial.println("=> [LỖI] Server HERE từ chối (Sai Key hoặc cú pháp JSON).");
+      Serial.println(http.responseBody());
+    }
+    
+    http.stop();
+    secureClient.stop(); 
+    delay(3000); 
+  } else {
+      Serial.println("=> [Wi-Fi] Thất bại do không đủ 2 mạng (chỉ tìm thấy 0 hoặc 1 mạng).");
+  }
+  WiFi.scanDelete();
+
+  // =====================================
+  // [LỚP 3]: LBS NHÀ MẠNG
+  // =====================================
+  Serial.println("=> [Wi-Fi] Thất bại. Gọi LBS nhà mạng...");
+  
+  // Kiểm tra xem PDP Context đã được kích hoạt chưa
+  modem.sendAT("+QIACT?");
+  Serial.print("=> [DEBUG LBS] Trạng thái Context: ");
+  modem.waitResponse(2000);
+
+  // Ép LBS dùng chung Context 1 với MQTT
+  modem.sendAT("+QLBSCFG=\"contextid\",1");
+  modem.waitResponse(1000); 
+
+  Serial.println("=> [DEBUG LBS] Đang gửi lệnh AT+QLBS (Timeout 30s)...");
+  modem.sendAT("+QLBS");
+  
+  // Chờ phản hồi, bắt thêm cả chữ ERROR để in ra. LBS có thể mất tới 30 giây!
+  int lbsRes = modem.waitResponse(30000, "+QLBS: 0,", "ERROR", "+CME ERROR:");
+  
+  if (lbsRes == 1) {
+    currentLat = modem.stream.readStringUntil(',').toFloat();
+    currentLon = modem.stream.readStringUntil(',').toFloat();
+    modem.waitResponse();
+    Serial.printf("=> [LBS] Thành công: %.6f, %.6f\n", currentLat, currentLon);
+  } else if (lbsRes == 2) {
+    Serial.println("=> [LBS] Lỗi: Module trả về chữ ERROR (Có thể EG800K chưa cấu hình Server LBS mặc định).");
+  } else if (lbsRes == 3) {
+    Serial.println("=> [LBS] Lỗi: +CME ERROR (Lỗi viễn thông cấp thấp).");
+  } else {
+    Serial.println("=> [LBS] Thất bại hoàn toàn (Timeout). Giữ tọa độ cũ.");
+  }
+}
+
+// ==========================================
+// CÁC HÀM CÒN LẠI (GIỮ NGUYÊN)
+// ==========================================
+void publishTelemetry(float currentTemp) {
+  StaticJsonDocument<256> doc;
+  doc["DeviceId"] = DEVICE_ID;
+  doc["TempC"] = roundf(currentTemp * 10.0f) / 10.0f;
+  doc["DoorOpen"] = doorOpen; 
+  doc["Lat"] = currentLat;
+  doc["Lon"] = currentLon;
+  doc["Timestamp"] = getIsoTimestamp();
+
+  char payload[256];
+  serializeJson(doc, payload, sizeof(payload));
+
+  char dataTopic[96];
+  snprintf(dataTopic, sizeof(dataTopic), "telemetry/coldchain/%s/data", DEVICE_ID);
+  
+  bool ok = mqttClient.publish(dataTopic, payload);
+  Serial.printf("[DATA SENT] %s | Topic: %s | Payload: %s\n", ok ? "OK" : "FAILED", dataTopic, payload);
+}
 
 void connect4G() {
   Serial.print("Đang chờ mạng di động...");
   if (!modem.waitForNetwork()) {
-    Serial.println(" Thất bại. Đang thử lại...");
-    delay(5000);
-    return;
+    Serial.println(" Thất bại. Thử lại...");
+    delay(5000); return;
   }
   Serial.println(" Đã nhận sóng!");
-
-  Serial.print("Đang kết nối 4G (APN: "); Serial.print(apn); Serial.print(")...");
+  Serial.print("Đang kết nối 4G...");
+  
   if (!modem.gprsConnect(apn, gprsUser, gprsPass)) {
-    Serial.println(" Thất bại. Đang thử lại...");
-    delay(5000);
-    return;
+    Serial.println(" Thất bại. Thử lại...");
+    delay(5000); return;
   }
   Serial.println(" KẾT NỐI INTERNET THÀNH CÔNG!");
 }
 
 void connectMqtt() {
+  String clientId = String(DEVICE_ID) + String(random(0xffff), HEX);
+  char cmdTopic[96];
+  snprintf(cmdTopic, sizeof(cmdTopic), "command/coldchain/%s", DEVICE_ID);
+
+  // Khai báo thêm Status Topic để làm Di chúc (LWT)
+  char statusTopic[96];
+  snprintf(statusTopic, sizeof(statusTopic), "telemetry/coldchain/%s/status", DEVICE_ID);
+
   while (!mqttClient.connected()) {
-    Serial.print("Đang kết nối MQTT Broker...");
+    Serial.print("Đang kết nối MQTT (ID: ");
+    Serial.print(clientId);
+    Serial.print(")...");
+    
+    // Gắn ClientId vào LWT Payload để Backend C# kiểm tra chéo (chống Ghost Connection)
+    char lwtPayload[128];
+    snprintf(lwtPayload, sizeof(lwtPayload), "{\"status\": \"OFFLINE\", \"clientId\": \"%s\"}", clientId.c_str());
 
-    const String clientId = String(DEVICE_ID) + "-" + String((uint32_t)ESP.getEfuseMac(), HEX);
-    bool connected = mqttClient.connect(clientId.c_str(), MQTT_USERNAME, MQTT_PASSWORD);
-
-    if (connected) {
+    if (mqttClient.connect(clientId.c_str(), MQTT_USERNAME, MQTT_PASSWORD, statusTopic, 1, true, lwtPayload)) {
       Serial.println(" THÀNH CÔNG!");
-      char commandTopic[96];
-      snprintf(commandTopic, sizeof(commandTopic), "commands/coldchain/%s/commands", DEVICE_ID);
-      if (mqttClient.subscribe(commandTopic, MQTT_PUBLISH_QOS)) {
-        Serial.print("Đã subscribe topic lệnh: ");
-        Serial.println(commandTopic);
-      } else {
-        Serial.println("Lỗi: Không subscribe được topic lệnh.");
-      }
+      
+      // Gắn ClientId vào ONLINE Payload
+      char onlinePayload[128];
+      snprintf(onlinePayload, sizeof(onlinePayload), "{\"status\": \"ONLINE\", \"clientId\": \"%s\"}", clientId.c_str());
+      mqttClient.publish(statusTopic, onlinePayload, true);
+      
+      mqttClient.subscribe(cmdTopic, MQTT_PUBLISH_QOS);
     } else {
-      Serial.print(" Lỗi RC=");
-      Serial.print(mqttClient.state());
-      Serial.println(". Thử lại sau 3s...");
-      delay(3000);
+      Serial.printf(" Lỗi RC=%d. Thử lại sau 5s...\n", mqttClient.state());
+      delay(5000);
     }
   }
 }
 
 void handleMqttMessage(char* topic, byte* payload, unsigned int length) {
-  Serial.print("Nhận MQTT command | Topic: ");
-  Serial.print(topic);
-  Serial.print(" | Payload: ");
-  for (unsigned int i = 0; i < length; i++) {
-    Serial.print(static_cast<char>(payload[i]));
-  }
-  Serial.println();
-
+  Serial.printf(">>> [MQTT Nhận] Topic: %s <<<\n", topic);
   handleCommandPayload(reinterpret_cast<const uint8_t*>(payload), length);
 }
 
 void handleCommandPayload(const uint8_t* payload, size_t length) {
   StaticJsonDocument<256> doc;
-  DeserializationError error = deserializeJson(doc, payload, length);
-  if (error) {
-    Serial.print("Lỗi parse command JSON: ");
-    Serial.println(error.c_str());
+  if (deserializeJson(doc, payload, length)) {
+    Serial.println("=> [LỖI] Parse JSON Command thất bại!");
     return;
   }
-
-  const char* command = doc["Command"] | "";
-  const char* targetDevice = doc["DeviceCode"] | DEVICE_ID;
-  if (strcmp(targetDevice, DEVICE_ID) != 0) {
-    return;
-  }
-
-  if (strcmp(command, "ACTIVATE_SIREN") == 0) {
-    activateSiren(SIREN_DURATION_MS);
-  } else {
-    Serial.print("Command không hỗ trợ: ");
-    Serial.println(command);
-  }
+  
+  const char* action = "";
+  if (doc.containsKey("command")) action = doc["command"];
+  else if (doc.containsKey("Command")) action = doc["Command"];
+  else if (doc.containsKey("action")) action = doc["action"];
+  
+  if (strcmp(action, "START_STREAMING") == 0) {
+    is_streaming = true;
+    Serial.println(">>> LỆNH: BẮT ĐẦU GỬI DỮ LIỆU <<<");
+    lastSentTemp = -999.0;
+  } 
+  else if (strcmp(action, "STOP_STREAMING") == 0) {
+    is_streaming = false;
+    Serial.println(">>> LỆNH: DỪNG GỬI DỮ LIỆU <<<");
+  } 
+  else if (strcmp(action, "ACTIVATE_SIREN") == 0) activateSiren(SIREN_DURATION_MS);
 }
 
 void activateSiren(uint32_t durationMs) {
@@ -224,243 +400,15 @@ void updateSiren() {
   if (sirenActive && static_cast<int32_t>(millis() - sirenUntilMs) >= 0) {
     sirenActive = false;
     digitalWrite(SIREN_PIN, LOW);
-    Serial.println("Đã tắt còi cảnh báo.");
   }
 }
 
-// Hàm lấy tọa độ qua Trạm phát sóng (LBS)
-void updateLBSLocation() {
-  Serial.println("\n--- Đang cập nhật tọa độ LBS ---");
-  
-  // Gửi lệnh LBS thô qua TinyGSM
-  modem.sendAT("+CLBS=1,1");
-  
-  // Chờ phản hồi "+CLBS: 0," nghĩa là thành công
-  if (modem.waitResponse(15000, "+CLBS: 0,") == 1) {
-    String latStr = modem.stream.readStringUntil(',');
-    String lonStr = modem.stream.readStringUntil(',');
-    
-    currentLat = latStr.toFloat();
-    currentLon = lonStr.toFloat();
-    
-    modem.waitResponse(); // Đọc nốt chữ OK cuối cùng
-    Serial.printf("=> Tọa độ mới: Lat: %.6f, Lon: %.6f\n", currentLat, currentLon);
-  } else {
-    Serial.println("=> Lỗi: Không thể lấy tọa độ LBS lúc này.");
-  }
-}
-
-void publishTelemetry() {
-  sensors.requestTemperatures();
-  float tempC = sensors.getTempCByIndex(0);
-
-  // Kiểm tra cảm biến DS18B20
-  if (tempC == DEVICE_DISCONNECTED_C) {
-    Serial.println("Lỗi: Cảm biến DS18B20 bị mất kết nối! (Vui lòng kiểm tra dây và trở kéo 4.7k)");
-    return;
-  }
-
-  // Tạo đối tượng JSON
-  StaticJsonDocument<256> doc;
-  doc["DeviceId"] = DEVICE_ID;
-  doc["TempC"] = roundf(tempC * 10.0f) / 10.0f;
-  doc["DoorOpen"] = doorOpen;
-  doc["Lat"] = currentLat;
-  doc["Lon"] = currentLon;
-  doc["Timestamp"] = getIsoTimestamp();
-
-  // Đóng gói JSON
-  char payload[256];
-  size_t length = serializeJson(doc, payload, sizeof(payload));
-
-  // Tạo Topic
-  char topic[96];
-  snprintf(topic, sizeof(topic), "telemetry/coldchain/%s", DEVICE_ID);
-
-  // Publish bằng hàm QoS 1 tùy chỉnh
-  bool ok = publishMqttQos1(topic, reinterpret_cast<const uint8_t*>(payload), length);
-
-  Serial.print("Publish ");
-  Serial.print(ok ? "OK" : "FAILED");
-  Serial.print(" | Topic: ");
-  Serial.print(topic);
-  Serial.print(" | Dữ liệu: ");
-  Serial.println(payload);
-}
-
-// Lấy thời gian từ mạng viễn thông
 String getIsoTimestamp() {
-  int year, month, day, hour, minute, second;
-  float timezone;
-  
-  if (modem.getNetworkTime(&year, &month, &day, &hour, &minute, &second, &timezone)) {
-    char buffer[32];
-    snprintf(buffer, sizeof(buffer), "%04d-%02d-%02dT%02d:%02d:%02d+07:00", 
-             year, month, day, hour, minute, second);
-    return String(buffer);
+  int y, m, d, h, min, s; float tz;
+  if (modem.getNetworkTime(&y, &m, &d, &h, &min, &s, &tz)) {
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%04d-%02d-%02dT%02d:%02d:%02d+07:00", y, m, d, h, min, s);
+    return String(buf);
   }
-  
-  // Fallback nếu chưa đồng bộ được giờ mạng
-  return "2026-01-01T00:00:00+07:00"; 
-}
-
-// ================= CÁC HÀM MQTT QOS 1 TÙY CHỈNH (Đã trỏ sang mạng 4G) =================
-
-bool publishMqttQos1(const char* topic, const uint8_t* payload, size_t payloadLength) {
-  if (!mqttClient.connected()) return false;
-
-  const size_t topicLength = strlen(topic);
-  if (topicLength == 0 || topicLength > 65535) return false;
-
-  const uint16_t packetId = nextPacketId++;
-  if (nextPacketId == 0) nextPacketId = 1;
-
-  const uint32_t remainingLength = 2 + topicLength + 2 + payloadLength;
-  const uint8_t fixedHeader = 0x30 | (MQTT_PUBLISH_QOS << 1);
-  const uint8_t topicLengthBytes[2] = { static_cast<uint8_t>((topicLength >> 8) & 0xFF), static_cast<uint8_t>(topicLength & 0xFF) };
-  const uint8_t packetIdBytes[2] = { static_cast<uint8_t>((packetId >> 8) & 0xFF), static_cast<uint8_t>(packetId & 0xFF) };
-
-  if (!writeAll(&fixedHeader, 1) || !writeMqttRemainingLength(remainingLength) ||
-      !writeAll(topicLengthBytes, sizeof(topicLengthBytes)) || !writeAll(reinterpret_cast<const uint8_t*>(topic), topicLength) ||
-      !writeAll(packetIdBytes, sizeof(packetIdBytes)) || !writeAll(payload, payloadLength)) {
-    return false;
-  }
-  return waitForPubAck(packetId, 5000);
-}
-
-bool waitForPubAck(uint16_t packetId, uint32_t timeoutMs) {
-  const uint32_t startedAt = millis();
-  while (millis() - startedAt < timeoutMs) {
-    uint8_t fixedHeader = 0;
-    if (!readMqttByte(fixedHeader, 100)) continue;
-
-    uint32_t remainingLength = 0;
-    if (!readMqttRemainingLength(remainingLength, 1000)) return false;
-
-    if ((fixedHeader & 0xF0) == 0x40 && remainingLength == 2) {
-      uint8_t packetIdMsb = 0, packetIdLsb = 0;
-      if (!readMqttByte(packetIdMsb, 1000) || !readMqttByte(packetIdLsb, 1000)) return false;
-      const uint16_t ackPacketId = (static_cast<uint16_t>(packetIdMsb) << 8) | packetIdLsb;
-      if (ackPacketId == packetId) return true;
-      continue;
-    }
-
-    if ((fixedHeader & 0xF0) == 0x30) {
-      if (!processIncomingPublishPacket(fixedHeader, remainingLength, 1000)) return false;
-      continue;
-    }
-
-    for (uint32_t i = 0; i < remainingLength; i++) {
-      uint8_t ignored = 0;
-      if (!readMqttByte(ignored, 1000)) return false;
-    }
-  }
-  return false;
-}
-
-bool processIncomingPublishPacket(uint8_t fixedHeader, uint32_t remainingLength, uint32_t timeoutMs) {
-  if (remainingLength < 2) return false;
-
-  uint8_t topicLengthBytes[2] = { 0, 0 };
-  if (!readMqttBytes(topicLengthBytes, sizeof(topicLengthBytes), timeoutMs)) return false;
-
-  uint16_t topicLength = (static_cast<uint16_t>(topicLengthBytes[0]) << 8) | topicLengthBytes[1];
-  if (topicLength > remainingLength - 2) return false;
-
-  char topic[128];
-  const bool topicFits = topicLength < sizeof(topic);
-  for (uint16_t i = 0; i < topicLength; i++) {
-    uint8_t value = 0;
-    if (!readMqttByte(value, timeoutMs)) return false;
-    if (topicFits) topic[i] = static_cast<char>(value);
-  }
-  if (topicFits) topic[topicLength] = '\0';
-
-  uint32_t consumed = 2 + topicLength;
-  const uint8_t qos = (fixedHeader & 0x06) >> 1;
-  uint16_t incomingPacketId = 0;
-  if (qos > 0) {
-    uint8_t packetIdBytes[2] = { 0, 0 };
-    if (!readMqttBytes(packetIdBytes, sizeof(packetIdBytes), timeoutMs)) return false;
-    incomingPacketId = (static_cast<uint16_t>(packetIdBytes[0]) << 8) | packetIdBytes[1];
-    consumed += 2;
-  }
-  if (consumed > remainingLength) return false;
-
-  uint32_t payloadLength = remainingLength - consumed;
-  uint8_t payload[256];
-  const bool payloadFits = payloadLength <= sizeof(payload);
-  for (uint32_t i = 0; i < payloadLength; i++) {
-    uint8_t value = 0;
-    if (!readMqttByte(value, timeoutMs)) return false;
-    if (payloadFits) payload[i] = value;
-  }
-
-  if (qos == 1 && incomingPacketId != 0 && !sendPubAck(incomingPacketId)) {
-    return false;
-  }
-
-  if (topicFits && payloadFits) {
-    handleCommandPayload(payload, payloadLength);
-  }
-  return true;
-}
-
-bool readMqttRemainingLength(uint32_t& remainingLength, uint32_t timeoutMs) {
-  remainingLength = 0;
-  uint32_t multiplier = 1;
-  uint8_t encodedByte = 0;
-  do {
-    if (!readMqttByte(encodedByte, timeoutMs)) return false;
-    remainingLength += (encodedByte & 127) * multiplier;
-    multiplier *= 128;
-    if (multiplier > 128UL * 128UL * 128UL * 128UL) return false;
-  } while ((encodedByte & 128) != 0);
-  return true;
-}
-
-bool readMqttByte(uint8_t& value, uint32_t timeoutMs) {
-  const uint32_t startedAt = millis();
-  while (millis() - startedAt < timeoutMs) {
-    if (gsmClient.available() > 0) {
-      const int byteRead = gsmClient.read();
-      if (byteRead >= 0) {
-        value = static_cast<uint8_t>(byteRead);
-        return true;
-      }
-    }
-    delay(5);
-  }
-  return false;
-}
-
-bool readMqttBytes(uint8_t* buffer, size_t length, uint32_t timeoutMs) {
-  for (size_t i = 0; i < length; i++) {
-    if (!readMqttByte(buffer[i], timeoutMs)) return false;
-  }
-  return true;
-}
-
-bool writeMqttRemainingLength(uint32_t remainingLength) {
-  do {
-    uint8_t encodedByte = remainingLength % 128;
-    remainingLength /= 128;
-    if (remainingLength > 0) encodedByte |= 128;
-    if (!writeAll(&encodedByte, 1)) return false;
-  } while (remainingLength > 0);
-  return true;
-}
-
-bool writeAll(const uint8_t* data, size_t length) {
-  return gsmClient.write(data, length) == length;
-}
-
-bool sendPubAck(uint16_t packetId) {
-  const uint8_t pubAck[4] = {
-    0x40,
-    0x02,
-    static_cast<uint8_t>((packetId >> 8) & 0xFF),
-    static_cast<uint8_t>(packetId & 0xFF)
-  };
-  return writeAll(pubAck, sizeof(pubAck));
+  return "2026-06-27T00:00:00+07:00"; 
 }

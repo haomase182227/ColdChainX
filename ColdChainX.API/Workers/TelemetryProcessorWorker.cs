@@ -9,8 +9,8 @@ namespace ColdChainX.API.Workers;
 
 public sealed class TelemetryProcessorWorker : BackgroundService
 {
-    private static readonly TimeSpan FlushInterval = TimeSpan.FromSeconds(2);
-    private const int BatchSize = 50;
+    private static readonly TimeSpan FlushInterval = TimeSpan.FromSeconds(60);
+    private const int BatchSize = 100;
 
     private readonly Channel<TelemetryData> _telemetryChannel;
     private readonly RedisService _redisService;

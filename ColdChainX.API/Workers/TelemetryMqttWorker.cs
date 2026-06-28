@@ -2,7 +2,9 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 using ColdChainX.API.Models;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using MQTTnet;
@@ -19,18 +21,23 @@ public sealed class TelemetryMqttWorker : BackgroundService
         PropertyNameCaseInsensitive = true
     };
 
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _activeConnections = new();
+
     private readonly Channel<TelemetryData> _telemetryChannel;
     private readonly IConfiguration _configuration;
     private readonly ILogger<TelemetryMqttWorker> _logger;
     private readonly IMqttClient _mqttClient;
+    private readonly IServiceScopeFactory _scopeFactory;
 
     public TelemetryMqttWorker(
         Channel<TelemetryData> telemetryChannel,
         IConfiguration configuration,
+        IServiceScopeFactory scopeFactory,
         ILogger<TelemetryMqttWorker> logger)
     {
         _telemetryChannel = telemetryChannel;
         _configuration = configuration;
+        _scopeFactory = scopeFactory;
         _logger = logger;
 
         _mqttClient = new MqttFactory().CreateMqttClient();
@@ -101,14 +108,86 @@ public sealed class TelemetryMqttWorker : BackgroundService
 
     private async Task HandleApplicationMessageReceivedAsync(MqttApplicationMessageReceivedEventArgs args)
     {
+        var topic = args.ApplicationMessage.Topic;
         var payload = Encoding.UTF8.GetString(args.ApplicationMessage.PayloadSegment.ToArray());
 
+        if (topic.EndsWith("/status", StringComparison.OrdinalIgnoreCase))
+        {
+            await HandleStatusMessageAsync(topic, payload);
+            return;
+        }
+        else if (topic.EndsWith("/data", StringComparison.OrdinalIgnoreCase) || topic.Contains("/telemetry/"))
+        {
+            await HandleDataMessageAsync(topic, payload);
+            return;
+        }
+    }
+
+    private async Task HandleStatusMessageAsync(string topic, string payload)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(payload);
+            if (doc.RootElement.TryGetProperty("status", out var statusProp))
+            {
+                var statusStr = statusProp.GetString();
+                bool isOnline = string.Equals(statusStr, "ONLINE", StringComparison.OrdinalIgnoreCase);
+                
+                string? incomingClientId = null;
+                if (doc.RootElement.TryGetProperty("clientId", out var clientProp))
+                {
+                    incomingClientId = clientProp.GetString();
+                }
+
+                // Extract device code from topic, e.g. telemetry/coldchain/{deviceCode}/status
+                var parts = topic.Split('/');
+                if (parts.Length >= 2)
+                {
+                    var deviceCode = parts[parts.Length - 2];
+
+                    if (isOnline)
+                    {
+                        if (!string.IsNullOrEmpty(incomingClientId))
+                            _activeConnections[deviceCode] = incomingClientId;
+                    }
+                    else
+                    {
+                        if (!string.IsNullOrEmpty(incomingClientId) && _activeConnections.TryGetValue(deviceCode, out var currentClientId))
+                        {
+                            if (currentClientId != incomingClientId)
+                            {
+                                _logger.LogInformation("Ignored old LWT OFFLINE for {DeviceCode} (Old: {OldId}, Current: {CurrentId})", deviceCode, incomingClientId, currentClientId);
+                                return;
+                            }
+                        }
+                    }
+
+                    using var scope = _scopeFactory.CreateScope();
+                    var db = scope.ServiceProvider.GetRequiredService<ColdChainX.Infrastructure.Persistence.ApplicationDbContext>();
+                    var device = await db.IotDevices.FirstOrDefaultAsync(d => d.DeviceCode == deviceCode);
+                    if (device != null)
+                    {
+                        device.IsOnline = isOnline;
+                        await db.SaveChangesAsync();
+                        _logger.LogInformation("Updated device {DeviceCode} IsOnline to {IsOnline}", deviceCode, isOnline);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to process status message on topic {Topic}", topic);
+        }
+    }
+
+    private async Task HandleDataMessageAsync(string topic, string payload)
+    {
         try
         {
             var telemetry = JsonSerializer.Deserialize<TelemetryData>(payload, JsonOptions);
             if (telemetry is null || string.IsNullOrWhiteSpace(telemetry.DeviceId))
             {
-                _logger.LogWarning("Invalid telemetry payload on {Topic}: {Payload}", args.ApplicationMessage.Topic, payload);
+                _logger.LogWarning("Invalid telemetry payload on {Topic}: {Payload}", topic, payload);
                 return;
             }
 
@@ -116,7 +195,7 @@ public sealed class TelemetryMqttWorker : BackgroundService
 
             _logger.LogInformation(
                 "Telemetry received topic={Topic} device={DeviceId} temp={TempC} doorOpen={DoorOpen} timestamp={Timestamp}",
-                args.ApplicationMessage.Topic,
+                topic,
                 telemetry.DeviceId,
                 telemetry.TempC,
                 telemetry.DoorOpen,
@@ -124,7 +203,7 @@ public sealed class TelemetryMqttWorker : BackgroundService
         }
         catch (JsonException ex)
         {
-            _logger.LogWarning(ex, "Failed to deserialize telemetry payload on {Topic}: {Payload}", args.ApplicationMessage.Topic, payload);
+            _logger.LogWarning(ex, "Failed to deserialize telemetry payload on {Topic}: {Payload}", topic, payload);
         }
     }
 }
