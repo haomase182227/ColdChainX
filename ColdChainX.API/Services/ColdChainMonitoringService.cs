@@ -21,6 +21,7 @@ public sealed class ColdChainMonitoringService : IColdChainMonitoringService
     private readonly ApplicationDbContext _db;
     private readonly ILocationService _locationService;
     private readonly IHubContext<MonitoringHub> _hubContext;
+    private readonly IHubContext<NotificationHub> _notificationHub;
     private readonly IColdChainRiskService _riskService;
     private readonly IMqttCommandPublisher _mqttCommandPublisher;
     private readonly ILogger<ColdChainMonitoringService> _logger;
@@ -29,6 +30,7 @@ public sealed class ColdChainMonitoringService : IColdChainMonitoringService
         ApplicationDbContext db,
         ILocationService locationService,
         IHubContext<MonitoringHub> hubContext,
+        IHubContext<NotificationHub> notificationHub,
         IColdChainRiskService riskService,
         IMqttCommandPublisher mqttCommandPublisher,
         ILogger<ColdChainMonitoringService> logger)
@@ -36,6 +38,7 @@ public sealed class ColdChainMonitoringService : IColdChainMonitoringService
         _db = db;
         _locationService = locationService;
         _hubContext = hubContext;
+        _notificationHub = notificationHub;
         _riskService = riskService;
         _mqttCommandPublisher = mqttCommandPublisher;
         _logger = logger;
@@ -141,21 +144,26 @@ public sealed class ColdChainMonitoringService : IColdChainMonitoringService
             await BroadcastAlertAsync(trip.TripId, alert.AlertType, BuildAlertMessage(alert, risk), data.Timestamp, cancellationToken);
         }
 
-        if (alerts.Any(a => a.AlertType is "DOOR_OPEN" or "TEMP_HIGH" or "TEMP_CRITICAL" or "GEOFENCE_HARD" or "SMART_COLDCHAIN_RISK")
-            && !string.IsNullOrWhiteSpace(device.DeviceCode))
+        if (alerts.Any(a => a.AlertType is "DOOR_OPEN" or "TEMP_HIGH" or "TEMP_CRITICAL" or "GEOFENCE_HARD" or "SMART_COLDCHAIN_RISK" or "TEMP_FORECAST_BREACH"))
         {
-            await _mqttCommandPublisher.ActivateSirenAsync(
-                device.DeviceCode,
-                new
-                {
-                    TripId = trip.TripId,
-                    AlertTypes = alerts.Select(a => a.AlertType).ToArray(),
-                    Risk = risk,
-                    Forecast = forecast,
-                    GeoFence = geoFence,
-                    Expert = expert
-                },
-                cancellationToken);
+            var notificationData = new
+            {
+                TripId = trip.TripId,
+                AlertTypes = alerts.Select(a => a.AlertType).ToArray(),
+                Timestamp = data.Timestamp
+            };
+
+            await _notificationHub.Clients.Group("Group_Dispatcher").SendAsync("ReceiveColdChainAlert", notificationData, cancellationToken);
+
+            var driverUserIds = trip.TripDrivers
+                .Where(td => td.Driver?.UserId != null)
+                .Select(td => td.Driver.UserId!.Value.ToString())
+                .ToList();
+
+            if (driverUserIds.Count > 0)
+            {
+                await _notificationHub.Clients.Users(driverUserIds).SendAsync("ReceiveColdChainAlert", notificationData, cancellationToken);
+            }
         }
     }
 
