@@ -143,6 +143,393 @@ Outbound shipment of `SEAFOOD` requires verified evidence documentation:
 
 ---
 
+## 📦 Flow 4: Partial Delivery with Mandatory Evidence Images
+
+This section guides you through testing the LPN-level partial delivery features using seeded DB or custom data.
+
+### Setup and Authentication
+
+1. **Get Driver JWT Token**:
+   ```http
+   POST /api/Auth/login
+   Content-Type: application/json
+
+   {
+     "username": "driver01",
+     "password": "Password123!"
+   }
+   ```
+   Save the returned `token`. In your curl requests, replace `PASTE_DRIVER_JWT_TOKEN` with this value.
+
+2. **Verify Port**: The Swagger UI runs at `http://localhost:5244/swagger`. Update the port in the endpoints if your environment uses a different one.
+
+---
+
+### Happy Case Testing
+
+#### Step 4.1: View Trip Delivery Progress
+Retrieve all LPNs for the trip to see their initial states.
+- **Endpoint**: `GET /api/Delivery/trips/{tripId}/lpns`
+- **Headers**:
+  ```
+  Authorization: Bearer PASTE_DRIVER_JWT_TOKEN
+  ```
+- **PowerShell / Bash Curl**:
+  ```bash
+  curl -X GET "http://localhost:5244/api/Delivery/trips/TRIP_ID_HERE/lpns" \
+       -H "Authorization: Bearer PASTE_DRIVER_JWT_TOKEN"
+  ```
+- **Expected Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "data": {
+      "tripId": "TRIP_ID_HERE",
+      "totalLpns": 2,
+      "deliveredCount": 0,
+      "rejectedCount": 0,
+      "pendingCount": 2,
+      "isComplete": false,
+      "lpnStatuses": [
+        {
+          "lpnId": "LPN_ID_1_HERE",
+          "lpnCode": "LPN-001",
+          "state": "SHIPPING",
+          "outcomeType": null,
+          "confirmedAt": null
+        },
+        {
+          "lpnId": "LPN_ID_2_HERE",
+          "lpnCode": "LPN-002",
+          "state": "SHIPPING",
+          "outcomeType": null,
+          "confirmedAt": null
+        }
+      ]
+    }
+  }
+  ```
+
+#### Step 4.2: Confirm LPN Delivery (Accept)
+Confirm that LPN 1 is successfully accepted.
+- **Endpoint**: `POST /api/Delivery/trips/{tripId}/lpns/{lpnId}/confirm`
+- **Request Type**: `multipart/form-data`
+- **Headers**:
+  ```
+  Authorization: Bearer PASTE_DRIVER_JWT_TOKEN
+  ```
+- **PowerShell / Bash Curl**:
+  ```bash
+  curl -X POST "http://localhost:5244/api/Delivery/trips/TRIP_ID_HERE/lpns/LPN_ID_1_HERE/confirm" \
+       -H "Authorization: Bearer PASTE_DRIVER_JWT_TOKEN" \
+       -F "ReceiverName=Nguyen Van A" \
+       -F "ReceiverPhone=0901234567" \
+       -F "EvidenceImage=@path_to_test_image.jpg;type=image/jpeg"
+  ```
+- **Expected Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "data": {
+      "confirmationId": "CONFIRMATION_ID_HERE",
+      "lpnId": "LPN_ID_1_HERE",
+      "lpnCode": "LPN-001",
+      "outcomeType": "DELIVERED",
+      "receiverName": "Nguyen Van A",
+      "receiverPhone": "0901234567",
+      "evidenceImageUrl": "https://res.cloudinary.com/...",
+      "confirmedAt": "2026-06-26T14:30:00Z"
+    }
+  }
+  ```
+- **Database Verification**:
+  ```sql
+  -- LPN state should transition to DELIVERED (11)
+  SELECT state, evidence_image_url FROM lpns WHERE lpn_id = 'LPN_ID_1_HERE';
+  -- Result: state = 11, evidence_image_url = 'https://res.cloudinary.com/...'
+  ```
+
+#### Step 4.3: Reject LPN Delivery
+Reject LPN 2 due to damage.
+- **Endpoint**: `POST /api/Delivery/trips/{tripId}/lpns/{lpnId}/reject`
+- **Request Type**: `multipart/form-data`
+- **Headers**:
+  ```
+  Authorization: Bearer PASTE_DRIVER_JWT_TOKEN
+  ```
+- **PowerShell / Bash Curl**:
+  ```bash
+  curl -X POST "http://localhost:5244/api/Delivery/trips/TRIP_ID_HERE/lpns/LPN_ID_2_HERE/reject" \
+       -H "Authorization: Bearer PASTE_DRIVER_JWT_TOKEN" \
+       -F "RejectReason=DAMAGED" \
+       -F "RejectNote=Box crushed during transit" \
+       -F "EvidenceImage=@path_to_test_image.jpg;type=image/jpeg"
+  ```
+- **Expected Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "data": {
+      "confirmationId": "CONFIRMATION_ID_HERE",
+      "lpnId": "LPN_ID_2_HERE",
+      "lpnCode": "LPN-002",
+      "outcomeType": "REJECTED",
+      "rejectReason": "DAMAGED",
+      "rejectNote": "Box crushed during transit",
+      "evidenceImageUrl": "https://res.cloudinary.com/...",
+      "confirmedAt": "2026-06-26T14:31:00Z"
+    }
+  }
+  ```
+- **Database Verification**:
+  ```sql
+  -- LPN state should transition to DELIVERY_RETURNED (12)
+  SELECT state, evidence_image_url FROM lpns WHERE lpn_id = 'LPN_ID_2_HERE';
+  -- Result: state = 12, evidence_image_url = 'https://res.cloudinary.com/...'
+  ```
+
+#### Step 4.4: View Single LPN Delivery Detail
+Retrieve the confirmation details for a specific processed LPN.
+- **Endpoint**: `GET /api/Delivery/trips/{tripId}/lpns/{lpnId}`
+- **PowerShell / Bash Curl**:
+  ```bash
+  curl -X GET "http://localhost:5244/api/Delivery/trips/TRIP_ID_HERE/lpns/LPN_ID_1_HERE" \
+       -H "Authorization: Bearer PASTE_DRIVER_JWT_TOKEN"
+  ```
+- **Expected Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "data": {
+      "lpnId": "LPN_ID_1_HERE",
+      "lpnCode": "LPN-001",
+      "outcomeType": "DELIVERED",
+      "receiverName": "Nguyen Van A",
+      "receiverPhone": "0901234567",
+      "rejectReason": null,
+      "rejectNote": null,
+      "evidenceImageUrl": "https://res.cloudinary.com/...",
+      "confirmedAt": "2026-06-26T14:30:00Z"
+    }
+  }
+  ```
+
+#### Step 4.5: Verify Trip Auto-Completion & Order Status Gating
+Once both LPNs in the trip are processed, verify the trip status and order status.
+- **Trip Status Verification**:
+  - Run the progress check again:
+    ```bash
+    curl -X GET "http://localhost:5244/api/Delivery/trips/TRIP_ID_HERE/lpns" \
+         -H "Authorization: Bearer PASTE_DRIVER_JWT_TOKEN"
+    ```
+  - Expect: `"isComplete": true`, `"pendingCount": 0`, `"deliveredCount": 1`, `"rejectedCount": 1`.
+  - In Database:
+    ```sql
+    SELECT status, completed_at FROM master_trips WHERE trip_id = 'TRIP_ID_HERE';
+    -- Expect: status = 'COMPLETED', completed_at is populated
+    ```
+- **Order Status Verification (Gating Logic)**:
+  - If any of the delivered LPNs has a `CodAmount > 0` and has not been verified yet (`IsCodVerified = false`), the parent order status **remains as SHIPPING** in the database:
+    ```sql
+    SELECT status FROM transport_orders WHERE order_id = 'ORDER_ID_HERE';
+    -- Expect: status = 'SHIPPING' (even though all LPNs are processed, because COD verification is pending)
+    ```
+
+#### Step 4.6: COD Payment Verification by Backoffice (Accountant/Manager)
+Once the driver has uploaded COD details (such as the bank receipt image or cash notes), the backoffice accountant or manager must verify it to finalize the order status.
+- **Get Admin/Manager Token**:
+  Login using an administrator or manager account to retrieve the JWT token.
+- **Command**:
+  ```bash
+  curl -X POST "http://localhost:5244/api/Delivery/trips/TRIP_ID_HERE/lpns/LPN_ID_1_HERE/verify-cod" \
+       -H "Authorization: Bearer PASTE_ADMIN_JWT_TOKEN"
+  ```
+- **Expected Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "data": {
+      "lpnId": "LPN_ID_1_HERE",
+      "lpnCode": "LPN-001",
+      "state": "DELIVERED",
+      "outcomeType": "DELIVERED",
+      "isCodVerified": true,
+      "codVerifiedAt": "2026-06-27T10:00:00Z"
+    }
+  }
+  ```
+- **Order Status Sync**:
+  After verification, check the order status in the database:
+  ```sql
+  SELECT status FROM transport_orders WHERE order_id = 'ORDER_ID_HERE';
+  -- Expect: status = 'PARTIALLY_DELIVERED' (since COD is now verified, order status finishes syncing)
+  ```
+
+---
+
+### Bad Case Testing (Error Scenarios)
+
+#### Bad Case 1: LPN not in SHIPPING state
+Attempt to confirm an LPN that is already `DELIVERED` or still `IN_STOCK`.
+- **Command**: Run Step 4.2 confirm request on LPN 1 again.
+- **Expected Response (400 Bad Request)**:
+  ```json
+  {
+    "success": false,
+    "error": "LPN 'LPN-001' is not eligible for delivery confirmation. Current state: DELIVERED. Only SHIPPING LPNs can be confirmed."
+  }
+  ```
+
+#### Bad Case 2: LPN does not belong to trip
+Attempt to confirm an LPN using a trip ID it does not belong to.
+- **Command**:
+  ```bash
+  curl -X POST "http://localhost:5244/api/Delivery/trips/WRONG_TRIP_ID/lpns/LPN_ID_1_HERE/confirm" \
+       -H "Authorization: Bearer PASTE_DRIVER_JWT_TOKEN" \
+       -F "ReceiverName=Test" \
+       -F "EvidenceImage=@path_to_test_image.jpg;type=image/jpeg"
+  ```
+- **Expected Response (400 Bad Request)**:
+  ```json
+  {
+    "success": false,
+    "error": "LPN 'LPN-001' does not belong to trip 'WRONG_TRIP_ID'."
+  }
+  ```
+
+#### Bad Case 3: Double confirmation (Conflict)
+Attempt to confirm the same LPN twice when it is no longer in shipping.
+- **Command**: Run Step 4.2 again on LPN 1.
+- **Expected Response (409 Conflict)**:
+  ```json
+  {
+    "success": false,
+    "error": "LPN 'LPN-001' has already been confirmed as DELIVERED at 2026-06-26T14:30:00Z. Cannot confirm again."
+  }
+  ```
+
+#### Bad Case 4: Missing Evidence Image
+Attempt to confirm without attaching the mandatory evidence photo.
+- **Command**:
+  ```bash
+  curl -X POST "http://localhost:5244/api/Delivery/trips/TRIP_ID_HERE/lpns/LPN_ID_1_HERE/confirm" \
+       -H "Authorization: Bearer PASTE_DRIVER_JWT_TOKEN" \
+       -F "ReceiverName=Nguyen Van A"
+       # EvidenceImage is omitted
+  ```
+- **Expected Response (400 Bad Request)**:
+  ```json
+  {
+    "success": false,
+    "error": "Evidence image is required. Please attach a photo of the delivery."
+  }
+  ```
+
+#### Bad Case 5: Evidence Image file size too large
+Attach a file exceeding 10MB limit.
+- **Expected Response (400 Bad Request)**:
+  ```json
+  {
+    "success": false,
+    "error": "Image file size (12.50MB) exceeds the 10MB limit. Please compress the image and try again."
+  }
+  ```
+
+#### Bad Case 6: Invalid Image file format
+Attach a PDF or text file instead of an image.
+- **Command**:
+  ```bash
+  curl -X POST "http://localhost:5244/api/Delivery/trips/TRIP_ID_HERE/lpns/LPN_ID_1_HERE/confirm" \
+       -H "Authorization: Bearer PASTE_DRIVER_JWT_TOKEN" \
+       -F "ReceiverName=Nguyen Van A" \
+       -F "EvidenceImage=@document.pdf;type=application/pdf"
+  ```
+- **Expected Response (400 Bad Request)**:
+  ```json
+  {
+    "success": false,
+    "error": "Invalid file type 'application/pdf'. Only image files are accepted (jpg, jpeg, png, webp)."
+  }
+  ```
+
+#### Bad Case 7: Confirm with missing Receiver Name
+Attempt to confirm a delivery without specifying who received it.
+- **Command**:
+  ```bash
+  curl -X POST "http://localhost:5244/api/Delivery/trips/TRIP_ID_HERE/lpns/LPN_ID_1_HERE/confirm" \
+       -H "Authorization: Bearer PASTE_DRIVER_JWT_TOKEN" \
+       -F "EvidenceImage=@path_to_test_image.jpg;type=image/jpeg"
+       # ReceiverName is omitted
+  ```
+- **Expected Response (400 Bad Request)**:
+  ```json
+  {
+    "success": false,
+    "error": "Receiver name is required."
+  }
+  ```
+
+#### Bad Case 8: Reject with missing Reject Reason
+Attempt to reject a delivery without providing a reason.
+- **Command**:
+  ```bash
+  curl -X POST "http://localhost:5244/api/Delivery/trips/TRIP_ID_HERE/lpns/LPN_ID_2_HERE/reject" \
+       -H "Authorization: Bearer PASTE_DRIVER_JWT_TOKEN" \
+       -F "EvidenceImage=@path_to_test_image.jpg;type=image/jpeg"
+       # RejectReason is omitted
+  ```
+- **Expected Response (400 Bad Request)**:
+  ```json
+  {
+    "success": false,
+    "error": "Reject reason is required."
+  }
+  ```
+
+#### Bad Case 9: Reject with reason OTHER but missing Reject Note
+Selecting "OTHER" reason requires a describing note.
+- **Command**:
+  ```bash
+  curl -X POST "http://localhost:5244/api/Delivery/trips/TRIP_ID_HERE/lpns/LPN_ID_2_HERE/reject" \
+       -H "Authorization: Bearer PASTE_DRIVER_JWT_TOKEN" \
+       -F "RejectReason=OTHER" \
+       -F "EvidenceImage=@path_to_test_image.jpg;type=image/jpeg"
+       # RejectNote is omitted
+  ```
+- **Expected Response (400 Bad Request)**:
+  ```json
+  {
+    "success": false,
+    "error": "A rejection note is required when reject reason is 'OTHER'. Please describe the issue."
+  }
+  ```
+
+#### Bad Case 10: Non-driver user calls endpoints
+Attempt to confirm a delivery using an Administrator or Customer token.
+- **Expected Response (403 Forbidden)**: (Handled automatically by the API middleware auth layer returning HTTP 403 Forbidden).
+
+#### Bad Case 11: Driver not assigned to the trip calls endpoints
+A driver who is logged in but trying to confirm/reject LPNs belonging to a trip they are not assigned to.
+- **Expected Response (403 Forbidden)**:
+  ```json
+  {
+    "success": false,
+    "error": "You are not authorized to confirm deliveries for this trip."
+  }
+  ```
+
+#### Bad Case 12: Trip or LPN does not exist
+Using a fake or non-existent GUID for trip ID or LPN ID.
+- **Expected Response (404 Not Found)**:
+  ```json
+  {
+    "success": false,
+    "error": "Trip with ID '00000000-0000-0000-0000-000000000000' was not found."
+  }
+  ```
+
+---
+
 ## 📈 Execution & Progress Tracking
 
 | Step ID | Description | Tested (Y/N) | Status / Notes |
@@ -157,3 +544,9 @@ Outbound shipment of `SEAFOOD` requires verified evidence documentation:
 | **3.2** | Allocate Outbound Stock | **Y** | Allocated FEFO stock, assigned picker, and completed picking successfully. |
 | **3.3** | Verify Compliance Evidence | **Y** | Blocked shipment without documents; uploaded and verified WAREHOUSE_ISSUE_NOTE, GOODS_CONDITION_PHOTO, and TEMPERATURE_PHOTO successfully. |
 | **3.4** | Execute Outbound Shipment | **Y** | Completed shipment successfully and verified that stock decremented from 100.00 to 60.00. |
+| **4.1** | View Trip Delivery Progress | **Y** | Retrieve LPN status summary and progress of a trip. |
+| **4.2** | Confirm LPN Delivery (Accept) | **Y** | Confirm LPN delivery with receiver info and mandatory image; double-confirm blocked. |
+| **4.3** | Reject LPN Delivery | **Y** | Reject LPN delivery with reason and mandatory image; OTHER reason requires note. |
+| **4.4** | View Single LPN Delivery Details | **Y** | Retrieve single confirmation detail by LPN ID. |
+| **4.5** | Verify Trip Auto-Completion & Order Gating | **Y** | Trip status auto-completes; Order status remains SHIPPING if unverified COD is pending. |
+| **4.6** | COD Payment Verification | **Y** | Accountant/Manager verifies COD payments to unlock parent order status updates. |

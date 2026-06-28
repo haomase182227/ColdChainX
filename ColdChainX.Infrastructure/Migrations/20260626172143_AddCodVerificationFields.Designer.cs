@@ -3,6 +3,7 @@ using System;
 using ColdChainX.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ColdChainX.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260626172143_AddCodVerificationFields")]
+    partial class AddCodVerificationFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -768,16 +771,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("checkin_time");
 
-                    b.Property<decimal?>("CodAmount")
-                        .HasPrecision(15, 2)
-                        .HasColumnType("numeric(15,2)")
-                        .HasColumnName("cod_amount");
-
-                    b.Property<decimal?>("CodAmountPaid")
-                        .HasPrecision(15, 2)
-                        .HasColumnType("numeric(15,2)")
-                        .HasColumnName("cod_amount_paid");
-
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp without time zone")
@@ -790,15 +783,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasDefaultValue(5)
                         .HasColumnName("delivery_rating");
 
-                    b.Property<DateTime?>("HandoverConfirmedAt")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("handover_confirmed_at");
-
-                    b.Property<string>("HandoverPdfUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("handover_pdf_url");
-
                     b.Property<string>("Note")
                         .HasColumnType("text")
                         .HasColumnName("note");
@@ -806,25 +790,6 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.Property<Guid?>("OrderId")
                         .HasColumnType("uuid")
                         .HasColumnName("order_id");
-
-                    b.Property<DateTime?>("PaymentConfirmedAt")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("payment_confirmed_at");
-
-                    b.Property<string>("PaymentEvidenceImageUrl")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("payment_evidence_image_url");
-
-                    b.Property<string>("PaymentMethod")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("payment_method");
-
-                    b.Property<string>("PaymentStatus")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("payment_status");
 
                     b.Property<string>("PdfUrl")
                         .HasMaxLength(255)
@@ -1603,14 +1568,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("DeviceCode")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("device_code");
-
-                    b.Property<bool>("IsOnline")
-                        .HasColumnType("boolean");
-
                     b.Property<DateTime?>("LastPingTime")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("last_ping_time");
@@ -1630,10 +1587,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasName("iot_devices_pkey");
 
                     b.HasIndex("VehicleId");
-
-                    b.HasIndex(new[] { "DeviceCode" }, "uq_iot_devices_device_code")
-                        .IsUnique()
-                        .HasFilter("device_code IS NOT NULL");
 
                     b.ToTable("iot_devices", "public");
                 });
@@ -1792,10 +1745,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("updated_at");
 
-                    b.Property<Guid?>("WarehouseId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("warehouse_id");
-
                     b.Property<decimal?>("WidthCm")
                         .HasPrecision(10, 2)
                         .HasColumnType("numeric(10,2)")
@@ -1824,9 +1773,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasDatabaseName("idx_lpns_storage_location");
 
                     b.HasIndex("TripId");
-
-                    b.HasIndex("WarehouseId")
-                        .HasDatabaseName("idx_lpns_warehouse_id");
 
                     b.ToTable("lpns", "public");
                 });
@@ -1916,11 +1862,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
                         .HasColumnName("receiver_phone");
-
-                    b.Property<decimal?>("RecordedTemperature")
-                        .HasPrecision(8, 2)
-                        .HasColumnType("numeric(8,2)")
-                        .HasColumnName("recorded_temperature");
 
                     b.Property<string>("RejectNote")
                         .HasColumnType("text")
@@ -4347,12 +4288,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_lpns_trip");
 
-                    b.HasOne("ColdChainX.Core.Entities.Warehouse", "Warehouse")
-                        .WithMany("Lpns")
-                        .HasForeignKey("WarehouseId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_lpns_warehouse");
-
                     b.Navigation("Customer");
 
                     b.Navigation("Order");
@@ -4362,8 +4297,6 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.Navigation("Route");
 
                     b.Navigation("Trip");
-
-                    b.Navigation("Warehouse");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.LpnDeliveryConfirmation", b =>
@@ -5021,8 +4954,6 @@ namespace ColdChainX.Infrastructure.Migrations
 
             modelBuilder.Entity("ColdChainX.Core.Entities.Warehouse", b =>
                 {
-                    b.Navigation("Lpns");
-
                     b.Navigation("WarehouseReceipts");
 
                     b.Navigation("WarehouseZones");

@@ -21,6 +21,7 @@ namespace ColdChainX.Application.Interfaces
 
         DbSet<TransportOrder> TransportOrders { get; }
         DbSet<Customer> Customers { get; }
+        DbSet<Driver> Drivers { get; }
         DbSet<MasterTrip> MasterTrips { get; }
         DbSet<TripDriver> TripDrivers { get; }
         DbSet<DriverWorkLog> DriverWorkLogs { get; }
@@ -37,10 +38,17 @@ namespace ColdChainX.Application.Interfaces
         DbSet<DeliveryEpod> DeliveryEpods { get; }
         DbSet<ContractAppendix> ContractAppendices { get; }
         DbSet<InboundReturnSlip> InboundReturnSlips { get; }
+        DbSet<LpnDeliveryConfirmation> LpnDeliveryConfirmations { get; }
+        DbSet<TelemetryLog> TelemetryLogs { get; }
+        DbSet<Seal> Seals { get; }
         DbSet<Notification> Notifications { get; }
         DbSet<NotificationTemplate> NotificationTemplates { get; }
         DbSet<Messagetype> Messagetypes { get; }
         DbSet<TransportDocument> TransportDocuments { get; }
+        DbSet<TripStop> TripStops { get; }
+        DbSet<Location> Locations { get; }
+        DbSet<Vehicle> Vehicles { get; }
+        DbSet<ReturnedItem> ReturnedItems { get; }
 
         DatabaseFacade Database { get; }
         Microsoft.EntityFrameworkCore.ChangeTracking.ChangeTracker ChangeTracker { get; }
