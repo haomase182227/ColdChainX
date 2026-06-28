@@ -56,9 +56,9 @@ public sealed class ColdChainRiskService : IColdChainRiskService
             "ColdChainX.Infrastructure",
             "ML"));
 
-        _dataPath = Path.Combine(mlRoot, "Data", "frozen_storage_data_10k.csv");
+        _dataPath = Path.Combine(mlRoot, "Data", "frozen_storage_data_20k.csv");
         _modelPath = Path.Combine(mlRoot, "Models", "coldchain_risk_model.zip");
-        _ssaDataPath = Path.Combine(mlRoot, "Data", "temperature_historical_data .csv");
+        _ssaDataPath = Path.Combine(mlRoot, "Data", "temperature_historical_data.csv");
         _ssaModelPath = Path.Combine(mlRoot, "Models", "coldchain_temperature_ssa_model.zip");
         _knowledgeBase = CargoKnowledgeBase.Load(
             Path.Combine(mlRoot, "Config", "cargo_knowledge_base.json"),
@@ -927,22 +927,22 @@ public sealed class GeoFenceAssessment
 
 public sealed class ColdChainRiskTrainingRow
 {
-    [LoadColumn(0)]
+    [LoadColumn(2)]
     public string CargoCategory { get; set; } = string.Empty;
 
-    [LoadColumn(1)]
+    [LoadColumn(4)]
     public float TempDeviation { get; set; }
 
-    [LoadColumn(2)]
+    [LoadColumn(5)]
     public float DurationMins { get; set; }
 
     [LoadColumn(3)]
     public float ActualTemp { get; set; }
 
-    [LoadColumn(4)]
+    [LoadColumn(6)]
     public float ThermalShockRate { get; set; }
 
-    [LoadColumn(5)]
+    [LoadColumn(8)]
     public string ResultLabel { get; set; } = string.Empty;
 }
 
