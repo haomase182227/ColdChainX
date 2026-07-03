@@ -198,44 +198,59 @@ public class DispatchController : ControllerBase
     /// Mỗi phần tử Data trả về: lpnId, lpnCode, orderId, trackingCode, itemName, customerName,
     /// warehouseId, warehouseName, destinationAddress, routeName, plannedDispatchDate, quantity,
     /// actualWeightKg, actualCbm, tempCondition.
+    ///
+    /// Có phân trang qua <paramref name="pageNumber"/> / <paramref name="pageSize"/> (mặc định 1/10).
     /// </remarks>
     [HttpGet("lookup/lpns-ready")]
     [ProducesResponseType(typeof(object), 200)]
-    public async Task<IActionResult> LookupLpnsReady([FromQuery] Guid? warehouseId)
+    public async Task<IActionResult> LookupLpnsReady(
+        [FromQuery] Guid? warehouseId,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10)
     {
-        var rawLpns = await (from l in _db.Lpns
-                             join o in _db.TransportOrders on l.OrderId equals o.OrderId
-                             join w in _db.Warehouses on l.WarehouseId equals w.WarehouseId
-                             join c in _db.Customers on o.CustomerId equals c.CustomerId into cg
-                             from cust in cg.DefaultIfEmpty()
-                             join dl in _db.Locations on o.DestLocation equals dl.LocationId into dlg
-                             from destLoc in dlg.DefaultIfEmpty()
-                             join r in _db.RouteMasters on o.RouteId equals r.RouteId into rg
-                             from route in rg.DefaultIfEmpty()
-                             where l.State == LpnState.IN_STOCK
-                                && (warehouseId == null || l.WarehouseId == warehouseId)
-                             select new
-                             {
-                                 l.LpnId,
-                                 l.LpnCode,
-                                 l.Quantity,
-                                 l.ActualWeightKg,
-                                 l.ActualCbm,
-                                 l.SlaDeadline,
-                                 o.OrderId,
-                                 o.TrackingCode,
-                                 o.ItemName,
-                                 o.TempCondition,
-                                 CustomerName = cust != null ? cust.CompanyName : "N/A",
-                                 WarehouseId = w.WarehouseId,
-                                 WarehouseName = w.WarehouseName,
-                                 DestinationAddress = destLoc != null ? destLoc.Address : null,
-                                 RouteOriginCity = route != null ? route.OriginCity : null,
-                                 RouteDestCity = route != null ? route.DestCity : null,
-                                 l.CreatedAt
-                             })
-                             .OrderByDescending(x => x.CreatedAt)
-                             .ToListAsync();
+        var safePageNumber = pageNumber < 1 ? 1 : pageNumber;
+        var safePageSize = pageSize < 1 ? 10 : pageSize;
+
+        var query = from l in _db.Lpns
+                    join o in _db.TransportOrders on l.OrderId equals o.OrderId
+                    join w in _db.Warehouses on l.WarehouseId equals w.WarehouseId
+                    join c in _db.Customers on o.CustomerId equals c.CustomerId into cg
+                    from cust in cg.DefaultIfEmpty()
+                    join dl in _db.Locations on o.DestLocation equals dl.LocationId into dlg
+                    from destLoc in dlg.DefaultIfEmpty()
+                    join r in _db.RouteMasters on o.RouteId equals r.RouteId into rg
+                    from route in rg.DefaultIfEmpty()
+                    where l.State == LpnState.IN_STOCK
+                       && (warehouseId == null || l.WarehouseId == warehouseId)
+                    select new
+                    {
+                        l.LpnId,
+                        l.LpnCode,
+                        l.Quantity,
+                        l.ActualWeightKg,
+                        l.ActualCbm,
+                        l.SlaDeadline,
+                        o.OrderId,
+                        o.TrackingCode,
+                        o.ItemName,
+                        o.TempCondition,
+                        CustomerName = cust != null ? cust.CompanyName : "N/A",
+                        WarehouseId = w.WarehouseId,
+                        WarehouseName = w.WarehouseName,
+                        DestinationAddress = destLoc != null ? destLoc.Address : null,
+                        RouteOriginCity = route != null ? route.OriginCity : null,
+                        RouteDestCity = route != null ? route.DestCity : null,
+                        l.CreatedAt
+                    };
+
+        var totalRecords = await query.CountAsync();
+        var totalPages = (int)Math.Ceiling(totalRecords / (double)safePageSize);
+
+        var rawLpns = await query
+            .OrderByDescending(x => x.CreatedAt)
+            .Skip((safePageNumber - 1) * safePageSize)
+            .Take(safePageSize)
+            .ToListAsync();
 
         var items = rawLpns.Select(x => new
         {
@@ -258,7 +273,16 @@ public class DispatchController : ControllerBase
             x.CreatedAt
         }).ToList();
 
-        return Ok(new { Success = true, Count = items.Count, Data = items });
+        return Ok(new
+        {
+            Success = true,
+            PageNumber = safePageNumber,
+            PageSize = safePageSize,
+            TotalRecords = totalRecords,
+            TotalPages = totalPages,
+            Count = items.Count,
+            Data = items
+        });
     }
 
     /// <summary>
