@@ -1,3 +1,7 @@
+> ⚠️ **DEPRECATED**: This document has been superseded by `.ai-os/knowledge/testing/flow5-testing.md`.
+> This file is preserved for backward compatibility. Do NOT update this file.
+> All future updates MUST go to the new location.
+
 # 09 — Hướng Dẫn Kiểm Thử Flow 5: Giao Hàng & Quyết Toán COD
 
 Tài liệu này hướng dẫn chi tiết cách kiểm thử thủ công và tự động cho **Flow 5: Giao nhận hàng (ePOD) & Quyết toán COD** trên môi trường Local thông qua Swagger UI.

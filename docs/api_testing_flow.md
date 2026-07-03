@@ -1,3 +1,7 @@
+> ⚠️ **DEPRECATED**: This document has been superseded by `.ai-os/knowledge/testing/full-api-testing-flow.md`.
+> This file is preserved for backward compatibility. Do NOT update this file.
+> All future updates MUST go to the new location.
+
 # ColdChainX API Testing Flow & Progress Note
 
 This document tracks the steps and sample payloads required to verify the core backend workflows (Inbound, Inventory Hold, Outbound Shipping) using Swagger UI. It acts as a status sheet so you can track where the verification stands and what endpoints have been tested.
