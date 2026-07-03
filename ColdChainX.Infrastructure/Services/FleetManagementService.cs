@@ -30,12 +30,14 @@ public class FleetManagementService : IFleetManagementService
     private readonly ApplicationDbContext _db;
     private readonly IHubContext<NotificationHub> _hubContext;
     private readonly IPasswordHasher<User> _passwordHasher;
+    private readonly IFileService _fileService;
 
-    public FleetManagementService(ApplicationDbContext db, IHubContext<NotificationHub> hubContext, IPasswordHasher<User> passwordHasher)
+    public FleetManagementService(ApplicationDbContext db, IHubContext<NotificationHub> hubContext, IPasswordHasher<User> passwordHasher, IFileService fileService)
     {
         _db = db;
         _hubContext = hubContext;
         _passwordHasher = passwordHasher;
+        _fileService = fileService;
     }
 
     public async Task<ApiResponse<IReadOnlyCollection<VehicleFleetResponse>>> GetVehiclesAsync()
@@ -84,6 +86,9 @@ public class FleetManagementService : IFleetManagementService
             NextMaintenanceOdometer = request.NextMaintenanceOdometer > 0
                 ? request.NextMaintenanceOdometer
                 : request.CurrentOdometer + 10000,
+            NextMaintenanceDate = DateOnly.FromDateTime(DateTime.Today).AddDays(365),
+            WarningDaysBeforeDue = 15,
+            WarningKmBeforeDue = 500.0,
             Status = "ACTIVE",
             CreatedAt = DateTime.Now
         };
@@ -834,7 +839,6 @@ public class FleetManagementService : IFleetManagementService
         };
 
         vehicle.Status = "MAINTENANCE";
-        vehicle.NextMaintenanceOdometer = vehicle.CurrentOdometer + 10000;
         _db.MaintenanceTickets.Add(ticket);
         await _db.SaveChangesAsync();
 
@@ -853,7 +857,23 @@ public class FleetManagementService : IFleetManagementService
         ticket.CompletionDate = request.CompletionDate;
 
         if (ticket.Vehicle != null)
-            ticket.Vehicle.Status = "ACTIVE";
+        {
+            var odometerInterval = await GetSystemConfigDoubleAsync("MaintenanceIntervalOdometer", 10000.0);
+            var daysInterval = await GetSystemConfigIntAsync("MaintenanceIntervalDays", 365);
+
+            ticket.Vehicle.NextMaintenanceOdometer = ticket.Vehicle.CurrentOdometer + odometerInterval;
+            ticket.Vehicle.NextMaintenanceDate = DateOnly.FromDateTime(DateTime.Today).AddDays(daysInterval);
+
+            var hasOtherActiveTickets = await _db.MaintenanceTickets.AnyAsync(t =>
+                t.VehicleId == ticket.VehicleId &&
+                t.TicketId != ticket.TicketId &&
+                (t.Status == "OPEN" || t.Status == "IN_PROGRESS"));
+
+            if (!hasOtherActiveTickets)
+            {
+                ticket.Vehicle.Status = "ACTIVE";
+            }
+        }
 
         await _db.SaveChangesAsync();
         return ApiResponse<MaintenanceTicketResponse>.SuccessResponse(ToMaintenanceTicketResponse(ticket), "Maintenance ticket completed successfully");
@@ -1155,6 +1175,9 @@ public class FleetManagementService : IFleetManagementService
         CurrentLocation = vehicle.CurrentLocation,
         CurrentOdometer = vehicle.CurrentOdometer,
         NextMaintenanceOdometer = vehicle.NextMaintenanceOdometer,
+        NextMaintenanceDate = vehicle.NextMaintenanceDate,
+        WarningDaysBeforeDue = vehicle.WarningDaysBeforeDue,
+        WarningKmBeforeDue = vehicle.WarningKmBeforeDue,
         Status = vehicle.Status,
         Documents = vehicle.VehicleDocuments.Select(ToVehicleDocumentResponse).ToList()
     };
@@ -1208,7 +1231,8 @@ public class FleetManagementService : IFleetManagementService
         Cost = ticket.Cost,
         IssueDate = ticket.IssueDate,
         CompletionDate = ticket.CompletionDate,
-        Status = ticket.Status
+        Status = ticket.Status,
+        AttachmentUrl = ticket.AttachmentUrl
     };
 
     private static string NormalizeRequired(string? value)
@@ -1270,6 +1294,216 @@ public class FleetManagementService : IFleetManagementService
 
     private static string NormalizeHeader(string value)
         => value.Trim().Replace(" ", string.Empty).Replace("_", string.Empty).ToUpperInvariant();
+
+    public async Task<ApiResponse<IReadOnlyCollection<MaintenanceTicketResponse>>> GetMaintenanceTicketsAsync(Guid? vehicleId, string? status, int pageNumber = 1, int pageSize = 10)
+    {
+        var query = _db.MaintenanceTickets.AsNoTracking().AsQueryable();
+
+        if (vehicleId.HasValue)
+            query = query.Where(t => t.VehicleId == vehicleId.Value);
+
+        if (!string.IsNullOrWhiteSpace(status))
+            query = query.Where(t => t.Status == status);
+
+        var tickets = await query
+            .OrderByDescending(t => t.CreatedAt)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        var responses = tickets.Select(ToMaintenanceTicketResponse).ToList();
+        return ApiResponse<IReadOnlyCollection<MaintenanceTicketResponse>>.SuccessResponse(responses);
+    }
+
+    public async Task<ApiResponse<MaintenanceTicketResponse>> GetMaintenanceTicketByIdAsync(Guid ticketId)
+    {
+        var ticket = await _db.MaintenanceTickets
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.TicketId == ticketId);
+
+        if (ticket == null)
+            return ApiResponse<MaintenanceTicketResponse>.Failure("Maintenance ticket not found");
+
+        return ApiResponse<MaintenanceTicketResponse>.SuccessResponse(ToMaintenanceTicketResponse(ticket));
+    }
+
+    public async Task<ApiResponse<MaintenanceTicketResponse>> UpdateMaintenanceTicketStatusAsync(Guid ticketId, string status)
+    {
+        var ticket = await _db.MaintenanceTickets
+            .Include(t => t.Vehicle)
+            .FirstOrDefaultAsync(t => t.TicketId == ticketId);
+
+        if (ticket == null)
+            return ApiResponse<MaintenanceTicketResponse>.Failure("Maintenance ticket not found");
+
+        var normalizedStatus = status.ToUpperInvariant();
+        if (normalizedStatus != "OPEN" && normalizedStatus != "IN_PROGRESS" && normalizedStatus != "CANCELLED" && normalizedStatus != "RESOLVED")
+            return ApiResponse<MaintenanceTicketResponse>.Failure("Invalid status");
+
+        ticket.Status = normalizedStatus;
+
+        if (ticket.Vehicle != null)
+        {
+            if (normalizedStatus == "IN_PROGRESS" || normalizedStatus == "OPEN")
+            {
+                ticket.Vehicle.Status = "MAINTENANCE";
+            }
+            else if (normalizedStatus == "CANCELLED")
+            {
+                var hasOtherActive = await _db.MaintenanceTickets.AnyAsync(t =>
+                    t.VehicleId == ticket.VehicleId &&
+                    t.TicketId != ticket.TicketId &&
+                    (t.Status == "OPEN" || t.Status == "IN_PROGRESS"));
+
+                if (!hasOtherActive)
+                {
+                    ticket.Vehicle.Status = "ACTIVE";
+                }
+            }
+        }
+
+        await _db.SaveChangesAsync();
+        return ApiResponse<MaintenanceTicketResponse>.SuccessResponse(ToMaintenanceTicketResponse(ticket), $"Status updated to {normalizedStatus}");
+    }
+
+    public async Task<ApiResponse<string>> UploadMaintenanceTicketDocumentAsync(Guid ticketId, IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+            return ApiResponse<string>.Failure("No file uploaded or file is empty");
+
+        var ticket = await _db.MaintenanceTickets.FirstOrDefaultAsync(t => t.TicketId == ticketId);
+        if (ticket == null)
+            return ApiResponse<string>.Failure("Maintenance ticket not found");
+
+        var uploadResult = await _fileService.UploadFileAsync(file);
+        if (uploadResult == null)
+            return ApiResponse<string>.Failure("Failed to upload document");
+
+        ticket.AttachmentUrl = uploadResult;
+        await _db.SaveChangesAsync();
+
+        return ApiResponse<string>.SuccessResponse(uploadResult, "Document uploaded successfully");
+    }
+
+    public async Task<ApiResponse<IReadOnlyCollection<MaintenanceTicketResponse>>> GetVehicleMaintenanceHistoryAsync(Guid vehicleId)
+    {
+        var tickets = await _db.MaintenanceTickets
+            .AsNoTracking()
+            .Where(t => t.VehicleId == vehicleId && t.Status == "RESOLVED")
+            .OrderByDescending(t => t.CompletionDate)
+            .ToListAsync();
+
+        var responses = tickets.Select(ToMaintenanceTicketResponse).ToList();
+        return ApiResponse<IReadOnlyCollection<MaintenanceTicketResponse>>.SuccessResponse(responses);
+    }
+
+    public async Task<ApiResponse<VehicleFleetResponse>> MarkVehicleUnavailableAsync(Guid vehicleId, string reason)
+    {
+        var vehicle = await _db.Vehicles.FirstOrDefaultAsync(v => v.VehicleId == vehicleId && v.Status != "DELETED");
+        if (vehicle == null)
+            return ApiResponse<VehicleFleetResponse>.Failure("Vehicle not found");
+
+        vehicle.Status = "INACTIVE";
+        await _db.SaveChangesAsync();
+
+        return ApiResponse<VehicleFleetResponse>.SuccessResponse(ToVehicleResponse(vehicle), "Vehicle marked unavailable successfully");
+    }
+
+    public async Task<ApiResponse<MaintenanceForecastResponse>> GetVehicleMaintenanceForecastAsync(Guid vehicleId, Guid? tripId)
+    {
+        var vehicle = await _db.Vehicles.FirstOrDefaultAsync(v => v.VehicleId == vehicleId && v.Status != "DELETED");
+        if (vehicle == null)
+            return ApiResponse<MaintenanceForecastResponse>.Failure("Vehicle not found");
+
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var isDueByDate = vehicle.NextMaintenanceDate.HasValue && today >= vehicle.NextMaintenanceDate.Value;
+        var isDueByKm = vehicle.CurrentOdometer >= vehicle.NextMaintenanceOdometer;
+
+        var isWarningByDate = vehicle.NextMaintenanceDate.HasValue && !isDueByDate &&
+            (vehicle.NextMaintenanceDate.Value.DayNumber - today.DayNumber <= vehicle.WarningDaysBeforeDue);
+        var isWarningByKm = !isDueByKm &&
+            (vehicle.NextMaintenanceOdometer - vehicle.CurrentOdometer <= vehicle.WarningKmBeforeDue);
+
+        var isOverrunForecast = false;
+        double? tripDistance = null;
+
+        if (tripId.HasValue)
+        {
+            var trip = await _db.MasterTrips.AsNoTracking().FirstOrDefaultAsync(t => t.TripId == tripId.Value);
+            if (trip != null && trip.TotalDistanceKm.HasValue)
+            {
+                tripDistance = (double)trip.TotalDistanceKm.Value;
+                if (vehicle.CurrentOdometer + tripDistance.Value > vehicle.NextMaintenanceOdometer)
+                {
+                    isOverrunForecast = true;
+                }
+            }
+        }
+
+        var headroomKm = vehicle.NextMaintenanceOdometer - vehicle.CurrentOdometer;
+        var remainingDays = vehicle.NextMaintenanceDate.HasValue
+            ? vehicle.NextMaintenanceDate.Value.DayNumber - today.DayNumber
+            : 365;
+
+        var forecastStatus = "SAFE";
+        var message = "Vehicle is safe for dispatch";
+
+        if (isDueByDate || isDueByKm || isOverrunForecast)
+        {
+            forecastStatus = "OVERDUE";
+            message = isOverrunForecast
+                ? $"Trip distance of {tripDistance:F1} km exceeds available odometer headroom of {headroomKm:F1} km"
+                : (isDueByKm ? "Vehicle has exceeded maintenance mileage limit" : "Vehicle is overdue for scheduled maintenance date");
+        }
+        else if (isWarningByDate || isWarningByKm)
+        {
+            forecastStatus = "WARNING";
+            message = isWarningByKm
+                ? $"Vehicle is approaching mileage limit. Headroom: {headroomKm:F1} km"
+                : $"Vehicle is approaching due date. Remaining days: {remainingDays}";
+        }
+
+        var forecast = new MaintenanceForecastResponse
+        {
+            VehicleId = vehicle.VehicleId,
+            TruckPlate = vehicle.TruckPlate,
+            IsDueByDate = isDueByDate,
+            IsDueByKm = isDueByKm,
+            IsWarningByDate = isWarningByDate,
+            IsWarningByKm = isWarningByKm,
+            IsOverrunForecast = isOverrunForecast,
+            HeadroomKm = headroomKm,
+            RemainingDays = remainingDays,
+            ForecastStatus = forecastStatus,
+            Message = message
+        };
+
+        return ApiResponse<MaintenanceForecastResponse>.SuccessResponse(forecast);
+    }
+
+    private async Task<double> GetSystemConfigDoubleAsync(string key, double fallback)
+    {
+        var value = await _db.SystemConfigs
+            .AsNoTracking()
+            .Where(c => c.Key == key)
+            .Select(c => c.Value)
+            .FirstOrDefaultAsync();
+
+        return double.TryParse(value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : fallback;
+    }
+
+    private async Task<int> GetSystemConfigIntAsync(string key, int fallback)
+    {
+        var value = await _db.SystemConfigs
+            .AsNoTracking()
+            .Where(c => c.Key == key)
+            .Select(c => c.Value)
+            .FirstOrDefaultAsync();
+
+        return int.TryParse(value, out var parsed) ? parsed : fallback;
+    }
 
     private static class SpreadsheetReader
     {

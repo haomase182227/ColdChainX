@@ -954,6 +954,9 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasColumnName("ticket_code");
             entity.Property(e => e.TriggeredAtOdometer).HasColumnName("triggered_at_odometer");
             entity.Property(e => e.VehicleId).HasColumnName("vehicle_id");
+            entity.Property(e => e.AttachmentUrl)
+                .HasMaxLength(500)
+                .HasColumnName("attachment_url");
 
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.MaintenanceTickets)
                 .HasForeignKey(d => d.CreatedBy)
@@ -1765,6 +1768,13 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasPrecision(5, 2)
                 .HasColumnName("min_temp");
             entity.Property(e => e.NextMaintenanceOdometer).HasColumnName("next_maintenance_odometer");
+            entity.Property(e => e.NextMaintenanceDate).HasColumnName("next_maintenance_date");
+            entity.Property(e => e.WarningDaysBeforeDue)
+                .HasDefaultValueSql("15")
+                .HasColumnName("warning_days_before_due");
+            entity.Property(e => e.WarningKmBeforeDue)
+                .HasDefaultValueSql("500.0")
+                .HasColumnName("warning_km_before_due");
             entity.Property(e => e.StandardFuelLiters)
                 .HasPrecision(5, 2)
                 .HasColumnName("standard_fuel_liters");

@@ -14,6 +14,9 @@ public class VehicleFleetResponse
     public string? CurrentLocation { get; set; }
     public double CurrentOdometer { get; set; }
     public double NextMaintenanceOdometer { get; set; }
+    public DateOnly? NextMaintenanceDate { get; set; }
+    public int WarningDaysBeforeDue { get; set; }
+    public double WarningKmBeforeDue { get; set; }
     public string? Status { get; set; }
     public IReadOnlyCollection<VehicleDocumentResponse> Documents { get; set; } = Array.Empty<VehicleDocumentResponse>();
 }
@@ -68,6 +71,22 @@ public class MaintenanceTicketResponse
     public DateOnly IssueDate { get; set; }
     public DateOnly? CompletionDate { get; set; }
     public string? Status { get; set; }
+    public string? AttachmentUrl { get; set; }
+}
+
+public class MaintenanceForecastResponse
+{
+    public Guid VehicleId { get; set; }
+    public string TruckPlate { get; set; } = null!;
+    public bool IsDueByDate { get; set; }
+    public bool IsDueByKm { get; set; }
+    public bool IsWarningByDate { get; set; }
+    public bool IsWarningByKm { get; set; }
+    public bool IsOverrunForecast { get; set; }
+    public double HeadroomKm { get; set; }
+    public int RemainingDays { get; set; }
+    public string ForecastStatus { get; set; } = "SAFE"; // SAFE, WARNING, OVERDUE
+    public string? Message { get; set; }
 }
 
 public class ImportResultResponse

@@ -95,5 +95,26 @@ namespace ColdChainX.API.Controllers
             var result = await _fleetService.SoftDeleteVehicleAsync(id);
             return result.Success ? Ok(result) : NotFound(result);
         }
+
+        [HttpGet("{id:guid}/maintenance-history")]
+        public async Task<IActionResult> GetMaintenanceHistory(Guid id)
+        {
+            var result = await _fleetService.GetVehicleMaintenanceHistoryAsync(id);
+            return result.Success ? Ok(result) : NotFound(result);
+        }
+
+        [HttpPost("{id:guid}/mark-unavailable")]
+        public async Task<IActionResult> MarkUnavailable(Guid id, [FromQuery] string reason = "Manual lock")
+        {
+            var result = await _fleetService.MarkVehicleUnavailableAsync(id, reason);
+            return result.Success ? Ok(result) : NotFound(result);
+        }
+
+        [HttpGet("{id:guid}/maintenance-forecast")]
+        public async Task<IActionResult> GetMaintenanceForecast(Guid id, [FromQuery] Guid? tripId = null)
+        {
+            var result = await _fleetService.GetVehicleMaintenanceForecastAsync(id, tripId);
+            return result.Success ? Ok(result) : NotFound(result);
+        }
     }
 }

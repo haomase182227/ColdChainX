@@ -3,6 +3,7 @@ using System;
 using ColdChainX.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ColdChainX.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260703075724_AddAttachmentUrlToMaintenanceTickets")]
+    partial class AddAttachmentUrlToMaintenanceTickets
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -3452,10 +3455,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("numeric(5,2)")
                         .HasColumnName("min_temp");
 
-                    b.Property<DateOnly?>("NextMaintenanceDate")
-                        .HasColumnType("date")
-                        .HasColumnName("next_maintenance_date");
-
                     b.Property<double>("NextMaintenanceOdometer")
                         .HasColumnType("double precision")
                         .HasColumnName("next_maintenance_odometer");
@@ -3483,18 +3482,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)")
                         .HasColumnName("vehicle_type");
-
-                    b.Property<int>("WarningDaysBeforeDue")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("warning_days_before_due")
-                        .HasDefaultValueSql("15");
-
-                    b.Property<double>("WarningKmBeforeDue")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("double precision")
-                        .HasColumnName("warning_km_before_due")
-                        .HasDefaultValueSql("500.0");
 
                     b.HasKey("VehicleId")
                         .HasName("vehicles_pkey");
