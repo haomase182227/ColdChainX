@@ -194,6 +194,10 @@ public class DispatchController : ControllerBase
     /// Truyền <paramref name="warehouseId"/> để chỉ lấy các LPN thuộc kho đã chọn
     /// (Lpn.WarehouseId == warehouseId). Đây là bước bắt buộc của luồng manual-dispatch:
     /// người dùng chọn kho trước, sau đó chỉ thấy LPN của kho đó.
+    ///
+    /// Mỗi phần tử Data trả về: lpnId, lpnCode, orderId, trackingCode, itemName, customerName,
+    /// warehouseId, warehouseName, destinationAddress, routeName, plannedDispatchDate, quantity,
+    /// actualWeightKg, actualCbm, tempCondition.
     /// </remarks>
     [HttpGet("lookup/lpns-ready")]
     [ProducesResponseType(typeof(object), 200)]
@@ -204,6 +208,10 @@ public class DispatchController : ControllerBase
                              join w in _db.Warehouses on l.WarehouseId equals w.WarehouseId
                              join c in _db.Customers on o.CustomerId equals c.CustomerId into cg
                              from cust in cg.DefaultIfEmpty()
+                             join dl in _db.Locations on o.DestLocation equals dl.LocationId into dlg
+                             from destLoc in dlg.DefaultIfEmpty()
+                             join r in _db.RouteMasters on o.RouteId equals r.RouteId into rg
+                             from route in rg.DefaultIfEmpty()
                              where l.State == LpnState.IN_STOCK
                                 && (warehouseId == null || l.WarehouseId == warehouseId)
                              select new
@@ -213,12 +221,17 @@ public class DispatchController : ControllerBase
                                  l.Quantity,
                                  l.ActualWeightKg,
                                  l.ActualCbm,
+                                 l.SlaDeadline,
                                  o.OrderId,
                                  o.TrackingCode,
                                  o.ItemName,
                                  o.TempCondition,
                                  CustomerName = cust != null ? cust.CompanyName : "N/A",
+                                 WarehouseId = w.WarehouseId,
                                  WarehouseName = w.WarehouseName,
+                                 DestinationAddress = destLoc != null ? destLoc.Address : null,
+                                 RouteOriginCity = route != null ? route.OriginCity : null,
+                                 RouteDestCity = route != null ? route.DestCity : null,
                                  l.CreatedAt
                              })
                              .OrderByDescending(x => x.CreatedAt)
@@ -229,13 +242,19 @@ public class DispatchController : ControllerBase
             x.LpnId,
             Label = $"{x.LpnCode} ({x.TrackingCode}) — {x.ItemName} | Qty: {x.Quantity} | {x.ActualWeightKg}kg / {x.ActualCbm}m³ ({x.TempCondition}) | Khách: {x.CustomerName} | Kho: {x.WarehouseName}",
             x.LpnCode,
+            x.OrderId,
             x.TrackingCode,
             x.ItemName,
-            x.TempCondition,
+            x.CustomerName,
+            x.WarehouseId,
+            x.WarehouseName,
+            x.DestinationAddress,
+            RouteName = x.RouteOriginCity != null ? $"{x.RouteOriginCity} → {x.RouteDestCity}" : null,
+            PlannedDispatchDate = x.SlaDeadline,
             x.Quantity,
             x.ActualWeightKg,
             x.ActualCbm,
-            x.OrderId,
+            x.TempCondition,
             x.CreatedAt
         }).ToList();
 
