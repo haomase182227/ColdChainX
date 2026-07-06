@@ -22,6 +22,8 @@ public partial class MasterTrip
 
     public decimal TargetTemperature { get; set; }
 
+    public bool RequiresInspection { get; set; } = false;
+
     public DateTime PlannedStartTime { get; set; }
 
     public DateTime PlannedEndTime { get; set; }

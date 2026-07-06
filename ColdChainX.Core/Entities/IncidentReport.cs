@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace ColdChainX.Core.Entities;
@@ -30,4 +30,6 @@ public partial class IncidentReport
     public virtual User ReportedByNavigation { get; set; } = null!;
 
     public virtual MasterTrip? Trip { get; set; }
+
+    public virtual ICollection<IncidentEvidence> IncidentEvidences { get; set; } = new List<IncidentEvidence>();
 }
