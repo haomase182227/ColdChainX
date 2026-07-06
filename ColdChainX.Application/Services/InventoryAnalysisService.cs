@@ -147,28 +147,21 @@ namespace ColdChainX.Application.Services
                 var items = await query.ToListAsync();
 
                 // Load the active locations and zones for temperature comparison
-                var dbLocations = await _db.WarehouseLocations
-                    .Include(l => l.Zone)
-                    .ToListAsync();
-
-                var locationMap = dbLocations
-                    .Where(loc => !string.IsNullOrEmpty(loc.LocationCode))
-                    .GroupBy(loc => loc.LocationCode.ToUpperInvariant())
-                    .ToDictionary(g => g.Key, g => g.First());
+                // Since WarehouseLocations and Zones are removed, we use Warehouse defaults
 
                 var responseList = new List<TempAuditResponse>();
 
                 foreach (var s in items)
                 {
-                    var locCode = s.StorageLocation?.ToUpperInvariant() ?? string.Empty;
-                    locationMap.TryGetValue(locCode, out var loc);
+                    var locCode = s.StorageLocation ?? string.Empty;
+                    var warehouse = s.Receipt?.Warehouse;
 
                     // Check if the required temperature matches the zone range
                     decimal? reqMin = s.RequiredTemperature;
                     decimal? reqMax = s.RequiredTemperature;
 
-                    decimal? zoneMin = loc?.Zone?.TemperatureMin;
-                    decimal? zoneMax = loc?.Zone?.TemperatureMax;
+                    decimal? zoneMin = warehouse?.DefaultMinTemp;
+                    decimal? zoneMax = warehouse?.DefaultMaxTemp;
 
                     bool isFlagged = false;
                     if (reqMin.HasValue)
@@ -182,15 +175,15 @@ namespace ColdChainX.Application.Services
                         responseList.Add(new TempAuditResponse
                         {
                             StockId = s.LpnId,
-                            ItemCode = s.Order.TrackingCode ?? string.Empty,
-                            ItemName = s.Order.ItemName ?? string.Empty,
+                            ItemCode = s.Order?.TrackingCode ?? string.Empty,
+                            ItemName = s.Order?.ItemName ?? string.Empty,
                             RequiredTempMin = reqMin,
                             RequiredTempMax = reqMax,
                             ZoneTemperatureMin = zoneMin,
                             ZoneTemperatureMax = zoneMax,
-                            ZoneCode = loc?.Zone?.ZoneCode ?? "Unknown",
-                            LocationCode = s.StorageLocation ?? "N/A",
-                            WarehouseName = s.Receipt.Warehouse?.WarehouseName ?? "Unknown"
+                            ZoneCode = "N/A",
+                            LocationCode = locCode == string.Empty ? "N/A" : locCode,
+                            WarehouseName = warehouse?.WarehouseName ?? "Unknown"
                         });
                     }
                 }
@@ -216,7 +209,6 @@ namespace ColdChainX.Application.Services
             try
             {
                 var warehouse = await _db.Warehouses
-                    .Include(w => w.WarehouseZones)
                     .FirstOrDefaultAsync(w => w.WarehouseId == warehouseId);
 
                 if (warehouse == null)
@@ -224,23 +216,11 @@ namespace ColdChainX.Application.Services
                     return ApiResponse<WarehouseUtilizationResponse>.Failure("Warehouse not found.");
                 }
 
-                var zones = await _db.WarehouseZones
-                    .Where(z => z.WarehouseId == warehouseId && z.Status == "ACTIVE")
-                    .ToListAsync();
-
-                int currentPallets = zones.Sum(z => z.CurrentPallets);
+                int currentPallets = warehouse.CurrentPallets ?? 0;
                 int maxCapacity = warehouse.MaxPallets;
                 double warehouseOccupancy = maxCapacity > 0 ? (double)currentPallets / maxCapacity : 0.0;
 
-                var zoneOccupancyDetails = zones.Select(z => new ZoneOccupancyDetail
-                {
-                    ZoneId = z.ZoneId,
-                    ZoneCode = z.ZoneCode,
-                    ZoneName = z.ZoneName,
-                    MaxCapacityPallets = z.MaxCapacityPallets,
-                    CurrentPallets = z.CurrentPallets,
-                    ZoneOccupancyRate = z.MaxCapacityPallets > 0 ? (double)z.CurrentPallets / z.MaxCapacityPallets : 0.0
-                }).ToList();
+                var zoneOccupancyDetails = new List<ZoneOccupancyDetail>();
 
                 var response = new WarehouseUtilizationResponse
                 {
