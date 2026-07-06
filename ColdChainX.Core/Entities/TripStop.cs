@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace ColdChainX.Core.Entities;
@@ -32,6 +32,10 @@ public partial class TripStop
     public virtual Location? Location { get; set; }
 
     public virtual ICollection<Seal> Seals { get; set; } = new List<Seal>();
+
+    public virtual ICollection<TripStopEvent> TripStopEvents { get; set; } = new List<TripStopEvent>();
+
+    public virtual ICollection<DetentionCharge> DetentionCharges { get; set; } = new List<DetentionCharge>();
 
     public virtual MasterTrip? Trip { get; set; }
 }
