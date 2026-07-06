@@ -3,16 +3,19 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
-using ColdChainX.Application.DTOs.Dispatch;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
 using ColdChainX.Core.Enums;
+using System.Text;
+using System.Text.Json;
+using ColdChainX.Application.DTOs.Common;
+using ColdChainX.Application.DTOs.Dispatch;
 using ColdChainX.Infrastructure.Persistence;
 using ColdChainX.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using MediatR;
 
 namespace ColdChainX.API.Controllers;
@@ -497,31 +500,38 @@ public class DispatchController : ControllerBase
     /// Chỉ trả về các chuyến đã ghép (PLANNED) — tức đã qua bước manual-dispatch.
     /// </remarks>
     [HttpGet("trips/can-start-picking")]
-    [ProducesResponseType(typeof(object), 200)]
-    public async Task<IActionResult> GetTripsCanStartPicking()
+    [ProducesResponseType(typeof(PagedResult<ColdChainX.Application.DTOs.Dispatch.TripDispatchDto>), 200)]
+    public async Task<IActionResult> GetTripsCanStartPicking([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
     {
-        var trips = await _db.MasterTrips
+        var query = _db.MasterTrips
             .Include(t => t.Vehicle)
             .Include(t => t.TripDrivers)
                 .ThenInclude(td => td.Driver)
             .Where(t => t.Status == "PLANNED")
-            .OrderByDescending(t => t.CreatedAt)
-            .Select(t => new
+            .OrderByDescending(t => t.CreatedAt);
+
+        var totalRecords = await query.CountAsync();
+
+        var trips = await query
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .Select(t => new ColdChainX.Application.DTOs.Dispatch.TripDispatchDto
             {
-                t.TripId,
-                t.Status,
+                TripId = t.TripId,
+                Status = t.Status,
                 Vehicle = t.Vehicle != null ? t.Vehicle.TruckPlate : "N/A",
                 Driver  = t.TripDrivers.Count > 0 ? string.Join(", ", t.TripDrivers.Select(td => td.Driver.FullName)) : "N/A",
-                t.PlannedStartTime,
-                t.PlannedEndTime,
-                t.EstimatedDurationHours,
+                PlannedStartTime = t.PlannedStartTime,
+                PlannedEndTime = t.PlannedEndTime,
+                EstimatedDurationHours = t.EstimatedDurationHours,
                 TotalLpns     = _db.Lpns.Count(l => l.TripId == t.TripId),
                 AllocatedLpns = _db.Lpns.Count(l => l.TripId == t.TripId && l.State == LpnState.ALLOCATED),
                 Label = $"{t.TripId} | Xe {(t.Vehicle != null ? t.Vehicle.TruckPlate : "N/A")} | {_db.Lpns.Count(l => l.TripId == t.TripId)} LPN"
             })
             .ToListAsync();
 
-        return Ok(new { Success = true, Count = trips.Count, Data = trips });
+        var pagedResult = PagedResult<ColdChainX.Application.DTOs.Dispatch.TripDispatchDto>.Create(trips, totalRecords, pageNumber, pageSize);
+        return Ok(pagedResult);
     }
 
     /// <summary>
@@ -652,49 +662,41 @@ public class DispatchController : ControllerBase
     /// Dùng để FE biết nên nhập tripId nào vào POST /api/Dispatch/seal-and-dispatch/{tripId}.
     /// </remarks>
     [HttpGet("trips/ready-to-seal")]
-    [ProducesResponseType(typeof(object), 200)]
-    public async Task<IActionResult> GetTripsReadyToSeal()
+    [ProducesResponseType(typeof(PagedResult<ColdChainX.Application.DTOs.Dispatch.TripDispatchDto>), 200)]
+    public async Task<IActionResult> GetTripsReadyToSeal([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
     {
-        var candidates = await _db.MasterTrips
+        var query = _db.MasterTrips
             .Include(t => t.Vehicle)
             .Include(t => t.TripDrivers)
                 .ThenInclude(td => td.Driver)
-            .Where(t => t.Status == "LOADING_COMPLETED")
-            .OrderByDescending(t => t.CreatedAt)
-            .Select(t => new
+            .Where(t => t.Status == "LOADING_COMPLETED" 
+                     && string.IsNullOrEmpty(t.SealNumber)
+                     && _db.Lpns.Count(l => l.TripId == t.TripId) > 0
+                     && _db.Lpns.Count(l => l.TripId == t.TripId && l.State == LpnState.RELEASED) == _db.Lpns.Count(l => l.TripId == t.TripId))
+            .OrderByDescending(t => t.CreatedAt);
+
+        var totalRecords = await query.CountAsync();
+
+        var trips = await query
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .Select(t => new ColdChainX.Application.DTOs.Dispatch.TripDispatchDto
             {
-                t.TripId,
-                t.Status,
+                TripId = t.TripId,
+                Status = t.Status,
                 Vehicle = t.Vehicle != null ? t.Vehicle.TruckPlate : "N/A",
                 Driver  = t.TripDrivers.Count > 0 ? string.Join(", ", t.TripDrivers.Select(td => td.Driver.FullName)) : "N/A",
-                t.PlannedStartTime,
-                t.PlannedEndTime,
-                t.SealNumber,
+                PlannedStartTime = t.PlannedStartTime,
+                PlannedEndTime = t.PlannedEndTime,
+                EstimatedDurationHours = t.EstimatedDurationHours,
                 TotalLpns    = _db.Lpns.Count(l => l.TripId == t.TripId),
-                ReleasedLpns = _db.Lpns.Count(l => l.TripId == t.TripId && l.State == LpnState.RELEASED)
+                AllocatedLpns = _db.Lpns.Count(l => l.TripId == t.TripId && l.State == LpnState.RELEASED),
+                Label = $"{t.TripId} | Xe {(t.Vehicle != null ? t.Vehicle.TruckPlate : "N/A")} | {_db.Lpns.Count(l => l.TripId == t.TripId)} LPN"
             })
             .ToListAsync();
 
-        // Chỉ giữ các chuyến đã đầy đủ LPN ở trạng thái RELEASED và chưa kẹp chì
-        var ready = candidates
-            .Where(t => t.TotalLpns > 0
-                     && t.ReleasedLpns == t.TotalLpns
-                     && string.IsNullOrEmpty(t.SealNumber))
-            .Select(t => new
-            {
-                t.TripId,
-                t.Status,
-                t.Vehicle,
-                t.Driver,
-                t.PlannedStartTime,
-                t.PlannedEndTime,
-                t.TotalLpns,
-                t.ReleasedLpns,
-                Label = $"{t.TripId} | Xe {t.Vehicle} | {t.ReleasedLpns}/{t.TotalLpns} LPN RELEASED"
-            })
-            .ToList();
-
-        return Ok(new { Success = true, Count = ready.Count, Data = ready });
+        var pagedResult = PagedResult<ColdChainX.Application.DTOs.Dispatch.TripDispatchDto>.Create(trips, totalRecords, pageNumber, pageSize);
+        return Ok(pagedResult);
     }
 
     /// <summary>
