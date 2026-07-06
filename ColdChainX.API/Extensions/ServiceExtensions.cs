@@ -79,8 +79,7 @@ namespace ColdChainX.API.Extensions
 
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IWarehouseRepository, WarehouseRepository>();
-            services.AddScoped<IWarehouseZoneRepository, WarehouseZoneRepository>();
-            services.AddScoped<IWarehouseLocationRepository, WarehouseLocationRepository>();
+
             services.AddScoped<IWarehouseReceiptRepository, WarehouseReceiptRepository>();
             services.AddScoped<IVehicleRepository, VehicleRepository>();
             services.AddScoped<IDriverRepository, DriverRepository>();
@@ -90,8 +89,7 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IJwtService, JwtService>();
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<IWarehouseService, WarehouseService>();
-            services.AddScoped<IWarehouseZoneService, WarehouseZoneService>();
-            services.AddScoped<IWarehouseLocationService, WarehouseLocationService>();
+
             services.AddScoped<ICustomerService, CustomerService>();
             services.AddHttpClient<ILocationService, GoongLocationService>(client =>
             {
