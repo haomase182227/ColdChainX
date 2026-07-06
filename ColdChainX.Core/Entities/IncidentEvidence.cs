@@ -1,9 +1,11 @@
 using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace ColdChainX.Core.Entities;
 
 public partial class IncidentEvidence
 {
+    [Key]
     public Guid EvidenceId { get; set; }
     
     public Guid IncidentId { get; set; }

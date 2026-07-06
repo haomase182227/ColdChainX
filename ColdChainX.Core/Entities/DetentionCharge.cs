@@ -1,9 +1,11 @@
 using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace ColdChainX.Core.Entities;
 
 public partial class DetentionCharge
 {
+    [Key]
     public Guid ChargeId { get; set; }
     
     public Guid StopId { get; set; }

@@ -1,9 +1,11 @@
 using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace ColdChainX.Core.Entities;
 
 public partial class TripStopEvent
 {
+    [Key]
     public Guid EventId { get; set; }
     
     public Guid StopId { get; set; }
