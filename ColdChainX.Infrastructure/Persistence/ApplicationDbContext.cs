@@ -48,6 +48,12 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
 
     public virtual DbSet<InvoiceLine> InvoiceLines { get; set; }
 
+    public virtual DbSet<TripStopEvent> TripStopEvents { get; set; }
+
+    public virtual DbSet<DetentionCharge> DetentionCharges { get; set; }
+
+    public virtual DbSet<IncidentEvidence> IncidentEvidences { get; set; }
+
     public virtual DbSet<InboundAsn> InboundAsns { get; set; }
 
     public virtual DbSet<IotDevice> IotDevices { get; set; }
