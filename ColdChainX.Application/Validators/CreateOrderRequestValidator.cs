@@ -1,5 +1,7 @@
 using ColdChainX.Application.DTOs.Orders;
 using FluentValidation;
+using System;
+using System.Linq;
 
 namespace ColdChainX.Application.Validators
 {
@@ -49,8 +51,8 @@ namespace ColdChainX.Application.Validators
 
             RuleFor(x => x.PackagingType)
                 .NotEmpty().WithMessage("Packaging_Type is required")
-                .Must(value => AllowedPackagingTypes.Contains(value))
-                .WithMessage($"Packaging_Type must be one of: {string.Join(", ", AllowedPackagingTypes)}");
+                .Must(ContainsOnlyAllowedPackagingTypes)
+                .WithMessage(request => BuildPackagingTypeErrorMessage(request.PackagingType));
 
             RuleFor(x => x.LengthCm)
                 .GreaterThan(0).WithMessage("Length_CM must be greater than 0");
@@ -74,6 +76,35 @@ namespace ColdChainX.Application.Validators
                 .WithMessage("DocumentImage must not be empty")
                 .Must(file => file == null || file.Length <= MaxDocumentSizeBytes)
                 .WithMessage("DocumentImage must be smaller than 10MB");
+        }
+
+        private static bool ContainsOnlyAllowedPackagingTypes(string? value)
+        {
+            var packagingTypes = SplitPackagingTypes(value);
+
+            return packagingTypes.Length > 0 && packagingTypes.All(packagingType => AllowedPackagingTypes.Contains(packagingType));
+        }
+
+        private static string BuildPackagingTypeErrorMessage(string? value)
+        {
+            var invalidValue = SplitPackagingTypes(value)
+                .FirstOrDefault(packagingType => !AllowedPackagingTypes.Contains(packagingType));
+
+            if (!string.IsNullOrWhiteSpace(invalidValue))
+                return $"Packaging_Type contains invalid value: {invalidValue}. Allowed values: {string.Join(", ", AllowedPackagingTypes)}";
+
+            return $"Packaging_Type must be one of: {string.Join(", ", AllowedPackagingTypes)}";
+        }
+
+        private static string[] SplitPackagingTypes(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return [];
+
+            return value
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(packagingType => !string.IsNullOrWhiteSpace(packagingType))
+                .ToArray();
         }
     }
 }

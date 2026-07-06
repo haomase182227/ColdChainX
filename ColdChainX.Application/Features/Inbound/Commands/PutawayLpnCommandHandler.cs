@@ -18,7 +18,9 @@ public class PutawayLpnCommandHandler : IRequestHandler<PutawayLpnCommand, Putaw
 
     public async Task<PutawayLpnResponse> Handle(PutawayLpnCommand request, CancellationToken cancellationToken)
     {
-        var lpn = await _context.Lpns.FirstOrDefaultAsync(l => l.LpnId == request.LpnId, cancellationToken);
+        var lpn = await _context.Lpns
+            .Include(l => l.Receipt)
+            .FirstOrDefaultAsync(l => l.LpnId == request.LpnId, cancellationToken);
         if (lpn == null)
         {
             return new PutawayLpnResponse { Success = false, Message = "LPN not found." };
@@ -27,6 +29,15 @@ public class PutawayLpnCommandHandler : IRequestHandler<PutawayLpnCommand, Putaw
         if (lpn.State != LpnState.RECEIVING)
         {
             return new PutawayLpnResponse { Success = false, Message = $"LPN is not in RECEIVING state. Current state: {lpn.State}" };
+        }
+
+        if (lpn.Receipt == null || string.IsNullOrWhiteSpace(lpn.Receipt.PdfUrl))
+        {
+            return new PutawayLpnResponse
+            {
+                Success = false,
+                Message = "Warehouse receipt must be generated before putaway."
+            };
         }
 
         if (string.IsNullOrWhiteSpace(request.StorageLocation))

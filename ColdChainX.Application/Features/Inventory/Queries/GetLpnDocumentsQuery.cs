@@ -42,12 +42,15 @@ public class GetLpnDocumentsQueryHandler : IRequestHandler<GetLpnDocumentsQuery,
         var docs = new List<LpnDocumentDto>();
 
         // 1. Warehouse Receipt (Phiếu nhập kho)
-        docs.Add(new LpnDocumentDto
+        if (!string.IsNullOrWhiteSpace(lpn.Receipt?.PdfUrl))
         {
-            DocumentType = "WarehouseReceipt",
-            DocumentName = "Phiếu Nhập Kho",
-            Url = $"/api/inbound/receipts/{lpn.ReceiptId}/pdf"
-        });
+            docs.Add(new LpnDocumentDto
+            {
+                DocumentType = "WarehouseReceipt",
+                DocumentName = "Phiếu Nhập Kho",
+                Url = lpn.Receipt.PdfUrl
+            });
+        }
 
         // 2. Discrepancy Note (Biên bản bất thường) - Always generated dynamically if requested
         if (!string.IsNullOrEmpty(lpn.DiscrepancyReason) || !string.IsNullOrEmpty(lpn.EvidenceImageUrl))

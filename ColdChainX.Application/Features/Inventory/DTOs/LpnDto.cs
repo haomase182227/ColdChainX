@@ -8,6 +8,9 @@ public class LpnDto
     public string LpnCode { get; set; } = null!;
     public string ItemName { get; set; } = null!;
     public string? BatchNumber { get; set; }
+    public Guid? ReceiptId { get; set; }
+    public bool HasWarehouseReceipt { get; set; }
+    public string? WarehouseReceiptPdfUrl { get; set; }
     public Guid? WarehouseId { get; set; }
     public string? WarehouseName { get; set; }
     public string? StorageLocation { get; set; }
