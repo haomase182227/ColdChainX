@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace ColdChainX.Core.Entities;
@@ -8,6 +8,8 @@ public partial class AlertLog
     public Guid AlertId { get; set; }
 
     public Guid? TripId { get; set; }
+
+    public Guid? LpnId { get; set; }
 
     public string AlertType { get; set; } = null!;
 
@@ -32,4 +34,6 @@ public partial class AlertLog
     public virtual User? ResolvedByNavigation { get; set; }
 
     public virtual MasterTrip? Trip { get; set; }
+
+    public virtual Lpn? Lpn { get; set; }
 }
