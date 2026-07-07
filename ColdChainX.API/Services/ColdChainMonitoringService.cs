@@ -11,7 +11,8 @@ namespace ColdChainX.API.Services;
 
 public sealed class ColdChainMonitoringService : IColdChainMonitoringService
 {
-    private const string ActiveTripStatus = "IN_TRANSIT";
+    // DELAYED (Luồng 8 — sự cố/sang xe) vẫn là chuyến đang chở hàng lạnh, telemetry phải được xử lý
+    private static readonly string[] ActiveTripStatuses = { "IN_TRANSIT", "DELAYED" };
     private const double DeliveryRadiusMeters = 50;
     private const double SoftGeoFenceRadiusMeters = 1000;
     private const double HardGeoFenceRadiusMeters = 2500;
@@ -79,7 +80,7 @@ public sealed class ColdChainMonitoringService : IColdChainMonitoringService
                 .ThenInclude(s => s.Location)
             .FirstOrDefaultAsync(t =>
                 t.VehicleId == device.VehicleId &&
-                t.Status == ActiveTripStatus,
+                ActiveTripStatuses.Contains(t.Status!),
                 cancellationToken);
 
         if (trip == null)
