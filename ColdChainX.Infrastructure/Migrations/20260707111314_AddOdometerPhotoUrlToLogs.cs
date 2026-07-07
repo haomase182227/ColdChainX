@@ -11,10 +11,11 @@ namespace ColdChainX.Infrastructure.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<string>(
-                name: "OdometerPhotoUrl",
+                name: "odometer_photo_url",
                 schema: "public",
                 table: "vehicle_odometer_logs",
-                type: "text",
+                type: "character varying(1000)",
+                maxLength: 1000,
                 nullable: true);
         }
 
@@ -22,7 +23,7 @@ namespace ColdChainX.Infrastructure.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(
-                name: "OdometerPhotoUrl",
+                name: "odometer_photo_url",
                 schema: "public",
                 table: "vehicle_odometer_logs");
         }

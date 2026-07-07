@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ColdChainX.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260707110240_AddOdometerPhotoUrlToLogs")]
+    [Migration("20260707111314_AddOdometerPhotoUrlToLogs")]
     partial class AddOdometerPhotoUrlToLogs
     {
         /// <inheritdoc />
@@ -3592,7 +3592,9 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("location_text");
 
                     b.Property<string>("OdometerPhotoUrl")
-                        .HasColumnType("text");
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("odometer_photo_url");
 
                     b.Property<double>("OdometerValue")
                         .HasColumnType("double precision")

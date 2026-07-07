@@ -2624,6 +2624,7 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.LocationText).HasMaxLength(500).HasColumnName("location_text");
             entity.Property(e => e.Reason).HasMaxLength(255).HasColumnName("reason");
             entity.Property(e => e.UpdatedBy).HasColumnName("updated_by");
+            entity.Property(e => e.OdometerPhotoUrl).HasMaxLength(1000).HasColumnName("odometer_photo_url");
 
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")

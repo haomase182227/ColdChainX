@@ -3589,7 +3589,9 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("location_text");
 
                     b.Property<string>("OdometerPhotoUrl")
-                        .HasColumnType("text");
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("odometer_photo_url");
 
                     b.Property<double>("OdometerValue")
                         .HasColumnType("double precision")
