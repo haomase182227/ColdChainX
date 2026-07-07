@@ -103,9 +103,29 @@ public class ImportExcelRequest
 
 public class SyncOdometerRequest
 {
+    /// <summary>
+    /// Chỉ số công tơ mét hiện tại của xe (km).
+    /// </summary>
     public double Odometer { get; set; }
+
+    /// <summary>
+    /// Địa điểm đồng bộ odometer (ví dụ: tên kho bãi, địa chỉ thực tế).
+    /// </summary>
     public string? LocationText { get; set; }
+
+    /// <summary>
+    /// Lý do đồng bộ công tơ mét. Các giá trị chấp nhận:
+    /// - ROUTINE_SYNC (Đồng bộ định kỳ)
+    /// - PRE_TRIP_INSPECTION (Kiểm tra trước chuyến đi)
+    /// - POST_TRIP_REPORT (Báo cáo sau chuyến đi)
+    /// - MANUAL_CORRECTION (Điều chỉnh thủ công)
+    /// - OTHER (Lý do khác, ghi chú ở trường Note)
+    /// </summary>
     public OdometerSyncReason Reason { get; set; } = OdometerSyncReason.ROUTINE_SYNC;
+
+    /// <summary>
+    /// Ghi chú/chi tiết thêm về lý do đồng bộ (Bắt buộc nhập nếu lý do là OTHER).
+    /// </summary>
     public string? Note { get; set; }
 }
 
