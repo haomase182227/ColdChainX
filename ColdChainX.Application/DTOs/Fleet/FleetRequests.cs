@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using ColdChainX.Core.Enums;
 
 namespace ColdChainX.Application.DTOs.Fleet;
 
@@ -104,7 +105,8 @@ public class SyncOdometerRequest
 {
     public double Odometer { get; set; }
     public string? LocationText { get; set; }
-    public string? Reason { get; set; }
+    public OdometerSyncReason Reason { get; set; } = OdometerSyncReason.ROUTINE_SYNC;
+    public string? Note { get; set; }
 }
 
 public class CreateMaintenanceTicketRequest

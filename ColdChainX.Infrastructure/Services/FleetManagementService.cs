@@ -788,7 +788,7 @@ public class FleetManagementService : IFleetManagementService
             VehicleId = vehicle.VehicleId,
             OdometerValue = request.Odometer,
             LocationText = TrimOrNull(request.LocationText),
-            Reason = string.IsNullOrWhiteSpace(request.Reason) ? "ROUTINE_SYNC" : TrimOrNull(request.Reason),
+            Reason = string.IsNullOrWhiteSpace(request.Note) ? request.Reason.ToString() : $"{request.Reason} - {TrimOrNull(request.Note)}",
             UpdatedBy = updatedBy,
             CreatedAt = DateTime.Now
         };

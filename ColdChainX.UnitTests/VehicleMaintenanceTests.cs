@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.SignalR;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Application.DTOs.Fleet;
 using ColdChainX.Core.Entities;
+using ColdChainX.Core.Enums;
 using ColdChainX.Infrastructure.Persistence;
 using ColdChainX.Infrastructure.Services;
 using ColdChainX.Infrastructure.Hubs;
@@ -212,7 +213,8 @@ namespace ColdChainX.UnitTests
             {
                 Odometer = 6500.5,
                 LocationText = "Test Location",
-                Reason = "Manual correction check"
+                Reason = OdometerSyncReason.MANUAL_CORRECTION,
+                Note = "Manual correction check"
             };
             var updaterId = Guid.NewGuid();
 
@@ -232,7 +234,7 @@ namespace ColdChainX.UnitTests
             Assert.NotNull(log);
             Assert.Equal(6500.5, log.OdometerValue);
             Assert.Equal("Test Location", log.LocationText);
-            Assert.Equal("Manual correction check", log.Reason);
+            Assert.Equal("MANUAL_CORRECTION - Manual correction check", log.Reason);
             Assert.Equal(updaterId, log.UpdatedBy);
             Assert.True((DateTime.Now - log.CreatedAt).TotalSeconds < 5);
         }
