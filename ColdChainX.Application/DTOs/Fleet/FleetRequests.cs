@@ -137,6 +137,11 @@ public class SyncOdometerRequest
     /// Đường dẫn ảnh minh chứng công tơ mét (ví dụ: ảnh chụp màn hình cơ hoặc bảng taplo).
     /// </summary>
     public string? OdometerPhotoUrl { get; set; }
+
+    /// <summary>
+    /// Tệp ảnh minh chứng chụp công tơ mét thực tế (upload trực tiếp từ thiết bị).
+    /// </summary>
+    public IFormFile? OdometerPhoto { get; set; }
 }
 
 public class CreateMaintenanceTicketRequest

@@ -16,11 +16,13 @@ namespace ColdChainX.API.Controllers
     {
         private readonly IVehicleService _vehicleService;
         private readonly IFleetManagementService _fleetService;
+        private readonly IFileService _fileService;
 
-        public VehiclesController(IVehicleService vehicleService, IFleetManagementService fleetService)
+        public VehiclesController(IVehicleService vehicleService, IFleetManagementService fleetService, IFileService fileService)
         {
             _vehicleService = vehicleService;
             _fleetService = fleetService;
+            _fileService = fileService;
         }
 
         [HttpGet]
@@ -68,6 +70,12 @@ namespace ColdChainX.API.Controllers
             if (Guid.TryParse(userIdClaim, out var parsedId))
             {
                 userId = parsedId;
+            }
+
+            if (request.OdometerPhoto != null)
+            {
+                var uploadedUrl = await _fileService.UploadFileAsync(request.OdometerPhoto);
+                request.OdometerPhotoUrl = uploadedUrl;
             }
 
             var result = await _fleetService.SyncOdometerAsync(request, userId);
