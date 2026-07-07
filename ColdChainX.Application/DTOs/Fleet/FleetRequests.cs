@@ -104,6 +104,11 @@ public class ImportExcelRequest
 public class SyncOdometerRequest
 {
     /// <summary>
+    /// Biển số xe cần đồng bộ (ví dụ: "29C-12345").
+    /// </summary>
+    public string TruckPlate { get; set; } = null!;
+
+    /// <summary>
     /// Chỉ số công tơ mét hiện tại của xe (km).
     /// </summary>
     public double Odometer { get; set; }
@@ -127,6 +132,11 @@ public class SyncOdometerRequest
     /// Ghi chú/chi tiết thêm về lý do đồng bộ (Bắt buộc nhập nếu lý do là OTHER).
     /// </summary>
     public string? Note { get; set; }
+
+    /// <summary>
+    /// Đường dẫn ảnh minh chứng công tơ mét (ví dụ: ảnh chụp màn hình cơ hoặc bảng taplo).
+    /// </summary>
+    public string? OdometerPhotoUrl { get; set; }
 }
 
 public class CreateMaintenanceTicketRequest

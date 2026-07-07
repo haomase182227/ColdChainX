@@ -16,6 +16,8 @@ public partial class VehicleOdometerLog
 
     public Guid? UpdatedBy { get; set; }
 
+    public string? OdometerPhotoUrl { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public virtual Vehicle? Vehicle { get; set; }

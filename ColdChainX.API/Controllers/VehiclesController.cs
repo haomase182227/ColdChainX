@@ -60,8 +60,8 @@ namespace ColdChainX.API.Controllers
             return result.Success ? Ok(result) : NotFound(result);
         }
 
-        [HttpPost("{truckPlate}/sync-odometer")]
-        public async Task<IActionResult> SyncOdometer(string truckPlate, [FromBody] SyncOdometerRequest request)
+        [HttpPost("sync-odometer")]
+        public async Task<IActionResult> SyncOdometer([FromBody] SyncOdometerRequest request)
         {
             Guid? userId = null;
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -70,7 +70,7 @@ namespace ColdChainX.API.Controllers
                 userId = parsedId;
             }
 
-            var result = await _fleetService.SyncOdometerAsync(truckPlate, request, userId);
+            var result = await _fleetService.SyncOdometerAsync(request, userId);
             return result.Success ? Ok(result) : NotFound(result);
         }
 

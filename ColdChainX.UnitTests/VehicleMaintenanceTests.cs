@@ -211,15 +211,17 @@ namespace ColdChainX.UnitTests
             // Arrange
             var request = new SyncOdometerRequest
             {
+                TruckPlate = "29C-12345",
                 Odometer = 6500.5,
                 LocationText = "Test Location",
                 Reason = OdometerSyncReason.MANUAL_CORRECTION,
-                Note = "Manual correction check"
+                Note = "Manual correction check",
+                OdometerPhotoUrl = "http://test.image/odo.png"
             };
             var updaterId = Guid.NewGuid();
 
             // Act
-            var result = await _service.SyncOdometerAsync("29C-12345", request, updaterId);
+            var result = await _service.SyncOdometerAsync(request, updaterId);
 
             // Assert
             Assert.True(result.Success);
@@ -236,6 +238,7 @@ namespace ColdChainX.UnitTests
             Assert.Equal("Test Location", log.LocationText);
             Assert.Equal("MANUAL_CORRECTION - Manual correction check", log.Reason);
             Assert.Equal(updaterId, log.UpdatedBy);
+            Assert.Equal("http://test.image/odo.png", log.OdometerPhotoUrl);
             Assert.True((DateTime.Now - log.CreatedAt).TotalSeconds < 5);
         }
     }

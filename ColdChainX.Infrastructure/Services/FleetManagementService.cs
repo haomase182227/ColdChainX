@@ -770,9 +770,14 @@ public class FleetManagementService : IFleetManagementService
         return ApiResponse<ImportResultResponse>.SuccessResponse(result, "Driver licenses imported");
     }
 
-    public async Task<ApiResponse<VehicleFleetResponse>> SyncOdometerAsync(string truckPlate, SyncOdometerRequest request, Guid? updatedBy = null)
+    public async Task<ApiResponse<VehicleFleetResponse>> SyncOdometerAsync(SyncOdometerRequest request, Guid? updatedBy = null)
     {
-        var plate = NormalizeRequired(truckPlate);
+        if (request == null || string.IsNullOrWhiteSpace(request.TruckPlate))
+        {
+            return ApiResponse<VehicleFleetResponse>.Failure("Truck plate is required");
+        }
+
+        var plate = NormalizeRequired(request.TruckPlate);
         var vehicle = await _db.Vehicles
             .Include(v => v.VehicleDocuments)
             .FirstOrDefaultAsync(v => v.TruckPlate.ToUpper() == plate.ToUpper() && v.Status != "DELETED");
@@ -790,6 +795,7 @@ public class FleetManagementService : IFleetManagementService
             LocationText = TrimOrNull(request.LocationText),
             Reason = string.IsNullOrWhiteSpace(request.Note) ? request.Reason.ToString() : $"{request.Reason} - {TrimOrNull(request.Note)}",
             UpdatedBy = updatedBy,
+            OdometerPhotoUrl = TrimOrNull(request.OdometerPhotoUrl),
             CreatedAt = DateTime.Now
         };
         _db.VehicleOdometerLogs.Add(odometerLog);
