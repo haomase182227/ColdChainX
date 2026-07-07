@@ -61,7 +61,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("sync-odometer")]
-        public async Task<IActionResult> SyncOdometer([FromBody] SyncOdometerRequest request)
+        public async Task<IActionResult> SyncOdometer([FromForm] SyncOdometerRequest request)
         {
             Guid? userId = null;
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
