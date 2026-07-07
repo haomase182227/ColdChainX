@@ -63,7 +63,14 @@ namespace ColdChainX.API.Controllers
         [HttpPost("{truckPlate}/sync-odometer")]
         public async Task<IActionResult> SyncOdometer(string truckPlate, [FromBody] SyncOdometerRequest request)
         {
-            var result = await _fleetService.SyncOdometerAsync(truckPlate, request);
+            Guid? userId = null;
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (Guid.TryParse(userIdClaim, out var parsedId))
+            {
+                userId = parsedId;
+            }
+
+            var result = await _fleetService.SyncOdometerAsync(truckPlate, request, userId);
             return result.Success ? Ok(result) : NotFound(result);
         }
 

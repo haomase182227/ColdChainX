@@ -33,7 +33,7 @@ public interface IFleetManagementService
     Task<ApiResponse<bool>> DeleteDriverLicenseAsync(Guid licenseId);
     Task<ApiResponse<ImportResultResponse>> ImportDriverLicensesAsync(IFormFile excelFile);
 
-    Task<ApiResponse<VehicleFleetResponse>> SyncOdometerAsync(string truckPlate, SyncOdometerRequest request);
+    Task<ApiResponse<VehicleFleetResponse>> SyncOdometerAsync(string truckPlate, SyncOdometerRequest request, Guid? updatedBy = null);
     Task<ApiResponse<MaintenanceTicketResponse>> CreateMaintenanceTicketAsync(Guid vehicleId, CreateMaintenanceTicketRequest request, Guid createdBy);
     Task<ApiResponse<MaintenanceTicketResponse>> CompleteMaintenanceTicketAsync(Guid ticketId, CompleteMaintenanceTicketRequest request);
     Task<ApiResponse<IReadOnlyCollection<MaintenanceTicketResponse>>> GetMaintenanceTicketsAsync(Guid? vehicleId, string? status, int pageNumber = 1, int pageSize = 10);

@@ -770,7 +770,7 @@ public class FleetManagementService : IFleetManagementService
         return ApiResponse<ImportResultResponse>.SuccessResponse(result, "Driver licenses imported");
     }
 
-    public async Task<ApiResponse<VehicleFleetResponse>> SyncOdometerAsync(string truckPlate, SyncOdometerRequest request)
+    public async Task<ApiResponse<VehicleFleetResponse>> SyncOdometerAsync(string truckPlate, SyncOdometerRequest request, Guid? updatedBy = null)
     {
         var plate = NormalizeRequired(truckPlate);
         var vehicle = await _db.Vehicles
@@ -781,6 +781,18 @@ public class FleetManagementService : IFleetManagementService
 
         vehicle.CurrentOdometer = request.Odometer;
         vehicle.CurrentLocation = TrimOrNull(request.LocationText);
+
+        var odometerLog = new VehicleOdometerLog
+        {
+            LogId = Guid.NewGuid(),
+            VehicleId = vehicle.VehicleId,
+            OdometerValue = request.Odometer,
+            LocationText = TrimOrNull(request.LocationText),
+            Reason = string.IsNullOrWhiteSpace(request.Reason) ? "ROUTINE_SYNC" : TrimOrNull(request.Reason),
+            UpdatedBy = updatedBy,
+            CreatedAt = DateTime.Now
+        };
+        _db.VehicleOdometerLogs.Add(odometerLog);
 
         if (vehicle.Status == "ACTIVE" && vehicle.CurrentOdometer >= vehicle.NextMaintenanceOdometer)
         {

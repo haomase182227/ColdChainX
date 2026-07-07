@@ -120,6 +120,8 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
 
     public virtual DbSet<LpnDeliveryConfirmation> LpnDeliveryConfirmations { get; set; }
 
+    public virtual DbSet<VehicleOdometerLog> VehicleOdometerLogs { get; set; }
+
 
 
 
@@ -2606,6 +2608,32 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasForeignKey(d => d.CodVerifiedByUserId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_lpn_delivery_confirmations_verified_by");
+        });
+
+        modelBuilder.Entity<VehicleOdometerLog>(entity =>
+        {
+            entity.HasKey(e => e.LogId).HasName("vehicle_odometer_logs_pkey");
+            entity.ToTable("vehicle_odometer_logs");
+
+            entity.Property(e => e.LogId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("log_id");
+
+            entity.Property(e => e.VehicleId).HasColumnName("vehicle_id");
+            entity.Property(e => e.OdometerValue).HasColumnName("odometer_value");
+            entity.Property(e => e.LocationText).HasMaxLength(500).HasColumnName("location_text");
+            entity.Property(e => e.Reason).HasMaxLength(255).HasColumnName("reason");
+            entity.Property(e => e.UpdatedBy).HasColumnName("updated_by");
+
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+
+            entity.HasOne(d => d.Vehicle).WithMany()
+                .HasForeignKey(d => d.VehicleId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_vehicle_odometer_logs_vehicle_id");
         });
 
         OnModelCreatingPartial(modelBuilder);

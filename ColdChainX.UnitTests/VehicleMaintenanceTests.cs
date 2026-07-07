@@ -203,6 +203,39 @@ namespace ColdChainX.UnitTests
             Assert.Equal("OVERDUE", result.Data.ForecastStatus);
             Assert.Contains("exceeds available odometer headroom", result.Data.Message);
         }
+
+        [Fact]
+        public async Task SyncOdometer_CreatesVehicleOdometerLog()
+        {
+            // Arrange
+            var request = new SyncOdometerRequest
+            {
+                Odometer = 6500.5,
+                LocationText = "Test Location",
+                Reason = "Manual correction check"
+            };
+            var updaterId = Guid.NewGuid();
+
+            // Act
+            var result = await _service.SyncOdometerAsync("29C-12345", request, updaterId);
+
+            // Assert
+            Assert.True(result.Success);
+            
+            // Check vehicle was updated
+            var vehicle = await _db.Vehicles.FindAsync(_vehicleId);
+            Assert.Equal(6500.5, vehicle!.CurrentOdometer);
+            Assert.Equal("Test Location", vehicle.CurrentLocation);
+
+            // Check log was created
+            var log = await _db.VehicleOdometerLogs.FirstOrDefaultAsync(l => l.VehicleId == _vehicleId);
+            Assert.NotNull(log);
+            Assert.Equal(6500.5, log.OdometerValue);
+            Assert.Equal("Test Location", log.LocationText);
+            Assert.Equal("Manual correction check", log.Reason);
+            Assert.Equal(updaterId, log.UpdatedBy);
+            Assert.True((DateTime.Now - log.CreatedAt).TotalSeconds < 5);
+        }
     }
 
     // Hand-made mock/fake dependencies to keep unit tests fast and dependency-free

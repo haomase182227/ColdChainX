@@ -104,6 +104,7 @@ public class SyncOdometerRequest
 {
     public double Odometer { get; set; }
     public string? LocationText { get; set; }
+    public string? Reason { get; set; }
 }
 
 public class CreateMaintenanceTicketRequest

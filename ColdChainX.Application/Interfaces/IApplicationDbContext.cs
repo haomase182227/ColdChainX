@@ -50,6 +50,7 @@ namespace ColdChainX.Application.Interfaces
         DbSet<Vehicle> Vehicles { get; }
         DbSet<ReturnedItem> ReturnedItems { get; }
         DbSet<MaintenanceTicket> MaintenanceTickets { get; }
+        DbSet<VehicleOdometerLog> VehicleOdometerLogs { get; }
 
         DatabaseFacade Database { get; }
         Microsoft.EntityFrameworkCore.ChangeTracking.ChangeTracker ChangeTracker { get; }
