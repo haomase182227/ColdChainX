@@ -82,6 +82,10 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
 
     public virtual DbSet<RouteMaster> RouteMasters { get; set; }
 
+    public virtual DbSet<RouteStop> RouteStops { get; set; }
+
+    public virtual DbSet<RouteSchedule> RouteSchedules { get; set; }
+
     public virtual DbSet<Seal> Seals { get; set; }
 
     public virtual DbSet<SystemConfig> SystemConfigs { get; set; }
@@ -181,9 +185,44 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.OriginCity).HasColumnName("origin_city").HasMaxLength(50);
             entity.Property(e => e.DestCity).HasColumnName("dest_city").HasMaxLength(50);
             entity.Property(e => e.TransitTime).HasColumnName("transit_time").HasMaxLength(50);
-            entity.Property(e => e.CutOffTime).HasColumnName("cut_off_time");
             entity.Property(e => e.Status).HasColumnName("status").HasMaxLength(20);
             entity.Property(e => e.CreatedAt).HasColumnType("timestamp without time zone").HasColumnName("created_at");
+        });
+
+        modelBuilder.Entity<RouteStop>(entity =>
+        {
+            entity.HasKey(e => e.StopId).HasName("route_stops_pkey");
+            entity.ToTable("route_stops", "public");
+            entity.Property(e => e.StopId).HasColumnName("stop_id").HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.RouteId).HasColumnName("route_id");
+
+            entity.Property(e => e.StopName).HasColumnName("stop_name").HasMaxLength(150);
+
+            entity.Property(e => e.CreatedAt).HasColumnType("timestamp without time zone").HasColumnName("created_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne(d => d.Route).WithMany(p => p.RouteStops)
+                .HasForeignKey(d => d.RouteId)
+                .HasConstraintName("fk_routestop_route");
+
+
+        });
+
+        modelBuilder.Entity<RouteSchedule>(entity =>
+        {
+            entity.HasKey(e => e.ScheduleId).HasName("route_schedules_pkey");
+            entity.ToTable("route_schedules", "public");
+            entity.Property(e => e.ScheduleId).HasColumnName("schedule_id").HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.RouteId).HasColumnName("route_id");
+            entity.Property(e => e.ScheduleName).HasColumnName("schedule_name").HasMaxLength(100);
+            entity.Property(e => e.DayOfWeek).HasColumnName("day_of_week");
+            entity.Property(e => e.DepartureTime).HasColumnName("departure_time");
+            entity.Property(e => e.CutOffTime).HasColumnName("cut_off_time");
+            entity.Property(e => e.Status).HasColumnName("status").HasMaxLength(20);
+            entity.Property(e => e.CreatedAt).HasColumnType("timestamp without time zone").HasColumnName("created_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne(d => d.Route).WithMany(p => p.RouteSchedules)
+                .HasForeignKey(d => d.RouteId)
+                .HasConstraintName("fk_routeschedule_route");
         });
 
         modelBuilder.Entity<SystemConfig>(entity =>
@@ -369,6 +408,11 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.TaxCode)
                 .HasMaxLength(20)
                 .HasColumnName("tax_code");
+            entity.Property(e => e.ComplianceRiskScore)
+                .HasDefaultValue(0)
+                .HasColumnName("compliance_risk_score");
+            entity.Property(e => e.RiskFlags)
+                .HasColumnName("risk_flags");
         });
 
         modelBuilder.Entity<CustomerContract>(entity =>
@@ -1011,6 +1055,11 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.SealNumber)
                 .HasMaxLength(100)
                 .HasColumnName("seal_number");
+            entity.Property(e => e.RouteId).HasColumnName("route_id");
+            entity.Property(e => e.ScheduleId).HasColumnName("schedule_id");
+            entity.Property(e => e.DepartureDate)
+                .HasColumnType("date")
+                .HasColumnName("departure_date");
 
             entity.HasOne(d => d.DestinationLocation).WithMany(p => p.MasterTripDestinationLocations)
                 .HasForeignKey(d => d.DestinationLocationId)
@@ -1025,6 +1074,14 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.HasOne(d => d.Vehicle).WithMany(p => p.MasterTrips)
                 .HasForeignKey(d => d.VehicleId)
                 .HasConstraintName("fk_mtrip_vehicles");
+
+            entity.HasOne(d => d.Route).WithMany(p => p.MasterTrips)
+                .HasForeignKey(d => d.RouteId)
+                .HasConstraintName("fk_mtrip_route");
+
+            entity.HasOne(d => d.Schedule).WithMany(p => p.MasterTrips)
+                .HasForeignKey(d => d.ScheduleId)
+                .HasConstraintName("fk_mtrip_schedule");
         });
 
         modelBuilder.Entity<TripDriver>(entity =>
@@ -1540,15 +1597,6 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.OrderId)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("order_id");
-            entity.Property(e => e.ActualCbm)
-                .HasPrecision(8, 2)
-                .HasColumnName("actual_cbm");
-            entity.Property(e => e.ActualWeightKg)
-                .HasPrecision(10, 2)
-                .HasColumnName("actual_weight_kg");
-            entity.Property(e => e.CargoValue)
-                .HasPrecision(15, 2)
-                .HasColumnName("cargo_value");
             entity.Property(e => e.Category)
                 .HasMaxLength(50)
                 .HasColumnName("category");
@@ -1558,21 +1606,15 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasColumnName("created_at");
             entity.Property(e => e.CustomerId).HasColumnName("customer_id");
             entity.Property(e => e.DestLocation).HasColumnName("dest_location");
-            entity.Property(e => e.ExpectedCbm)
-                .HasPrecision(8, 2)
-                .HasColumnName("expected_cbm");
-            entity.Property(e => e.LengthCm).HasPrecision(10, 2).HasColumnName("length_cm");
-            entity.Property(e => e.WidthCm).HasPrecision(10, 2).HasColumnName("width_cm");
-            entity.Property(e => e.HeightCm).HasPrecision(10, 2).HasColumnName("height_cm");
-            entity.Property(e => e.ExpectedWeightKg)
-                .HasPrecision(10, 2)
-                .HasColumnName("expected_weight_kg");
+            entity.Property(e => e.HasStrongOdor).HasColumnName("has_strong_odor");
+            entity.Property(e => e.IsStackable).HasDefaultValue(true).HasColumnName("is_stackable");
             entity.Property(e => e.ItemName)
                 .HasMaxLength(150)
                 .HasColumnName("item_name");
             entity.Property(e => e.MasterTripId).HasColumnName("master_trip_id");
             entity.Property(e => e.PickupLocation).HasColumnName("pickup_location");
-            entity.Property(e => e.RouteId).HasColumnName("route_id");
+            entity.Property(e => e.ScheduleId).HasColumnName("schedule_id");
+            entity.Property(e => e.DropoffStopId).HasColumnName("dropoff_stop_id");
             entity.Property(e => e.PackingType)
                 .HasMaxLength(50)
                 .HasDefaultValueSql("'Thùng'::character varying")
@@ -1606,9 +1648,34 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasForeignKey(d => d.PickupLocation)
                 .HasConstraintName("fk_to_pickup");
 
-            entity.HasOne(d => d.Route).WithMany(p => p.TransportOrders)
-                .HasForeignKey(d => d.RouteId)
-                .HasConstraintName("fk_transport_orders_route_master");
+            entity.HasOne(d => d.Schedule).WithMany()
+                .HasForeignKey(d => d.ScheduleId)
+                .HasConstraintName("fk_transport_orders_route_schedule");
+
+            entity.HasOne(d => d.DropoffStop).WithMany()
+                .HasForeignKey(d => d.DropoffStopId)
+                .HasConstraintName("fk_transport_orders_route_stop");
+        });
+
+        modelBuilder.Entity<OrderDimension>(entity =>
+        {
+            entity.HasKey(e => e.OrderId).HasName("order_dimensions_pkey");
+
+            entity.ToTable("order_dimensions");
+
+            entity.Property(e => e.OrderId).HasColumnName("order_id");
+            entity.Property(e => e.ExpectedWeightKg).HasPrecision(10, 2).HasColumnName("expected_weight_kg");
+            entity.Property(e => e.ActualWeightKg).HasPrecision(10, 2).HasColumnName("actual_weight_kg");
+            entity.Property(e => e.ExpectedCbm).HasPrecision(8, 2).HasColumnName("expected_cbm");
+            entity.Property(e => e.ActualCbm).HasPrecision(8, 2).HasColumnName("actual_cbm");
+            entity.Property(e => e.LengthCm).HasPrecision(10, 2).HasColumnName("length_cm");
+            entity.Property(e => e.WidthCm).HasPrecision(10, 2).HasColumnName("width_cm");
+            entity.Property(e => e.HeightCm).HasPrecision(10, 2).HasColumnName("height_cm");
+
+            entity.HasOne(d => d.Order)
+                .WithOne(p => p.OrderDimension)
+                .HasForeignKey<OrderDimension>(d => d.OrderId)
+                .HasConstraintName("fk_order_dimensions_order");
         });
 
         modelBuilder.Entity<TripStop>(entity =>

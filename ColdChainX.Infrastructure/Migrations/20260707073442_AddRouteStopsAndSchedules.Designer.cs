@@ -3,6 +3,7 @@ using System;
 using ColdChainX.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ColdChainX.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260707073442_AddRouteStopsAndSchedules")]
+    partial class AddRouteStopsAndSchedules
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -640,12 +643,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("character varying(150)")
                         .HasColumnName("company_name");
 
-                    b.Property<int>("ComplianceRiskScore")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0)
-                        .HasColumnName("compliance_risk_score");
-
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp without time zone")
@@ -662,10 +659,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasDefaultValue(30)
                         .HasColumnName("payment_term");
-
-                    b.Property<string>("RiskFlags")
-                        .HasColumnType("text")
-                        .HasColumnName("risk_flags");
 
                     b.Property<string>("Status")
                         .ValueGeneratedOnAdd()
@@ -2350,53 +2343,6 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.ToTable("notification_templates", "public");
                 });
 
-            modelBuilder.Entity("ColdChainX.Core.Entities.OrderDimension", b =>
-                {
-                    b.Property<Guid>("OrderId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("order_id");
-
-                    b.Property<decimal?>("ActualCbm")
-                        .HasPrecision(8, 2)
-                        .HasColumnType("numeric(8,2)")
-                        .HasColumnName("actual_cbm");
-
-                    b.Property<decimal>("ActualWeightKg")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("actual_weight_kg");
-
-                    b.Property<decimal>("ExpectedCbm")
-                        .HasPrecision(8, 2)
-                        .HasColumnType("numeric(8,2)")
-                        .HasColumnName("expected_cbm");
-
-                    b.Property<decimal>("ExpectedWeightKg")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("expected_weight_kg");
-
-                    b.Property<decimal>("HeightCm")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("height_cm");
-
-                    b.Property<decimal>("LengthCm")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("length_cm");
-
-                    b.Property<decimal>("WidthCm")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("width_cm");
-
-                    b.HasKey("OrderId")
-                        .HasName("order_dimensions_pkey");
-
-                    b.ToTable("order_dimensions", "public");
-                });
-
             modelBuilder.Entity("ColdChainX.Core.Entities.OutboundOrder", b =>
                 {
                     b.Property<Guid>("OutboundOrderId")
@@ -3030,6 +2976,10 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("location_id");
+
                     b.Property<Guid>("RouteId")
                         .HasColumnType("uuid")
                         .HasColumnName("route_id");
@@ -3040,8 +2990,20 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("character varying(150)")
                         .HasColumnName("stop_name");
 
+                    b.Property<int>("StopSequence")
+                        .HasColumnType("integer")
+                        .HasColumnName("stop_sequence");
+
+                    b.Property<string>("StopType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("stop_type");
+
                     b.HasKey("StopId")
                         .HasName("route_stops_pkey");
+
+                    b.HasIndex("LocationId");
 
                     b.HasIndex("RouteId");
 
@@ -3272,6 +3234,21 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("order_id")
                         .HasDefaultValueSql("gen_random_uuid()");
 
+                    b.Property<decimal?>("ActualCbm")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)")
+                        .HasColumnName("actual_cbm");
+
+                    b.Property<decimal>("ActualWeightKg")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("actual_weight_kg");
+
+                    b.Property<decimal>("CargoValue")
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("cargo_value");
+
                     b.Property<string>("Category")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -3292,25 +3269,31 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("dest_location");
 
-                    b.Property<Guid?>("DropoffStopId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("dropoff_stop_id");
+                    b.Property<decimal>("ExpectedCbm")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)")
+                        .HasColumnName("expected_cbm");
 
-                    b.Property<bool>("HasStrongOdor")
-                        .HasColumnType("boolean")
-                        .HasColumnName("has_strong_odor");
+                    b.Property<decimal>("ExpectedWeightKg")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("expected_weight_kg");
 
-                    b.Property<bool>("IsStackable")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true)
-                        .HasColumnName("is_stackable");
+                    b.Property<decimal>("HeightCm")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("height_cm");
 
                     b.Property<string>("ItemName")
                         .IsRequired()
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)")
                         .HasColumnName("item_name");
+
+                    b.Property<decimal>("LengthCm")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("length_cm");
 
                     b.Property<Guid?>("MasterTripId")
                         .HasColumnType("uuid")
@@ -3334,12 +3317,9 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasDefaultValue(1)
                         .HasColumnName("quantity");
 
-                    b.Property<Guid?>("RouteMasterRouteId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("ScheduleId")
+                    b.Property<Guid?>("RouteId")
                         .HasColumnType("uuid")
-                        .HasColumnName("schedule_id");
+                        .HasColumnName("route_id");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -3359,6 +3339,11 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("tracking_code");
 
+                    b.Property<decimal>("WidthCm")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("width_cm");
+
                     b.HasKey("OrderId")
                         .HasName("transport_orders_pkey");
 
@@ -3366,15 +3351,11 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.HasIndex("DestLocation");
 
-                    b.HasIndex("DropoffStopId");
-
                     b.HasIndex("MasterTripId");
 
                     b.HasIndex("PickupLocation");
 
-                    b.HasIndex("RouteMasterRouteId");
-
-                    b.HasIndex("ScheduleId");
+                    b.HasIndex("RouteId");
 
                     b.HasIndex(new[] { "TrackingCode" }, "transport_orders_tracking_code_key")
                         .IsUnique();
@@ -4603,18 +4584,6 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.Navigation("Type");
                 });
 
-            modelBuilder.Entity("ColdChainX.Core.Entities.OrderDimension", b =>
-                {
-                    b.HasOne("ColdChainX.Core.Entities.TransportOrder", "Order")
-                        .WithOne("OrderDimension")
-                        .HasForeignKey("ColdChainX.Core.Entities.OrderDimension", "OrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_order_dimensions_order");
-
-                    b.Navigation("Order");
-                });
-
             modelBuilder.Entity("ColdChainX.Core.Entities.OutboundOrder", b =>
                 {
                     b.HasOne("ColdChainX.Core.Entities.User", "AssignedPicker")
@@ -4725,12 +4694,19 @@ namespace ColdChainX.Infrastructure.Migrations
 
             modelBuilder.Entity("ColdChainX.Core.Entities.RouteStop", b =>
                 {
+                    b.HasOne("ColdChainX.Core.Entities.Location", "Location")
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .HasConstraintName("fk_routestop_location");
+
                     b.HasOne("ColdChainX.Core.Entities.RouteMaster", "Route")
                         .WithMany("RouteStops")
                         .HasForeignKey("RouteId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_routestop_route");
+
+                    b.Navigation("Location");
 
                     b.Navigation("Route");
                 });
@@ -4806,11 +4782,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasForeignKey("DestLocation")
                         .HasConstraintName("fk_to_dest");
 
-                    b.HasOne("ColdChainX.Core.Entities.RouteStop", "DropoffStop")
-                        .WithMany()
-                        .HasForeignKey("DropoffStopId")
-                        .HasConstraintName("fk_transport_orders_route_stop");
-
                     b.HasOne("ColdChainX.Core.Entities.MasterTrip", "MasterTrip")
                         .WithMany("TransportOrders")
                         .HasForeignKey("MasterTripId")
@@ -4821,26 +4792,20 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasForeignKey("PickupLocation")
                         .HasConstraintName("fk_to_pickup");
 
-                    b.HasOne("ColdChainX.Core.Entities.RouteMaster", null)
+                    b.HasOne("ColdChainX.Core.Entities.RouteMaster", "Route")
                         .WithMany("TransportOrders")
-                        .HasForeignKey("RouteMasterRouteId");
-
-                    b.HasOne("ColdChainX.Core.Entities.RouteSchedule", "Schedule")
-                        .WithMany()
-                        .HasForeignKey("ScheduleId")
-                        .HasConstraintName("fk_transport_orders_route_schedule");
+                        .HasForeignKey("RouteId")
+                        .HasConstraintName("fk_transport_orders_route_master");
 
                     b.Navigation("Customer");
 
                     b.Navigation("DestLocationNavigation");
 
-                    b.Navigation("DropoffStop");
-
                     b.Navigation("MasterTrip");
 
                     b.Navigation("PickupLocationNavigation");
 
-                    b.Navigation("Schedule");
+                    b.Navigation("Route");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.TripDriver", b =>
@@ -5120,8 +5085,6 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.Navigation("InvoiceLines");
 
                     b.Navigation("Notifications");
-
-                    b.Navigation("OrderDimension");
 
                     b.Navigation("Quotations");
 
