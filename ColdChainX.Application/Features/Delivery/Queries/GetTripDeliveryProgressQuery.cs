@@ -38,7 +38,7 @@ public class GetTripDeliveryProgressQueryHandler : IRequestHandler<GetTripDelive
         if (!tripExists)
             throw new NotFoundException($"Trip with ID '{request.TripId}' was not found.");
 
-        // 2. Fetch all LPNs of the trip (including Order for CargoValue)
+        // 2. Fetch all LPNs of the trip
         var lpns = await _context.Lpns
             .Include(l => l.Order)
             .Where(l => l.TripId == request.TripId)
@@ -60,8 +60,8 @@ public class GetTripDeliveryProgressQueryHandler : IRequestHandler<GetTripDelive
         {
             confirmations.TryGetValue(lpn.LpnId, out var conf);
 
-            // Default COD amount is order's CargoValue if not confirmed yet
-            var codAmount = conf != null ? conf.CodAmount : lpn.Order.CargoValue;
+            // Default COD amount is 0 if not confirmed yet
+            var codAmount = conf != null ? conf.CodAmount : 0m;
 
             string? vietQrUrl = null;
             if (lpn.State == LpnState.SHIPPING && codAmount > 0)
