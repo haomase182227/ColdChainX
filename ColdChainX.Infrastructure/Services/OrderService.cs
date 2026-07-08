@@ -104,12 +104,7 @@ namespace ColdChainX.Infrastructure.Services
 
         public async Task<ApiResponse<CreateOrderResponse>> CreateOrderAsync(CreateOrderRequest request, Guid customerId)
         {
-            if (request.DocumentImage == null || request.DocumentImage.Length == 0)
-                return ApiResponse<CreateOrderResponse>.Failure("DocumentImage is required");
-
-            if (request.DocumentImage.Length > 10 * 1024 * 1024)
-                return ApiResponse<CreateOrderResponse>.Failure("DocumentImage must be smaller than 10MB");
-
+            
             var strategy = _db.Database.CreateExecutionStrategy();
 
             return await strategy.ExecuteAsync(async () =>
@@ -118,11 +113,15 @@ namespace ColdChainX.Infrastructure.Services
                 if (!customerExists)
                     return ApiResponse<CreateOrderResponse>.Failure("Customer not found");
 
-                var route = await _db.RouteMasters
+                var schedule = await _db.RouteSchedules
                     .AsNoTracking()
-                    .FirstOrDefaultAsync(r => r.RouteId == request.RouteId && r.Status == "ACTIVE");
-                if (route == null)
-                    return ApiResponse<CreateOrderResponse>.Failure("Route_ID is invalid or inactive");
+                    .Include(s => s.Route)
+                    .FirstOrDefaultAsync(s => s.ScheduleId == request.ScheduleId);
+                    
+                if (schedule == null || schedule.Route?.Status != "ACTIVE")
+                    return ApiResponse<CreateOrderResponse>.Failure("Schedule_ID or Route is invalid or inactive");
+                    
+                var route = schedule.Route!;
 
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
@@ -151,35 +150,67 @@ namespace ColdChainX.Infrastructure.Services
                     Quantity = request.Quantity,
                     PackingType = request.PackagingType.Trim(),
                     TempCondition = request.TempCondition.ToString("0.##", CultureInfo.InvariantCulture),
-                    ExpectedWeightKg = request.ExpectedWeightKg,
-                    ActualWeightKg = request.ExpectedWeightKg,
-                    ExpectedCbm = expectedCbm,
+                    HasStrongOdor = request.HasStrongOdor,
+                    IsStackable = request.IsStackable,
+                    OrderDimension = new OrderDimension
+                    {
+                        ExpectedWeightKg = request.ExpectedWeightKg,
+                        ActualWeightKg = request.ExpectedWeightKg,
+                        ExpectedCbm = expectedCbm,
+                        ActualCbm = expectedCbm,
+                        LengthCm = request.LengthCm,
+                        WidthCm = request.WidthCm,
+                        HeightCm = request.HeightCm
+                    },
+                    ScheduleId = request.ScheduleId,
+                    DropoffStopId = request.DropoffStopId,
                     DestLocation = location.LocationId,
-                    RouteId = route.RouteId,
-                    CargoValue = 0,
                     Status = PendingReview,
-                    CreatedAt = DbNow(),
-                    LengthCm = request.LengthCm,
-                    WidthCm = request.WidthCm,
-                    HeightCm = request.HeightCm
+                    CreatedAt = DbNow()
                 };
                 _db.TransportOrders.Add(order);
 
-                var documentUrl = await _fileService.UploadFileAsync(request.DocumentImage);
-                var uploadedBy = await ResolveCustomerUserIdAsync(customerId);
+                                var uploadedBy = await ResolveCustomerUserIdAsync(customerId);
                 if (!uploadedBy.HasValue)
                     return ApiResponse<CreateOrderResponse>.Failure("Customer user was not found for document upload");
 
-                _db.TransportDocuments.Add(new TransportDocument
+                if (request.LegalDocuments != null)
                 {
-                    DocId = Guid.NewGuid(),
-                    OrderId = order.OrderId,
-                    DocType = "ITEM_IMAGE",
-                    ImageUrl = documentUrl,
-                    Status = "PENDING",
-                    UploadedBy = uploadedBy.Value,
-                    CreatedAt = DbNow()
-                });
+                    foreach (var file in request.LegalDocuments)
+                    {
+                        if (file.Length > 10 * 1024 * 1024) return ApiResponse<CreateOrderResponse>.Failure("Legal document must be smaller than 10MB");
+                        var url = await _fileService.UploadFileAsync(file);
+                        _db.TransportDocuments.Add(new TransportDocument
+                        {
+                            DocId = Guid.NewGuid(),
+                            OrderId = order.OrderId,
+                            DocType = "LEGAL_DOCUMENT",
+                            ImageUrl = url,
+                            Status = "PENDING",
+                            UploadedBy = uploadedBy.Value,
+                            CreatedAt = DbNow()
+                        });
+                    }
+                }
+
+                if (request.CargoPhotos != null)
+                {
+                    foreach (var file in request.CargoPhotos)
+                    {
+                        if (file.Length > 10 * 1024 * 1024) return ApiResponse<CreateOrderResponse>.Failure("Cargo photo must be smaller than 10MB");
+                        var url = await _fileService.UploadFileAsync(file);
+                        _db.TransportDocuments.Add(new TransportDocument
+                        {
+                            DocId = Guid.NewGuid(),
+                            OrderId = order.OrderId,
+                            DocType = "ITEM_IMAGE",
+                            ImageUrl = url,
+                            Status = "PENDING",
+                            UploadedBy = uploadedBy.Value,
+                            CreatedAt = DbNow()
+                        });
+                    }
+                }
 
                 var draftQuotation = await BuildAutoDraftQuotationAsync(order, route, location);
                 _db.Quotations.Add(draftQuotation);
@@ -210,7 +241,7 @@ namespace ColdChainX.Infrastructure.Services
                     TrackingCode = order.TrackingCode,
                     DestLocationId = location.LocationId,
                     ExpectedCbm = expectedCbm,
-                    DocumentUrl = documentUrl,
+                    
                     Status = order.Status
                 }, "Order created successfully");
             });
@@ -224,7 +255,7 @@ namespace ColdChainX.Infrastructure.Services
             {
                 var order = await _db.TransportOrders
                 .Include(o => o.Customer)
-                .Include(o => o.Route)
+                .Include(o => o.Schedule).ThenInclude(s => s.Route)
                 .Include(o => o.DestLocationNavigation)
                 .FirstOrDefaultAsync(o => o.OrderId == orderId);
 
@@ -237,25 +268,25 @@ namespace ColdChainX.Infrastructure.Services
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
                 var action = request.Action.Trim().ToUpperInvariant();
-                if (action == "REJECT")
+                                if (action == "SOFT_REJECT")
                 {
                     if (string.IsNullOrWhiteSpace(request.RejectReason))
-                        return ApiResponse<ReviewOrderResponse>.Failure("RejectReason is required when action is REJECT");
+                        return ApiResponse<ReviewOrderResponse>.Failure("RejectReason is required when action is SOFT_REJECT");
 
-                    order.Status = Rejected;
+                    order.Status = "NEEDS_DOCUMENT";
 
                     var customerUserId = await ResolveCustomerUserIdAsync(order.CustomerId);
                     await AddNotificationAsync(
                         customerUserId,
                         salesUserId,
-                        "NOTI_ORDER_REJECTED",
+                        "NOTI_ORDER_NEEDS_DOCUMENT",
                         order.OrderId,
-                        new { Tracking_Code = order.TrackingCode, Reject_Reason = request.RejectReason });
+                        new { Tracking_Code = order.TrackingCode, Request_Reason = request.RejectReason });
 
                     await _db.SaveChangesAsync();
                     await transaction.CommitAsync();
 
-                    await _hubContext.Clients.User(order.CustomerId.ToString()!).SendAsync("OrderRejected", new
+                    await _hubContext.Clients.User(order.CustomerId.ToString()!).SendAsync("OrderNeedsDocument", new
                     {
                         order.OrderId,
                         order.TrackingCode,
@@ -267,11 +298,60 @@ namespace ColdChainX.Infrastructure.Services
                         OrderId = order.OrderId,
                         TrackingCode = order.TrackingCode,
                         Status = order.Status
-                    }, "Order rejected");
+                    }, "Order requires document update");
+                }
+                
+                if (action == "HARD_REJECT")
+                {
+                    if (string.IsNullOrWhiteSpace(request.RejectReason))
+                        return ApiResponse<ReviewOrderResponse>.Failure("RejectReason is required when action is HARD_REJECT");
+                    if (string.IsNullOrWhiteSpace(request.ComplianceCode))
+                        return ApiResponse<ReviewOrderResponse>.Failure("ComplianceCode is required when action is HARD_REJECT");
+
+                    order.Status = Rejected;
+                    
+                    if (order.Customer != null)
+                    {
+                        order.Customer.ComplianceRiskScore += 10;
+                        if (string.IsNullOrEmpty(order.Customer.RiskFlags))
+                        {
+                            order.Customer.RiskFlags = request.ComplianceCode;
+                        }
+                        else if (!order.Customer.RiskFlags.Contains(request.ComplianceCode))
+                        {
+                            order.Customer.RiskFlags += "," + request.ComplianceCode;
+                        }
+                    }
+
+                    var customerUserId = await ResolveCustomerUserIdAsync(order.CustomerId);
+                    await AddNotificationAsync(
+                        customerUserId,
+                        salesUserId,
+                        "NOTI_ORDER_REJECTED",
+                        order.OrderId,
+                        new { Tracking_Code = order.TrackingCode, Reject_Reason = request.RejectReason, Compliance_Code = request.ComplianceCode });
+
+                    await _db.SaveChangesAsync();
+                    await transaction.CommitAsync();
+
+                    await _hubContext.Clients.User(order.CustomerId.ToString()!).SendAsync("OrderRejected", new
+                    {
+                        order.OrderId,
+                        order.TrackingCode,
+                        RejectReason = request.RejectReason,
+                        ComplianceCode = request.ComplianceCode
+                    });
+
+                    return ApiResponse<ReviewOrderResponse>.SuccessResponse(new ReviewOrderResponse
+                    {
+                        OrderId = order.OrderId,
+                        TrackingCode = order.TrackingCode,
+                        Status = order.Status
+                    }, "Order rejected due to legal compliance violation");
                 }
 
                 if (action != "APPROVE")
-                    return ApiResponse<ReviewOrderResponse>.Failure("Action must be APPROVE or REJECT");
+                    return ApiResponse<ReviewOrderResponse>.Failure("Action must be APPROVE, SOFT_REJECT, or HARD_REJECT");
 
                 var quotation = await _db.Quotations
                     .Where(q => q.OrderId == order.OrderId && q.Status == Draft)
@@ -336,8 +416,8 @@ namespace ColdChainX.Infrastructure.Services
             var volumetricRate = await GetSystemConfigDecimalAsync("VolumetricConversionRate", 250m);
             var pricePerKm = await GetSystemConfigDecimalAsync("PricePerKm", 15000m);
 
-            var volumetricWeight = Math.Round(order.ExpectedCbm * volumetricRate, 2);
-            var chargeableWeight = Math.Max(Math.Max(order.ExpectedWeightKg, volumetricWeight), MinChargeableWeightKg);
+            var volumetricWeight = Math.Round((order.OrderDimension?.ExpectedCbm ?? 0m) * volumetricRate, 2);
+            var chargeableWeight = Math.Max(Math.Max((order.OrderDimension?.ExpectedWeightKg ?? 0m), volumetricWeight), MinChargeableWeightKg);
 
             var tier = await _db.WeightTiers
                 .AsNoTracking()
@@ -400,16 +480,16 @@ namespace ColdChainX.Infrastructure.Services
 
         private async Task<RoutePricing?> ResolvePricingAsync(TransportOrder order)
         {
-            if (!order.RouteId.HasValue)
+            if (order.Schedule == null)
                 return null;
 
             var volumetricRate = await GetSystemConfigDecimalAsync("VolumetricConversionRate", 250m);
-            var volumetricWeight = Math.Round(order.ExpectedCbm * volumetricRate, 2);
-            var chargeableWeight = Math.Max(Math.Max(order.ExpectedWeightKg, volumetricWeight), MinChargeableWeightKg);
+            var volumetricWeight = Math.Round((order.OrderDimension?.ExpectedCbm ?? 0m) * volumetricRate, 2);
+            var chargeableWeight = Math.Max(Math.Max((order.OrderDimension?.ExpectedWeightKg ?? 0m), volumetricWeight), MinChargeableWeightKg);
             var tier = await _db.WeightTiers
                 .AsNoTracking()
                 .Include(t => t.Route)
-                .Where(t => t.RouteId == order.RouteId.Value
+                .Where(t => t.RouteId == order.Schedule.RouteId
                             && chargeableWeight >= t.MinWeightKg
                             && (!t.MaxWeightKg.HasValue || chargeableWeight <= t.MaxWeightKg.Value))
                 .OrderByDescending(t => t.MinWeightKg)
@@ -444,14 +524,14 @@ namespace ColdChainX.Infrastructure.Services
                 ["Item_Name"] = order.ItemName,
                 ["Quantity"] = order.Quantity.ToString(CultureInfo.InvariantCulture),
                 ["Packing_Type"] = order.PackingType,
-                ["Pickup_Address"] = order.Route?.OriginCity ?? DefaultOriginCity,
+                ["Pickup_Address"] = order.Schedule?.Route?.OriginCity ?? DefaultOriginCity,
                 ["Dest_Address"] = order.DestLocationNavigation?.Address ?? string.Empty,
-                ["Actual_Weight_KG"] = order.ActualWeightKg.ToString("0.##", CultureInfo.InvariantCulture),
-                ["Actual_CBM"] = order.ExpectedCbm.ToString("0.####", CultureInfo.InvariantCulture),
-                ["Route_Code"] = order.Route?.RouteCode,
+                ["Actual_Weight_KG"] = (order.OrderDimension?.ActualWeightKg ?? 0m).ToString("0.##", CultureInfo.InvariantCulture),
+                ["Actual_CBM"] = (order.OrderDimension?.ActualCbm ?? 0m).ToString("0.####", CultureInfo.InvariantCulture),
+                ["Route_Code"] = order.Schedule?.Route?.RouteCode,
                 ["ETD"] = string.Empty,
-                ["ETA"] = order.Route?.TransitTime,
-                ["Cut_Off_Time"] = order.Route?.CutOffTime.ToString(@"hh\:mm", CultureInfo.InvariantCulture),
+                ["ETA"] = order.Schedule?.Route?.TransitTime,
+                ["Cut_Off_Time"] = order.Schedule?.Route?.CutOffTime.ToString(@"hh\:mm", CultureInfo.InvariantCulture),
                 ["Base_Freight"] = quotation.BaseFreight.ToString("N0", CultureInfo.InvariantCulture),
                 ["Final_Amount"] = quotation.BaseFreight.ToString("N0", CultureInfo.InvariantCulture)
             };
@@ -541,7 +621,7 @@ namespace ColdChainX.Infrastructure.Services
             return _db.TransportOrders
                 .AsNoTracking()
                 .Include(o => o.Customer)
-                .Include(o => o.Route)
+                .Include(o => o.Schedule).ThenInclude(s => s.Route)
                 .Include(o => o.DestLocationNavigation)
                 .Include(o => o.TransportDocuments)
                 .Include(o => o.Quotations);
@@ -560,23 +640,22 @@ namespace ColdChainX.Infrastructure.Services
                 Quantity = order.Quantity,
                 PackingType = order.PackingType,
                 TempCondition = order.TempCondition,
-                ExpectedWeightKg = order.ExpectedWeightKg,
-                ActualWeightKg = order.ActualWeightKg,
-                ExpectedCbm = order.ExpectedCbm,
-                ActualCbm = order.ActualCbm,
-                CargoValue = order.CargoValue,
+                ExpectedWeightKg = (order.OrderDimension?.ExpectedWeightKg ?? 0m),
+                ActualWeightKg = (order.OrderDimension?.ActualWeightKg ?? 0m),
+                ExpectedCbm = (order.OrderDimension?.ExpectedCbm ?? 0m),
+                ActualCbm = (order.OrderDimension?.ActualCbm ?? 0m),
                 Status = order.Status,
                 CreatedAt = order.CreatedAt,
-                Route = order.Route == null
+                Route = order.Schedule?.Route == null
                     ? null
                     : new OrderRouteResponse
                     {
-                        RouteId = order.Route.RouteId,
-                        RouteCode = order.Route.RouteCode,
-                        OriginCity = order.Route.OriginCity,
-                        DestCity = order.Route.DestCity,
-                        TransitTime = order.Route.TransitTime,
-                        CutOffTime = order.Route.CutOffTime
+                        RouteId = order.Schedule.RouteId,
+                        RouteCode = order.Schedule.Route.RouteCode,
+                        OriginCity = order.Schedule.Route.OriginCity,
+                        DestCity = order.Schedule.Route.DestCity,
+                        TransitTime = order.Schedule.Route.TransitTime,
+                        CutOffTime = order.Schedule.Route.CutOffTime
                     },
                 Destination = order.DestLocationNavigation == null
                     ? null
@@ -630,7 +709,7 @@ namespace ColdChainX.Infrastructure.Services
             decimal volumetricWeight)
         {
             return "Hệ thống phát hiện kích thước Dài x Rộng x Cao và số lượng của bạn quá lớn so với trọng lượng thực tế "
-                   + $"({FormatKg(order.ExpectedWeightKg)}kg), dẫn đến trọng lượng quy đổi lên tới {FormatKg(volumetricWeight)}kg "
+                   + $"({FormatKg((order.OrderDimension?.ExpectedWeightKg ?? 0m))}kg), dẫn đến trọng lượng quy đổi lên tới {FormatKg(volumetricWeight)}kg "
                    + $"và trọng lượng tính cước là {FormatKg(chargeableWeight)}kg. "
                    + "Bạn vui lòng kiểm tra lại đã nhập đúng kích thước theo đơn vị Centimet (CM) chưa nhé. "
                    + "Nếu kích thước bạn nhập là chính xác, đơn hàng này cần được vận chuyển theo hình thức Bao Nguyên Xe (FTL). "
@@ -643,3 +722,9 @@ namespace ColdChainX.Infrastructure.Services
         }
     }
 }
+
+
+
+
+
+

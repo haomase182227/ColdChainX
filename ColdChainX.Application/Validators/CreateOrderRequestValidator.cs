@@ -67,16 +67,13 @@ namespace ColdChainX.Application.Validators
                 .NotEmpty().WithMessage("Dest_Address_Text is required")
                 .MaximumLength(500).WithMessage("Dest_Address_Text must not exceed 500 characters");
 
-            RuleFor(x => x.RouteId)
-                .NotEmpty().WithMessage("Route_ID is required");
+            RuleFor(x => x.ScheduleId)
+                .NotEmpty().WithMessage("Schedule_ID is required");
 
-            RuleFor(x => x.DocumentImage)
-                .NotNull().WithMessage("DocumentImage is required")
-                .Must(file => file != null && file.Length > 0)
-                .WithMessage("DocumentImage must not be empty")
-                .Must(file => file == null || file.Length <= MaxDocumentSizeBytes)
-                .WithMessage("DocumentImage must be smaller than 10MB");
-        }
+            RuleFor(x => x.DropoffStopId)
+                .NotEmpty().WithMessage("Dropoff_Stop_ID is required");
+
+                    }
 
         private static bool ContainsOnlyAllowedPackagingTypes(string? value)
         {
@@ -108,3 +105,4 @@ namespace ColdChainX.Application.Validators
         }
     }
 }
+

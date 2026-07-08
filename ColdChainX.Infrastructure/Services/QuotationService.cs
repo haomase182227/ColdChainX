@@ -101,7 +101,8 @@ namespace ColdChainX.Infrastructure.Services
             {
                 var order = await _db.TransportOrders
                     .Include(o => o.Customer)
-                    .Include(o => o.Route)
+                    .Include(o => o.Schedule)
+                        .ThenInclude(s => s!.Route)
                     .Include(o => o.DestLocationNavigation)
                     .FirstOrDefaultAsync(o => o.OrderId == request.OrderId);
 
@@ -126,7 +127,7 @@ namespace ColdChainX.Infrastructure.Services
 
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
-                var quotation = await BuildAutoDraftQuotationAsync(order, order.Route!, order.DestLocationNavigation);
+                var quotation = await BuildAutoDraftQuotationAsync(order, order.Schedule?.Route!, order.DestLocationNavigation);
                 _db.Quotations.Add(quotation);
 
                 await _db.SaveChangesAsync();
@@ -141,18 +142,19 @@ namespace ColdChainX.Infrastructure.Services
         {
             var order = await _db.TransportOrders
                 .Include(o => o.Customer)
-                .Include(o => o.Route)
+                .Include(o => o.Schedule)
+                    .ThenInclude(s => s!.Route)
                 .Include(o => o.DestLocationNavigation)
                 .FirstOrDefaultAsync(o => o.OrderId == orderId);
 
             if (order == null)
                 return ApiResponse<QuotationResponse>.Failure("Order not found");
-            if (order.Route == null)
+            if (order.Schedule?.Route == null)
                 return ApiResponse<QuotationResponse>.Failure("Order has no selected route");
             if (order.DestLocationNavigation == null)
                 return ApiResponse<QuotationResponse>.Failure("Order destination location was not found");
 
-            var quotation = await BuildAutoDraftQuotationAsync(order, order.Route, order.DestLocationNavigation);
+            var quotation = await BuildAutoDraftQuotationAsync(order, order.Schedule?.Route, order.DestLocationNavigation);
             _db.Quotations.Add(quotation);
             await _db.SaveChangesAsync();
 
@@ -212,7 +214,7 @@ namespace ColdChainX.Infrastructure.Services
                     .Include(q => q.Order)
                         .ThenInclude(o => o!.Customer)
                     .Include(q => q.Order)
-                        .ThenInclude(o => o!.Route)
+                        .ThenInclude(o => o!.Schedule).ThenInclude(s => s!.Route)
                     .Include(q => q.Order)
                         .ThenInclude(o => o!.DestLocationNavigation)
                     .FirstOrDefaultAsync(q => q.QuoteId == quoteId);
@@ -374,8 +376,8 @@ namespace ColdChainX.Infrastructure.Services
             var volumetricRate = await GetSystemConfigDecimalAsync("VolumetricConversionRate", 250m);
             var pricePerKm = await GetSystemConfigDecimalAsync("PricePerKm", 15000m);
 
-            var volumetricWeight = Math.Round(order.ExpectedCbm * volumetricRate, 2);
-            var chargeableWeight = Math.Max(Math.Max(order.ExpectedWeightKg, volumetricWeight), MinChargeableWeightKg);
+            var volumetricWeight = Math.Round((order.OrderDimension?.ExpectedCbm ?? 0m) * volumetricRate, 2);
+            var chargeableWeight = Math.Max(Math.Max((order.OrderDimension?.ExpectedWeightKg ?? 0m), volumetricWeight), MinChargeableWeightKg);
 
             var tier = await _db.WeightTiers
                 .AsNoTracking()
@@ -438,17 +440,18 @@ namespace ColdChainX.Infrastructure.Services
 
         private async Task<RoutePricing?> ResolvePricingAsync(TransportOrder order)
         {
-            if (!order.RouteId.HasValue)
+            if (order.Schedule == null)
                 return null;
 
             var volumetricRate = await GetSystemConfigDecimalAsync("VolumetricConversionRate", 250m);
-            var volumetricWeight = Math.Round(order.ExpectedCbm * volumetricRate, 2);
-            var chargeableWeight = Math.Max(Math.Max(order.ExpectedWeightKg, volumetricWeight), MinChargeableWeightKg);
+            var volumetricWeight = Math.Round((order.OrderDimension?.ExpectedCbm ?? 0m) * volumetricRate, 2);
+            var chargeableWeight = Math.Max(Math.Max((order.OrderDimension?.ExpectedWeightKg ?? 0m), volumetricWeight), MinChargeableWeightKg);
 
+            var routeId = order.Schedule?.RouteId;
             var tier = await _db.WeightTiers
                 .AsNoTracking()
                 .Include(t => t.Route)
-                .Where(t => t.RouteId == order.RouteId.Value
+                .Where(t => t.RouteId == routeId
                             && chargeableWeight >= t.MinWeightKg
                             && (!t.MaxWeightKg.HasValue || chargeableWeight <= t.MaxWeightKg.Value))
                 .OrderByDescending(t => t.MinWeightKg)
@@ -483,14 +486,14 @@ namespace ColdChainX.Infrastructure.Services
                 ["Item_Name"] = order.ItemName,
                 ["Quantity"] = order.Quantity.ToString(CultureInfo.InvariantCulture),
                 ["Packing_Type"] = order.PackingType,
-                ["Pickup_Address"] = order.Route?.OriginCity ?? DefaultOriginCity,
+                ["Pickup_Address"] = order.Schedule?.Route?.OriginCity ?? DefaultOriginCity,
                 ["Dest_Address"] = order.DestLocationNavigation?.Address ?? string.Empty,
-                ["Actual_Weight_KG"] = order.ActualWeightKg.ToString("0.##", CultureInfo.InvariantCulture),
-                ["Actual_CBM"] = order.ExpectedCbm.ToString("0.####", CultureInfo.InvariantCulture),
-                ["Route_Code"] = order.Route?.RouteCode,
+                ["Actual_Weight_KG"] = (order.OrderDimension?.ActualWeightKg ?? 0m).ToString("0.##", CultureInfo.InvariantCulture),
+                ["Actual_CBM"] = (order.OrderDimension?.ExpectedCbm ?? 0m).ToString("0.####", CultureInfo.InvariantCulture),
+                ["Route_Code"] = order.Schedule?.Route?.RouteCode,
                 ["ETD"] = string.Empty,
-                ["ETA"] = order.Route?.TransitTime,
-                ["Cut_Off_Time"] = order.Route?.CutOffTime.ToString(@"hh\:mm", CultureInfo.InvariantCulture),
+                ["ETA"] = order.Schedule?.Route?.TransitTime,
+                ["Cut_Off_Time"] = order.Schedule?.Route?.CutOffTime.ToString(@"hh\:mm", CultureInfo.InvariantCulture),
                 ["Base_Freight"] = quotation.BaseFreight.ToString("N0", CultureInfo.InvariantCulture),
                 ["Final_Amount"] = quotation.BaseFreight.ToString("N0", CultureInfo.InvariantCulture)
             };
@@ -567,7 +570,7 @@ namespace ColdChainX.Infrastructure.Services
                 .Include(q => q.Order)
                     .ThenInclude(o => o!.Customer)
                 .Include(q => q.Order)
-                    .ThenInclude(o => o!.Route);
+                    .ThenInclude(o => o!.Schedule).ThenInclude(s => s!.Route);
         }
 
         private static QuotationResponse ToQuotationResponse(Quotation quotation)
@@ -685,7 +688,7 @@ namespace ColdChainX.Infrastructure.Services
             decimal volumetricWeight)
         {
             return "Hệ thống phát hiện kích thước Dài x Rộng x Cao và số lượng của bạn quá lớn so với trọng lượng thực tế "
-                   + $"({FormatKg(order.ExpectedWeightKg)}kg), dẫn đến trọng lượng quy đổi lên tới {FormatKg(volumetricWeight)}kg "
+                   + $"({FormatKg((order.OrderDimension?.ExpectedWeightKg ?? 0m))}kg), dẫn đến trọng lượng quy đổi lên tới {FormatKg(volumetricWeight)}kg "
                    + $"và trọng lượng tính cước là {FormatKg(chargeableWeight)}kg. "
                    + "Bạn vui lòng kiểm tra lại đã nhập đúng kích thước theo đơn vị Centimet (CM) chưa nhé. "
                    + "Nếu kích thước bạn nhập là chính xác, đơn hàng này cần được vận chuyển theo hình thức Bao Nguyên Xe (FTL). "
@@ -698,3 +701,4 @@ namespace ColdChainX.Infrastructure.Services
         }
     }
 }
+

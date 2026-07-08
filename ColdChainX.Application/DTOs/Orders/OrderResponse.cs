@@ -15,7 +15,7 @@ namespace ColdChainX.Application.DTOs.Orders
         public decimal ActualWeightKg { get; set; }
         public decimal ExpectedCbm { get; set; }
         public decimal? ActualCbm { get; set; }
-        public decimal CargoValue { get; set; }
+
         public string Status { get; set; } = null!;
         public DateTime? CreatedAt { get; set; }
         public OrderRouteResponse? Route { get; set; }
