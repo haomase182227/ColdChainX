@@ -47,8 +47,8 @@ public class GetPendingDiscrepanciesQueryHandler : IRequestHandler<GetPendingDis
         var items = pendingLpns.Select(l =>
         {
             var order = l.Order;
-            var weightDiff = CalculateDiffPercent(order.ExpectedWeightKg, l.ActualWeightKg);
-            var cbmDiff = CalculateDiffPercent(order.ExpectedCbm, l.ActualCbm);
+            var weightDiff = CalculateDiffPercent(order.OrderDimension?.ExpectedWeightKg ?? 0m, l.ActualWeightKg);
+            var cbmDiff = CalculateDiffPercent(order.OrderDimension?.ExpectedCbm ?? 0m, l.ActualCbm);
             var diffPercent = Math.Max(weightDiff, cbmDiff);
 
             var asn = order.InboundAsns.OrderByDescending(a => a.CreatedAt).FirstOrDefault();
@@ -61,9 +61,9 @@ public class GetPendingDiscrepanciesQueryHandler : IRequestHandler<GetPendingDis
                 TrackingCode = order.TrackingCode,
                 CustomerName = l.Customer?.CompanyName,
                 ItemName = order.ItemName,
-                ExpectedWeightKg = order.ExpectedWeightKg,
+                ExpectedWeightKg = order.OrderDimension?.ExpectedWeightKg ?? 0m,
                 ActualWeightKg = l.ActualWeightKg,
-                ExpectedCbm = order.ExpectedCbm,
+                ExpectedCbm = order.OrderDimension?.ExpectedCbm ?? 0m,
                 ActualCbm = l.ActualCbm,
                 DiffPercent = diffPercent,
                 DiscrepancyReason = l.DiscrepancyReason,
