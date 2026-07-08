@@ -391,7 +391,7 @@ public class DispatchService : IDispatchService
         //  - Cùng điểm & trọng lượng: zone đông → xếp trước
         var sorted = enriched
             .OrderByDescending(x => x.StopSeq)          // điểm cuối vào xe trước
-            .ThenByDescending(x => x.Order.ExpectedWeightKg)  // nặng dưới
+            .ThenByDescending(x => (x.Order.OrderDimension?.ExpectedWeightKg ?? 0m))  // nặng dưới
             .ThenBy(x => x.TempZoneOrd)                  // frozen trước
             .ToList();
 
@@ -406,7 +406,7 @@ public class DispatchService : IDispatchService
             if (item.TempZoneOrd == 0) zone = "REAR";
 
             var reason = BuildLoadReason(item.StopSeq, stopSequence.Count,
-                                         item.TempZoneOrd, order.ExpectedWeightKg);
+                                         item.TempZoneOrd, (order.OrderDimension?.ExpectedWeightKg ?? 0m));
 
             result.Add(new LoadInstruction
             {
@@ -414,8 +414,8 @@ public class DispatchService : IDispatchService
                 OrderId             = order.OrderId,
                 TrackingCode        = order.TrackingCode,
                 ItemName            = order.ItemName,
-                WeightKg            = order.ExpectedWeightKg,
-                Cbm                 = order.ExpectedCbm,
+                WeightKg            = (order.OrderDimension?.ExpectedWeightKg ?? 0m),
+                Cbm                 = (order.OrderDimension?.ExpectedCbm ?? 0m),
                 TempCondition       = order.TempCondition,
                 Zone                = zone,
                 DeliveryLocationId  = order.DestLocation!.Value,
@@ -578,7 +578,7 @@ public class DispatchService : IDispatchService
                 { "vehicle",     vehicle.TruckPlate },
                 { "orderCount",  orders.Count.ToString() },
                 { "firstLoad",   loadPlan.FirstOrDefault()?.ItemName ?? "-" },
-                { "totalWeight", orders.Sum(o => o.ExpectedWeightKg).ToString("F1") },
+                { "totalWeight", orders.Sum(o => (o.OrderDimension?.ExpectedWeightKg ?? 0m)).ToString("F1") },
                 { "startTime",   trip.PlannedStartTime.ToString("dd/MM/yyyy HH:mm") }
             });
 
@@ -1590,7 +1590,7 @@ public class DispatchService : IDispatchService
 
         if (orders.Count == 0) throw new Exception("No orders found.");
 
-        decimal totalWeight = orders.Sum(o => o.ExpectedWeightKg);
+        decimal totalWeight = orders.Sum(o => (o.OrderDimension?.ExpectedWeightKg ?? 0m));
 
         if (totalWeight > vehicle.MaxWeight)
             throw new InvalidOperationException(
@@ -2089,7 +2089,7 @@ public class DispatchService : IDispatchService
                 { "tripId",      trip.TripId.ToString() },
                 { "vehicle",     trip.Vehicle?.TruckPlate ?? "N/A" },
                 { "orderCount",  trip.TransportOrders.Count.ToString() },
-                { "totalWeight", trip.TransportOrders.Sum(o => o.ExpectedWeightKg).ToString("F1") },
+                { "totalWeight", trip.TransportOrders.Sum(o => (o.OrderDimension?.ExpectedWeightKg ?? 0m)).ToString("F1") },
                 { "action",      "Xem sơ đồ LIFO và xếp hàng lên container, sau đó kẹp chì" }
             });
 
@@ -2117,7 +2117,7 @@ public class DispatchService : IDispatchService
                     Status = "LOADING",
                     Vehicle = trip.Vehicle?.TruckPlate ?? "N/A",
                     OrderCount = trip.TransportOrders.Count,
-                    TotalWeight = trip.TransportOrders.Sum(o => o.ExpectedWeightKg)
+                    TotalWeight = trip.TransportOrders.Sum(o => (o.OrderDimension?.ExpectedWeightKg ?? 0m))
                 });
         }
         catch (Exception)
@@ -2126,3 +2126,5 @@ public class DispatchService : IDispatchService
         }
     }
 }
+
+

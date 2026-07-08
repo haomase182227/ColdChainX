@@ -221,7 +221,9 @@ public class DispatchController : ControllerBase
                     from cust in cg.DefaultIfEmpty()
                     join dl in _db.Locations on o.DestLocation equals dl.LocationId into dlg
                     from destLoc in dlg.DefaultIfEmpty()
-                    join r in _db.RouteMasters on o.RouteId equals r.RouteId into rg
+                    join s in _db.RouteSchedules on o.ScheduleId equals s.ScheduleId into sg
+                    from schedule in sg.DefaultIfEmpty()
+                    join r in _db.RouteMasters on schedule.RouteId equals r.RouteId into rg
                     from route in rg.DefaultIfEmpty()
                     where l.State == LpnState.IN_STOCK
                        && (warehouseId == null || l.WarehouseId == warehouseId)
@@ -876,8 +878,8 @@ public class DispatchController : ControllerBase
             ItemName = order.ItemName,
             Category = order.Category,
             Quantity = order.Quantity,
-            WeightKg = order.ActualWeightKg,
-            Cbm = order.ActualCbm ?? order.ExpectedCbm,
+            WeightKg = (order.OrderDimension?.ActualWeightKg ?? 0m),
+            Cbm = ((order.OrderDimension?.ActualCbm ?? 0m) > 0 ? (order.OrderDimension?.ActualCbm ?? 0m) : (order.OrderDimension?.ExpectedCbm ?? 0m)),
             TempCondition = order.TempCondition
         };
     }
@@ -912,3 +914,5 @@ public class DispatchController : ControllerBase
         }
     }
 }
+
+

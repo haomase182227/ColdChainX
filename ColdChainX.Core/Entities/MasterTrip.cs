@@ -7,6 +7,12 @@ public partial class MasterTrip
 {
     public Guid TripId { get; set; }
 
+    public Guid? RouteId { get; set; }
+
+    public Guid? ScheduleId { get; set; }
+
+    public DateTime? DepartureDate { get; set; }
+
     public Guid? VehicleId { get; set; }
 
     public Guid OriginLocationId { get; set; }
@@ -57,4 +63,8 @@ public partial class MasterTrip
     public virtual ICollection<TripStop> TripStops { get; set; } = new List<TripStop>();
 
     public virtual Vehicle? Vehicle { get; set; }
+
+    public virtual RouteMaster? Route { get; set; }
+
+    public virtual RouteSchedule? Schedule { get; set; }
 }
