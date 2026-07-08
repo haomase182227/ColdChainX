@@ -288,8 +288,11 @@ namespace ColdChainX.Application.Services
                     }
 
                     // Update order dimensions
-                    order.ActualWeightKg = totalActualWeight;
-                    order.ActualCbm = totalActualCbm;
+                    if (order.OrderDimension != null)
+                    {
+                        order.OrderDimension.ActualWeightKg = totalActualWeight;
+                        order.OrderDimension.ActualCbm = totalActualCbm;
+                    }
                     order.Status = InWarehouseStatus;
 
                     // Recalculate freight and generate adjustment invoice if necessary

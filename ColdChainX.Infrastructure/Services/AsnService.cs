@@ -157,8 +157,8 @@ namespace ColdChainX.Infrastructure.Services
                     Category = item.Order.Category,
                     Quantity = item.Order.Quantity,
                     TempCondition = item.Order.TempCondition,
-                    ExpectedWeightKg = item.Order.ExpectedWeightKg,
-                    ExpectedCbm = item.Order.ExpectedCbm,
+                    ExpectedWeightKg = (item.Order.OrderDimension?.ExpectedWeightKg ?? 0m),
+                    ExpectedCbm = (item.Order.OrderDimension?.ExpectedCbm ?? 0m),
                     DestAddress = item.Order.DestLocationNavigation?.Address ?? "Không xác định",
                     RequestedDropoffTime = item.RequestedDropoffTime,
                     Status = item.Status,
@@ -179,7 +179,8 @@ namespace ColdChainX.Infrastructure.Services
                 return ApiResponse<AsnResponse>.Failure("OrderId is required");
 
             var order = await _db.TransportOrders
-                .Include(o => o.Route)
+                .Include(o => o.Schedule)
+                    .ThenInclude(s => s!.Route)
                 .FirstOrDefaultAsync(o => o.OrderId == request.OrderId);
 
             if (order == null)
@@ -191,20 +192,20 @@ namespace ColdChainX.Infrastructure.Services
             if (!string.Equals(order.Status, ContractSigned, StringComparison.OrdinalIgnoreCase))
                 return ApiResponse<AsnResponse>.Failure("ASN can only be created after contract is signed");
 
-            if (order.Route == null)
+            if (order.Schedule?.Route == null)
                 return ApiResponse<AsnResponse>.Failure("Order has no selected route");
 
             var requestedDropoff = DateTime.SpecifyKind(request.RequestedDropoffTime, DateTimeKind.Unspecified);
-            var latestDropoffTime = order.Route.CutOffTime.Subtract(TimeSpan.FromHours(2));
+            var latestDropoffTime = order.Schedule!.Route!.CutOffTime.Subtract(TimeSpan.FromHours(2));
             
             if (requestedDropoff.TimeOfDay > latestDropoffTime)
             {
                 return ApiResponse<AsnResponse>.Failure(
-                    $"Requested_Dropoff_Time must be at least 2 hours before the route cut-off time ({order.Route.CutOffTime:hh\\:mm\\:ss}). Latest allowed drop-off time is {latestDropoffTime:hh\\:mm\\:ss}");
+                    $"Requested_Dropoff_Time must be at least 2 hours before the route cut-off time ({order.Schedule!.Route.CutOffTime:hh\\:mm\\:ss}). Latest allowed drop-off time is {latestDropoffTime:hh\\:mm\\:ss}");
             }
 
             var asnCode = await GenerateUniqueAsnCodeAsync();
-            var qrValue = $"ASN|{asnCode}|ORDER|{order.OrderId}|ROUTE|{order.Route.RouteCode}|DROPOFF|{requestedDropoff:O}";
+            var qrValue = $"ASN|{asnCode}|ORDER|{order.OrderId}|ROUTE|{order.Schedule!.Route.RouteCode}|DROPOFF|{requestedDropoff:O}";
 
             var asn = new Core.Entities.InboundAsn
             {
@@ -242,10 +243,10 @@ namespace ColdChainX.Infrastructure.Services
                 AsnId = asn.AsnId,
                 AsnCode = asn.AsnCode,
                 OrderId = asn.OrderId,
-                RouteId = order.Route.RouteId,
-                RouteCode = order.Route.RouteCode,
+                RouteId = order.Schedule!.Route!.RouteId,
+                RouteCode = order.Schedule!.Route.RouteCode,
                 RequestedDropoffTime = asn.RequestedDropoffTime,
-                CutOffTime = order.Route.CutOffTime,
+                CutOffTime = order.Schedule!.Route.CutOffTime,
                 QrCodeValue = asn.QrCodeValue,
                 Status = asn.Status,
                 Phone = asn.Phone,
@@ -266,7 +267,8 @@ namespace ColdChainX.Infrastructure.Services
                 .Include(a => a.Order)
                     .ThenInclude(o => o.Customer)
                 .Include(a => a.Order)
-                    .ThenInclude(o => o.Route)
+                    .ThenInclude(o => o.Schedule)
+                        .ThenInclude(s => s!.Route)
                 .Where(a => a.RequestedDropoffTime >= from && a.RequestedDropoffTime <= to);
 
             if (!string.IsNullOrWhiteSpace(status))
@@ -311,10 +313,10 @@ namespace ColdChainX.Infrastructure.Services
                     CustomerName = a.Order.Customer?.CompanyName,
                     CustomerEmail = a.Order.Customer?.Email,
                     CustomerUserId = customerUserId == Guid.Empty ? null : customerUserId,
-                    RouteId = a.Order.RouteId,
-                    RouteCode = a.Order.Route?.RouteCode,
+                    RouteId = a.Order.Schedule?.RouteId,
+                    RouteCode = a.Order.Schedule?.Route?.RouteCode,
                     RequestedDropoffTime = a.RequestedDropoffTime,
-                    CutOffTime = a.Order.Route?.CutOffTime,
+                    CutOffTime = a.Order.Schedule?.Route?.CutOffTime,
                     Status = a.Status,
                     QrCodeValue = a.QrCodeValue
                 };
@@ -327,7 +329,8 @@ namespace ColdChainX.Infrastructure.Services
         {
             var rawAsns = await _db.InboundAsns
                 .Include(a => a.Order)
-                .ThenInclude(o => o.Route)
+                .ThenInclude(o => o.Schedule)
+                    .ThenInclude(s => s.Route)
                 .Where(a => a.CustomerId == customerId || a.Order.CustomerId == customerId)
                 .OrderByDescending(a => a.CreatedAt)
                 .Select(a => new
@@ -335,10 +338,10 @@ namespace ColdChainX.Infrastructure.Services
                     a.AsnId,
                     a.AsnCode,
                     a.OrderId,
-                    RouteId = a.Order.RouteId,
-                    RouteCode = a.Order.Route != null ? a.Order.Route.RouteCode : string.Empty,
+                    RouteId = a.Order.Schedule != null ? a.Order.Schedule.RouteId : (Guid?)null,
+                    RouteCode = (a.Order.Schedule != null && a.Order.Schedule.Route != null) ? a.Order.Schedule.Route.RouteCode : string.Empty,
                     a.RequestedDropoffTime,
-                    CutOffTime = a.Order.Route != null ? (TimeSpan?)a.Order.Route.CutOffTime : null,
+                    CutOffTime = a.Order.Schedule != null ? (TimeSpan?)a.Order.Schedule.CutOffTime : null,
                     a.QrCodeValue,
                     a.Status,
                     a.Phone,
@@ -386,3 +389,4 @@ namespace ColdChainX.Infrastructure.Services
             => DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
     }
 }
+

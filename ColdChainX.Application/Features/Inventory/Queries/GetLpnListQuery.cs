@@ -65,7 +65,7 @@ public class GetLpnListQueryHandler : IRequestHandler<GetLpnListQuery, PagedResu
                 WarehouseName = x.Warehouse != null ? x.Warehouse.WarehouseName : null,
                 StorageLocation = x.StorageLocation,
                 Quantity = x.Quantity,
-                ExpectedWeightKg = x.Order.ExpectedWeightKg,
+                ExpectedWeightKg = x.Order != null && x.Order.OrderDimension != null ? x.Order.OrderDimension.ExpectedWeightKg : 0m,
                 ActualWeightKg = x.ActualWeightKg,
                 State = x.State.ToString(),
                 Condition = x.DiscrepancyReason,
