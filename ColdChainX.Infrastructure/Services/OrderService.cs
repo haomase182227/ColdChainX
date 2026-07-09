@@ -566,6 +566,7 @@ namespace ColdChainX.Infrastructure.Services
                 ActualCbm = order.ActualCbm,
                 CargoValue = order.CargoValue,
                 Status = order.Status,
+                MasterTripId = order.MasterTripId,
                 CreatedAt = order.CreatedAt,
                 Route = order.Route == null
                     ? null
