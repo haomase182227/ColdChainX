@@ -108,6 +108,8 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IRouteService, RouteService>();
             services.AddScoped<IAsnService, AsnService>();
             services.AddScoped<IPdfService, SimplePdfService>();
+            services.AddScoped<IWeightTierService, WeightTierService>();
+            services.AddScoped<ISystemConfigService, SystemConfigService>();
             services.AddScoped<IContractService, ContractService>();
             services.AddScoped<IContractAppendixService, ContractAppendixService>();
             services.AddScoped<IChatService, ChatService>();

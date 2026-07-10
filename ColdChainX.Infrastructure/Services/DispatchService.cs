@@ -1172,13 +1172,7 @@ public class DispatchService : IDispatchService
         }
         trip.SealNumber = null;
 
-        // 4. Vô hiệu các chứng từ E-Waybill đã phát hành cho chuyến (best-effort, theo tripId trong URL)
-        var tripIdStr = tripId.ToString();
-        var documents = await _context.TransportDocuments
-            .Where(d => d.ImageUrl.Contains(tripIdStr) && d.Status != "CANCELLED")
-            .ToListAsync();
-        foreach (var doc in documents)
-            doc.Status = "CANCELLED";
+        // 4. Removed E-Waybill invalidation because TransportDocument no longer has Status
 
         // 5. Hủy các OutboundOrder đã sinh ra (chỉ tồn tại nếu đã từng seal — best-effort)
         var lpnCodes = lpns.Select(l => l.LpnCode).ToList();
@@ -1252,7 +1246,7 @@ public class DispatchService : IDispatchService
             ResetLpnCount       = lpns.Count,
             ResetOrderCount     = resetOrderCount,
             CancelledSealCount  = cancelledSealCount,
-            VoidedDocumentCount = documents.Count,
+            VoidedDocumentCount = 0,
             VehiclePlate        = trip.Vehicle?.TruckPlate,
             DriverName          = trip.TripDrivers.Count > 0
                                     ? string.Join(", ", trip.TripDrivers.Select(td => td.Driver?.FullName).Where(n => n != null))
@@ -1506,7 +1500,6 @@ public class DispatchService : IDispatchService
                 DocId = Guid.NewGuid(),
                 DocType = "E-WAYBILL",
                 ImageUrl = waybillUrl,
-                Status = "ISSUED",
                 CreatedAt = DateTime.UtcNow,
                 UploadedBy = documentUploader
             });
@@ -1696,7 +1689,6 @@ public class DispatchService : IDispatchService
             DocId     = Guid.NewGuid(),
             DocType   = "E-WAYBILL",
             ImageUrl  = pdfUrl,
-            Status    = "ISSUED",
             CreatedAt = DateTime.UtcNow,
             UploadedBy = documentUploader
         });
