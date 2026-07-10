@@ -76,16 +76,35 @@ namespace ColdChainX.Infrastructure.Services
             if (data.Order.Status != "DISCREPANCY_HOLD")
                 return ApiResponse<ContractAppendixResponse>.Failure($"Order must be in DISCREPANCY_HOLD status. Current status: {data.Order.Status}");
 
+            if (_db.Database.CurrentTransaction != null)
+                return await GenerateAppendixDraftAsync(orderId, adjustedPrice, reason, data);
+
             var strategy = _db.Database.CreateExecutionStrategy();
             return await strategy.ExecuteAsync(async () =>
             {
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
-                var existingAppendix = await _db.ContractAppendices
-                    .FirstOrDefaultAsync(a => a.OrderId == orderId && (a.Status == Draft || a.Status == Sent));
+                var result = await GenerateAppendixDraftAsync(orderId, adjustedPrice, reason, data);
+                if (result.Success)
+                {
+                    await transaction.CommitAsync();
+                }
 
-                if (existingAppendix != null)
-                    return ApiResponse<ContractAppendixResponse>.Failure($"An active contract appendix already exists for this order (Status: {existingAppendix.Status})");
+                return result;
+            });
+        }
+
+        private async Task<ApiResponse<ContractAppendixResponse>> GenerateAppendixDraftAsync(
+            Guid orderId,
+            decimal? adjustedPrice,
+            string reason,
+            AppendixData data)
+        {
+            var existingAppendix = await _db.ContractAppendices
+                .FirstOrDefaultAsync(a => a.OrderId == orderId && (a.Status == Draft || a.Status == Sent));
+
+            if (existingAppendix != null)
+                return ApiResponse<ContractAppendixResponse>.Failure($"An active contract appendix already exists for this order (Status: {existingAppendix.Status})");
 
                 decimal resolvedAdjustedPrice = 0m;
                 if (adjustedPrice.HasValue)
@@ -113,34 +132,32 @@ namespace ColdChainX.Infrastructure.Services
                     if (tier == null)
                         return ApiResponse<ContractAppendixResponse>.Failure($"Weight tier is missing for route and chargeable weight {chargeableWeight} kg");
 
-                    var newBaseFreight = Math.Round(chargeableWeight * tier.PricePerKg, 0);
-                    var originalBaseFreight = data.Quotation.BaseFreight;
-                    resolvedAdjustedPrice = newBaseFreight - originalBaseFreight;
-                }
+                var newBaseFreight = Math.Round(chargeableWeight * unitPrice.Value, 0);
+                var originalBaseFreight = data.Quotation.BaseFreight;
+                resolvedAdjustedPrice = newBaseFreight - originalBaseFreight;
+            }
 
-                var appendixNumber = await GenerateUniqueAppendixNumberAsync();
-                var template = await LoadAppendixTemplateAsync();
-                var htmlContent = await RenderAppendixTemplateAsync(template, data, appendixNumber, resolvedAdjustedPrice, reason);
+            var appendixNumber = await GenerateUniqueAppendixNumberAsync();
+            var template = await LoadAppendixTemplateAsync();
+            var htmlContent = await RenderAppendixTemplateAsync(template, data, appendixNumber, resolvedAdjustedPrice, reason);
 
-                var appendix = new ContractAppendix
-                {
-                    AppendixId = Guid.NewGuid(),
-                    ContractId = data.Contract?.ContractId,
-                    OrderId = orderId,
-                    AppendixNumber = appendixNumber,
-                    AdjustedPrice = resolvedAdjustedPrice,
-                    Reason = reason,
-                    Status = Draft,
-                    DraftHtmlContent = htmlContent,
-                    CreatedAt = DbNow()
-                };
+            var appendix = new ContractAppendix
+            {
+                AppendixId = Guid.NewGuid(),
+                ContractId = data.Contract?.ContractId,
+                OrderId = orderId,
+                AppendixNumber = appendixNumber,
+                AdjustedPrice = resolvedAdjustedPrice,
+                Reason = reason,
+                Status = Draft,
+                DraftHtmlContent = htmlContent,
+                CreatedAt = DbNow()
+            };
 
-                _db.ContractAppendices.Add(appendix);
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+            _db.ContractAppendices.Add(appendix);
+            await _db.SaveChangesAsync();
 
-                return ApiResponse<ContractAppendixResponse>.SuccessResponse(ToResponse(appendix), "Contract appendix draft generated");
-            });
+            return ApiResponse<ContractAppendixResponse>.SuccessResponse(ToResponse(appendix), "Contract appendix draft generated");
         }
 
         public async Task<ApiResponse<ContractAppendixResponse>> UpdateAppendixDraftAsync(Guid appendixId, string editedHtmlContent, Guid salesUserId)
@@ -817,7 +834,30 @@ namespace ColdChainX.Infrastructure.Services
                 .OrderByDescending(t => t.MinWeightKg)
                 .FirstOrDefaultAsync();
 
-            var unitPrice = tier?.PricePerKg ?? 0m;
+                tier ??= await _db.WeightTiers
+                    .AsNoTracking()
+                    .Where(t => t.RouteId == data.Order.RouteId.Value
+                                && chargeableWeight >= t.MinWeightKg)
+                    .OrderByDescending(t => t.MinWeightKg)
+                    .FirstOrDefaultAsync();
+
+                if (tier != null)
+                    return tier.PricePerKg;
+            }
+
+            return data.Quotation.PricePerKg;
+        }
+
+        private async Task<string> RenderAppendixTemplateAsync(string template, AppendixData data, string appendixNumber, decimal adjustedPrice, string reason)
+        {
+            var now = DateTime.UtcNow;
+            
+            var volumetricRate = await GetSystemConfigDecimalAsync("VolumetricConversionRate", 250m);
+            var actualCbm = data.Order.ActualCbm ?? data.Order.ExpectedCbm;
+            var volumetricWeight = Math.Round(actualCbm * volumetricRate, 2);
+            var chargeableWeight = Math.Max(Math.Max(data.Order.ActualWeightKg, volumetricWeight), MinChargeableWeightKg);
+
+            var unitPrice = await ResolveAppendixUnitPriceAsync(data, chargeableWeight) ?? 0m;
             var newBasePrice = Math.Round(chargeableWeight * unitPrice, 0);
             var originalBasePrice = data.Quotation.BaseFreight;
 

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -20,10 +21,14 @@ namespace ColdChainX.API.Controllers
     public class IncidentReportsController : ControllerBase
     {
         private readonly IIncidentReportService _incidentService;
+        private readonly IIncidentRescueService _rescueService;
 
-        public IncidentReportsController(IIncidentReportService incidentService)
+        public IncidentReportsController(
+            IIncidentReportService incidentService,
+            IIncidentRescueService rescueService)
         {
             _incidentService = incidentService;
+            _rescueService = rescueService;
         }
 
         /// <summary>
@@ -63,6 +68,60 @@ namespace ColdChainX.API.Controllers
                 return Unauthorized(ApiResponse<object>.Failure("User ID claim is missing or invalid in the token."));
 
             var result = await _incidentService.ResolveIncidentAsync(id, request.ResolutionNote, userId);
+            if (!result.Success)
+                return BadRequest(result);
+
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// [Luồng 8 - Bước 2, Lookup] Danh sách xe lạnh ACTIVE đủ điều kiện thay thế cho chuyến gặp sự cố.
+        /// </summary>
+        /// <remarks>
+        /// Chỉ trả về các xe: đang ACTIVE, giữ được nhiệt độ mục tiêu của chuyến,
+        /// và đủ tải trọng/thể tích để sang toàn bộ LPN đang trên xe hỏng.
+        /// Dùng để Điều phối viên chọn ReplacementVehicleId cho POST /dispatch-rescue.
+        /// </remarks>
+        [HttpGet("{id:guid}/rescue-candidates")]
+        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Dispatcher,DISPATCHER")]
+        [ProducesResponseType(typeof(ApiResponse<List<RescueCandidateResponse>>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> GetRescueCandidates([FromRoute] Guid id)
+        {
+            var result = await _rescueService.GetRescueCandidatesAsync(id);
+            if (!result.Success)
+                return BadRequest(result);
+
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// [Luồng 8 - Bước 2+3] Điều xe lạnh thay thế đến hiện trường (Sang xe) và cập nhật lộ trình.
+        /// </summary>
+        /// <remarks>
+        /// Thực hiện trọn vẹn Bước 2 và Bước 3 của luồng xử lý sự cố:
+        ///
+        ///   - Xe hỏng → MAINTENANCE + tự động mở phiếu sửa chữa (MaintenanceTicket OPEN)
+        ///   - Xe thay thế gán vào chuyến → OnTrip; đội bốc xếp nhận lệnh sang toàn bộ LPN (SignalR)
+        ///   - Trip.Status → DELAYED
+        ///   - Hệ thống tự tính lại ETA các trạm phía trước (Goong, fallback Haversine/shift)
+        ///   - Gửi thông báo xin lỗi kèm ETA mới cho tất cả khách hàng đang chờ ở các trạm phía trước
+        ///   - Incident.Status → RESCUE_DISPATCHED (đóng hẳn bằng POST /{id}/resolve sau khi hoàn tất)
+        /// </remarks>
+        [HttpPost("{id:guid}/dispatch-rescue")]
+        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Dispatcher,DISPATCHER")]
+        [ProducesResponseType(typeof(ApiResponse<IncidentRescueResult>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
+        public async Task<IActionResult> DispatchRescue([FromRoute] Guid id, [FromBody] DispatchRescueRequest request)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var userId))
+                return Unauthorized(ApiResponse<object>.Failure("User ID claim is missing or invalid in the token."));
+
+            var result = await _rescueService.DispatchRescueAsync(id, request, userId);
             if (!result.Success)
                 return BadRequest(result);
 
