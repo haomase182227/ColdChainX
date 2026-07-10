@@ -258,8 +258,8 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
                         salesUserId = request.ReceiverId;
                     }
 
-            var isWeightHigher = request.ActualWeightKg > order.ExpectedWeightKg;
-            var isCbmHigher = actualCbm > order.ExpectedCbm;
+            var isWeightHigher = request.ActualWeightKg > (order.OrderDimension?.ExpectedWeightKg ?? 0m);
+            var isCbmHigher = actualCbm > (order.OrderDimension?.ExpectedCbm ?? 0m);
             var weightSign = isWeightHigher ? "+" : "-";
             var cbmSign = isCbmHigher ? "+" : "-";
 
