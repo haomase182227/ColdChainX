@@ -212,7 +212,6 @@ namespace ColdChainX.Infrastructure.Services
                     OrderId = appendix.OrderId,
                     DocType = "CONTRACT_APPENDIX",
                     ImageUrl = pdfUrl,
-                    Status = "PENDING",
                     UploadedBy = salesUserId,
                     CreatedAt = DbNow()
                 });
@@ -220,7 +219,6 @@ namespace ColdChainX.Infrastructure.Services
             else
             {
                 existingDoc.ImageUrl = pdfUrl;
-                existingDoc.Status = "PENDING";
                 existingDoc.UploadedBy = salesUserId;
                 existingDoc.CreatedAt = DbNow();
             }
@@ -281,8 +279,6 @@ namespace ColdChainX.Infrastructure.Services
                 .FirstOrDefaultAsync(d => d.OrderId == appendix.OrderId && d.DocType == "CONTRACT_APPENDIX");
             if (doc != null)
             {
-                doc.Status = "APPROVED";
-                doc.VerifiedAt = DbNow();
                 if (customerUserId.HasValue)
                 {
                     doc.VerifiedBy = customerUserId.Value;
@@ -398,8 +394,6 @@ namespace ColdChainX.Infrastructure.Services
                     .FirstOrDefaultAsync(d => d.OrderId == appendix.OrderId && d.DocType == "CONTRACT_APPENDIX");
                 if (doc != null)
                 {
-                    doc.Status = "REJECTED";
-                    doc.VerifiedAt = DbNow();
                     if (customerUserId.HasValue)
                     {
                         doc.VerifiedBy = customerUserId.Value;

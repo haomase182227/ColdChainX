@@ -636,7 +636,6 @@ namespace ColdChainX.Infrastructure.Services
                     OrderId = orderId,
                     DocType = docType,
                     ImageUrl = string.Empty,
-                    Status = "PENDING",
                     UploadedBy = uploadedBy,
                     CreatedAt = DbNow()
                 });
