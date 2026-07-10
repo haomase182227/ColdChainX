@@ -134,8 +134,8 @@ namespace ColdChainX.UnitTests
 
             var request = new ReviewOrderRequest
             {
-                Action = "REJECT",
-                RejectReason = "Documents incomplete"
+                Action = "COMPLIANCE_REJECT",
+                CustomerNote = "Documents incomplete"
             };
 
             // Act

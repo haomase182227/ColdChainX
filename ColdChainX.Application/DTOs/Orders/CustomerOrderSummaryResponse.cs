@@ -1,6 +1,8 @@
+using System;
+
 namespace ColdChainX.Application.DTOs.Orders
 {
-    public class CreateOrderResponse
+    public class CustomerOrderSummaryResponse
     {
         public Guid OrderId { get; set; }
         public string TrackingCode { get; set; } = null!;
@@ -12,7 +14,6 @@ namespace ColdChainX.Application.DTOs.Orders
         public decimal ExpectedWeightKg { get; set; }
         public decimal ExpectedCbm { get; set; }
         public string Status { get; set; } = null!;
-        public DateTime CreatedAt { get; set; }
+        public DateTime? CreatedAt { get; set; }
     }
 }
-

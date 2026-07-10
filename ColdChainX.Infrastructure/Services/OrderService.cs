@@ -78,11 +78,11 @@ namespace ColdChainX.Infrastructure.Services
             return ApiResponse<OrderResponse>.SuccessResponse(ToOrderResponse(order), "Order retrieved successfully");
         }
 
-        public async Task<ApiResponse<PagedResult<OrderResponse>>> GetOrdersByCustomerAsync(Guid customerId, int pageNumber, int pageSize, string? status = null)
+        public async Task<ApiResponse<PagedResult<CustomerOrderSummaryResponse>>> GetOrdersByCustomerAsync(Guid customerId, int pageNumber, int pageSize, string? status = null)
         {
             var customerExists = await _db.Customers.AnyAsync(c => c.CustomerId == customerId);
             if (!customerExists)
-                return ApiResponse<PagedResult<OrderResponse>>.Failure("Customer not found");
+                return ApiResponse<PagedResult<CustomerOrderSummaryResponse>>.Failure("Customer not found");
 
             var query = BuildOrderQuery().Where(o => o.CustomerId == customerId);
             if (!string.IsNullOrWhiteSpace(status))
@@ -94,11 +94,24 @@ namespace ColdChainX.Infrastructure.Services
             var orders = await query
                 .Skip(NormalizeSkip(pageNumber, pageSize))
                 .Take(NormalizePageSize(pageSize))
-                .Select(o => ToOrderResponse(o))
+                .Select(o => new CustomerOrderSummaryResponse
+                {
+                    OrderId = o.OrderId,
+                    TrackingCode = o.TrackingCode,
+                    ItemName = o.ItemName,
+                    Category = o.Category,
+                    Quantity = o.Quantity,
+                    PackingType = o.PackingType,
+                    TempCondition = o.TempCondition,
+                    ExpectedWeightKg = o.OrderDimension != null ? o.OrderDimension.ExpectedWeightKg : 0,
+                    ExpectedCbm = o.OrderDimension != null ? o.OrderDimension.ExpectedCbm : 0,
+                    Status = o.Status,
+                    CreatedAt = o.CreatedAt
+                })
                 .ToListAsync();
 
-            return ApiResponse<PagedResult<OrderResponse>>.SuccessResponse(
-                PagedResult<OrderResponse>.Create(orders, totalRecords, pageNumber, NormalizePageSize(pageSize)),
+            return ApiResponse<PagedResult<CustomerOrderSummaryResponse>>.SuccessResponse(
+                PagedResult<CustomerOrderSummaryResponse>.Create(orders, totalRecords, pageNumber, NormalizePageSize(pageSize)),
                 "Customer orders retrieved successfully");
         }
 
@@ -186,7 +199,6 @@ namespace ColdChainX.Infrastructure.Services
                             OrderId = order.OrderId,
                             DocType = "LEGAL_DOCUMENT",
                             ImageUrl = url,
-                            Status = "PENDING",
                             UploadedBy = uploadedBy.Value,
                             CreatedAt = DbNow()
                         });
@@ -205,7 +217,6 @@ namespace ColdChainX.Infrastructure.Services
                             OrderId = order.OrderId,
                             DocType = "ITEM_IMAGE",
                             ImageUrl = url,
-                            Status = "PENDING",
                             UploadedBy = uploadedBy.Value,
                             CreatedAt = DbNow()
                         });
@@ -239,12 +250,278 @@ namespace ColdChainX.Infrastructure.Services
                 {
                     OrderId = order.OrderId,
                     TrackingCode = order.TrackingCode,
-                    DestLocationId = location.LocationId,
-                    ExpectedCbm = expectedCbm,
-                    
-                    Status = order.Status
+                    ItemName = order.ItemName,
+                    Category = order.Category,
+                    Quantity = order.Quantity,
+                    PackingType = order.PackingType,
+                    TempCondition = order.TempCondition,
+                    ExpectedWeightKg = order.OrderDimension?.ExpectedWeightKg ?? 0,
+                    ExpectedCbm = order.OrderDimension?.ExpectedCbm ?? 0,
+                    Status = order.Status,
+                    CreatedAt = order.CreatedAt ?? DateTime.UtcNow
                 }, "Order created successfully");
             });
+        }
+
+        public async Task<ApiResponse<CreateOrderResponse>> AdminUpdateOrderAsync(Guid orderId, UpdateOrderRequest request, Guid salesUserId)
+        {
+            var strategy = _db.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                var order = await _db.TransportOrders
+                    .Include(o => o.OrderDimension)
+                    .Include(o => o.DestLocationNavigation)
+                    .Include(o => o.Schedule)
+                    .ThenInclude(s => s!.Route)
+                    .FirstOrDefaultAsync(o => o.OrderId == orderId);
+
+                if (order == null)
+                    return ApiResponse<CreateOrderResponse>.Failure("Order not found");
+
+                await using var transaction = await _db.Database.BeginTransactionAsync();
+
+                if (request.ItemName != null) order.ItemName = request.ItemName.Trim();
+                if (request.Category != null) order.Category = request.Category.Trim();
+                if (request.Quantity.HasValue) order.Quantity = request.Quantity.Value;
+                if (request.PackagingType != null) order.PackingType = request.PackagingType.Trim();
+                if (request.TempCondition.HasValue) order.TempCondition = request.TempCondition.Value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+                if (request.HasStrongOdor.HasValue) order.HasStrongOdor = request.HasStrongOdor.Value;
+                if (request.IsStackable.HasValue) order.IsStackable = request.IsStackable.Value;
+                
+                bool dimensionChanged = false;
+
+                if (request.ExpectedWeightKg.HasValue && order.OrderDimension != null)
+                {
+                    if (order.OrderDimension.ExpectedWeightKg != request.ExpectedWeightKg.Value) dimensionChanged = true;
+                    order.OrderDimension.ExpectedWeightKg = request.ExpectedWeightKg.Value;
+                    order.OrderDimension.ActualWeightKg = request.ExpectedWeightKg.Value;
+                }
+                
+                if (request.LengthCm.HasValue && request.WidthCm.HasValue && request.HeightCm.HasValue && request.Quantity.HasValue && order.OrderDimension != null)
+                {
+                    var expectedCbm = Math.Round(request.LengthCm.Value * request.WidthCm.Value * request.HeightCm.Value * request.Quantity.Value / 1000000m, 4);
+                    if (order.OrderDimension.ExpectedCbm != expectedCbm) dimensionChanged = true;
+                    order.OrderDimension.ExpectedCbm = expectedCbm;
+                    order.OrderDimension.ActualCbm = expectedCbm;
+                    order.OrderDimension.LengthCm = request.LengthCm.Value;
+                    order.OrderDimension.WidthCm = request.WidthCm.Value;
+                    order.OrderDimension.HeightCm = request.HeightCm.Value;
+                }
+
+                if (request.DestAddressText != null && order.DestLocationNavigation != null)
+                {
+                    var coordinates = await _locationService.GetCoordinatesAsync(request.DestAddressText);
+                    order.DestLocationNavigation.Address = request.DestAddressText.Trim();
+                    order.DestLocationNavigation.Latitude = coordinates.Latitude;
+                    order.DestLocationNavigation.Longitude = coordinates.Longitude;
+                    dimensionChanged = true; // Destination change affects pricing
+                }
+
+                if (request.ScheduleId.HasValue) 
+                {
+                    if (order.ScheduleId != request.ScheduleId.Value) dimensionChanged = true;
+                    order.ScheduleId = request.ScheduleId.Value;
+                }
+                if (request.DropoffStopId.HasValue) order.DropoffStopId = request.DropoffStopId.Value;
+
+                if (request.LegalDocuments != null)
+                {
+                    foreach (var file in request.LegalDocuments)
+                    {
+                        if (file.Length > 10 * 1024 * 1024) return ApiResponse<CreateOrderResponse>.Failure("Legal document must be smaller than 10MB");
+                        var url = await _fileService.UploadFileAsync(file);
+                        _db.TransportDocuments.Add(new TransportDocument
+                        {
+                            DocId = Guid.NewGuid(),
+                            OrderId = order.OrderId,
+                            DocType = "LEGAL_DOCUMENT",
+                            ImageUrl = url,
+                            UploadedBy = salesUserId,
+                            CreatedAt = DbNow()
+                        });
+                    }
+                }
+
+                if (request.CargoPhotos != null)
+                {
+                    foreach (var file in request.CargoPhotos)
+                    {
+                        if (file.Length > 10 * 1024 * 1024) return ApiResponse<CreateOrderResponse>.Failure("Cargo photo must be smaller than 10MB");
+                        var url = await _fileService.UploadFileAsync(file);
+                        _db.TransportDocuments.Add(new TransportDocument
+                        {
+                            DocId = Guid.NewGuid(),
+                            OrderId = order.OrderId,
+                            DocType = "ITEM_IMAGE",
+                            ImageUrl = url,
+                            UploadedBy = salesUserId,
+                            CreatedAt = DbNow()
+                        });
+                    }
+                }
+
+                // If dimension/destination changed and it's already approved/quoted, regenerate quotation
+                if (dimensionChanged && order.Schedule?.Route != null && order.DestLocationNavigation != null)
+                {
+                    var existingQuotations = await _db.Quotations.Where(q => q.OrderId == orderId).ToListAsync();
+                    if (existingQuotations.Any())
+                    {
+                        // Set them as Obsolete (using string constant or just deleting them, here we change status if string, or simply delete)
+                        _db.Quotations.RemoveRange(existingQuotations);
+                        
+                        var draftQuotation = await BuildAutoDraftQuotationAsync(order, order.Schedule.Route, order.DestLocationNavigation);
+                        _db.Quotations.Add(draftQuotation);
+                    }
+                }
+
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return ApiResponse<CreateOrderResponse>.SuccessResponse(new CreateOrderResponse
+                {
+                    OrderId = order.OrderId,
+                    TrackingCode = order.TrackingCode,
+                    ItemName = order.ItemName,
+                    Category = order.Category,
+                    Quantity = order.Quantity,
+                    PackingType = order.PackingType,
+                    TempCondition = order.TempCondition,
+                    ExpectedWeightKg = order.OrderDimension?.ExpectedWeightKg ?? 0,
+                    ExpectedCbm = order.OrderDimension?.ExpectedCbm ?? 0,
+                    Status = order.Status,
+                    CreatedAt = order.CreatedAt ?? DateTime.UtcNow
+                }, "Order updated successfully by Admin");
+            });
+        }
+
+        public async Task<ApiResponse<CreateOrderResponse>> UpdateOrderAsync(Guid orderId, UpdateOrderRequest request, Guid customerId)
+        {
+            var strategy = _db.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                var order = await _db.TransportOrders
+                    .Include(o => o.OrderDimension)
+                    .Include(o => o.DestLocationNavigation)
+                    .FirstOrDefaultAsync(o => o.OrderId == orderId && o.CustomerId == customerId);
+
+                if (order == null)
+                    return ApiResponse<CreateOrderResponse>.Failure("Order not found or you don't have permission");
+
+                if (order.Status != "NEEDS_UPDATE")
+                    return ApiResponse<CreateOrderResponse>.Failure("Order can only be updated when it requires an update (NEEDS_UPDATE)");
+
+                await using var transaction = await _db.Database.BeginTransactionAsync();
+
+                if (request.ItemName != null) order.ItemName = request.ItemName.Trim();
+                if (request.Category != null) order.Category = request.Category.Trim();
+                if (request.Quantity.HasValue) order.Quantity = request.Quantity.Value;
+                if (request.PackagingType != null) order.PackingType = request.PackagingType.Trim();
+                if (request.TempCondition.HasValue) order.TempCondition = request.TempCondition.Value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+                if (request.HasStrongOdor.HasValue) order.HasStrongOdor = request.HasStrongOdor.Value;
+                if (request.IsStackable.HasValue) order.IsStackable = request.IsStackable.Value;
+                
+                if (request.ExpectedWeightKg.HasValue && order.OrderDimension != null)
+                {
+                    order.OrderDimension.ExpectedWeightKg = request.ExpectedWeightKg.Value;
+                    order.OrderDimension.ActualWeightKg = request.ExpectedWeightKg.Value;
+                }
+                
+                if (request.LengthCm.HasValue && request.WidthCm.HasValue && request.HeightCm.HasValue && request.Quantity.HasValue && order.OrderDimension != null)
+                {
+                    var expectedCbm = Math.Round(request.LengthCm.Value * request.WidthCm.Value * request.HeightCm.Value * request.Quantity.Value / 1000000m, 4);
+                    order.OrderDimension.ExpectedCbm = expectedCbm;
+                    order.OrderDimension.ActualCbm = expectedCbm;
+                    order.OrderDimension.LengthCm = request.LengthCm.Value;
+                    order.OrderDimension.WidthCm = request.WidthCm.Value;
+                    order.OrderDimension.HeightCm = request.HeightCm.Value;
+                }
+
+                if (request.DestAddressText != null && order.DestLocationNavigation != null)
+                {
+                    var coordinates = await _locationService.GetCoordinatesAsync(request.DestAddressText);
+                    order.DestLocationNavigation.Address = request.DestAddressText.Trim();
+                    order.DestLocationNavigation.Latitude = coordinates.Latitude;
+                    order.DestLocationNavigation.Longitude = coordinates.Longitude;
+                }
+
+                if (request.ScheduleId.HasValue) order.ScheduleId = request.ScheduleId.Value;
+                if (request.DropoffStopId.HasValue) order.DropoffStopId = request.DropoffStopId.Value;
+
+                var uploadedBy = await ResolveCustomerUserIdAsync(customerId);
+                if (request.LegalDocuments != null && uploadedBy.HasValue)
+                {
+                    foreach (var file in request.LegalDocuments)
+                    {
+                        if (file.Length > 10 * 1024 * 1024) return ApiResponse<CreateOrderResponse>.Failure("Legal document must be smaller than 10MB");
+                        var url = await _fileService.UploadFileAsync(file);
+                        _db.TransportDocuments.Add(new TransportDocument
+                        {
+                            DocId = Guid.NewGuid(),
+                            OrderId = order.OrderId,
+                            DocType = "LEGAL_DOCUMENT",
+                            ImageUrl = url,
+                            UploadedBy = uploadedBy.Value,
+                            CreatedAt = DbNow()
+                        });
+                    }
+                }
+
+                if (request.CargoPhotos != null && uploadedBy.HasValue)
+                {
+                    foreach (var file in request.CargoPhotos)
+                    {
+                        if (file.Length > 10 * 1024 * 1024) return ApiResponse<CreateOrderResponse>.Failure("Cargo photo must be smaller than 10MB");
+                        var url = await _fileService.UploadFileAsync(file);
+                        _db.TransportDocuments.Add(new TransportDocument
+                        {
+                            DocId = Guid.NewGuid(),
+                            OrderId = order.OrderId,
+                            DocType = "ITEM_IMAGE",
+                            ImageUrl = url,
+                            UploadedBy = uploadedBy.Value,
+                            CreatedAt = DbNow()
+                        });
+                    }
+                }
+
+                if (order.Status == "NEEDS_UPDATE")
+                {
+                    order.Status = PendingReview;
+                }
+
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return ApiResponse<CreateOrderResponse>.SuccessResponse(new CreateOrderResponse
+                {
+                    OrderId = order.OrderId,
+                    TrackingCode = order.TrackingCode,
+                    ItemName = order.ItemName,
+                    Category = order.Category,
+                    Quantity = order.Quantity,
+                    PackingType = order.PackingType,
+                    TempCondition = order.TempCondition,
+                    ExpectedWeightKg = order.OrderDimension?.ExpectedWeightKg ?? 0,
+                    ExpectedCbm = order.OrderDimension?.ExpectedCbm ?? 0,
+                    Status = order.Status,
+                    CreatedAt = order.CreatedAt ?? DateTime.UtcNow
+                }, "Order updated successfully");
+            });
+        }
+
+        public async Task<ApiResponse<bool>> DeleteOrderAsync(Guid orderId, Guid customerId)
+        {
+            var order = await _db.TransportOrders
+                .FirstOrDefaultAsync(o => o.OrderId == orderId && o.CustomerId == customerId);
+                
+            if (order == null) return ApiResponse<bool>.Failure("Order not found or permission denied");
+            
+            if (order.Status != PendingReview && order.Status != "NEEDS_UPDATE")
+                return ApiResponse<bool>.Failure("Cannot delete order at this stage");
+
+            _db.TransportOrders.Remove(order);
+            await _db.SaveChangesAsync();
+            return ApiResponse<bool>.SuccessResponse(true, "Order deleted successfully");
         }
 
         public async Task<ApiResponse<ReviewOrderResponse>> ReviewOrderAsync(Guid orderId, ReviewOrderRequest request, Guid salesUserId)
@@ -268,29 +545,29 @@ namespace ColdChainX.Infrastructure.Services
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
                 var action = request.Action.Trim().ToUpperInvariant();
-                                if (action == "SOFT_REJECT")
+                                if (action == "REQUEST_UPDATE")
                 {
-                    if (string.IsNullOrWhiteSpace(request.RejectReason))
-                        return ApiResponse<ReviewOrderResponse>.Failure("RejectReason is required when action is SOFT_REJECT");
+                    if (string.IsNullOrWhiteSpace(request.CustomerNote))
+                        return ApiResponse<ReviewOrderResponse>.Failure("CustomerNote is required when action is REQUEST_UPDATE");
 
-                    order.Status = "NEEDS_DOCUMENT";
+                    order.Status = "NEEDS_UPDATE";
 
                     var customerUserId = await ResolveCustomerUserIdAsync(order.CustomerId);
                     await AddNotificationAsync(
                         customerUserId,
                         salesUserId,
-                        "NOTI_ORDER_NEEDS_DOCUMENT",
+                        "NOTI_ORDER_NEEDS_UPDATE",
                         order.OrderId,
-                        new { Tracking_Code = order.TrackingCode, Request_Reason = request.RejectReason });
+                        new { Tracking_Code = order.TrackingCode, Request_Reason = request.CustomerNote });
 
                     await _db.SaveChangesAsync();
                     await transaction.CommitAsync();
 
-                    await _hubContext.Clients.User(order.CustomerId.ToString()!).SendAsync("OrderNeedsDocument", new
+                    await _hubContext.Clients.User(order.CustomerId.ToString()!).SendAsync("OrderNeedsUpdate", new
                     {
                         order.OrderId,
                         order.TrackingCode,
-                        RejectReason = request.RejectReason
+                        RejectReason = request.CustomerNote
                     });
 
                     return ApiResponse<ReviewOrderResponse>.SuccessResponse(new ReviewOrderResponse
@@ -301,27 +578,12 @@ namespace ColdChainX.Infrastructure.Services
                     }, "Order requires document update");
                 }
                 
-                if (action == "HARD_REJECT")
+                if (action == "COMPLIANCE_REJECT")
                 {
-                    if (string.IsNullOrWhiteSpace(request.RejectReason))
-                        return ApiResponse<ReviewOrderResponse>.Failure("RejectReason is required when action is HARD_REJECT");
-                    if (string.IsNullOrWhiteSpace(request.ComplianceCode))
-                        return ApiResponse<ReviewOrderResponse>.Failure("ComplianceCode is required when action is HARD_REJECT");
+                    if (string.IsNullOrWhiteSpace(request.CustomerNote))
+                        return ApiResponse<ReviewOrderResponse>.Failure("CustomerNote is required when action is COMPLIANCE_REJECT");
 
                     order.Status = Rejected;
-                    
-                    if (order.Customer != null)
-                    {
-                        order.Customer.ComplianceRiskScore += 10;
-                        if (string.IsNullOrEmpty(order.Customer.RiskFlags))
-                        {
-                            order.Customer.RiskFlags = request.ComplianceCode;
-                        }
-                        else if (!order.Customer.RiskFlags.Contains(request.ComplianceCode))
-                        {
-                            order.Customer.RiskFlags += "," + request.ComplianceCode;
-                        }
-                    }
 
                     var customerUserId = await ResolveCustomerUserIdAsync(order.CustomerId);
                     await AddNotificationAsync(
@@ -329,7 +591,7 @@ namespace ColdChainX.Infrastructure.Services
                         salesUserId,
                         "NOTI_ORDER_REJECTED",
                         order.OrderId,
-                        new { Tracking_Code = order.TrackingCode, Reject_Reason = request.RejectReason, Compliance_Code = request.ComplianceCode });
+                        new { Tracking_Code = order.TrackingCode, Reject_Reason = request.CustomerNote });
 
                     await _db.SaveChangesAsync();
                     await transaction.CommitAsync();
@@ -338,8 +600,7 @@ namespace ColdChainX.Infrastructure.Services
                     {
                         order.OrderId,
                         order.TrackingCode,
-                        RejectReason = request.RejectReason,
-                        ComplianceCode = request.ComplianceCode
+                        RejectReason = request.CustomerNote
                     });
 
                     return ApiResponse<ReviewOrderResponse>.SuccessResponse(new ReviewOrderResponse
@@ -351,7 +612,7 @@ namespace ColdChainX.Infrastructure.Services
                 }
 
                 if (action != "APPROVE")
-                    return ApiResponse<ReviewOrderResponse>.Failure("Action must be APPROVE, SOFT_REJECT, or HARD_REJECT");
+                    return ApiResponse<ReviewOrderResponse>.Failure("Action must be APPROVE, REQUEST_UPDATE, or COMPLIANCE_REJECT");
 
                 var quotation = await _db.Quotations
                     .Where(q => q.OrderId == order.OrderId && q.Status == Draft)
@@ -623,6 +884,7 @@ namespace ColdChainX.Infrastructure.Services
                 .Include(o => o.Customer)
                 .Include(o => o.Schedule).ThenInclude(s => s.Route)
                 .Include(o => o.DestLocationNavigation)
+                .Include(o => o.OrderDimension)
                 .Include(o => o.TransportDocuments)
                 .Include(o => o.Quotations);
         }
@@ -633,8 +895,6 @@ namespace ColdChainX.Infrastructure.Services
             {
                 OrderId = order.OrderId,
                 TrackingCode = order.TrackingCode,
-                CustomerId = order.CustomerId,
-                CustomerName = order.Customer?.CompanyName,
                 ItemName = order.ItemName,
                 Category = order.Category,
                 Quantity = order.Quantity,
@@ -662,9 +922,7 @@ namespace ColdChainX.Infrastructure.Services
                     : new OrderLocationResponse
                     {
                         LocationId = order.DestLocationNavigation.LocationId,
-                        Address = order.DestLocationNavigation.Address,
-                        Latitude = order.DestLocationNavigation.Latitude,
-                        Longitude = order.DestLocationNavigation.Longitude
+                        Address = order.DestLocationNavigation.Address
                     },
                 Documents = order.TransportDocuments
                     .OrderByDescending(d => d.CreatedAt)
@@ -673,23 +931,7 @@ namespace ColdChainX.Infrastructure.Services
                         DocId = d.DocId,
                         DocType = d.DocType,
                         ImageUrl = d.ImageUrl,
-                        Status = d.Status,
                         CreatedAt = d.CreatedAt
-                    })
-                    .ToList(),
-                Quotations = order.Quotations
-                    .OrderByDescending(q => q.CreatedAt)
-                    .Select(q => new OrderQuotationResponse
-                    {
-                        QuoteId = q.QuoteId,
-                        BaseFreight = q.BaseFreight,
-                        LastMileSurcharge = q.LastMileSurcharge,
-                        VatPercentage = q.VatPercentage,
-                        VatAmount = q.VatAmount,
-                        FinalAmount = q.FinalAmount,
-                        FileUrl = q.FileUrl,
-                        Status = q.Status,
-                        CreatedAt = q.CreatedAt
                     })
                     .ToList()
             };
