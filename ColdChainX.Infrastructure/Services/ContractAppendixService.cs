@@ -132,7 +132,7 @@ namespace ColdChainX.Infrastructure.Services
                     if (tier == null)
                         return ApiResponse<ContractAppendixResponse>.Failure($"Weight tier is missing for route and chargeable weight {chargeableWeight} kg");
 
-                var newBaseFreight = Math.Round(chargeableWeight * unitPrice.Value, 0);
+                var newBaseFreight = Math.Round(chargeableWeight * tier.PricePerKg, 0);
                 var originalBaseFreight = data.Quotation.BaseFreight;
                 resolvedAdjustedPrice = newBaseFreight - originalBaseFreight;
             }
@@ -814,29 +814,22 @@ namespace ColdChainX.Infrastructure.Services
                 : fallback;
         }
 
-        private async Task<string> RenderAppendixTemplateAsync(string template, AppendixData data, string appendixNumber, decimal adjustedPrice, string reason)
+        private async Task<decimal?> ResolveAppendixUnitPriceAsync(AppendixData data, decimal chargeableWeight)
         {
-            var now = DateTime.UtcNow;
-            
-            var volumetricRate = await GetSystemConfigDecimalAsync("VolumetricConversionRate", 250m);
-            var actualCbmVal = (data.Order.OrderDimension?.ActualCbm ?? 0m);
-            var expectedCbmVal = (data.Order.OrderDimension?.ExpectedCbm ?? 0m);
-            var actualCbm = actualCbmVal > 0 ? actualCbmVal : expectedCbmVal;
-            var volumetricWeight = Math.Round(actualCbm * volumetricRate, 2);
-            var chargeableWeight = Math.Max(Math.Max((data.Order.OrderDimension?.ActualWeightKg ?? 0m), volumetricWeight), MinChargeableWeightKg);
-
             var routeId = data.Order.Schedule?.RouteId;
-            var tier = await _db.WeightTiers
-                .AsNoTracking()
-                .Where(t => t.RouteId == routeId
-                            && chargeableWeight >= t.MinWeightKg
-                            && (!t.MaxWeightKg.HasValue || chargeableWeight <= t.MaxWeightKg.Value))
-                .OrderByDescending(t => t.MinWeightKg)
-                .FirstOrDefaultAsync();
+            if (routeId.HasValue)
+            {
+                var tier = await _db.WeightTiers
+                    .AsNoTracking()
+                    .Where(t => t.RouteId == routeId.Value
+                                && chargeableWeight >= t.MinWeightKg
+                                && (!t.MaxWeightKg.HasValue || chargeableWeight <= t.MaxWeightKg.Value))
+                    .OrderByDescending(t => t.MinWeightKg)
+                    .FirstOrDefaultAsync();
 
                 tier ??= await _db.WeightTiers
                     .AsNoTracking()
-                    .Where(t => t.RouteId == data.Order.RouteId.Value
+                    .Where(t => t.RouteId == routeId.Value
                                 && chargeableWeight >= t.MinWeightKg)
                     .OrderByDescending(t => t.MinWeightKg)
                     .FirstOrDefaultAsync();
@@ -853,9 +846,9 @@ namespace ColdChainX.Infrastructure.Services
             var now = DateTime.UtcNow;
             
             var volumetricRate = await GetSystemConfigDecimalAsync("VolumetricConversionRate", 250m);
-            var actualCbm = data.Order.ActualCbm ?? data.Order.ExpectedCbm;
+            var actualCbm = data.Order.OrderDimension?.ActualCbm ?? data.Order.OrderDimension?.ExpectedCbm ?? 0m;
             var volumetricWeight = Math.Round(actualCbm * volumetricRate, 2);
-            var chargeableWeight = Math.Max(Math.Max(data.Order.ActualWeightKg, volumetricWeight), MinChargeableWeightKg);
+            var chargeableWeight = Math.Max(Math.Max((data.Order.OrderDimension?.ActualWeightKg ?? 0m), volumetricWeight), MinChargeableWeightKg);
 
             var unitPrice = await ResolveAppendixUnitPriceAsync(data, chargeableWeight) ?? 0m;
             var newBasePrice = Math.Round(chargeableWeight * unitPrice, 0);
