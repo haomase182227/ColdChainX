@@ -1,0 +1,613 @@
+-- ==========================================
+-- PHẦN 1: TẠO TOÀN BỘ BẢNG (TABLES) TRƯỚC
+-- ==========================================
+
+CREATE TABLE Roles (
+    Role_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Role_Name VARCHAR(50) UNIQUE NOT NULL,
+    Description VARCHAR(255)
+);
+
+CREATE TABLE Permissions (
+    Perm_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Perm_Code VARCHAR(50) UNIQUE NOT NULL,
+    Module VARCHAR(50) NOT NULL
+);
+
+CREATE TABLE MessageType (
+    Type_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Type_Name VARCHAR(50) NOT NULL,       
+    Description VARCHAR(255)
+);
+
+CREATE TABLE Locations (
+    Location_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Customer_ID UUID NULL,
+    -- [CHANGE] Bỏ cột Location_Name (không còn trong entity Location)
+    Address TEXT NOT NULL,
+    Latitude DECIMAL(10,7) NOT NULL,
+    Longitude DECIMAL(10,7) NOT NULL,
+    Status VARCHAR(20) DEFAULT 'ACTIVE',
+    Created_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Warehouses (
+    Warehouse_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Warehouse_Name VARCHAR(100) NOT NULL,
+    Address VARCHAR(100),
+    Max_Pallets INT NOT NULL,
+    Current_Pallets INT DEFAULT 0,
+    Status VARCHAR(20) DEFAULT 'ACTIVE',          
+    Created_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Pricing_Matrix (
+    Price_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Origin_City VARCHAR(50) NOT NULL,
+    Dest_City VARCHAR(50) NOT NULL,
+    Pricing_Unit VARCHAR(20) NOT NULL,
+    Unit_Price DECIMAL(15,2) NOT NULL,
+    Effective_Date DATE NOT NULL
+);
+
+CREATE TABLE Vehicles (
+    Vehicle_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Truck_Plate VARCHAR(20) UNIQUE NOT NULL,      
+    Brand VARCHAR(50),                            
+    Manufacture_Year INT,                         
+    Chassis_Number VARCHAR(50) UNIQUE,            
+    Engine_Number VARCHAR(50) UNIQUE,             
+    Standard_Fuel_Liters DECIMAL(5,2),            
+    Vehicle_Type VARCHAR(50) NOT NULL,            
+    Max_Weight DECIMAL(10,2) NOT NULL,            
+    Max_CBM DECIMAL(8,2) NOT NULL,                
+    Min_Temp DECIMAL(5,2) NOT NULL,               
+    Max_Temp DECIMAL(5,2) NOT NULL,               
+    Status VARCHAR(20) DEFAULT 'ACTIVE',          
+    Created_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Role_Permissions (
+    Role_ID UUID,
+    Perm_ID UUID,
+    PRIMARY KEY (Role_ID, Perm_ID)
+);
+
+CREATE TABLE Users (
+    User_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Username VARCHAR(50) UNIQUE NOT NULL,
+    Password_Hash VARCHAR(255) NOT NULL,
+    Email VARCHAR(255) NULL,                      
+    Role_ID UUID,
+    Full_Name VARCHAR(100) NOT NULL,
+    Status VARCHAR(20) DEFAULT 'ACTIVE',
+    Refresh_Token VARCHAR(255) NULL,              
+    Refresh_Token_Expiry_Time TIMESTAMP NULL,     
+    Created_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    Updated_At TIMESTAMP NULL
+);
+
+CREATE TABLE Notification_Templates (
+    Template_ID VARCHAR(50) PRIMARY KEY,
+    Type_ID UUID NOT NULL,                 
+    Title_Template VARCHAR(100) NOT NULL, 
+    Body_Template TEXT NOT NULL,          
+    Channel VARCHAR(20) NOT NULL,         
+    Status VARCHAR(20) DEFAULT 'ACTIVE'
+);
+
+CREATE TABLE Notifications (
+    Noti_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    User_ID UUID NOT NULL,          
+    Sender_ID UUID NULL,            
+    Template_ID VARCHAR(50) NOT NULL,      
+    Params JSON NOT NULL,                  
+    Order_ID UUID NULL,             
+    Is_Read BOOLEAN DEFAULT FALSE,
+    Created_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IoT_Devices (
+    Device_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Vehicle_ID UUID,
+    Battery_Level INT CHECK (Battery_Level BETWEEN 0 AND 100), 
+    Last_Ping_Time TIMESTAMP NULL,                
+    Status VARCHAR(20) DEFAULT 'ACTIVE',          
+    Created_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Geo_Fences (
+    Fence_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Location_ID UUID,
+    Status VARCHAR(20) DEFAULT 'ACTIVE',     
+    Created_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Customers (
+    Customer_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Company_Name VARCHAR(150) NOT NULL,
+    Tax_Code VARCHAR(20) UNIQUE NOT NULL,
+    Address VARCHAR(200),
+    Email VARCHAR(200),
+    Payment_Term INT DEFAULT 30,
+    Status VARCHAR(20) DEFAULT 'ACTIVE',          
+    Created_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- [CHANGE] Thêm cột Order_ID (FK sang Transport_Orders) - entity hiện tại có OrderId
+-- [CHANGE] Signed_Date đổi thành nullable (DateOnly? trong entity)
+CREATE TABLE Customer_Contracts (
+    Contract_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Customer_ID UUID,
+    Order_ID UUID NULL,                           -- [NEW] liên kết hợp đồng với đơn hàng
+    Contract_Number VARCHAR(50) UNIQUE NOT NULL,
+    Signed_Date DATE NULL,                        -- [CHANGE] nullable (chờ ký)
+    Expired_Date DATE NOT NULL,
+    File_URL VARCHAR(500) NOT NULL,               -- [CHANGE] tăng độ dài để chứa absolute URL
+    Status VARCHAR(20) DEFAULT 'ACTIVE',          
+    Created_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- [CHANGE] Thêm cột User_ID (FK sang Users) - entity Driver hiện có UserId
+CREATE TABLE Drivers (
+    Driver_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    User_ID UUID NULL,                            -- [NEW] liên kết Driver với User account
+    Date_Of_Birth DATE NOT NULL,
+    Status VARCHAR(20) DEFAULT 'AVAILABLE',         
+    Created_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Driver_Licenses (
+    License_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Driver_ID UUID,
+    License_Number VARCHAR(20) UNIQUE NOT NULL, 
+    License_Class VARCHAR(10) NOT NULL,      
+    Issue_Date DATE NOT NULL,                
+    Expiry_Date DATE NOT NULL,               
+    Document_URL VARCHAR(255) NOT NULL,      
+    Status VARCHAR(20) DEFAULT 'ACTIVE',
+    Created_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Vehicle_Documents (
+    Doc_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Vehicle_ID UUID,
+    Document_Number VARCHAR(50) NOT NULL, 
+    Issuer VARCHAR(150),                  
+    Issue_Date DATE NOT NULL,
+    Expire_Date DATE NOT NULL,
+    Image_URL VARCHAR(255) NOT NULL,
+    Status VARCHAR(20) DEFAULT 'ACTIVE',  
+    Created_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Maintenance_Tickets (
+    Ticket_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Ticket_Code VARCHAR(50) UNIQUE NOT NULL,
+    Vehicle_ID UUID,
+    Maintenance_Type VARCHAR(30) NOT NULL,         
+    Garage_Name VARCHAR(150) NOT NULL,            
+    Description TEXT NOT NULL,                    
+    Cost DECIMAL(15,2) DEFAULT 0.00,              
+    Issue_Date DATE NOT NULL,                     
+    Completion_Date DATE NULL,                    
+    Status VARCHAR(20) DEFAULT 'OPEN',            
+    Created_By UUID NOT NULL,              
+    Created_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Master_Trips (
+    Trip_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Vehicle_ID UUID,
+    Driver_ID UUID,
+    Origin_Location_ID UUID NOT NULL,            
+    Destination_Location_ID UUID NOT NULL,       
+    Total_Distance_Km DECIMAL(8,2) NULL,        
+    Target_Temperature DECIMAL(5,2) NOT NULL,   
+    Planned_Start_Time TIMESTAMP NOT NULL,      
+    Planned_End_Time TIMESTAMP NOT NULL,        
+    Started_At TIMESTAMP NULL,                  
+    Completed_At TIMESTAMP NULL,                
+    Status VARCHAR(20) DEFAULT 'PLANNED',       
+    Created_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- [CHANGE] Thêm cột Quantity và Packing_Type - entity TransportOrder hiện có Quantity & PackingType
+-- [CHANGE] File_URL -> Absolute URL nên tăng độ dài
+CREATE TABLE Transport_Orders (                   -- [CHANGE] đổi tên bảng thêm 's' để nhất quán
+    Order_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Tracking_Code VARCHAR(50) UNIQUE NOT NULL,
+    Customer_ID UUID,
+    Item_Name VARCHAR(150) NOT NULL,
+    Category VARCHAR(50) NOT NULL,
+    Quantity INT NOT NULL,                        -- [NEW] số lượng kiện hàng
+    Packing_Type VARCHAR(50) NOT NULL,            -- [NEW] loại đóng gói
+    Temp_Condition VARCHAR(20) NOT NULL,
+    Expected_Weight_KG DECIMAL(10,2) NOT NULL,
+    Actual_Weight_KG DECIMAL(10,2) NOT NULL,
+    Expected_CBM DECIMAL(8,2) NOT NULL,
+    Actual_CBM DECIMAL(8,2) NULL,
+    Pickup_Location UUID,
+    Dest_Location UUID,
+    Cargo_Value DECIMAL(15,2) NOT NULL,
+    Status VARCHAR(30) NOT NULL,
+    Master_Trip_ID UUID NULL,
+    Created_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- [CHANGE] Thêm cột File_URL - entity Quotation hiện có FileUrl để lưu đường dẫn PDF báo giá
+CREATE TABLE Quotations (
+    Quote_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Order_ID UUID,
+    Base_Freight DECIMAL(15,2) NOT NULL,         
+    Last_Mile_Surcharge DECIMAL(15,2) DEFAULT 0,    
+    VAS_Amount DECIMAL(15,2) DEFAULT 0,             
+    VAT_Amount DECIMAL(15,2) NOT NULL,             
+    Final_Amount DECIMAL(15,2) NOT NULL,
+    File_URL VARCHAR(500) NULL,                   -- [NEW] đường dẫn PDF báo giá
+    Status VARCHAR(20) NOT NULL,
+    Created_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Transport_Documents (
+    Doc_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Order_ID UUID,
+    Doc_Type VARCHAR(50) NOT NULL,
+    Image_URL VARCHAR(255) NOT NULL,
+    Status VARCHAR(20) DEFAULT 'PENDING',         
+    Verified_By UUID NULL,                 
+    Verified_At TIMESTAMP NULL,                   
+    Reject_Reason VARCHAR(255) NULL,              
+    Uploaded_By UUID NOT NULL,             
+    Created_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Warehouse_Receipts (
+    Receipt_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Receipt_Code VARCHAR(50) UNIQUE NOT NULL,     
+    Reference_Doc_No VARCHAR(100) NULL,           
+    Order_ID UUID NOT NULL,              
+    Warehouse_ID UUID NOT NULL,                    
+    Receipt_Type VARCHAR(20) NOT NULL,            
+    Reason VARCHAR(255) NULL,                     
+    Total_Expected_Qty DECIMAL(10,2) DEFAULT 0,   
+    Total_Actual_Qty DECIMAL(10,2) DEFAULT 0,     
+    Recorded_Temperature DECIMAL(5,2) NULL,       
+    Deliverer_Name VARCHAR(100) NOT NULL,         
+    Receiver_ID UUID NOT NULL,             
+    Note TEXT NULL,                               
+    PDF_URL VARCHAR(500) NULL,                    -- [CHANGE] tăng độ dài cho absolute URL
+    Created_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Warehouse_Receipt_Items (
+    Item_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Receipt_ID UUID NOT NULL,              
+    Item_Name VARCHAR(255) NOT NULL,              
+    Item_Code VARCHAR(50) NULL,                   
+    Unit VARCHAR(20) NOT NULL,                    
+    Expected_Qty DECIMAL(10,2) NOT NULL,          
+    Actual_Qty DECIMAL(10,2) NOT NULL,            
+    Condition_Status VARCHAR(50) DEFAULT 'GOOD',  
+    Note TEXT NULL                               
+);
+
+CREATE TABLE Trip_Stops (
+    Stop_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Trip_ID UUID,
+    Location_ID UUID,
+    Stop_Sequence INT NOT NULL,                   
+    Stop_Type VARCHAR(30) NOT NULL,               
+    Planned_Arrival_Time TIMESTAMP NOT NULL,      
+    Planned_Departure_Time TIMESTAMP NOT NULL,    
+    Actual_Arrival_Time TIMESTAMP NULL,            
+    Actual_Departure_Time TIMESTAMP NULL,          
+    Status VARCHAR(20) DEFAULT 'PENDING',         
+    Note TEXT NULL,                               
+    Created_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Incident_Reports (
+    Incident_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Trip_ID UUID,
+    Incident_Type VARCHAR(50) NOT NULL,           
+    Severity VARCHAR(20) NOT NULL,                
+    Description TEXT NOT NULL,                    
+    Current_Latitude DECIMAL(10,7) NULL,          
+    Current_Longitude DECIMAL(10,7) NULL,         
+    Status VARCHAR(20) DEFAULT 'REPORTED',        
+    Reported_By UUID NOT NULL,             
+    Reported_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    Resolved_At TIMESTAMP NULL
+);
+
+CREATE TABLE Seals (
+    Seal_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Trip_ID UUID,
+    Stop_ID UUID,
+    Seal_Code VARCHAR(50) NOT NULL,               
+    Applied_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    Applied_Image_URL VARCHAR(255) NULL,          
+    Removed_At TIMESTAMP NULL,                    
+    Removed_Image_URL VARCHAR(255) NULL,          
+    Status VARCHAR(20) DEFAULT 'APPLIED',         
+    Note TEXT NULL,                               
+    Created_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Telemetry_Logs (
+    Log_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Device_ID UUID,
+    Trip_ID UUID,
+    Temperature DECIMAL(5,2) NOT NULL,
+    Latitude DECIMAL(10,7) NOT NULL,
+    Longitude DECIMAL(10,7) NOT NULL,
+    Timestamp TIMESTAMP NOT NULL,
+    Created_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Alert_Logs (
+    Alert_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Trip_ID UUID,
+    Alert_Type VARCHAR(50) NOT NULL,
+    Value DECIMAL(5,2) NULL,
+    Latitude DECIMAL(10,7) NOT NULL,
+    Longitude DECIMAL(10,7) NOT NULL,
+    Status VARCHAR(20) DEFAULT 'NEW',     
+    Resolved_By UUID NULL,         
+    Resolved_At TIMESTAMP NULL,           
+    Resolution_Note TEXT NULL,            
+    Created_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- [CHANGE] Delivery_ePODs: bỏ cột Checkin_Time (entity dùng CheckinTime không phải CheckIn_Time)
+-- Giữ nguyên column name đúng convention
+CREATE TABLE Delivery_ePODs (
+    ePOD_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Order_ID UUID,
+    CheckIn_Time TIMESTAMP NOT NULL,              
+    Signed_At TIMESTAMP NULL,                     
+    Receiver_Name VARCHAR(100) NULL,              
+    Receiver_Phone VARCHAR(20) NULL,              
+    Sign_Image_URL VARCHAR(255) NULL,             
+    Sign_Latitude DECIMAL(10,7) NULL,             
+    Sign_Longitude DECIMAL(10,7) NULL,            
+    Delivery_Rating INT DEFAULT 5,                
+    Note TEXT NULL,                               
+    PDF_URL VARCHAR(500) NULL,                    -- [CHANGE] tăng độ dài
+    Status VARCHAR(30) DEFAULT 'PENDING',         
+    Created_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Returned_Items (
+    Return_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    ePOD_ID UUID,
+    Item_Name VARCHAR(255) NOT NULL,              
+    Item_Code VARCHAR(50) NULL,                   
+    Unit VARCHAR(20) NOT NULL,                    
+    Returned_Qty DECIMAL(10,2) NOT NULL,          
+    Reason_Type VARCHAR(50) NOT NULL,             
+    Reason_Note TEXT NULL,                        
+    Processing_Status VARCHAR(30) DEFAULT 'PENDING_INSPECT', 
+    Processed_By UUID NULL,                
+    Processed_At TIMESTAMP NULL,                  
+    Returned_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Claims (
+    Claim_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Claim_Code VARCHAR(50) UNIQUE NOT NULL,
+    Order_ID UUID,
+    Claim_Type VARCHAR(50) NOT NULL,              
+    Description TEXT NOT NULL,                    
+    Fault_Owner VARCHAR(50) NULL,                 
+    Status VARCHAR(20) DEFAULT 'OPEN',            
+    Resolution_Note TEXT NULL,                    
+    Created_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    Resolved_At TIMESTAMP NULL
+);
+
+CREATE TABLE Claim_Evidences (
+    Evidence_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Claim_ID UUID,
+    Evidence_Type VARCHAR(30) NOT NULL,           
+    Alert_ID UUID NULL,                    
+    Doc_ID UUID NULL,                      
+    Image_URL VARCHAR(255) NULL,                  
+    Uploaded_By UUID NOT NULL,             
+    Created_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Expense_Advances (
+    Advance_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Advance_Code VARCHAR(50) UNIQUE NOT NULL,      
+    Trip_ID UUID NOT NULL,                  
+    Driver_ID UUID NOT NULL,                
+    Amount DECIMAL(15,2) NOT NULL,                 
+    Payment_Method VARCHAR(20) DEFAULT 'CASH',     
+    Advanced_Date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
+    Approved_By UUID NOT NULL,              
+    Cleared_Amount DECIMAL(15,2) DEFAULT 0.00,     
+    Returned_Amount DECIMAL(15,2) DEFAULT 0.00,    
+    Status VARCHAR(20) DEFAULT 'PENDING',          
+    Clearance_Status VARCHAR(20) DEFAULT 'OPEN',   
+    Note TEXT NULL
+);
+
+CREATE TABLE Expense_Receipts (
+    Receipt_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Advance_ID UUID NOT NULL,              
+    Expense_Type VARCHAR(30) NOT NULL,            
+    Description VARCHAR(255) NULL,                
+    Amount DECIMAL(15,2) NOT NULL,                
+    Expense_Date DATE NOT NULL,                   
+    Image_URL VARCHAR(255) NOT NULL,              
+    Status VARCHAR(20) DEFAULT 'PENDING',         
+    Verified_By UUID NULL,                 
+    Verified_At TIMESTAMP NULL,                   
+    Reject_Reason VARCHAR(255) NULL,              
+    Uploaded_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Invoices (
+    Invoice_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Invoice_Code VARCHAR(50) UNIQUE NOT NULL,     
+    Customer_ID UUID NOT NULL,             
+    VAT_Invoice_No VARCHAR(50) NULL,              
+    PDF_URL VARCHAR(500) NULL,                    -- [CHANGE] tăng độ dài
+    Sub_Total DECIMAL(15,2) NOT NULL,             
+    Tax_Rate DECIMAL(5,2) DEFAULT 8.00,           
+    Tax_Amount DECIMAL(15,2) NOT NULL,            
+    Deduction_Amount DECIMAL(15,2) DEFAULT 0.00,  
+    Grand_Total DECIMAL(15,2) NOT NULL,           
+    Paid_Amount DECIMAL(15,2) DEFAULT 0.00,       
+    Issued_Date DATE NOT NULL,                    
+    Due_Date DATE NOT NULL,                       
+    Status VARCHAR(20) DEFAULT 'DRAFT',           
+    Created_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Invoice_Lines (
+    Line_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Invoice_ID UUID NOT NULL,
+    Order_ID UUID NOT NULL,              
+    Charge_Type VARCHAR(50) NOT NULL,             
+    Description VARCHAR(255) NOT NULL,            
+    Quantity DECIMAL(10,2) DEFAULT 1.00,          
+    Unit_Price DECIMAL(15,2) NOT NULL,            
+    Amount DECIMAL(15,2) NOT NULL,                
+    Tax_Rate DECIMAL(5,2) DEFAULT 8.00
+);
+
+-- ==========================================
+-- PHẦN 2: THIẾT LẬP KẾT NỐI KHÓA NGOẠI (FOREIGN KEYS)
+-- ==========================================
+
+ALTER TABLE Role_Permissions ADD CONSTRAINT fk_rp_roles FOREIGN KEY (Role_ID) REFERENCES Roles(Role_ID);
+ALTER TABLE Role_Permissions ADD CONSTRAINT fk_rp_perms FOREIGN KEY (Perm_ID) REFERENCES Permissions(Perm_ID);
+
+ALTER TABLE Users ADD CONSTRAINT fk_users_roles FOREIGN KEY (Role_ID) REFERENCES Roles(Role_ID);
+
+ALTER TABLE Notification_Templates ADD CONSTRAINT fk_nt_msgtype FOREIGN KEY (Type_ID) REFERENCES MessageType(Type_ID);
+
+ALTER TABLE Notifications ADD CONSTRAINT fk_noti_users FOREIGN KEY (User_ID) REFERENCES Users(User_ID);
+ALTER TABLE Notifications ADD CONSTRAINT fk_noti_sender FOREIGN KEY (Sender_ID) REFERENCES Users(User_ID);
+ALTER TABLE Notifications ADD CONSTRAINT fk_noti_template FOREIGN KEY (Template_ID) REFERENCES Notification_Templates(Template_ID);
+ALTER TABLE Notifications ADD CONSTRAINT fk_noti_order FOREIGN KEY (Order_ID) REFERENCES Transport_Orders(Order_ID);
+
+ALTER TABLE Locations ADD CONSTRAINT fk_loc_customers FOREIGN KEY (Customer_ID) REFERENCES Customers(Customer_ID);
+
+ALTER TABLE Geo_Fences ADD CONSTRAINT fk_geo_locations FOREIGN KEY (Location_ID) REFERENCES Locations(Location_ID);
+
+ALTER TABLE IoT_Devices ADD CONSTRAINT fk_iot_vehicles FOREIGN KEY (Vehicle_ID) REFERENCES Vehicles(Vehicle_ID);
+
+ALTER TABLE Customer_Contracts ADD CONSTRAINT fk_cc_customers FOREIGN KEY (Customer_ID) REFERENCES Customers(Customer_ID);
+ALTER TABLE Customer_Contracts ADD CONSTRAINT fk_cc_orders FOREIGN KEY (Order_ID) REFERENCES Transport_Orders(Order_ID); -- [NEW]
+
+-- [NEW] Driver liên kết với User account
+ALTER TABLE Drivers ADD CONSTRAINT fk_drivers_users FOREIGN KEY (User_ID) REFERENCES Users(User_ID);
+
+ALTER TABLE Driver_Licenses ADD CONSTRAINT fk_dl_drivers FOREIGN KEY (Driver_ID) REFERENCES Drivers(Driver_ID);
+
+ALTER TABLE Vehicle_Documents ADD CONSTRAINT fk_vd_vehicles FOREIGN KEY (Vehicle_ID) REFERENCES Vehicles(Vehicle_ID);
+
+ALTER TABLE Maintenance_Tickets ADD CONSTRAINT fk_mt_vehicles FOREIGN KEY (Vehicle_ID) REFERENCES Vehicles(Vehicle_ID);
+ALTER TABLE Maintenance_Tickets ADD CONSTRAINT fk_mt_users FOREIGN KEY (Created_By) REFERENCES Users(User_ID);
+
+ALTER TABLE Master_Trips ADD CONSTRAINT fk_mtrip_vehicles FOREIGN KEY (Vehicle_ID) REFERENCES Vehicles(Vehicle_ID);
+ALTER TABLE Master_Trips ADD CONSTRAINT fk_mtrip_drivers FOREIGN KEY (Driver_ID) REFERENCES Drivers(Driver_ID);
+ALTER TABLE Master_Trips ADD CONSTRAINT fk_mtrip_orig FOREIGN KEY (Origin_Location_ID) REFERENCES Locations(Location_ID);
+ALTER TABLE Master_Trips ADD CONSTRAINT fk_mtrip_dest FOREIGN KEY (Destination_Location_ID) REFERENCES Locations(Location_ID);
+
+ALTER TABLE Transport_Orders ADD CONSTRAINT fk_to_customers FOREIGN KEY (Customer_ID) REFERENCES Customers(Customer_ID);
+ALTER TABLE Transport_Orders ADD CONSTRAINT fk_to_pickup FOREIGN KEY (Pickup_Location) REFERENCES Locations(Location_ID);
+ALTER TABLE Transport_Orders ADD CONSTRAINT fk_to_dest FOREIGN KEY (Dest_Location) REFERENCES Locations(Location_ID);
+ALTER TABLE Transport_Orders ADD CONSTRAINT fk_to_mtrip FOREIGN KEY (Master_Trip_ID) REFERENCES Master_Trips(Trip_ID);
+
+ALTER TABLE Quotations ADD CONSTRAINT fk_quote_to FOREIGN KEY (Order_ID) REFERENCES Transport_Orders(Order_ID);
+
+ALTER TABLE Transport_Documents ADD CONSTRAINT fk_td_to FOREIGN KEY (Order_ID) REFERENCES Transport_Orders(Order_ID);
+ALTER TABLE Transport_Documents ADD CONSTRAINT fk_td_verified FOREIGN KEY (Verified_By) REFERENCES Users(User_ID);
+ALTER TABLE Transport_Documents ADD CONSTRAINT fk_td_uploaded FOREIGN KEY (Uploaded_By) REFERENCES Users(User_ID);
+
+ALTER TABLE Warehouse_Receipts ADD CONSTRAINT fk_wr_to FOREIGN KEY (Order_ID) REFERENCES Transport_Orders(Order_ID);
+ALTER TABLE Warehouse_Receipts ADD CONSTRAINT fk_wr_wh FOREIGN KEY (Warehouse_ID) REFERENCES Warehouses(Warehouse_ID);
+ALTER TABLE Warehouse_Receipts ADD CONSTRAINT fk_wr_users FOREIGN KEY (Receiver_ID) REFERENCES Users(User_ID);
+
+ALTER TABLE Warehouse_Receipt_Items ADD CONSTRAINT fk_wri_wr FOREIGN KEY (Receipt_ID) REFERENCES Warehouse_Receipts(Receipt_ID);
+
+ALTER TABLE Trip_Stops ADD CONSTRAINT fk_ts_mtrip FOREIGN KEY (Trip_ID) REFERENCES Master_Trips(Trip_ID);
+ALTER TABLE Trip_Stops ADD CONSTRAINT fk_ts_loc FOREIGN KEY (Location_ID) REFERENCES Locations(Location_ID);
+
+ALTER TABLE Incident_Reports ADD CONSTRAINT fk_ir_mtrip FOREIGN KEY (Trip_ID) REFERENCES Master_Trips(Trip_ID);
+ALTER TABLE Incident_Reports ADD CONSTRAINT fk_ir_users FOREIGN KEY (Reported_By) REFERENCES Users(User_ID);
+
+ALTER TABLE Seals ADD CONSTRAINT fk_seals_mtrip FOREIGN KEY (Trip_ID) REFERENCES Master_Trips(Trip_ID);
+ALTER TABLE Seals ADD CONSTRAINT fk_seals_ts FOREIGN KEY (Stop_ID) REFERENCES Trip_Stops(Stop_ID);
+
+ALTER TABLE Telemetry_Logs ADD CONSTRAINT fk_tl_iot FOREIGN KEY (Device_ID) REFERENCES IoT_Devices(Device_ID);
+ALTER TABLE Telemetry_Logs ADD CONSTRAINT fk_tl_mtrip FOREIGN KEY (Trip_ID) REFERENCES Master_Trips(Trip_ID);
+
+ALTER TABLE Alert_Logs ADD CONSTRAINT fk_al_mtrip FOREIGN KEY (Trip_ID) REFERENCES Master_Trips(Trip_ID);
+ALTER TABLE Alert_Logs ADD CONSTRAINT fk_al_users FOREIGN KEY (Resolved_By) REFERENCES Users(User_ID);
+
+ALTER TABLE Delivery_ePODs ADD CONSTRAINT fk_epod_to FOREIGN KEY (Order_ID) REFERENCES Transport_Orders(Order_ID);
+
+ALTER TABLE Returned_Items ADD CONSTRAINT fk_ri_epod FOREIGN KEY (ePOD_ID) REFERENCES Delivery_ePODs(ePOD_ID);
+ALTER TABLE Returned_Items ADD CONSTRAINT fk_ri_users FOREIGN KEY (Processed_By) REFERENCES Users(User_ID);
+
+ALTER TABLE Claims ADD CONSTRAINT fk_claims_to FOREIGN KEY (Order_ID) REFERENCES Transport_Orders(Order_ID);
+
+ALTER TABLE Claim_Evidences ADD CONSTRAINT fk_ce_claims FOREIGN KEY (Claim_ID) REFERENCES Claims(Claim_ID);
+ALTER TABLE Claim_Evidences ADD CONSTRAINT fk_ce_alert FOREIGN KEY (Alert_ID) REFERENCES Alert_Logs(Alert_ID);
+ALTER TABLE Claim_Evidences ADD CONSTRAINT fk_ce_doc FOREIGN KEY (Doc_ID) REFERENCES Transport_Documents(Doc_ID);
+ALTER TABLE Claim_Evidences ADD CONSTRAINT fk_ce_users FOREIGN KEY (Uploaded_By) REFERENCES Users(User_ID);
+
+ALTER TABLE Expense_Advances ADD CONSTRAINT fk_ea_mtrip FOREIGN KEY (Trip_ID) REFERENCES Master_Trips(Trip_ID);
+ALTER TABLE Expense_Advances ADD CONSTRAINT fk_ea_drivers FOREIGN KEY (Driver_ID) REFERENCES Drivers(Driver_ID);
+ALTER TABLE Expense_Advances ADD CONSTRAINT fk_ea_users FOREIGN KEY (Approved_By) REFERENCES Users(User_ID);
+
+ALTER TABLE Expense_Receipts ADD CONSTRAINT fk_er_ea FOREIGN KEY (Advance_ID) REFERENCES Expense_Advances(Advance_ID);
+ALTER TABLE Expense_Receipts ADD CONSTRAINT fk_er_users FOREIGN KEY (Verified_By) REFERENCES Users(User_ID);
+
+ALTER TABLE Invoices ADD CONSTRAINT fk_inv_customers FOREIGN KEY (Customer_ID) REFERENCES Customers(Customer_ID);
+
+ALTER TABLE Invoice_Lines ADD CONSTRAINT fk_il_inv FOREIGN KEY (Invoice_ID) REFERENCES Invoices(Invoice_ID);
+ALTER TABLE Invoice_Lines ADD CONSTRAINT fk_il_to FOREIGN KEY (Order_ID) REFERENCES Transport_Orders(Order_ID);
+
+-- ========================================================
+-- PHẦN 3: DỮ LIỆU MẪU KHỞI TẠO (SEED DATA)
+-- ========================================================
+
+
+CREATE TABLE trip_stop_events (
+    event_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    stop_id UUID NOT NULL REFERENCES trip_stops(stop_id) ON DELETE CASCADE,
+    event_type VARCHAR(50) NOT NULL,
+    event_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    meta_data TEXT
+);
+
+CREATE TABLE detention_charges (
+    charge_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    stop_id UUID NOT NULL REFERENCES trip_stops(stop_id) ON DELETE CASCADE,
+    customer_id UUID REFERENCES customers(customer_id) ON DELETE SET NULL,
+    free_minutes_allocated INT NOT NULL DEFAULT 30,
+    actual_wait_minutes INT NOT NULL,
+    amount_charged DECIMAL(15,2) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'UNPAID'
+);
+
+CREATE TABLE incident_evidences (
+    evidence_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    incident_id UUID NOT NULL REFERENCES incident_reports(incident_id) ON DELETE CASCADE,
+    evidence_type VARCHAR(50) NOT NULL,
+    file_url VARCHAR(500) NOT NULL
+);
+
+ALTER TABLE master_trips ADD COLUMN requires_inspection BOOLEAN DEFAULT FALSE;
+ALTER TABLE expense_receipts ALTER COLUMN advance_id DROP NOT NULL;
+ALTER TABLE expense_receipts ADD COLUMN trip_id UUID REFERENCES master_trips(trip_id) ON DELETE CASCADE;
+ALTER TABLE alert_logs ADD COLUMN lpn_id UUID REFERENCES lpns(lpn_id) ON DELETE SET NULL;
+ALTER TABLE claims ADD COLUMN lpn_id UUID REFERENCES lpns(lpn_id) ON DELETE SET NULL;
+

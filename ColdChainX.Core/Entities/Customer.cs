@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace ColdChainX.Core.Entities;
@@ -20,6 +20,8 @@ public partial class Customer
     public string? Status { get; set; }
 
     public DateTime? CreatedAt { get; set; }
+
+
 
     public virtual ICollection<CustomerContract> CustomerContracts { get; set; } = new List<CustomerContract>();
 

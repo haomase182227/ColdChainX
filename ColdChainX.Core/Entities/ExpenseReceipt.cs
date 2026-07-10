@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace ColdChainX.Core.Entities;
@@ -7,7 +7,9 @@ public partial class ExpenseReceipt
 {
     public Guid ReceiptId { get; set; }
 
-    public Guid AdvanceId { get; set; }
+    public Guid? AdvanceId { get; set; }
+
+    public Guid? TripId { get; set; }
 
     public string ExpenseType { get; set; } = null!;
 
@@ -29,7 +31,9 @@ public partial class ExpenseReceipt
 
     public DateTime? UploadedAt { get; set; }
 
-    public virtual ExpenseAdvance Advance { get; set; } = null!;
+    public virtual ExpenseAdvance? Advance { get; set; }
+
+    public virtual MasterTrip? Trip { get; set; }
 
     public virtual User? VerifiedByNavigation { get; set; }
 }

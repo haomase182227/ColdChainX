@@ -44,8 +44,7 @@ public class ResolveDiscrepancyCommandHandler : IRequestHandler<ResolveDiscrepan
                 .FirstOrDefaultAsync(d => d.OrderId == lpn.OrderId && d.DocType == "DISCREPANCY_REPORT", cancellationToken);
             if (doc != null)
             {
-                doc.Status = "APPROVED";
-                doc.VerifiedAt = DateTime.UtcNow;
+                // Status mapping removed
             }
             
             await _context.SaveChangesAsync(cancellationToken);
@@ -88,8 +87,7 @@ public class ResolveDiscrepancyCommandHandler : IRequestHandler<ResolveDiscrepan
                 .FirstOrDefaultAsync(d => d.OrderId == lpn.OrderId && d.DocType == "DISCREPANCY_REPORT", cancellationToken);
             if (doc != null)
             {
-                doc.Status = "REJECTED";
-                doc.VerifiedAt = DateTime.UtcNow;
+                // Status mapping removed
             }
 
             await _context.SaveChangesAsync(cancellationToken);

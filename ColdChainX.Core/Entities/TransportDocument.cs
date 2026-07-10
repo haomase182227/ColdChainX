@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace ColdChainX.Core.Entities;
@@ -13,11 +13,7 @@ public partial class TransportDocument
 
     public string ImageUrl { get; set; } = null!;
 
-    public string? Status { get; set; }
-
     public Guid? VerifiedBy { get; set; }
-
-    public DateTime? VerifiedAt { get; set; }
 
     public string? RejectReason { get; set; }
 

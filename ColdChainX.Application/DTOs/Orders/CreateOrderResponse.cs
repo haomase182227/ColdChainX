@@ -4,9 +4,15 @@ namespace ColdChainX.Application.DTOs.Orders
     {
         public Guid OrderId { get; set; }
         public string TrackingCode { get; set; } = null!;
-        public Guid DestLocationId { get; set; }
+        public string ItemName { get; set; } = null!;
+        public string Category { get; set; } = null!;
+        public int Quantity { get; set; }
+        public string PackingType { get; set; } = null!;
+        public string TempCondition { get; set; } = null!;
+        public decimal ExpectedWeightKg { get; set; }
         public decimal ExpectedCbm { get; set; }
-        public string DocumentUrl { get; set; } = null!;
         public string Status { get; set; } = null!;
+        public DateTime CreatedAt { get; set; }
     }
 }
+

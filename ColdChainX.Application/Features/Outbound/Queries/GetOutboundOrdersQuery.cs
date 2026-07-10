@@ -4,13 +4,17 @@ using ColdChainX.Core.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
+using ColdChainX.Application.DTOs.Common;
+
 namespace ColdChainX.Application.Features.Outbound.Queries;
 
-public class GetOutboundOrdersQuery : IRequest<List<OutboundOrderDto>>
+public class GetOutboundOrdersQuery : IRequest<PagedResult<OutboundOrderDto>>
 {
+    public int PageNumber { get; set; } = 1;
+    public int PageSize { get; set; } = 10;
 }
 
-public class GetOutboundOrdersQueryHandler : IRequestHandler<GetOutboundOrdersQuery, List<OutboundOrderDto>>
+public class GetOutboundOrdersQueryHandler : IRequestHandler<GetOutboundOrdersQuery, PagedResult<OutboundOrderDto>>
 {
     private readonly IApplicationDbContext _context;
 
@@ -19,13 +23,18 @@ public class GetOutboundOrdersQueryHandler : IRequestHandler<GetOutboundOrdersQu
         _context = context;
     }
 
-    public async Task<List<OutboundOrderDto>> Handle(GetOutboundOrdersQuery request, CancellationToken cancellationToken)
+    public async Task<PagedResult<OutboundOrderDto>> Handle(GetOutboundOrdersQuery request, CancellationToken cancellationToken)
     {
-        var orders = await _context.TransportOrders
+        var query = _context.TransportOrders
             .Include(x => x.Customer)
             .Where(x => x.Category == "OUTBOUND" || x.Category == "LTL")
-            .OrderBy(x => x.CreatedAt)
-            .Take(100)
+            .OrderBy(x => x.CreatedAt);
+
+        var totalRecords = await query.CountAsync(cancellationToken);
+
+        var orders = await query
+            .Skip((request.PageNumber - 1) * request.PageSize)
+            .Take(request.PageSize)
             .Select(x => new OutboundOrderDto
             {
                 OrderId = x.OrderId,
@@ -38,6 +47,6 @@ public class GetOutboundOrdersQueryHandler : IRequestHandler<GetOutboundOrdersQu
             })
             .ToListAsync(cancellationToken);
 
-        return orders;
+        return PagedResult<OutboundOrderDto>.Create(orders, totalRecords, request.PageNumber, request.PageSize);
     }
 }

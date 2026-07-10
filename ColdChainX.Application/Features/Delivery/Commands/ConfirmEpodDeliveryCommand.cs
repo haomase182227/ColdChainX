@@ -259,7 +259,7 @@ public class ConfirmEpodDeliveryCommandHandler : IRequestHandler<ConfirmEpodDeli
         }
 
         // Expected COD is proportional to the quantity of items in the accepted LPNs
-        return order.CargoValue * ((decimal)acceptedQty / order.Quantity);
+        return 0m;
     }
 
     /// <summary>

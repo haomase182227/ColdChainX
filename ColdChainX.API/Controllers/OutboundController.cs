@@ -113,9 +113,13 @@ public class OutboundController : ControllerBase
     }
 
     [HttpGet("orders")]
-    public async Task<IActionResult> GetOrders()
+    public async Task<IActionResult> GetOrders([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
     {
-        var result = await _mediator.Send(new ColdChainX.Application.Features.Outbound.Queries.GetOutboundOrdersQuery());
+        var result = await _mediator.Send(new ColdChainX.Application.Features.Outbound.Queries.GetOutboundOrdersQuery
+        {
+            PageNumber = pageNumber,
+            PageSize = pageSize
+        });
         return Ok(result);
     }
 

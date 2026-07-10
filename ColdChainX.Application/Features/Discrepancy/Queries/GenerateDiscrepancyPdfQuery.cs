@@ -55,15 +55,15 @@ public class GenerateDiscrepancyPdfQueryHandler : IRequestHandler<GenerateDiscre
             DiscrepancyItems = discrepancyItems.Select((item, index) => {
                 var expectedQty = item.Order?.Quantity ?? 0;
                 var actualQty = item.Quantity;
-                var expectedWeight = item.Order?.ExpectedWeightKg ?? 0m;
+                var expectedWeight = item.Order?.OrderDimension?.ExpectedWeightKg ?? 0m;
                 var actualWeight = item.ActualWeightKg;
-                var expectedCbm = item.Order?.ExpectedCbm ?? 0m;
+                var expectedCbm = item.Order?.OrderDimension?.ExpectedCbm ?? 0m;
                 var actualCbm = item.ActualCbm;
-                var expectedLength = item.Order?.LengthCm ?? 0m;
+                var expectedLength = item.Order?.OrderDimension?.LengthCm ?? 0m;
                 var actualLength = item.LengthCm ?? 0m;
-                var expectedWidth = item.Order?.WidthCm ?? 0m;
+                var expectedWidth = item.Order?.OrderDimension?.WidthCm ?? 0m;
                 var actualWidth = item.WidthCm ?? 0m;
-                var expectedHeight = item.Order?.HeightCm ?? 0m;
+                var expectedHeight = item.Order?.OrderDimension?.HeightCm ?? 0m;
                 var actualHeight = item.HeightCm ?? 0m;
 
                 var isQtyDiff = expectedQty != actualQty;

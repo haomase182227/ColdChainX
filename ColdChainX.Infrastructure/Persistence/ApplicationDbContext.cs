@@ -48,6 +48,12 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
 
     public virtual DbSet<InvoiceLine> InvoiceLines { get; set; }
 
+    public virtual DbSet<TripStopEvent> TripStopEvents { get; set; }
+
+    public virtual DbSet<DetentionCharge> DetentionCharges { get; set; }
+
+    public virtual DbSet<IncidentEvidence> IncidentEvidences { get; set; }
+
     public virtual DbSet<InboundAsn> InboundAsns { get; set; }
 
     public virtual DbSet<IotDevice> IotDevices { get; set; }
@@ -76,6 +82,10 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
 
     public virtual DbSet<RouteMaster> RouteMasters { get; set; }
 
+    public virtual DbSet<RouteStop> RouteStops { get; set; }
+
+    public virtual DbSet<RouteSchedule> RouteSchedules { get; set; }
+
     public virtual DbSet<Seal> Seals { get; set; }
 
     public virtual DbSet<SystemConfig> SystemConfigs { get; set; }
@@ -98,11 +108,7 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
 
     public virtual DbSet<WarehouseReceipt> WarehouseReceipts { get; set; }
 
-    public virtual DbSet<WarehouseZone> WarehouseZones { get; set; }
-
     public virtual DbSet<WeightTier> WeightTiers { get; set; }
-
-    public virtual DbSet<WarehouseLocation> WarehouseLocations { get; set; }
 
     public virtual DbSet<OutboundOrder> OutboundOrders { get; set; }
 
@@ -179,9 +185,44 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.OriginCity).HasColumnName("origin_city").HasMaxLength(50);
             entity.Property(e => e.DestCity).HasColumnName("dest_city").HasMaxLength(50);
             entity.Property(e => e.TransitTime).HasColumnName("transit_time").HasMaxLength(50);
-            entity.Property(e => e.CutOffTime).HasColumnName("cut_off_time");
             entity.Property(e => e.Status).HasColumnName("status").HasMaxLength(20);
             entity.Property(e => e.CreatedAt).HasColumnType("timestamp without time zone").HasColumnName("created_at");
+        });
+
+        modelBuilder.Entity<RouteStop>(entity =>
+        {
+            entity.HasKey(e => e.StopId).HasName("route_stops_pkey");
+            entity.ToTable("route_stops", "public");
+            entity.Property(e => e.StopId).HasColumnName("stop_id").HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.RouteId).HasColumnName("route_id");
+
+            entity.Property(e => e.StopName).HasColumnName("stop_name").HasMaxLength(150);
+
+            entity.Property(e => e.CreatedAt).HasColumnType("timestamp without time zone").HasColumnName("created_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne(d => d.Route).WithMany(p => p.RouteStops)
+                .HasForeignKey(d => d.RouteId)
+                .HasConstraintName("fk_routestop_route");
+
+
+        });
+
+        modelBuilder.Entity<RouteSchedule>(entity =>
+        {
+            entity.HasKey(e => e.ScheduleId).HasName("route_schedules_pkey");
+            entity.ToTable("route_schedules", "public");
+            entity.Property(e => e.ScheduleId).HasColumnName("schedule_id").HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.RouteId).HasColumnName("route_id");
+            entity.Property(e => e.ScheduleName).HasColumnName("schedule_name").HasMaxLength(100);
+            entity.Property(e => e.DayOfWeek).HasColumnName("day_of_week");
+            entity.Property(e => e.DepartureTime).HasColumnName("departure_time");
+            entity.Property(e => e.CutOffTime).HasColumnName("cut_off_time");
+            entity.Property(e => e.Status).HasColumnName("status").HasMaxLength(20);
+            entity.Property(e => e.CreatedAt).HasColumnType("timestamp without time zone").HasColumnName("created_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne(d => d.Route).WithMany(p => p.RouteSchedules)
+                .HasForeignKey(d => d.RouteId)
+                .HasConstraintName("fk_routeschedule_route");
         });
 
         modelBuilder.Entity<SystemConfig>(entity =>
@@ -1009,6 +1050,11 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.SealNumber)
                 .HasMaxLength(100)
                 .HasColumnName("seal_number");
+            entity.Property(e => e.RouteId).HasColumnName("route_id");
+            entity.Property(e => e.ScheduleId).HasColumnName("schedule_id");
+            entity.Property(e => e.DepartureDate)
+                .HasColumnType("date")
+                .HasColumnName("departure_date");
 
             entity.HasOne(d => d.DestinationLocation).WithMany(p => p.MasterTripDestinationLocations)
                 .HasForeignKey(d => d.DestinationLocationId)
@@ -1023,6 +1069,14 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.HasOne(d => d.Vehicle).WithMany(p => p.MasterTrips)
                 .HasForeignKey(d => d.VehicleId)
                 .HasConstraintName("fk_mtrip_vehicles");
+
+            entity.HasOne(d => d.Route).WithMany(p => p.MasterTrips)
+                .HasForeignKey(d => d.RouteId)
+                .HasConstraintName("fk_mtrip_route");
+
+            entity.HasOne(d => d.Schedule).WithMany(p => p.MasterTrips)
+                .HasForeignKey(d => d.ScheduleId)
+                .HasConstraintName("fk_mtrip_schedule");
         });
 
         modelBuilder.Entity<TripDriver>(entity =>
@@ -1503,14 +1557,7 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.RejectReason)
                 .HasMaxLength(255)
                 .HasColumnName("reject_reason");
-            entity.Property(e => e.Status)
-                .HasMaxLength(20)
-                .HasDefaultValueSql("'PENDING'::character varying")
-                .HasColumnName("status");
             entity.Property(e => e.UploadedBy).HasColumnName("uploaded_by");
-            entity.Property(e => e.VerifiedAt)
-                .HasColumnType("timestamp without time zone")
-                .HasColumnName("verified_at");
             entity.Property(e => e.VerifiedBy).HasColumnName("verified_by");
 
             entity.HasOne(d => d.Order).WithMany(p => p.TransportDocuments)
@@ -1538,15 +1585,6 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.OrderId)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("order_id");
-            entity.Property(e => e.ActualCbm)
-                .HasPrecision(8, 2)
-                .HasColumnName("actual_cbm");
-            entity.Property(e => e.ActualWeightKg)
-                .HasPrecision(10, 2)
-                .HasColumnName("actual_weight_kg");
-            entity.Property(e => e.CargoValue)
-                .HasPrecision(15, 2)
-                .HasColumnName("cargo_value");
             entity.Property(e => e.Category)
                 .HasMaxLength(50)
                 .HasColumnName("category");
@@ -1556,21 +1594,15 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasColumnName("created_at");
             entity.Property(e => e.CustomerId).HasColumnName("customer_id");
             entity.Property(e => e.DestLocation).HasColumnName("dest_location");
-            entity.Property(e => e.ExpectedCbm)
-                .HasPrecision(8, 2)
-                .HasColumnName("expected_cbm");
-            entity.Property(e => e.LengthCm).HasPrecision(10, 2).HasColumnName("length_cm");
-            entity.Property(e => e.WidthCm).HasPrecision(10, 2).HasColumnName("width_cm");
-            entity.Property(e => e.HeightCm).HasPrecision(10, 2).HasColumnName("height_cm");
-            entity.Property(e => e.ExpectedWeightKg)
-                .HasPrecision(10, 2)
-                .HasColumnName("expected_weight_kg");
+            entity.Property(e => e.HasStrongOdor).HasColumnName("has_strong_odor");
+            entity.Property(e => e.IsStackable).HasDefaultValue(true).HasColumnName("is_stackable");
             entity.Property(e => e.ItemName)
                 .HasMaxLength(150)
                 .HasColumnName("item_name");
             entity.Property(e => e.MasterTripId).HasColumnName("master_trip_id");
             entity.Property(e => e.PickupLocation).HasColumnName("pickup_location");
-            entity.Property(e => e.RouteId).HasColumnName("route_id");
+            entity.Property(e => e.ScheduleId).HasColumnName("schedule_id");
+            entity.Property(e => e.DropoffStopId).HasColumnName("dropoff_stop_id");
             entity.Property(e => e.PackingType)
                 .HasMaxLength(50)
                 .HasDefaultValueSql("'Thùng'::character varying")
@@ -1604,9 +1636,34 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasForeignKey(d => d.PickupLocation)
                 .HasConstraintName("fk_to_pickup");
 
-            entity.HasOne(d => d.Route).WithMany(p => p.TransportOrders)
-                .HasForeignKey(d => d.RouteId)
-                .HasConstraintName("fk_transport_orders_route_master");
+            entity.HasOne(d => d.Schedule).WithMany()
+                .HasForeignKey(d => d.ScheduleId)
+                .HasConstraintName("fk_transport_orders_route_schedule");
+
+            entity.HasOne(d => d.DropoffStop).WithMany()
+                .HasForeignKey(d => d.DropoffStopId)
+                .HasConstraintName("fk_transport_orders_route_stop");
+        });
+
+        modelBuilder.Entity<OrderDimension>(entity =>
+        {
+            entity.HasKey(e => e.OrderId).HasName("order_dimensions_pkey");
+
+            entity.ToTable("order_dimensions");
+
+            entity.Property(e => e.OrderId).HasColumnName("order_id");
+            entity.Property(e => e.ExpectedWeightKg).HasPrecision(10, 2).HasColumnName("expected_weight_kg");
+            entity.Property(e => e.ActualWeightKg).HasPrecision(10, 2).HasColumnName("actual_weight_kg");
+            entity.Property(e => e.ExpectedCbm).HasPrecision(8, 2).HasColumnName("expected_cbm");
+            entity.Property(e => e.ActualCbm).HasPrecision(8, 2).HasColumnName("actual_cbm");
+            entity.Property(e => e.LengthCm).HasPrecision(10, 2).HasColumnName("length_cm");
+            entity.Property(e => e.WidthCm).HasPrecision(10, 2).HasColumnName("width_cm");
+            entity.Property(e => e.HeightCm).HasPrecision(10, 2).HasColumnName("height_cm");
+
+            entity.HasOne(d => d.Order)
+                .WithOne(p => p.OrderDimension)
+                .HasForeignKey<OrderDimension>(d => d.OrderId)
+                .HasConstraintName("fk_order_dimensions_order");
         });
 
         modelBuilder.Entity<TripStop>(entity =>
@@ -1932,161 +1989,6 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasForeignKey(d => d.WarehouseId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("fk_wr_wh");
-        });
-
-
-
-        modelBuilder.Entity<WarehouseZone>(entity =>
-        {
-            entity.HasKey(e => e.ZoneId).HasName("warehouse_zones_pkey");
-
-            entity.ToTable("warehouse_zones");
-
-            entity.HasIndex(e => new { e.WarehouseId, e.ZoneCode }, "IX_warehouse_zones_warehouse_id_zone_code").IsUnique().HasFilter("\"deleted_at\" IS NULL");
-
-            entity.Property(e => e.ZoneId)
-                .HasDefaultValueSql("gen_random_uuid()")
-                .HasColumnName("zone_id");
-
-            entity.Property(e => e.WarehouseId)
-                .HasColumnName("warehouse_id");
-
-            entity.Property(e => e.ZoneCode)
-                .HasMaxLength(20)
-                .HasColumnName("zone_code");
-
-            entity.Property(e => e.ZoneName)
-                .HasMaxLength(100)
-                .HasColumnName("zone_name");
-
-            entity.Property(e => e.ZoneType)
-                .HasMaxLength(30)
-                .HasColumnName("zone_type");
-
-            entity.Property(e => e.StorageType)
-                .HasMaxLength(30)
-                .HasColumnName("storage_type");
-
-            entity.Property(e => e.TemperatureMin)
-                .HasPrecision(5, 2)
-                .HasColumnName("temperature_min");
-
-            entity.Property(e => e.TemperatureMax)
-                .HasPrecision(5, 2)
-                .HasColumnName("temperature_max");
-
-            entity.Property(e => e.MaxCapacityPallets)
-                .HasColumnName("max_capacity_pallets");
-
-            entity.Property(e => e.CurrentPallets)
-                .HasDefaultValue(0)
-                .HasColumnName("current_pallets");
-
-            entity.Property(e => e.Status)
-                .HasMaxLength(20)
-                .HasDefaultValueSql("'ACTIVE'::character varying")
-                .HasColumnName("status");
-
-            entity.Property(e => e.CreatedAt)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP")
-                .HasColumnType("timestamp without time zone")
-                .HasColumnName("created_at");
-
-            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
-
-            entity.Property(e => e.UpdatedAt)
-                .HasColumnType("timestamp with time zone")
-                .HasColumnName("updated_at");
-
-            entity.Property(e => e.UpdatedBy).HasColumnName("updated_by");
-
-            entity.Property(e => e.DeletedAt)
-                .HasColumnType("timestamp without time zone")
-                .HasColumnName("deleted_at");
-
-            entity.Property(e => e.DeletedBy).HasColumnName("deleted_by");
-
-            entity.HasOne(d => d.Warehouse).WithMany(p => p.WarehouseZones)
-                .HasForeignKey(d => d.WarehouseId)
-                .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("fk_warehouse_zones_warehouses");
-
-            entity.HasQueryFilter(e => e.DeletedAt == null);
-        });
-
-        modelBuilder.Entity<WarehouseLocation>(entity =>
-        {
-            entity.HasKey(e => e.LocationId).HasName("warehouse_locations_pkey");
-
-            entity.ToTable("warehouse_locations");
-
-            entity.HasIndex(e => new { e.ZoneId, e.LocationCode }, "IX_warehouse_locations_zone_id_location_code")
-                .IsUnique()
-                .HasFilter("\"deleted_at\" IS NULL");
-
-            entity.Property(e => e.LocationId)
-                .HasDefaultValueSql("gen_random_uuid()")
-                .HasColumnName("location_id");
-
-            entity.Property(e => e.ZoneId)
-                .HasColumnName("zone_id");
-
-            entity.Property(e => e.LocationCode)
-                .HasMaxLength(50)
-                .HasColumnName("location_code");
-
-            entity.Property(e => e.RackCode)
-                .HasMaxLength(20)
-                .HasColumnName("rack_code");
-
-            entity.Property(e => e.BayCode)
-                .HasMaxLength(20)
-                .HasColumnName("bay_code");
-
-            entity.Property(e => e.LevelCode)
-                .HasMaxLength(20)
-                .HasColumnName("level_code");
-
-            entity.Property(e => e.MaxCapacityPallets)
-                .HasColumnName("max_capacity_pallets");
-
-            entity.Property(e => e.CurrentPallets)
-                .HasDefaultValue(0)
-                .HasColumnName("current_pallets");
-
-            entity.Property(e => e.Status)
-                .HasMaxLength(20)
-                .HasDefaultValueSql("'ACTIVE'::character varying")
-                .HasColumnName("status");
-
-            entity.Property(e => e.Description)
-                .HasColumnName("description");
-
-            entity.Property(e => e.CreatedAt)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP")
-                .HasColumnType("timestamp without time zone")
-                .HasColumnName("created_at");
-
-            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
-
-            entity.Property(e => e.UpdatedAt)
-                .HasColumnType("timestamp with time zone")
-                .HasColumnName("updated_at");
-
-            entity.Property(e => e.UpdatedBy).HasColumnName("updated_by");
-
-            entity.Property(e => e.DeletedAt)
-                .HasColumnType("timestamp without time zone")
-                .HasColumnName("deleted_at");
-
-            entity.Property(e => e.DeletedBy).HasColumnName("deleted_by");
-
-            entity.HasOne(d => d.Zone).WithMany(p => p.WarehouseLocations)
-                .HasForeignKey(d => d.ZoneId)
-                .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("fk_warehouse_locations_zones");
-
-            entity.HasQueryFilter(e => e.DeletedAt == null);
         });
 
         modelBuilder.Entity<OutboundOrder>(entity =>

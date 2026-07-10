@@ -56,7 +56,7 @@ var rawOrders = (from r in db.WarehouseReceipts
                                                  o.TrackingCode,
                                                  o.ItemName,
                                                  o.CustomerId,
-                                                 Weight = o.ActualWeightKg > 0 ? o.ActualWeightKg : o.ExpectedWeightKg,
+                                                 Weight = (o.OrderDimension != null ? o.OrderDimension.ActualWeightKg : 0m) > 0 ? (o.OrderDimension != null ? o.OrderDimension.ActualWeightKg : 0m) : (o.OrderDimension != null ? o.OrderDimension.ExpectedWeightKg : 0m),
                                                  o.TempCondition,
                                                  CustomerName = cust != null ? cust.CompanyName : "N/A",
                                                  WarehouseName = w.WarehouseName
@@ -180,7 +180,7 @@ var rawOrders = (from r in db.WarehouseReceipts
                                                   o.TrackingCode,
                                                   o.ItemName,
                                                   o.CustomerId,
-                                                  Weight = o.ActualWeightKg > 0 ? o.ActualWeightKg : o.ExpectedWeightKg,
+                                                  Weight = (o.OrderDimension != null ? o.OrderDimension.ActualWeightKg : 0m) > 0 ? (o.OrderDimension != null ? o.OrderDimension.ActualWeightKg : 0m) : (o.OrderDimension != null ? o.OrderDimension.ExpectedWeightKg : 0m),
                                                   o.TempCondition,
                                                   CustomerName = cust != null ? cust.CompanyName : "N/A",
                                                   WarehouseName = w.WarehouseName
@@ -240,4 +240,6 @@ var rawOrders = (from r in db.WarehouseReceipts
         }
     }
 }
+
+
 

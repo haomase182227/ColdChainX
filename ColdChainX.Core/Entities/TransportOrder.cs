@@ -21,31 +21,23 @@ public partial class TransportOrder
 
     public string TempCondition { get; set; } = null!;
 
-    public decimal ExpectedWeightKg { get; set; }
+    public bool HasStrongOdor { get; set; }
 
-    public decimal ActualWeightKg { get; set; }
-
-    public decimal ExpectedCbm { get; set; }
-
-    public decimal? ActualCbm { get; set; }
-
-    public decimal LengthCm { get; set; }
-
-    public decimal WidthCm { get; set; }
-
-    public decimal HeightCm { get; set; }
+    public bool IsStackable { get; set; } = true;
 
     public Guid? PickupLocation { get; set; }
 
     public Guid? DestLocation { get; set; }
 
-    public decimal CargoValue { get; set; }
+
 
     public string Status { get; set; } = null!;
 
     public Guid? MasterTripId { get; set; }
 
-    public Guid? RouteId { get; set; }
+    public Guid? ScheduleId { get; set; }
+
+    public Guid? DropoffStopId { get; set; }
 
     public DateTime? CreatedAt { get; set; }
 
@@ -65,7 +57,9 @@ public partial class TransportOrder
 
     public virtual MasterTrip? MasterTrip { get; set; }
 
-    public virtual RouteMaster? Route { get; set; }
+    public virtual RouteSchedule? Schedule { get; set; }
+
+    public virtual RouteStop? DropoffStop { get; set; }
 
     public virtual ICollection<InboundAsn> InboundAsns { get; set; } = new List<InboundAsn>();
 
@@ -78,4 +72,6 @@ public partial class TransportOrder
     public virtual ICollection<TransportDocument> TransportDocuments { get; set; } = new List<TransportDocument>();
 
     public virtual ICollection<WarehouseReceipt> WarehouseReceipts { get; set; } = new List<WarehouseReceipt>();
+
+    public virtual OrderDimension? OrderDimension { get; set; }
 }
