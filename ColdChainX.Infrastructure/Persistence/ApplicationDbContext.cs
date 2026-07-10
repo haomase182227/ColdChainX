@@ -408,11 +408,6 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.TaxCode)
                 .HasMaxLength(20)
                 .HasColumnName("tax_code");
-            entity.Property(e => e.ComplianceRiskScore)
-                .HasDefaultValue(0)
-                .HasColumnName("compliance_risk_score");
-            entity.Property(e => e.RiskFlags)
-                .HasColumnName("risk_flags");
         });
 
         modelBuilder.Entity<CustomerContract>(entity =>
@@ -1562,14 +1557,7 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.RejectReason)
                 .HasMaxLength(255)
                 .HasColumnName("reject_reason");
-            entity.Property(e => e.Status)
-                .HasMaxLength(20)
-                .HasDefaultValueSql("'PENDING'::character varying")
-                .HasColumnName("status");
             entity.Property(e => e.UploadedBy).HasColumnName("uploaded_by");
-            entity.Property(e => e.VerifiedAt)
-                .HasColumnType("timestamp without time zone")
-                .HasColumnName("verified_at");
             entity.Property(e => e.VerifiedBy).HasColumnName("verified_by");
 
             entity.HasOne(d => d.Order).WithMany(p => p.TransportDocuments)

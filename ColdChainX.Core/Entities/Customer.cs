@@ -21,9 +21,7 @@ public partial class Customer
 
     public DateTime? CreatedAt { get; set; }
 
-    public int ComplianceRiskScore { get; set; } = 0;
 
-    public string? RiskFlags { get; set; }
 
     public virtual ICollection<CustomerContract> CustomerContracts { get; set; } = new List<CustomerContract>();
 

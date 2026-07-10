@@ -640,12 +640,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("character varying(150)")
                         .HasColumnName("company_name");
 
-                    b.Property<int>("ComplianceRiskScore")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0)
-                        .HasColumnName("compliance_risk_score");
-
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp without time zone")
@@ -662,10 +656,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasDefaultValue(30)
                         .HasColumnName("payment_term");
-
-                    b.Property<string>("RiskFlags")
-                        .HasColumnType("text")
-                        .HasColumnName("risk_flags");
 
                     b.Property<string>("Status")
                         .ValueGeneratedOnAdd()
@@ -3233,20 +3223,9 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("reject_reason");
 
-                    b.Property<string>("Status")
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("status")
-                        .HasDefaultValueSql("'PENDING'::character varying");
-
                     b.Property<Guid>("UploadedBy")
                         .HasColumnType("uuid")
                         .HasColumnName("uploaded_by");
-
-                    b.Property<DateTime?>("VerifiedAt")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("verified_at");
 
                     b.Property<Guid?>("VerifiedBy")
                         .HasColumnType("uuid")
