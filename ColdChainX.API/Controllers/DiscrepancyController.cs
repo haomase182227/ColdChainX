@@ -132,7 +132,6 @@ public class DiscrepancyController : ControllerBase
                         OrderId = receipt.OrderId,
                         DocType = "DISCREPANCY_REPORT",
                         ImageUrl = pdfUrl,
-                        Status = "PENDING",
                         UploadedBy = receipt.ReceiverId,
                         CreatedAt = DateTime.UtcNow
                     });
@@ -140,7 +139,6 @@ public class DiscrepancyController : ControllerBase
                 else
                 {
                     doc.ImageUrl = pdfUrl;
-                    doc.Status = "PENDING";
                     doc.CreatedAt = DateTime.UtcNow;
                 }
 

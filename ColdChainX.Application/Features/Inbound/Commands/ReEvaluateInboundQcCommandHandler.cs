@@ -145,7 +145,6 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
                     OrderId = order.OrderId,
                     DocType = "DISCREPANCY_REPORT",
                     ImageUrl = pdfUrl,
-                    Status = "PENDING",
                     UploadedBy = receipt.ReceiverId,
                     CreatedAt = now
                 });
@@ -153,7 +152,6 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
             else
             {
                 existingDoc.ImageUrl = pdfUrl;
-                existingDoc.Status = "PENDING";
                 existingDoc.CreatedAt = now;
             }
         }
@@ -161,8 +159,7 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
         {
             if (existingDoc != null)
             {
-                existingDoc.Status = "APPROVED";
-                existingDoc.VerifiedAt = now;
+                // Status mapping removed
             }
         }
 

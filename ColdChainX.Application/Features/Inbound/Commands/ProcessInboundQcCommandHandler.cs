@@ -199,7 +199,6 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
                     OrderId = order.OrderId,
                     DocType = "DISCREPANCY_REPORT",
                     ImageUrl = pdfUrl,
-                    Status = "PENDING",
                     UploadedBy = request.ReceiverId,
                     CreatedAt = now
                 });
@@ -207,7 +206,6 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
             else
             {
                 existingDoc.ImageUrl = pdfUrl;
-                existingDoc.Status = "PENDING";
                 existingDoc.UploadedBy = request.ReceiverId;
                 existingDoc.CreatedAt = now;
             }
