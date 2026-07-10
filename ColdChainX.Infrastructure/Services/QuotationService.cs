@@ -90,6 +90,23 @@ namespace ColdChainX.Infrastructure.Services
                 "Order quotations retrieved successfully");
         }
 
+        public async Task<ApiResponse<PagedResult<QuotationResponse>>> GetQuotationsByCustomerAsync(Guid customerId, int pageNumber, int pageSize)
+        {
+            var query = BuildQuotationQuery()
+                .Where(q => q.Order != null && q.Order.CustomerId == customerId)
+                .OrderByDescending(q => q.CreatedAt);
+            var totalRecords = await query.CountAsync();
+            var data = await query
+                .Skip(NormalizeSkip(pageNumber, pageSize))
+                .Take(NormalizePageSize(pageSize))
+                .Select(q => ToQuotationResponse(q))
+                .ToListAsync();
+
+            return ApiResponse<PagedResult<QuotationResponse>>.SuccessResponse(
+                PagedResult<QuotationResponse>.Create(data, totalRecords, pageNumber, NormalizePageSize(pageSize)),
+                "Customer quotations retrieved successfully");
+        }
+
         public async Task<ApiResponse<QuotationResponse>> CreateQuotationAsync(CreateQuotationRequest request, Guid salesUserId)
         {
             if (request.OrderId == Guid.Empty)
