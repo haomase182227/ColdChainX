@@ -53,6 +53,7 @@ namespace ColdChainX.Infrastructure.Repositories
             return await _db.Users
                 .IgnoreQueryFilters() // Allow fetching soft-deleted users by ID (required for Restore and Admin detail)
                 .Include(u => u.Role)
+                .Include(u => u.Warehouse)
                 .FirstOrDefaultAsync(u => u.UserId == id);
         }
 
@@ -100,7 +101,7 @@ namespace ColdChainX.Infrastructure.Repositories
 
         public async Task UpdateAsync(User user)
         {
-            _db.Users.Update(user);
+            _db.Entry(user).State = EntityState.Modified;
             await Task.CompletedTask;
         }
 
@@ -132,13 +133,16 @@ namespace ColdChainX.Infrastructure.Repositories
             string? sortBy,
             string? order)
         {
-            IQueryable<User> query = _db.Users.Include(u => u.Role);
+            IQueryable<User> query = _db.Users
+                .Include(u => u.Role)
+                .Include(u => u.Warehouse);
 
             // If we explicitly search for Inactive/Deleted status, we must ignore the query filter
             if (status.HasValue && status.Value == ColdChainX.Core.Enums.UserStatus.Inactive)
             {
                 query = _db.Users.IgnoreQueryFilters()
                     .Include(u => u.Role)
+                    .Include(u => u.Warehouse)
                     .Where(u => u.DeletedAt != null || u.Status == "INACTIVE");
             }
             else if (status.HasValue && status.Value == ColdChainX.Core.Enums.UserStatus.Active)
