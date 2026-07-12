@@ -16,7 +16,8 @@ namespace ColdChainX.Application.Mappings
 
             CreateMap<User, UserProfileDto>()
                 .ForMember(d => d.UserId, o => o.MapFrom(s => s.UserId))
-                .ForMember(d => d.Role, o => o.MapFrom(s => s.Role != null ? s.Role.RoleName : null));
+                .ForMember(d => d.Role, o => o.MapFrom(s => s.Role != null ? s.Role.RoleName : null))
+                .ForMember(d => d.WarehouseName, o => o.MapFrom(s => s.Warehouse != null ? s.Warehouse.WarehouseName : null));
 
             // Dispatch — Vehicle + TripDriver architecture.
             // (DispatchService uses manual projections; these maps document the shape and

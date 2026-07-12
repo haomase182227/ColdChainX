@@ -31,6 +31,10 @@ namespace ColdChainX.Application.Interfaces
             Guid id,
             ChangeUserStatusRequest request);
 
+        Task<ApiResponse<bool>> UpdateWarehouseAsync(
+            Guid id,
+            UpdateUserWarehouseRequest request);
+
         Task<ApiResponse<bool>> ResetPasswordAsync(
             Guid id,
             ResetPasswordRequest request);

@@ -59,6 +59,8 @@ public partial class User
 
     public virtual Role? Role { get; set; }
 
+    public virtual Warehouse? Warehouse { get; set; }
+
     public virtual ICollection<TransportDocument> TransportDocumentUploadedByNavigations { get; set; } = new List<TransportDocument>();
 
     public virtual ICollection<TransportDocument> TransportDocumentVerifiedByNavigations { get; set; } = new List<TransportDocument>();
