@@ -1773,6 +1773,10 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasForeignKey(d => d.RoleId)
                 .HasConstraintName("fk_users_roles");
 
+            entity.HasOne(d => d.Warehouse).WithMany(p => p.Users)
+                .HasForeignKey(d => d.WarehouseId)
+                .HasConstraintName("fk_users_warehouse");
+
             entity.HasQueryFilter(e => e.DeletedAt == null);
         });
 
