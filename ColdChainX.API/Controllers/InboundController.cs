@@ -82,9 +82,13 @@ public class InboundController : ControllerBase
     }
 
     [HttpGet("receipts")]
-    public async Task<IActionResult> GetReceipts()
+    public async Task<IActionResult> GetReceipts([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
     {
-        var result = await _mediator.Send(new ColdChainX.Application.Features.Inbound.Queries.GetInboundReceiptsQuery());
+        var result = await _mediator.Send(new ColdChainX.Application.Features.Inbound.Queries.GetInboundReceiptsQuery
+        {
+            PageNumber = pageNumber,
+            PageSize = pageSize
+        });
         return Ok(result);
     }
 

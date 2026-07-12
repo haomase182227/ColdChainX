@@ -288,8 +288,11 @@ namespace ColdChainX.Application.Services
                     }
 
                     // Update order dimensions
-                    order.ActualWeightKg = totalActualWeight;
-                    order.ActualCbm = totalActualCbm;
+                    if (order.OrderDimension != null)
+                    {
+                        order.OrderDimension.ActualWeightKg = totalActualWeight;
+                        order.OrderDimension.ActualCbm = totalActualCbm;
+                    }
                     order.Status = InWarehouseStatus;
 
                     // Recalculate freight and generate adjustment invoice if necessary
@@ -389,63 +392,7 @@ namespace ColdChainX.Application.Services
                         }
                     }
 
-                    // Resolve or create RECEIVING Zone in target warehouse
-                    var receivingZone = await _db.WarehouseZones
-                        .FirstOrDefaultAsync(z => z.WarehouseId == receipt.WarehouseId && z.ZoneCode == "RECEIVING");
-                    if (receivingZone == null)
-                    {
-                        receivingZone = new WarehouseZone
-                        {
-                            ZoneId = Guid.NewGuid(),
-                            WarehouseId = receipt.WarehouseId,
-                            ZoneCode = "RECEIVING",
-                            ZoneName = "Receiving Stage Zone",
-                            ZoneType = "RECEIVING",
-                            StorageType = "FLOOR",
-                            MaxCapacityPallets = 1000,
-                            CurrentPallets = 0,
-                            Status = "ACTIVE",
-                            CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
-                        };
-                        _db.WarehouseZones.Add(receivingZone);
-                        await _db.SaveChangesAsync();
-                    }
 
-                    // Pessimistic Lock on Zone
-                    if (_db.Database.IsRelational())
-                    {
-                        receivingZone = await _db.WarehouseZones
-                            .FromSqlRaw("SELECT * FROM warehouse_zones WHERE zone_id = {0} FOR UPDATE", receivingZone.ZoneId)
-                            .FirstOrDefaultAsync();
-                    }
-
-                    // Resolve or create RCV-STAGE-01 Location in RECEIVING Zone
-                    var receivingLocation = await _db.WarehouseLocations
-                        .FirstOrDefaultAsync(l => l.ZoneId == receivingZone!.ZoneId && l.LocationCode == "RCV-STAGE-01");
-                    if (receivingLocation == null)
-                    {
-                        receivingLocation = new WarehouseLocation
-                        {
-                            LocationId = Guid.NewGuid(),
-                            ZoneId = receivingZone!.ZoneId,
-                            LocationCode = "RCV-STAGE-01",
-                            MaxCapacityPallets = 1000,
-                            CurrentPallets = 0,
-                            Status = "ACTIVE",
-                            Description = "Default Inbound Receiving Stage Location",
-                            CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
-                        };
-                        _db.WarehouseLocations.Add(receivingLocation);
-                        await _db.SaveChangesAsync();
-                    }
-
-                    // Pessimistic Lock on Location
-                    if (_db.Database.IsRelational())
-                    {
-                        receivingLocation = await _db.WarehouseLocations
-                            .FromSqlRaw("SELECT * FROM warehouse_locations WHERE location_id = {0} FOR UPDATE", receivingLocation.LocationId)
-                            .FirstOrDefaultAsync();
-                    }
                     // Inventory module has been removed. No stock will be recorded.
 
                     // Generate HTML and PDF Receipt

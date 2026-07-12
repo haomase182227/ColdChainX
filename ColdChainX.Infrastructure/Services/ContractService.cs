@@ -214,7 +214,7 @@ namespace ColdChainX.Infrastructure.Services
                 .Include(c => c.Order)
                     .ThenInclude(o => o!.Customer)
                 .Include(c => c.Order)
-                    .ThenInclude(o => o!.Route)
+                    .ThenInclude(o => o!.Schedule).ThenInclude(s => s!.Route)
                 .Include(c => c.Order)
                     .ThenInclude(o => o!.Quotations)
                 .Include(c => c.Order)
@@ -460,7 +460,7 @@ namespace ColdChainX.Infrastructure.Services
         {
             var order = await _db.TransportOrders
                 .Include(o => o.Customer)
-                .Include(o => o.Route)
+                .Include(o => o.Schedule).ThenInclude(s => s.Route)
                 .Include(o => o.Quotations)
                 .Include(o => o.PickupLocationNavigation)
                 .Include(o => o.DestLocationNavigation)
@@ -510,18 +510,18 @@ namespace ColdChainX.Infrastructure.Services
                 // Thông tin hàng hóa
                 ["Item_Name"] = data.Order.ItemName,
                 ["Category"] = data.Order.Category,
-                ["Actual_Weight_KG"] = data.Order.ActualWeightKg.ToString("0.##", CultureInfo.InvariantCulture),
-                ["Actual_CBM"] = (data.Order.ActualCbm ?? data.Order.ExpectedCbm).ToString("0.####", CultureInfo.InvariantCulture),
+                ["Actual_Weight_KG"] = (data.Order.OrderDimension?.ActualWeightKg ?? 0m).ToString("0.##", CultureInfo.InvariantCulture),
+                ["Actual_CBM"] = ((data.Order.OrderDimension?.ActualCbm ?? 0m) > 0 ? (data.Order.OrderDimension?.ActualCbm ?? 0m) : (data.Order.OrderDimension?.ExpectedCbm ?? 0m)).ToString("0.####", CultureInfo.InvariantCulture),
                 ["Temp_Condition"] = data.Order.TempCondition,
                 // Địa điểm
                 ["Origin_Address"] = data.Order.PickupLocationNavigation?.Address ?? "Kho Proship - 602/45D Điện Biên Phủ, P.22, Bình Thạnh, Tp. HCM",
                 ["Dest_Address"] = data.Order.DestLocationNavigation?.Address ?? string.Empty,
-                ["Route_Code"] = data.Order.Route?.RouteCode ?? string.Empty,
-                ["Route_Origin"] = data.Order.Route?.OriginCity ?? string.Empty,
-                ["Route_Dest"] = data.Order.Route?.DestCity ?? string.Empty,
+                ["Route_Code"] = data.Order.Schedule?.Route?.RouteCode ?? string.Empty,
+                ["Route_Origin"] = data.Order.Schedule?.Route?.OriginCity ?? string.Empty,
+                ["Route_Dest"] = data.Order.Schedule?.Route?.DestCity ?? string.Empty,
                 ["ETD"] = string.Empty,
-                ["ETA"] = data.Order.Route?.TransitTime ?? string.Empty,
-                ["Cut_Off_Time"] = data.Order.Route?.CutOffTime.ToString(@"hh\:mm", CultureInfo.InvariantCulture) ?? string.Empty,
+                ["ETA"] = data.Order.Schedule?.Route?.TransitTime ?? string.Empty,
+                ["Cut_Off_Time"] = data.Order.Schedule?.Route?.CutOffTime.ToString(@"hh\:mm", CultureInfo.InvariantCulture) ?? string.Empty,
                 // Tài chính
                 ["Final_Amount"] = data.Quotation.FinalAmount.ToString("N0", CultureInfo.InvariantCulture),
                 ["Payment_Term"] = data.Customer.PaymentTerm?.ToString(CultureInfo.InvariantCulture) ?? "30",
@@ -636,7 +636,6 @@ namespace ColdChainX.Infrastructure.Services
                     OrderId = orderId,
                     DocType = docType,
                     ImageUrl = string.Empty,
-                    Status = "PENDING",
                     UploadedBy = uploadedBy,
                     CreatedAt = DbNow()
                 });
@@ -746,3 +745,8 @@ namespace ColdChainX.Infrastructure.Services
         private sealed record ContractData(TransportOrder Order, Customer Customer, Quotation Quotation);
     }
 }
+
+
+
+
+

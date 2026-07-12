@@ -87,8 +87,8 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
         var order = asn.Order;
         var now = DbNow();
         var actualCbm = CalculateCbm(request.LengthCm, request.WidthCm, request.HeightCm, order.Quantity);
-        var weightDiff = CalculateDiffPercent(order.ExpectedWeightKg, request.ActualWeightKg);
-        var cbmDiff = CalculateDiffPercent(order.ExpectedCbm, actualCbm);
+        var weightDiff = CalculateDiffPercent(order.OrderDimension?.ExpectedWeightKg ?? 0m, request.ActualWeightKg);
+        var cbmDiff = CalculateDiffPercent(order.OrderDimension?.ExpectedCbm ?? 0m, actualCbm);
         var maxDiff = Math.Max(weightDiff, cbmDiff);
         var hasDiscrepancy = maxDiff > DiscrepancyThresholdPercent;
 
@@ -145,7 +145,7 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
             OrderId = order.OrderId,
             CustomerId = order.CustomerId,
             ReceiptId = receipt.ReceiptId,
-            RouteId = order.RouteId,
+            // RouteId = order.RouteId, // TransportOrder does not have RouteId
             TripId = order.MasterTripId,
             Quantity = order.Quantity,
             ActualWeightKg = request.ActualWeightKg,
@@ -167,26 +167,54 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
         _context.Lpns.Add(lpn);
 
         asn.Status = hasDiscrepancy ? "DISCREPANCY_HOLD" : "QC_PASSED";
-        order.ActualWeightKg = request.ActualWeightKg;
-        order.ActualCbm = actualCbm;
+        if (order.OrderDimension != null)
+        {
+            order.OrderDimension.ActualWeightKg = request.ActualWeightKg;
+            order.OrderDimension.ActualCbm = actualCbm;
+        }
         order.Status = hasDiscrepancy ? "DISCREPANCY_HOLD" : "RECEIVING";
 
-        // Save changes to generate ReceiptId in DB before generating PDF
-        await _context.SaveChangesAsync(cancellationToken);
-
-        string? pdfUrl = null;
-        if (hasDiscrepancy && receipt != null)
+        if (!hasDiscrepancy)
         {
-            var pdfBytes = await _mediator.Send(new ColdChainX.Application.Features.Discrepancy.Queries.GenerateDiscrepancyPdfQuery(receipt.ReceiptId), cancellationToken);
-                
-            var pdfFileName = $"discrepancy-{order.TrackingCode}-{now:yyyyMMddHHmmss}.pdf";
-            pdfUrl = await _fileService.UploadFileAsync(pdfBytes, pdfFileName);
-            
-            receipt.PdfUrl = pdfUrl;
+            await _context.SaveChangesAsync(cancellationToken);
 
-            // Create or update TransportDocument for discrepancy report
-            var existingDoc = await _context.TransportDocuments
-                .FirstOrDefaultAsync(d => d.OrderId == order.OrderId && d.DocType == "DISCREPANCY_REPORT", cancellationToken);
+            return new ProcessInboundQcResponse
+            {
+                Success = true,
+                Message = "QC passed successfully. LPN ready for putaway.",
+                LpnId = lpn.LpnId,
+                LpnCode = lpn.LpnCode,
+                State = lpn.State.ToString(),
+                ReceiptId = receipt?.ReceiptId,
+                DiffPercent = maxDiff
+            };
+        }
+
+        if (receipt == null)
+            return Failure("Warehouse receipt could not be created for discrepancy QC.");
+
+        var strategy = _context.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                // Save changes to generate ReceiptId in DB before generating PDF
+                await _context.SaveChangesAsync(cancellationToken);
+
+                string? pdfUrl = null;
+                if (hasDiscrepancy && receipt != null)
+                {
+                    var pdfBytes = await _mediator.Send(new ColdChainX.Application.Features.Discrepancy.Queries.GenerateDiscrepancyPdfQuery(receipt.ReceiptId), cancellationToken);
+
+                    var pdfFileName = $"discrepancy-{order.TrackingCode}-{now:yyyyMMddHHmmss}.pdf";
+                    pdfUrl = await _fileService.UploadFileAsync(pdfBytes, pdfFileName);
+
+                    receipt.PdfUrl = pdfUrl;
+
+                    // Create or update TransportDocument for discrepancy report
+                    var existingDoc = await _context.TransportDocuments
+                        .FirstOrDefaultAsync(d => d.OrderId == order.OrderId && d.DocType == "DISCREPANCY_REPORT", cancellationToken);
 
             if (existingDoc == null)
             {
@@ -196,7 +224,6 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
                     OrderId = order.OrderId,
                     DocType = "DISCREPANCY_REPORT",
                     ImageUrl = pdfUrl,
-                    Status = "PENDING",
                     UploadedBy = request.ReceiverId,
                     CreatedAt = now
                 });
@@ -204,106 +231,132 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
             else
             {
                 existingDoc.ImageUrl = pdfUrl;
-                existingDoc.Status = "PENDING";
                 existingDoc.UploadedBy = request.ReceiverId;
                 existingDoc.CreatedAt = now;
             }
 
-            await _context.SaveChangesAsync(cancellationToken);
+                    await _context.SaveChangesAsync(cancellationToken);
 
-            // Automatically generate a pre-tax contract appendix in DRAFT status
-            var salesUserId = await _context.Users
-                .Include(u => u.Role)
-                .Where(u => u.Role != null && u.Role.RoleName.ToLower() == "sales")
-                .Select(u => u.UserId)
-                .FirstOrDefaultAsync(cancellationToken);
+                    // Automatically generate a pre-tax contract appendix in DRAFT status
+                    var salesUserId = await _context.Users
+                        .Include(u => u.Role)
+                        .Where(u => u.Role != null && u.Role.RoleName.ToLower() == "sales")
+                        .Select(u => u.UserId)
+                        .FirstOrDefaultAsync(cancellationToken);
 
-            if (salesUserId == Guid.Empty)
-            {
-                salesUserId = await _context.Users
-                    .Include(u => u.Role)
-                    .Where(u => u.Role != null && (u.Role.RoleName.ToLower() == "admin" || u.Role.RoleName.ToLower() == "manager"))
-                    .Select(u => u.UserId)
-                    .FirstOrDefaultAsync(cancellationToken);
-            }
+                    if (salesUserId == Guid.Empty)
+                    {
+                        salesUserId = await _context.Users
+                            .Include(u => u.Role)
+                            .Where(u => u.Role != null && (u.Role.RoleName.ToLower() == "admin" || u.Role.RoleName.ToLower() == "manager"))
+                            .Select(u => u.UserId)
+                            .FirstOrDefaultAsync(cancellationToken);
+                    }
 
-            if (salesUserId == Guid.Empty)
-            {
-                salesUserId = request.ReceiverId;
-            }
+                    if (salesUserId == Guid.Empty)
+                    {
+                        salesUserId = request.ReceiverId;
+                    }
 
-            var isWeightHigher = request.ActualWeightKg > order.ExpectedWeightKg;
-            var isCbmHigher = actualCbm > order.ExpectedCbm;
+            var isWeightHigher = request.ActualWeightKg > (order.OrderDimension?.ExpectedWeightKg ?? 0m);
+            var isCbmHigher = actualCbm > (order.OrderDimension?.ExpectedCbm ?? 0m);
             var weightSign = isWeightHigher ? "+" : "-";
             var cbmSign = isCbmHigher ? "+" : "-";
 
-            var appendixReason = $"Phát hiện chênh lệch thực tế khi kiểm đếm QC tại Hub (Trọng lượng chênh lệch: {weightSign}{weightDiff:0.##}%, Thể tích chênh lệch: {cbmSign}{cbmDiff:0.##}%).";
+                    var appendixReason = $"Phát hiện chênh lệch thực tế khi kiểm đếm QC tại Hub (Trọng lượng chênh lệch: {weightSign}{weightDiff:0.##}%, Thể tích chênh lệch: {cbmSign}{cbmDiff:0.##}%).";
 
-            var appendixResult = await _appendixService.GenerateAppendixAsync(
-                order.OrderId,
-                null,
-                appendixReason,
-                salesUserId);
+                    var appendixResult = await _appendixService.GenerateAppendixAsync(
+                        order.OrderId,
+                        null,
+                        appendixReason,
+                        salesUserId);
 
-            if (!appendixResult.Success)
-            {
-                _logger.LogError("Failed to automatically generate contract appendix: {Message}", appendixResult.Message);
-            }
+                    if (!appendixResult.Success || appendixResult.Data == null || string.IsNullOrWhiteSpace(appendixResult.Data.DraftHtmlContent))
+                    {
+                        var appendixFailureMessage = appendixResult.Success
+                            ? "Contract appendix draft was generated without HTML content."
+                            : appendixResult.Message;
 
-            var appendixIdStr = appendixResult.Success ? appendixResult.Data!.AppendixId.ToString() : "";
-            var appendixNumberStr = appendixResult.Success ? appendixResult.Data!.AppendixNumber : "";
+                        _logger.LogError(
+                            "Failed to automatically generate contract appendix for order {OrderId} tracking {TrackingCode}: {Message}",
+                            order.OrderId,
+                            order.TrackingCode,
+                            appendixFailureMessage);
 
-            // Send notification to Sales, Admin, and Manager
-            await EnsureNotificationTemplateAsync("NOTI_QC_DISCREPANCY", cancellationToken);
-            var salesUsers = await _context.Users
-                .Include(u => u.Role)
-                .Where(u => u.Role != null && (u.Role.RoleName.ToLower() == "sales" || u.Role.RoleName.ToLower() == "admin" || u.Role.RoleName.ToLower() == "manager"))
-                .ToListAsync(cancellationToken);
+                        await transaction.RollbackAsync(cancellationToken);
+                        return Failure($"Inbound QC discrepancy hold was not saved because contract appendix draft generation failed: {appendixFailureMessage}");
+                    }
 
-            foreach (var user in salesUsers)
-            {
-                _context.Notifications.Add(new Notification
+                    var appendixIdStr = appendixResult.Success ? appendixResult.Data!.AppendixId.ToString() : "";
+                    var appendixNumberStr = appendixResult.Success ? appendixResult.Data!.AppendixNumber : "";
+
+                    // Send notification to Sales, Admin, and Manager
+                    await EnsureNotificationTemplateAsync("NOTI_QC_DISCREPANCY", cancellationToken);
+                    var salesUsers = await _context.Users
+                        .Include(u => u.Role)
+                        .Where(u => u.Role != null && (u.Role.RoleName.ToLower() == "sales" || u.Role.RoleName.ToLower() == "admin" || u.Role.RoleName.ToLower() == "manager"))
+                        .ToListAsync(cancellationToken);
+
+                    foreach (var user in salesUsers)
+                    {
+                        _context.Notifications.Add(new Notification
+                        {
+                            NotiId = Guid.NewGuid(),
+                            UserId = user.UserId,
+                            SenderId = request.ReceiverId,
+                            TemplateId = "NOTI_QC_DISCREPANCY",
+                            Params = JsonSerializer.Serialize(new
+                            {
+                                Tracking_Code = order.TrackingCode,
+                                Pdf_URL = pdfUrl ?? "",
+                                Appendix_Id = appendixIdStr,
+                                Appendix_Number = appendixNumberStr
+                            }),
+                            OrderId = order.OrderId,
+                            IsRead = false,
+                            CreatedAt = now
+                        });
+                    }
+                    await _context.SaveChangesAsync(cancellationToken);
+                }
+
+                if (hasDiscrepancy)
                 {
-                    NotiId = Guid.NewGuid(),
-                    UserId = user.UserId,
-                    SenderId = request.ReceiverId,
-                    TemplateId = "NOTI_QC_DISCREPANCY",
-                    Params = JsonSerializer.Serialize(new { 
-                        Tracking_Code = order.TrackingCode, 
-                        Pdf_URL = pdfUrl ?? "",
-                        Appendix_Id = appendixIdStr,
-                        Appendix_Number = appendixNumberStr
-                    }),
-                    OrderId = order.OrderId,
-                    IsRead = false,
-                    CreatedAt = now
-                });
+                    _logger.LogWarning(
+                        "Inbound QC discrepancy detected lpn={LpnCode} order={OrderId} maxDiff={MaxDiffPercent}",
+                        lpn.LpnCode,
+                        order.OrderId,
+                        maxDiff);
+                }
+
+                await transaction.CommitAsync(cancellationToken);
+
+                return new ProcessInboundQcResponse
+                {
+                    Success = true,
+                    Message = hasDiscrepancy
+                        ? "QC completed. LPN created and placed on DISCREPANCY_HOLD."
+                        : "QC passed successfully. LPN ready for putaway.",
+                    LpnId = lpn.LpnId,
+                    LpnCode = lpn.LpnCode,
+                    State = lpn.State.ToString(),
+                    ReceiptId = receipt?.ReceiptId,
+                    DiffPercent = maxDiff,
+                    PdfUrl = pdfUrl
+                };
             }
-            await _context.SaveChangesAsync(cancellationToken);
-        }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Failed to complete inbound QC discrepancy hold for order {OrderId} tracking {TrackingCode}. Database changes were rolled back.",
+                    order.OrderId,
+                    order.TrackingCode);
 
-        if (hasDiscrepancy)
-        {
-            _logger.LogWarning(
-                "Inbound QC discrepancy detected lpn={LpnCode} order={OrderId} maxDiff={MaxDiffPercent}",
-                lpn.LpnCode,
-                order.OrderId,
-                maxDiff);
-        }
-
-        return new ProcessInboundQcResponse
-        {
-            Success = true,
-            Message = hasDiscrepancy
-                ? "QC completed. LPN created and placed on DISCREPANCY_HOLD."
-                : "QC passed successfully. LPN ready for putaway.",
-            LpnId = lpn.LpnId,
-            LpnCode = lpn.LpnCode,
-            State = lpn.State.ToString(),
-            ReceiptId = receipt?.ReceiptId,
-            DiffPercent = maxDiff,
-            PdfUrl = pdfUrl
-        };
+                await transaction.RollbackAsync(cancellationToken);
+                return Failure($"Inbound QC discrepancy hold was not saved because contract appendix generation failed: {ex.Message}");
+            }
+        });
     }
 
     private async Task EnsureNotificationTemplateAsync(string templateId, CancellationToken cancellationToken)

@@ -77,8 +77,8 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
 
         var now = DateTime.UtcNow;
         var actualCbm = CalculateCbm(request.LengthCm, request.WidthCm, request.HeightCm, order.Quantity);
-        var weightDiff = CalculateDiffPercent(order.ExpectedWeightKg, request.ActualWeightKg);
-        var cbmDiff = CalculateDiffPercent(order.ExpectedCbm, actualCbm);
+        var weightDiff = CalculateDiffPercent(order.OrderDimension?.ExpectedWeightKg ?? 0m, request.ActualWeightKg);
+        var cbmDiff = CalculateDiffPercent(order.OrderDimension?.ExpectedCbm ?? 0m, actualCbm);
         var maxDiff = Math.Max(weightDiff, cbmDiff);
         var hasDiscrepancy = maxDiff > DiscrepancyThresholdPercent;
 
@@ -97,8 +97,11 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
         lpn.UpdatedAt = now;
 
         // Update Order
-        order.ActualWeightKg = request.ActualWeightKg;
-        order.ActualCbm = actualCbm;
+        if (order.OrderDimension != null)
+        {
+            order.OrderDimension.ActualWeightKg = request.ActualWeightKg;
+            order.OrderDimension.ActualCbm = actualCbm;
+        }
         // User explicitly said: "Không cần update trạng thái của Order đâu"
         // order.Status = hasDiscrepancy ? "DISCREPANCY_HOLD" : "RECEIVING";
 
@@ -142,7 +145,6 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
                     OrderId = order.OrderId,
                     DocType = "DISCREPANCY_REPORT",
                     ImageUrl = pdfUrl,
-                    Status = "PENDING",
                     UploadedBy = receipt.ReceiverId,
                     CreatedAt = now
                 });
@@ -150,7 +152,6 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
             else
             {
                 existingDoc.ImageUrl = pdfUrl;
-                existingDoc.Status = "PENDING";
                 existingDoc.CreatedAt = now;
             }
         }
@@ -158,8 +159,7 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
         {
             if (existingDoc != null)
             {
-                existingDoc.Status = "APPROVED";
-                existingDoc.VerifiedAt = now;
+                // Status mapping removed
             }
         }
 

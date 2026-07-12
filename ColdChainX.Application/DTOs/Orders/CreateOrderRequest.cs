@@ -35,10 +35,23 @@ namespace ColdChainX.Application.DTOs.Orders
         [FromForm(Name = "Dest_Address_Text")]
         public string DestAddressText { get; set; } = null!;
 
-        [FromForm(Name = "Route_ID")]
-        public Guid RouteId { get; set; }
+        [FromForm(Name = "Schedule_ID")]
+        public Guid ScheduleId { get; set; }
 
-        [FromForm(Name = "DocumentImage")]
-        public IFormFile DocumentImage { get; set; } = null!;
+        [FromForm(Name = "Dropoff_Stop_ID")]
+        public Guid DropoffStopId { get; set; }
+
+        [FromForm(Name = "Has_Strong_Odor")]
+        public bool HasStrongOdor { get; set; } = false;
+
+        [FromForm(Name = "Is_Stackable")]
+        public bool IsStackable { get; set; } = true;
+
+        [FromForm(Name = "Legal_Documents")]
+        public List<IFormFile> LegalDocuments { get; set; } = new();
+
+        [FromForm(Name = "Cargo_Photos")]
+        public List<IFormFile> CargoPhotos { get; set; } = new();
     }
 }
+

@@ -76,16 +76,35 @@ namespace ColdChainX.Infrastructure.Services
             if (data.Order.Status != "DISCREPANCY_HOLD")
                 return ApiResponse<ContractAppendixResponse>.Failure($"Order must be in DISCREPANCY_HOLD status. Current status: {data.Order.Status}");
 
+            if (_db.Database.CurrentTransaction != null)
+                return await GenerateAppendixDraftAsync(orderId, adjustedPrice, reason, data);
+
             var strategy = _db.Database.CreateExecutionStrategy();
             return await strategy.ExecuteAsync(async () =>
             {
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
-                var existingAppendix = await _db.ContractAppendices
-                    .FirstOrDefaultAsync(a => a.OrderId == orderId && (a.Status == Draft || a.Status == Sent));
+                var result = await GenerateAppendixDraftAsync(orderId, adjustedPrice, reason, data);
+                if (result.Success)
+                {
+                    await transaction.CommitAsync();
+                }
 
-                if (existingAppendix != null)
-                    return ApiResponse<ContractAppendixResponse>.Failure($"An active contract appendix already exists for this order (Status: {existingAppendix.Status})");
+                return result;
+            });
+        }
+
+        private async Task<ApiResponse<ContractAppendixResponse>> GenerateAppendixDraftAsync(
+            Guid orderId,
+            decimal? adjustedPrice,
+            string reason,
+            AppendixData data)
+        {
+            var existingAppendix = await _db.ContractAppendices
+                .FirstOrDefaultAsync(a => a.OrderId == orderId && (a.Status == Draft || a.Status == Sent));
+
+            if (existingAppendix != null)
+                return ApiResponse<ContractAppendixResponse>.Failure($"An active contract appendix already exists for this order (Status: {existingAppendix.Status})");
 
                 decimal resolvedAdjustedPrice = 0m;
                 if (adjustedPrice.HasValue)
@@ -95,13 +114,16 @@ namespace ColdChainX.Infrastructure.Services
                 else
                 {
                     var volumetricRate = await GetSystemConfigDecimalAsync("VolumetricConversionRate", 250m);
-                    var actualCbm = data.Order.ActualCbm ?? data.Order.ExpectedCbm;
+                    var actualCbmVal = (data.Order.OrderDimension?.ActualCbm ?? 0m);
+                    var expectedCbmVal = (data.Order.OrderDimension?.ExpectedCbm ?? 0m);
+                    var actualCbm = actualCbmVal > 0 ? actualCbmVal : expectedCbmVal;
                     var volumetricWeight = Math.Round(actualCbm * volumetricRate, 2);
-                    var chargeableWeight = Math.Max(Math.Max(data.Order.ActualWeightKg, volumetricWeight), MinChargeableWeightKg);
+                    var chargeableWeight = Math.Max(Math.Max((data.Order.OrderDimension?.ActualWeightKg ?? 0m), volumetricWeight), MinChargeableWeightKg);
 
+                    var routeId = data.Order.Schedule?.RouteId;
                     var tier = await _db.WeightTiers
                         .AsNoTracking()
-                        .Where(t => t.RouteId == data.Order.RouteId.Value
+                        .Where(t => t.RouteId == routeId
                                     && chargeableWeight >= t.MinWeightKg
                                     && (!t.MaxWeightKg.HasValue || chargeableWeight <= t.MaxWeightKg.Value))
                         .OrderByDescending(t => t.MinWeightKg)
@@ -110,34 +132,32 @@ namespace ColdChainX.Infrastructure.Services
                     if (tier == null)
                         return ApiResponse<ContractAppendixResponse>.Failure($"Weight tier is missing for route and chargeable weight {chargeableWeight} kg");
 
-                    var newBaseFreight = Math.Round(chargeableWeight * tier.PricePerKg, 0);
-                    var originalBaseFreight = data.Quotation.BaseFreight;
-                    resolvedAdjustedPrice = newBaseFreight - originalBaseFreight;
-                }
+                var newBaseFreight = Math.Round(chargeableWeight * tier.PricePerKg, 0);
+                var originalBaseFreight = data.Quotation.BaseFreight;
+                resolvedAdjustedPrice = newBaseFreight - originalBaseFreight;
+            }
 
-                var appendixNumber = await GenerateUniqueAppendixNumberAsync();
-                var template = await LoadAppendixTemplateAsync();
-                var htmlContent = await RenderAppendixTemplateAsync(template, data, appendixNumber, resolvedAdjustedPrice, reason);
+            var appendixNumber = await GenerateUniqueAppendixNumberAsync();
+            var template = await LoadAppendixTemplateAsync();
+            var htmlContent = await RenderAppendixTemplateAsync(template, data, appendixNumber, resolvedAdjustedPrice, reason);
 
-                var appendix = new ContractAppendix
-                {
-                    AppendixId = Guid.NewGuid(),
-                    ContractId = data.Contract?.ContractId,
-                    OrderId = orderId,
-                    AppendixNumber = appendixNumber,
-                    AdjustedPrice = resolvedAdjustedPrice,
-                    Reason = reason,
-                    Status = Draft,
-                    DraftHtmlContent = htmlContent,
-                    CreatedAt = DbNow()
-                };
+            var appendix = new ContractAppendix
+            {
+                AppendixId = Guid.NewGuid(),
+                ContractId = data.Contract?.ContractId,
+                OrderId = orderId,
+                AppendixNumber = appendixNumber,
+                AdjustedPrice = resolvedAdjustedPrice,
+                Reason = reason,
+                Status = Draft,
+                DraftHtmlContent = htmlContent,
+                CreatedAt = DbNow()
+            };
 
-                _db.ContractAppendices.Add(appendix);
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+            _db.ContractAppendices.Add(appendix);
+            await _db.SaveChangesAsync();
 
-                return ApiResponse<ContractAppendixResponse>.SuccessResponse(ToResponse(appendix), "Contract appendix draft generated");
-            });
+            return ApiResponse<ContractAppendixResponse>.SuccessResponse(ToResponse(appendix), "Contract appendix draft generated");
         }
 
         public async Task<ApiResponse<ContractAppendixResponse>> UpdateAppendixDraftAsync(Guid appendixId, string editedHtmlContent, Guid salesUserId)
@@ -209,7 +229,6 @@ namespace ColdChainX.Infrastructure.Services
                     OrderId = appendix.OrderId,
                     DocType = "CONTRACT_APPENDIX",
                     ImageUrl = pdfUrl,
-                    Status = "PENDING",
                     UploadedBy = salesUserId,
                     CreatedAt = DbNow()
                 });
@@ -217,7 +236,6 @@ namespace ColdChainX.Infrastructure.Services
             else
             {
                 existingDoc.ImageUrl = pdfUrl;
-                existingDoc.Status = "PENDING";
                 existingDoc.UploadedBy = salesUserId;
                 existingDoc.CreatedAt = DbNow();
             }
@@ -278,8 +296,6 @@ namespace ColdChainX.Infrastructure.Services
                 .FirstOrDefaultAsync(d => d.OrderId == appendix.OrderId && d.DocType == "CONTRACT_APPENDIX");
             if (doc != null)
             {
-                doc.Status = "APPROVED";
-                doc.VerifiedAt = DbNow();
                 if (customerUserId.HasValue)
                 {
                     doc.VerifiedBy = customerUserId.Value;
@@ -395,8 +411,6 @@ namespace ColdChainX.Infrastructure.Services
                     .FirstOrDefaultAsync(d => d.OrderId == appendix.OrderId && d.DocType == "CONTRACT_APPENDIX");
                 if (doc != null)
                 {
-                    doc.Status = "REJECTED";
-                    doc.VerifiedAt = DbNow();
                     if (customerUserId.HasValue)
                     {
                         doc.VerifiedBy = customerUserId.Value;
@@ -754,7 +768,7 @@ namespace ColdChainX.Infrastructure.Services
         {
             var order = await _db.TransportOrders
                 .Include(o => o.Customer)
-                .Include(o => o.Route)
+                .Include(o => o.Schedule).ThenInclude(s => s.Route)
                 .Include(o => o.PickupLocationNavigation)
                 .Include(o => o.DestLocationNavigation)
                 .FirstOrDefaultAsync(o => o.OrderId == orderId);
@@ -800,35 +814,54 @@ namespace ColdChainX.Infrastructure.Services
                 : fallback;
         }
 
+        private async Task<decimal?> ResolveAppendixUnitPriceAsync(AppendixData data, decimal chargeableWeight)
+        {
+            var routeId = data.Order.Schedule?.RouteId;
+            if (routeId.HasValue)
+            {
+                var tier = await _db.WeightTiers
+                    .AsNoTracking()
+                    .Where(t => t.RouteId == routeId.Value
+                                && chargeableWeight >= t.MinWeightKg
+                                && (!t.MaxWeightKg.HasValue || chargeableWeight <= t.MaxWeightKg.Value))
+                    .OrderByDescending(t => t.MinWeightKg)
+                    .FirstOrDefaultAsync();
+
+                tier ??= await _db.WeightTiers
+                    .AsNoTracking()
+                    .Where(t => t.RouteId == routeId.Value
+                                && chargeableWeight >= t.MinWeightKg)
+                    .OrderByDescending(t => t.MinWeightKg)
+                    .FirstOrDefaultAsync();
+
+                if (tier != null)
+                    return tier.PricePerKg;
+            }
+
+            return data.Quotation.PricePerKg;
+        }
+
         private async Task<string> RenderAppendixTemplateAsync(string template, AppendixData data, string appendixNumber, decimal adjustedPrice, string reason)
         {
             var now = DateTime.UtcNow;
             
             var volumetricRate = await GetSystemConfigDecimalAsync("VolumetricConversionRate", 250m);
-            var actualCbm = data.Order.ActualCbm ?? data.Order.ExpectedCbm;
+            var actualCbm = data.Order.OrderDimension?.ActualCbm ?? data.Order.OrderDimension?.ExpectedCbm ?? 0m;
             var volumetricWeight = Math.Round(actualCbm * volumetricRate, 2);
-            var chargeableWeight = Math.Max(Math.Max(data.Order.ActualWeightKg, volumetricWeight), MinChargeableWeightKg);
+            var chargeableWeight = Math.Max(Math.Max((data.Order.OrderDimension?.ActualWeightKg ?? 0m), volumetricWeight), MinChargeableWeightKg);
 
-            var tier = await _db.WeightTiers
-                .AsNoTracking()
-                .Where(t => t.RouteId == data.Order.RouteId.Value
-                            && chargeableWeight >= t.MinWeightKg
-                            && (!t.MaxWeightKg.HasValue || chargeableWeight <= t.MaxWeightKg.Value))
-                .OrderByDescending(t => t.MinWeightKg)
-                .FirstOrDefaultAsync();
-
-            var unitPrice = tier?.PricePerKg ?? 0m;
+            var unitPrice = await ResolveAppendixUnitPriceAsync(data, chargeableWeight) ?? 0m;
             var newBasePrice = Math.Round(chargeableWeight * unitPrice, 0);
             var originalBasePrice = data.Quotation.BaseFreight;
 
-            var expectedVolumetricWeight = data.Quotation.VolumetricWeightKg ?? Math.Round(data.Order.ExpectedCbm * volumetricRate, 2);
-            var expectedChargeableWeight = data.Quotation.ChargeableWeightKg ?? Math.Max(Math.Max(data.Order.ExpectedWeightKg, expectedVolumetricWeight), MinChargeableWeightKg);
+            var expectedVolumetricWeight = data.Quotation.VolumetricWeightKg ?? Math.Round((data.Order.OrderDimension?.ExpectedCbm ?? 0m) * volumetricRate, 2);
+            var expectedChargeableWeight = data.Quotation.ChargeableWeightKg ?? Math.Max(Math.Max((data.Order.OrderDimension?.ExpectedWeightKg ?? 0m), expectedVolumetricWeight), MinChargeableWeightKg);
 
-            var weightDiff = data.Order.ExpectedWeightKg > 0
-                ? Math.Round((data.Order.ActualWeightKg - data.Order.ExpectedWeightKg) / data.Order.ExpectedWeightKg * 100m, 2)
+            var weightDiff = (data.Order.OrderDimension?.ExpectedWeightKg ?? 0m) > 0
+                ? Math.Round(((data.Order.OrderDimension?.ActualWeightKg ?? 0m) - (data.Order.OrderDimension?.ExpectedWeightKg ?? 0m)) / (data.Order.OrderDimension?.ExpectedWeightKg ?? 0m) * 100m, 2)
                 : 0m;
-            var cbmDiff = data.Order.ExpectedCbm > 0
-                ? Math.Round((actualCbm - data.Order.ExpectedCbm) / data.Order.ExpectedCbm * 100m, 2)
+            var cbmDiff = (data.Order.OrderDimension?.ExpectedCbm ?? 0m) > 0
+                ? Math.Round((actualCbm - (data.Order.OrderDimension?.ExpectedCbm ?? 0m)) / (data.Order.OrderDimension?.ExpectedCbm ?? 0m) * 100m, 2)
                 : 0m;
             var volumetricWeightDiff = expectedVolumetricWeight > 0
                 ? Math.Round((volumetricWeight - expectedVolumetricWeight) / expectedVolumetricWeight * 100m, 2)
@@ -843,9 +876,9 @@ namespace ColdChainX.Infrastructure.Services
                 .AsNoTracking()
                 .FirstOrDefaultAsync(l => l.OrderId == data.Order.OrderId);
 
-            var expectedLength = data.Order.LengthCm;
-            var expectedWidth = data.Order.WidthCm;
-            var expectedHeight = data.Order.HeightCm;
+            var expectedLength = (data.Order.OrderDimension?.LengthCm ?? 0m);
+            var expectedWidth = (data.Order.OrderDimension?.WidthCm ?? 0m);
+            var expectedHeight = (data.Order.OrderDimension?.HeightCm ?? 0m);
 
             var actualLength = lpn?.LengthCm ?? 0m;
             var actualWidth = lpn?.WidthCm ?? 0m;
@@ -877,9 +910,9 @@ namespace ColdChainX.Infrastructure.Services
                 ["Customer_Email"] = data.Customer.Email ?? string.Empty,
                 ["Tracking_Code"] = data.Order.TrackingCode,
                 ["Item_Name"] = data.Order.ItemName,
-                ["Expected_Weight"] = data.Order.ExpectedWeightKg.ToString("0.##", CultureInfo.InvariantCulture),
-                ["Expected_Cbm"] = data.Order.ExpectedCbm.ToString("0.####", CultureInfo.InvariantCulture),
-                ["Actual_Weight"] = data.Order.ActualWeightKg.ToString("0.##", CultureInfo.InvariantCulture),
+                ["Expected_Weight"] = (data.Order.OrderDimension?.ExpectedWeightKg ?? 0m).ToString("0.##", CultureInfo.InvariantCulture),
+                ["Expected_Cbm"] = (data.Order.OrderDimension?.ExpectedCbm ?? 0m).ToString("0.####", CultureInfo.InvariantCulture),
+                ["Actual_Weight"] = (data.Order.OrderDimension?.ActualWeightKg ?? 0m).ToString("0.##", CultureInfo.InvariantCulture),
                 ["Actual_Cbm"] = actualCbm.ToString("0.####", CultureInfo.InvariantCulture),
                 ["Discrepancy_Percent"] = maxDiff.ToString("0.##", CultureInfo.InvariantCulture),
                 ["Original_Price"] = originalBasePrice.ToString("N0", CultureInfo.InvariantCulture),
@@ -1140,3 +1173,8 @@ namespace ColdChainX.Infrastructure.Services
         private sealed record AppendixData(TransportOrder Order, Customer Customer, CustomerContract? Contract, Quotation Quotation);
     }
 }
+
+
+
+
+

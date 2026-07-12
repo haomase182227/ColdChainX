@@ -11,7 +11,8 @@ public class ImportTemplatesController : ControllerBase
         ["vehicles"] = "vehicles_import_template.csv",
         ["drivers"] = "drivers_import_template.csv",
         ["vehicle-documents"] = "vehicle_documents_import_template.csv",
-        ["driver-licenses"] = "driver_licenses_import_template.csv"
+        ["driver-licenses"] = "driver_licenses_import_template.csv",
+        ["weight-tiers"] = "weight_tiers_import_template.csv"
     };
 
     private readonly IWebHostEnvironment _environment;

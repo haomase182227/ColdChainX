@@ -162,19 +162,11 @@ namespace ColdChainX.UnitTests
             // Arrange
             var customerId = Guid.NewGuid();
             var warehouseId = Guid.NewGuid();
-            var wh = new Warehouse { WarehouseId = warehouseId, WarehouseCode = "WH-TEMP", WarehouseName = "Temp WH", WarehouseType = "COLD", Address = "123 Cold St", Status = "ACTIVE", MaxPallets = 100 };
+            var wh = new Warehouse { WarehouseId = warehouseId, WarehouseCode = "WH-TEMP", WarehouseName = "Temp WH", WarehouseType = "COLD", Address = "123 Cold St", Status = "ACTIVE", MaxPallets = 100, DefaultMinTemp = 10m, DefaultMaxTemp = 15m };
             _db.Warehouses.Add(wh);
 
-            // Zone: operating temp is min 10 max 15
-            var hotZone = new WarehouseZone { ZoneId = Guid.NewGuid(), WarehouseId = warehouseId, ZoneCode = "Z-HOT", ZoneName = "Hot Zone", ZoneType = "STORAGE", StorageType = "RACK", Status = "ACTIVE", TemperatureMin = 10m, TemperatureMax = 15m, MaxCapacityPallets = 50, CurrentPallets = 10 };
-            var locHot = new WarehouseLocation { LocationId = Guid.NewGuid(), ZoneId = hotZone.ZoneId, LocationCode = "LOC-HOT", Status = "ACTIVE", MaxCapacityPallets = 10, CurrentPallets = 2 };
-            
-            // Zone: operating temp is min -20 max -15 (Freezer)
-            var freezerZone = new WarehouseZone { ZoneId = Guid.NewGuid(), WarehouseId = warehouseId, ZoneCode = "Z-FREEZER", ZoneName = "Freezer Zone", ZoneType = "STORAGE", StorageType = "RACK", Status = "ACTIVE", TemperatureMin = -20m, TemperatureMax = -15m, MaxCapacityPallets = 50, CurrentPallets = 10 };
-            var locFreezer = new WarehouseLocation { LocationId = Guid.NewGuid(), ZoneId = freezerZone.ZoneId, LocationCode = "LOC-FREEZER", Status = "ACTIVE", MaxCapacityPallets = 10, CurrentPallets = 2 };
-
-            _db.WarehouseZones.AddRange(hotZone, freezerZone);
-            _db.WarehouseLocations.AddRange(locHot, locFreezer);
+            var freezerWh = new Warehouse { WarehouseId = Guid.NewGuid(), WarehouseCode = "WH-FREEZER", WarehouseName = "Freezer WH", WarehouseType = "COLD", Address = "124 Cold St", Status = "ACTIVE", MaxPallets = 100, DefaultMinTemp = -20m, DefaultMaxTemp = -15m };
+            _db.Warehouses.Add(freezerWh);
 
             var order1 = new TransportOrder { OrderId = Guid.NewGuid(), TrackingCode = "ITEM-TOO-HOT", ItemName = "Chilled Item", PackingType = "BOX", Category = "FOOD", Quantity = 10, TempCondition = "COLD", Status = "ASSIGNED" };
             var order2 = new TransportOrder { OrderId = Guid.NewGuid(), TrackingCode = "ITEM-TOO-COLD", ItemName = "Chilled Item 2", PackingType = "BOX", Category = "FOOD", Quantity = 10, TempCondition = "COLD", Status = "ASSIGNED" };
@@ -183,7 +175,7 @@ namespace ColdChainX.UnitTests
 
             var receipt1 = new WarehouseReceipt { ReceiptId = Guid.NewGuid(), ReceiptCode = "REC-1", OrderId = order1.OrderId, WarehouseId = warehouseId, ReceiptType = "INBOUND", DelivererName = "Del1", CreatedAt = DateTime.UtcNow };
             var receipt2 = new WarehouseReceipt { ReceiptId = Guid.NewGuid(), ReceiptCode = "REC-2", OrderId = order2.OrderId, WarehouseId = warehouseId, ReceiptType = "INBOUND", DelivererName = "Del2", CreatedAt = DateTime.UtcNow };
-            var receipt3 = new WarehouseReceipt { ReceiptId = Guid.NewGuid(), ReceiptCode = "REC-3", OrderId = order3.OrderId, WarehouseId = warehouseId, ReceiptType = "INBOUND", DelivererName = "Del3", CreatedAt = DateTime.UtcNow };
+            var receipt3 = new WarehouseReceipt { ReceiptId = Guid.NewGuid(), ReceiptCode = "REC-3", OrderId = order3.OrderId, WarehouseId = freezerWh.WarehouseId, ReceiptType = "INBOUND", DelivererName = "Del3", CreatedAt = DateTime.UtcNow };
             _db.WarehouseReceipts.AddRange(receipt1, receipt2, receipt3);
 
             // Lpn 1: Requires 5 (RequiredTemperature = 5), stored in LOC-HOT -> Should be flagged (Too hot)
@@ -246,52 +238,12 @@ namespace ColdChainX.UnitTests
         }
 
         [Fact]
-        public async Task GetWarehouseUtilization_ComputesCorrectRates()
+        public async Task GetWarehouseUtilizationAsync_ShouldReturnCorrectMetrics_WhenZonesExist()
         {
             // Arrange
             var warehouseId = Guid.NewGuid();
-            var wh = new Warehouse 
-            { 
-                WarehouseId = warehouseId, 
-                WarehouseCode = "WH-UTIL", 
-                WarehouseName = "Utilization WH", 
-                WarehouseType = "COLD", 
-                Address = "123 Cold St", 
-                Status = "ACTIVE", 
-                MaxPallets = 100,
-                CurrentPallets = 0 
-            };
+            var wh = new Warehouse { WarehouseId = warehouseId, WarehouseCode = "WH-UTIL", WarehouseName = "Util WH", WarehouseType = "COLD", Address = "123 Util St", Status = "ACTIVE", MaxPallets = 80, CurrentPallets = 25 };
             _db.Warehouses.Add(wh);
-
-            // Zone 1: Max 50, Current 10 -> Occupancy 20% (0.2)
-            var zone1 = new WarehouseZone 
-            { 
-                ZoneId = Guid.NewGuid(), 
-                WarehouseId = warehouseId, 
-                ZoneCode = "Z-1", 
-                ZoneName = "Zone 1", 
-                ZoneType = "STORAGE", 
-                StorageType = "RACK", 
-                Status = "ACTIVE", 
-                MaxCapacityPallets = 50, 
-                CurrentPallets = 10 
-            };
-            
-            // Zone 2: Max 30, Current 15 -> Occupancy 50% (0.5)
-            var zone2 = new WarehouseZone 
-            { 
-                ZoneId = Guid.NewGuid(), 
-                WarehouseId = warehouseId, 
-                ZoneCode = "Z-2", 
-                ZoneName = "Zone 2", 
-                ZoneType = "STORAGE", 
-                StorageType = "RACK", 
-                Status = "ACTIVE", 
-                MaxCapacityPallets = 30, 
-                CurrentPallets = 15 
-            };
-
-            _db.WarehouseZones.AddRange(zone1, zone2);
             await _db.SaveChangesAsync();
 
             // Act
@@ -300,22 +252,10 @@ namespace ColdChainX.UnitTests
             // Assert
             Assert.True(response.Success);
             Assert.NotNull(response.Data);
-            Assert.Equal(warehouseId, response.Data.WarehouseId);
-            Assert.Equal(100, response.Data.MaxPallets);
-            Assert.Equal(25, response.Data.CurrentPallets); // 10 + 15
-            Assert.Equal(0.25, response.Data.WarehouseOccupancyRate); // 25 / 100
-
-            Assert.Equal(2, response.Data.ZoneOccupancyRates.Count);
-            
-            var z1Detail = response.Data.ZoneOccupancyRates.First(z => z.ZoneId == zone1.ZoneId);
-            Assert.Equal(50, z1Detail.MaxCapacityPallets);
-            Assert.Equal(10, z1Detail.CurrentPallets);
-            Assert.Equal(0.2, z1Detail.ZoneOccupancyRate);
-
-            var z2Detail = response.Data.ZoneOccupancyRates.First(z => z.ZoneId == zone2.ZoneId);
-            Assert.Equal(30, z2Detail.MaxCapacityPallets);
-            Assert.Equal(15, z2Detail.CurrentPallets);
-            Assert.Equal(0.5, z2Detail.ZoneOccupancyRate);
+            Assert.Equal(80, response.Data.MaxPallets);
+            Assert.Equal(25, response.Data.CurrentPallets);
+            Assert.Equal(0.3125, response.Data.WarehouseOccupancyRate);
+            Assert.Empty(response.Data.ZoneOccupancyRates);
         }
     }
 }

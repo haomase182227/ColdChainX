@@ -1,0 +1,1424 @@
+Enum "attachment_category" {
+  "operational"
+  "compliance"
+  "quality"
+  "incident"
+  "disposal"
+  "evidence"
+}
+
+Enum "attachment_format" {
+  "image"
+  "pdf"
+  "document"
+}
+
+Enum "attachment_sub_category" {
+  "delivery_note"
+  "packing_list"
+  "invoice"
+  "vat_invoice"
+  "warehouse_receipt_note"
+  "warehouse_issue_note"
+  "handover_report"
+  "food_safety_certificate"
+  "quarantine_certificate"
+  "coa_certificate"
+  "product_license"
+  "batch_release_certificate"
+  "customs_declaration"
+  "import_permit"
+  "certificate_of_origin"
+  "plant_quarantine_certificate"
+  "vietgap_certificate"
+  "qc_report"
+  "damage_report"
+  "temperature_log"
+  "temperature_exception_report"
+  "dispute_report"
+  "disposal_report"
+  "destruction_certificate"
+  "vehicle_photo"
+  "seal_photo"
+  "temperature_photo"
+  "goods_condition_photo"
+  "damage_photo"
+  "barcode_photo"
+  "batch_photo"
+  "expiry_date_photo"
+  "handover_photo"
+}
+
+Enum "document_status" {
+  "not_required"
+  "pending"
+  "verified"
+  "rejected"
+  "expired"
+}
+
+Enum "product_category" {
+  "food"
+  "seafood"
+  "agriculture"
+  "pharma"
+  "vaccine"
+  "import_goods"
+}
+
+Enum "requirement_level" {
+  "mandatory"
+  "conditional"
+  "optional"
+}
+
+Table "compliance_zoning_rules" {
+  "rule_id" uuid [not null, default: `gen_random_uuid()`]
+  "product_category" integer [not null]
+  "sub_category" integer [not null]
+  "requirement_level" integer [not null]
+  "is_active" boolean [not null, default: true]
+  "created_at" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "created_by" uuid [not null]
+  "updated_at" timestamp
+  "updated_by" uuid
+
+  Indexes {
+    rule_id [pk, name: "compliance_zoning_rules_pkey"]
+    (product_category, sub_category) [unique, name: "uq_rule_category_subcategory"]
+  }
+}
+
+Table "customers" {
+  "customer_id" uuid [not null, default: `gen_random_uuid()`]
+  "company_name" "character varying(150)" [not null]
+  "tax_code" "character varying(20)" [not null]
+  "address" "character varying(200)"
+  "email" "character varying(200)"
+  "payment_term" integer [default: 30]
+  "status" "character varying(20)" [default: `'ACTIVE'::charactervarying`]
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    customer_id [pk, name: "customers_pkey"]
+    tax_code [unique, name: "customers_tax_code_key"]
+  }
+}
+
+Table "messagetype" {
+  "type_id" uuid [not null, default: `gen_random_uuid()`]
+  "type_name" "character varying(50)" [not null]
+  "description" "character varying(255)"
+
+  Indexes {
+    type_id [pk, name: "messagetype_pkey"]
+  }
+}
+
+Table "permissions" {
+  "perm_id" uuid [not null, default: `gen_random_uuid()`]
+  "perm_code" "character varying(50)" [not null]
+  "module" "character varying(50)" [not null]
+
+  Indexes {
+    perm_id [pk, name: "permissions_pkey"]
+    perm_code [unique, name: "permissions_perm_code_key"]
+  }
+}
+
+Table "pricing_matrix" {
+  "price_id" uuid [not null, default: `gen_random_uuid()`]
+  "origin_city" "character varying(50)" [not null]
+  "dest_city" "character varying(50)" [not null]
+  "pricing_unit" "character varying(20)" [not null]
+  "unit_price" numeric(15,2) [not null]
+  "min_value" numeric(12,4)
+  "max_value" numeric(12,4)
+  "min_charge" numeric(15,2)
+  "effective_date" date [not null]
+
+  Indexes {
+    price_id [pk, name: "pricing_matrix_pkey"]
+  }
+}
+
+Table "roles" {
+  "role_id" uuid [not null, default: `gen_random_uuid()`]
+  "role_name" "character varying(50)" [not null]
+  "description" "character varying(255)"
+
+  Indexes {
+    role_id [pk, name: "roles_pkey"]
+    role_name [unique, name: "roles_role_name_key"]
+  }
+}
+
+Table "route_master" {
+  "route_id" uuid [not null]
+  "route_code" "character varying(50)" [not null]
+  "origin_city" "character varying(50)" [not null]
+  "dest_city" "character varying(50)" [not null]
+  "transit_time" "character varying(50)" [not null]
+  "cut_off_time" interval [not null]
+  "status" "character varying(20)" [not null]
+  "created_at" timestamp
+
+  Indexes {
+    route_id [pk, name: "route_master_pkey"]
+  }
+}
+
+Table "system_configs" {
+  "id" uuid [not null]
+  "key" "character varying(100)" [not null]
+  "value" "character varying(255)" [not null]
+  "description" "character varying(500)"
+
+  Indexes {
+    id [pk, name: "system_configs_pkey"]
+  }
+}
+
+Table "vehicles" {
+  "vehicle_id" uuid [not null, default: `gen_random_uuid()`]
+  "truck_plate" "character varying(20)" [not null]
+  "brand" "character varying(50)"
+  "manufacture_year" integer
+  "chassis_number" "character varying(50)"
+  "engine_number" "character varying(50)"
+  "standard_fuel_liters" numeric(5,2)
+  "vehicle_type" "character varying(50)" [not null]
+  "max_weight" numeric(10,2) [not null]
+  "max_cbm" numeric(8,2) [not null]
+  "min_temp" numeric(5,2) [not null]
+  "max_temp" numeric(5,2) [not null]
+  "current_location" "character varying(255)"
+  "current_odometer" doubleprecision [not null]
+  "next_maintenance_odometer" doubleprecision [not null]
+  "status" "character varying(20)" [default: `'ACTIVE'::charactervarying`]
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    vehicle_id [pk, name: "vehicles_pkey"]
+    chassis_number [unique, name: "vehicles_chassis_number_key"]
+    engine_number [unique, name: "vehicles_engine_number_key"]
+    truck_plate [unique, name: "vehicles_truck_plate_key"]
+  }
+}
+
+Table "warehouses" {
+  "warehouse_id" uuid [not null, default: `gen_random_uuid()`]
+  "warehouse_name" "character varying(100)" [not null]
+  "address" "character varying(100)"
+  "warehouse_code" "character varying(20)" [not null]
+  "warehouse_type" "character varying(20)" [not null]
+  "default_min_temp" numeric(5,2)
+  "default_max_temp" numeric(5,2)
+  "max_pallets" integer [not null]
+  "current_pallets" integer [default: 0]
+  "status" "character varying(20)" [default: `'ACTIVE'::charactervarying`]
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+  "created_by" uuid
+  "updated_at" timestamp
+  "updated_by" uuid
+  "deleted_at" timestamp
+  "deleted_by" uuid
+
+  Indexes {
+    warehouse_id [pk, name: "warehouses_pkey"]
+    warehouse_code [unique, name: "warehouses_warehouse_code_key"]
+  }
+}
+
+Table "invoices" {
+  "invoice_id" uuid [not null, default: `gen_random_uuid()`]
+  "invoice_code" "character varying(50)" [not null]
+  "customer_id" uuid [not null]
+  "vat_invoice_no" "character varying(50)"
+  "pdf_url" "character varying(255)"
+  "sub_total" numeric(15,2) [not null]
+  "tax_rate" numeric(5,2) [default: `8.00`]
+  "tax_amount" numeric(15,2) [not null]
+  "deduction_amount" numeric(15,2) [default: `0.00`]
+  "grand_total" numeric(15,2) [not null]
+  "paid_amount" numeric(15,2) [default: `0.00`]
+  "issued_date" date [not null]
+  "due_date" date [not null]
+  "status" "character varying(20)" [default: `'DRAFT'::charactervarying`]
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    invoice_id [pk, name: "invoices_pkey"]
+    invoice_code [unique, name: "invoices_invoice_code_key"]
+    customer_id [name: "IX_invoices_customer_id"]
+  }
+}
+
+Table "locations" {
+  "location_id" uuid [not null, default: `gen_random_uuid()`]
+  "customer_id" uuid
+  "address" text [not null]
+  "latitude" numeric(10,7) [not null]
+  "longitude" numeric(10,7) [not null]
+  "status" "character varying(20)" [default: `'ACTIVE'::charactervarying`]
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    location_id [pk, name: "locations_pkey"]
+    customer_id [name: "IX_locations_customer_id"]
+  }
+}
+
+Table "notification_templates" {
+  "template_id" "character varying(50)" [not null]
+  "type_id" uuid [not null]
+  "title_template" "character varying(100)" [not null]
+  "body_template" text [not null]
+  "channel" "character varying(20)" [not null]
+  "status" "character varying(20)" [default: `'ACTIVE'::charactervarying`]
+
+  Indexes {
+    template_id [pk, name: "notification_templates_pkey"]
+    type_id [name: "IX_notification_templates_type_id"]
+  }
+}
+
+Table "role_permissions" {
+  "role_id" uuid [not null]
+  "perm_id" uuid [not null]
+
+  Indexes {
+    (role_id, perm_id) [pk, name: "role_permissions_pkey"]
+    perm_id [name: "IX_role_permissions_perm_id"]
+  }
+}
+
+Table "users" {
+  "user_id" uuid [not null]
+  "username" "character varying(50)" [not null]
+  "password_hash" "character varying(255)" [not null]
+  "email" "character varying(255)"
+  "role_id" uuid
+  "full_name" "character varying(100)" [not null]
+  "phone" "character varying(20)"
+  "warehouse_id" uuid
+  "status" "character varying(20)" [default: `'ACTIVE'::charactervarying`]
+  "refresh_token" text
+  "refresh_token_expiry_time" timestamp
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+  "created_by" uuid
+  "updated_at" timestamp
+  "updated_by" uuid
+  "deleted_at" timestamp
+  "deleted_by" uuid
+
+  Indexes {
+    user_id [pk, name: "users_pkey"]
+    role_id [name: "IX_users_role_id"]
+    username [unique, name: "users_username_key"]
+  }
+}
+
+Table "weight_tiers" {
+  "id" uuid [not null]
+  "route_id" uuid [not null]
+  "min_weight_kg" numeric(10,2) [not null]
+  "max_weight_kg" numeric(10,2)
+  "price_per_kg" numeric(18,2) [not null]
+
+  Indexes {
+    id [pk, name: "weight_tiers_pkey"]
+    route_id [name: "IX_weight_tiers_route_id"]
+  }
+}
+
+Table "iot_devices" {
+  "device_id" uuid [not null, default: `gen_random_uuid()`]
+  "device_code" "character varying(100)"
+  "vehicle_id" uuid
+  "battery_level" integer
+  "last_ping_time" timestamp
+  "status" "character varying(20)" [default: `'ACTIVE'::charactervarying`]
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+  "IsOnline" boolean [not null]
+
+  Indexes {
+    device_id [pk, name: "iot_devices_pkey"]
+    vehicle_id [name: "IX_iot_devices_vehicle_id"]
+    device_code [unique, name: "uq_iot_devices_device_code"]
+  }
+}
+
+Table "vehicle_documents" {
+  "doc_id" uuid [not null, default: `gen_random_uuid()`]
+  "vehicle_id" uuid
+  "document_type" "character varying(50)" [not null]
+  "document_number" "character varying(50)" [not null]
+  "issuer" "character varying(150)"
+  "issue_date" date [not null]
+  "expire_date" date
+  "status" "character varying(20)" [default: `'ACTIVE'::charactervarying`]
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    doc_id [pk, name: "vehicle_documents_pkey"]
+    vehicle_id [name: "IX_vehicle_documents_vehicle_id"]
+  }
+}
+
+Table "warehouse_zones" {
+  "zone_id" uuid [not null, default: `gen_random_uuid()`]
+  "warehouse_id" uuid [not null]
+  "zone_code" "character varying(20)" [not null]
+  "zone_name" "character varying(100)" [not null]
+  "zone_type" "character varying(30)" [not null]
+  "storage_type" "character varying(30)" [not null]
+  "temperature_min" numeric(5,2)
+  "temperature_max" numeric(5,2)
+  "max_capacity_pallets" integer [not null]
+  "current_pallets" integer [not null, default: 0]
+  "status" "character varying(20)" [not null, default: `'ACTIVE'::charactervarying`]
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+  "created_by" uuid
+  "updated_at" timestamp
+  "updated_by" uuid
+  "deleted_at" timestamp
+  "deleted_by" uuid
+
+  Indexes {
+    zone_id [pk, name: "warehouse_zones_pkey"]
+    (warehouse_id, zone_code) [unique, name: "IX_warehouse_zones_warehouse_id_zone_code"]
+  }
+}
+
+Table "geo_fences" {
+  "fence_id" uuid [not null, default: `gen_random_uuid()`]
+  "location_id" uuid
+  "status" "character varying(20)" [default: `'ACTIVE'::charactervarying`]
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    fence_id [pk, name: "geo_fences_pkey"]
+    location_id [name: "IX_geo_fences_location_id"]
+  }
+}
+
+Table "master_trips" {
+  "trip_id" uuid [not null, default: `gen_random_uuid()`]
+  "vehicle_id" uuid
+  "origin_location_id" uuid [not null]
+  "destination_location_id" uuid [not null]
+  "seal_number" "character varying(100)"
+  "total_distance_km" numeric(8,2)
+  "estimated_duration_hours" numeric(8,2)
+  "target_temperature" numeric(5,2) [not null]
+  "requires_inspection" boolean [default: false]
+  "planned_start_time" timestamp [not null]
+  "planned_end_time" timestamp [not null]
+  "started_at" timestamp
+  "completed_at" timestamp
+  "status" "character varying(20)" [default: `'PLANNED'::charactervarying`]
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    trip_id [pk, name: "master_trips_pkey"]
+    destination_location_id [name: "IX_master_trips_destination_location_id"]
+    origin_location_id [name: "IX_master_trips_origin_location_id"]
+    vehicle_id [name: "IX_master_trips_vehicle_id"]
+  }
+}
+
+Table "drivers" {
+  "driver_id" uuid [not null, default: `gen_random_uuid()`]
+  "user_id" uuid
+  "full_name" "character varying(150)" [not null]
+  "identity_number" "character varying(30)" [not null]
+  "phone_number" "character varying(20)" [not null]
+  "date_of_birth" date [not null]
+  "join_date" date [not null]
+  "status" "character varying(20)" [default: `'ACTIVE'::charactervarying`]
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    driver_id [pk, name: "drivers_pkey"]
+    user_id [name: "IX_drivers_user_id"]
+  }
+}
+
+Table "maintenance_tickets" {
+  "ticket_id" uuid [not null, default: `gen_random_uuid()`]
+  "ticket_code" "character varying(50)" [not null]
+  "vehicle_id" uuid
+  "maintenance_type" "character varying(30)" [not null]
+  "triggered_at_odometer" doubleprecision [not null]
+  "garage_name" "character varying(150)" [not null]
+  "description" text [not null]
+  "cost" numeric(15,2) [default: `0.00`]
+  "issue_date" date [not null]
+  "completion_date" date
+  "status" "character varying(20)" [default: `'OPEN'::charactervarying`]
+  "created_by" uuid [not null]
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    ticket_id [pk, name: "maintenance_tickets_pkey"]
+    created_by [name: "IX_maintenance_tickets_created_by"]
+    vehicle_id [name: "IX_maintenance_tickets_vehicle_id"]
+    ticket_code [unique, name: "maintenance_tickets_ticket_code_key"]
+  }
+}
+
+Table "outbound_orders" {
+  "outbound_order_id" uuid [not null, default: `gen_random_uuid()`]
+  "order_code" "character varying(50)" [not null]
+  "customer_id" uuid [not null]
+  "receiver_name" "character varying(100)" [not null]
+  "receiver_phone" "character varying(20)" [not null]
+  "destination_address" "character varying(255)" [not null]
+  "status" "character varying(30)" [not null, default: 'DRAFT']
+  "assigned_picker_id" uuid
+  "allocated_at" timestamp
+  "created_at" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "created_by" uuid [not null]
+  "updated_at" timestamp
+  "updated_by" uuid
+
+  Indexes {
+    outbound_order_id [pk, name: "outbound_orders_pkey"]
+    assigned_picker_id [name: "IX_outbound_orders_assigned_picker_id"]
+    customer_id [name: "IX_outbound_orders_customer_id"]
+    order_code [unique, name: "uq_outbound_order_code"]
+  }
+}
+
+Table "warehouse_locations" {
+  "location_id" uuid [not null, default: `gen_random_uuid()`]
+  "zone_id" uuid [not null]
+  "location_code" "character varying(50)" [not null]
+  "rack_code" "character varying(20)"
+  "bay_code" "character varying(20)"
+  "level_code" "character varying(20)"
+  "max_capacity_pallets" integer [not null]
+  "current_pallets" integer [not null, default: 0]
+  "status" "character varying(20)" [not null, default: `'ACTIVE'::charactervarying`]
+  "description" text
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+  "created_by" uuid
+  "updated_at" timestamp
+  "updated_by" uuid
+  "deleted_at" timestamp
+  "deleted_by" uuid
+
+  Indexes {
+    location_id [pk, name: "warehouse_locations_pkey"]
+    (zone_id, location_code) [unique, name: "IX_warehouse_locations_zone_id_location_code"]
+  }
+}
+
+Table "alert_logs" {
+  "alert_id" uuid [not null, default: `gen_random_uuid()`]
+  "trip_id" uuid
+  "lpn_id" uuid
+  "alert_type" "character varying(50)" [not null]
+  "value" numeric(5,2)
+  "latitude" numeric(10,7) [not null]
+  "longitude" numeric(10,7) [not null]
+  "status" "character varying(20)" [default: `'NEW'::charactervarying`]
+  "resolved_by" uuid
+  "resolved_at" timestamp
+  "resolution_note" text
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    alert_id [pk, name: "alert_logs_pkey"]
+    resolved_by [name: "IX_alert_logs_resolved_by"]
+    trip_id [name: "IX_alert_logs_trip_id"]
+  }
+}
+
+Table "incident_reports" {
+  "incident_id" uuid [not null, default: `gen_random_uuid()`]
+  "trip_id" uuid
+  "incident_type" "character varying(50)" [not null]
+  "severity" "character varying(20)" [not null]
+  "description" text [not null]
+  "current_latitude" numeric(10,7)
+  "current_longitude" numeric(10,7)
+  "status" "character varying(20)" [default: `'REPORTED'::charactervarying`]
+  "reported_by" uuid [not null]
+  "reported_at" timestamp [default: `CURRENT_TIMESTAMP`]
+  "resolved_at" timestamp
+
+  Indexes {
+    incident_id [pk, name: "incident_reports_pkey"]
+    reported_by [name: "IX_incident_reports_reported_by"]
+    trip_id [name: "IX_incident_reports_trip_id"]
+  }
+}
+
+Table "telemetry_logs" {
+  "log_id" uuid [not null, default: `gen_random_uuid()`]
+  "device_id" uuid
+  "trip_id" uuid
+  "temperature" numeric(5,2) [not null]
+  "latitude" numeric(10,7) [not null]
+  "longitude" numeric(10,7) [not null]
+  "timestamp" timestamp [not null]
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    log_id [pk, name: "telemetry_logs_pkey"]
+    device_id [name: "IX_telemetry_logs_device_id"]
+    trip_id [name: "IX_telemetry_logs_trip_id"]
+  }
+}
+
+Table "transport_orders" {
+  "order_id" uuid [not null, default: `gen_random_uuid()`]
+  "tracking_code" "character varying(50)" [not null]
+  "customer_id" uuid
+  "item_name" "character varying(150)" [not null]
+  "category" "character varying(50)" [not null]
+  "quantity" integer [not null, default: 1]
+  "packing_type" "character varying(50)" [not null, default: `'Thùng'::charactervarying`]
+  "temp_condition" "character varying(20)" [not null]
+  "expected_weight_kg" numeric(10,2) [not null]
+  "actual_weight_kg" numeric(10,2) [not null]
+  "expected_cbm" numeric(8,2) [not null]
+  "actual_cbm" numeric(8,2)
+  "length_cm" numeric(10,2) [not null]
+  "width_cm" numeric(10,2) [not null]
+  "height_cm" numeric(10,2) [not null]
+  "pickup_location" uuid
+  "dest_location" uuid
+  "cargo_value" numeric(15,2) [not null]
+  "status" "character varying(30)" [not null]
+  "master_trip_id" uuid
+  "route_id" uuid
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    order_id [pk, name: "transport_orders_pkey"]
+    customer_id [name: "IX_transport_orders_customer_id"]
+    dest_location [name: "IX_transport_orders_dest_location"]
+    master_trip_id [name: "IX_transport_orders_master_trip_id"]
+    pickup_location [name: "IX_transport_orders_pickup_location"]
+    route_id [name: "IX_transport_orders_route_id"]
+    tracking_code [unique, name: "transport_orders_tracking_code_key"]
+  }
+}
+
+Table "trip_stops" {
+  "stop_id" uuid [not null, default: `gen_random_uuid()`]
+  "trip_id" uuid
+  "location_id" uuid
+  "stop_sequence" integer [not null]
+  "stop_type" "character varying(30)" [not null]
+  "planned_arrival_time" timestamp [not null]
+  "planned_departure_time" timestamp [not null]
+  "actual_arrival_time" timestamp
+  "actual_departure_time" timestamp
+  "status" "character varying(20)" [default: `'PENDING'::charactervarying`]
+  "note" text
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    stop_id [pk, name: "trip_stops_pkey"]
+    location_id [name: "IX_trip_stops_location_id"]
+    trip_id [name: "IX_trip_stops_trip_id"]
+  }
+}
+
+Table "driver_licenses" {
+  "license_id" uuid [not null, default: `gen_random_uuid()`]
+  "driver_id" uuid
+  "license_number" "character varying(20)" [not null]
+  "license_class" "character varying(10)" [not null]
+  "issue_date" date [not null]
+  "expiry_date" date [not null]
+  "status" "character varying(20)" [default: `'ACTIVE'::charactervarying`]
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    license_id [pk, name: "driver_licenses_pkey"]
+    license_number [unique, name: "driver_licenses_license_number_key"]
+    driver_id [name: "IX_driver_licenses_driver_id"]
+  }
+}
+
+Table "driver_work_logs" {
+  "work_log_id" uuid [not null, default: `gen_random_uuid()`]
+  "driver_id" uuid [not null]
+  "trip_id" uuid
+  "work_date" date [not null]
+  "driving_hours" numeric(8,2) [not null]
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    work_log_id [pk, name: "driver_work_logs_pkey"]
+    (driver_id, work_date) [name: "ix_driver_work_logs_driver_date"]
+    trip_id [name: "IX_driver_work_logs_trip_id"]
+  }
+}
+
+Table "expense_advances" {
+  "advance_id" uuid [not null, default: `gen_random_uuid()`]
+  "advance_code" "character varying(50)" [not null]
+  "trip_id" uuid [not null]
+  "driver_id" uuid [not null]
+  "amount" numeric(15,2) [not null]
+  "payment_method" "character varying(20)" [default: `'CASH'::charactervarying`]
+  "advanced_date" timestamp [default: `CURRENT_TIMESTAMP`]
+  "approved_by" uuid [not null]
+  "cleared_amount" numeric(15,2) [default: `0.00`]
+  "returned_amount" numeric(15,2) [default: `0.00`]
+  "status" "character varying(20)" [default: `'PENDING'::charactervarying`]
+  "clearance_status" "character varying(20)" [default: `'OPEN'::charactervarying`]
+  "note" text
+
+  Indexes {
+    advance_id [pk, name: "expense_advances_pkey"]
+    advance_code [unique, name: "expense_advances_advance_code_key"]
+    approved_by [name: "IX_expense_advances_approved_by"]
+    driver_id [name: "IX_expense_advances_driver_id"]
+    trip_id [name: "IX_expense_advances_trip_id"]
+  }
+}
+
+Table "trip_drivers" {
+  "trip_driver_id" uuid [not null, default: `gen_random_uuid()`]
+  "trip_id" uuid [not null]
+  "driver_id" uuid [not null]
+  "driver_role" "character varying(20)" [not null, default: `'PRIMARY'::charactervarying`]
+  "assigned_duration_hours" numeric(8,2) [not null]
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    trip_driver_id [pk, name: "trip_drivers_pkey"]
+    driver_id [name: "IX_trip_drivers_driver_id"]
+    (trip_id, driver_id) [unique, name: "trip_drivers_trip_driver_key"]
+  }
+}
+
+Table "outbound_order_items" {
+  "outbound_order_item_id" uuid [not null, default: `gen_random_uuid()`]
+  "outbound_order_id" uuid [not null]
+  "item_code" "character varying(50)" [not null]
+  "item_name" "character varying(255)" [not null]
+  "unit" "character varying(20)" [not null]
+  "quantity" numeric(10,2) [not null]
+
+  Indexes {
+    outbound_order_item_id [pk, name: "outbound_order_items_pkey"]
+    outbound_order_id [name: "IX_outbound_order_items_outbound_order_id"]
+  }
+}
+
+Table "chat_messages" {
+  "id" uuid [not null]
+  "order_id" uuid [not null]
+  "sender_id" uuid [not null]
+  "receiver_id" uuid [not null]
+  "message_content" text [not null]
+  "created_at" timestamp [not null]
+  "is_read" boolean [not null]
+
+  Indexes {
+    id [pk, name: "chat_messages_pkey"]
+    order_id [name: "IX_chat_messages_order_id"]
+    receiver_id [name: "IX_chat_messages_receiver_id"]
+    sender_id [name: "IX_chat_messages_sender_id"]
+  }
+}
+
+Table "claims" {
+  "claim_id" uuid [not null, default: `gen_random_uuid()`]
+  "claim_code" "character varying(50)" [not null]
+  "order_id" uuid
+  "lpn_id" uuid
+  "claim_type" "character varying(50)" [not null]
+  "description" text [not null]
+  "fault_owner" "character varying(50)"
+  "status" "character varying(20)" [default: `'OPEN'::charactervarying`]
+  "resolution_note" text
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+  "resolved_at" timestamp
+
+  Indexes {
+    claim_id [pk, name: "claims_pkey"]
+    claim_code [unique, name: "claims_claim_code_key"]
+    order_id [name: "IX_claims_order_id"]
+  }
+}
+
+Table "customer_contracts" {
+  "contract_id" uuid [not null, default: `gen_random_uuid()`]
+  "customer_id" uuid
+  "order_id" uuid
+  "contract_number" "character varying(50)" [not null]
+  "signed_date" date
+  "expired_date" date [not null]
+  "file_url" "character varying(255)" [not null]
+  "draft_html_content" text
+  "signed_file_url" "character varying(255)"
+  "sent_at" timestamp
+  "uploaded_signed_at" timestamp
+  "verified_at" timestamp
+  "verified_by" uuid
+  "status" "character varying(20)" [default: `'ACTIVE'::charactervarying`]
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    contract_id [pk, name: "customer_contracts_pkey"]
+    contract_number [unique, name: "customer_contracts_contract_number_key"]
+    customer_id [name: "IX_customer_contracts_customer_id"]
+    order_id [name: "IX_customer_contracts_order_id"]
+  }
+}
+
+Table "delivery_epods" {
+  "epod_id" uuid [not null, default: `gen_random_uuid()`]
+  "order_id" uuid
+  "checkin_time" timestamp [not null]
+  "signed_at" timestamp
+  "receiver_name" "character varying(100)"
+  "receiver_phone" "character varying(20)"
+  "sign_image_url" "character varying(255)"
+  "sign_latitude" numeric(10,7)
+  "sign_longitude" numeric(10,7)
+  "delivery_rating" integer [default: 5]
+  "note" text
+  "pdf_url" "character varying(255)"
+  "status" "character varying(30)" [default: `'PENDING'::charactervarying`]
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+  "cod_amount" numeric(15,2)
+  "cod_amount_paid" numeric(15,2)
+  "payment_method" "character varying(20)"
+  "payment_status" "character varying(20)"
+  "payment_evidence_image_url" "character varying(255)"
+  "handover_confirmed_at" timestamp
+  "handover_pdf_url" "character varying(500)"
+  "payment_confirmed_at" timestamp
+
+  Indexes {
+    epod_id [pk, name: "delivery_epods_pkey"]
+    order_id [name: "IX_delivery_epods_order_id"]
+  }
+}
+
+Table "inbound_asn" {
+  "asn_id" uuid [not null]
+  "asn_code" "character varying(50)" [not null]
+  "order_id" uuid [not null]
+  "requested_dropoff_time" timestamp [not null]
+  "qr_code_value" "character varying(500)" [not null]
+  "status" "character varying(30)" [not null]
+  "phone" "character varying(50)"
+  "warehouse_id" uuid
+  "customer_id" uuid
+  "file_url" "character varying(500)"
+  "created_at" timestamp
+
+  Indexes {
+    asn_id [pk, name: "inbound_asn_pkey"]
+    order_id [name: "IX_inbound_asn_order_id"]
+  }
+}
+
+Table "invoice_lines" {
+  "line_id" uuid [not null, default: `gen_random_uuid()`]
+  "invoice_id" uuid [not null]
+  "order_id" uuid [not null]
+  "charge_type" "character varying(50)" [not null]
+  "description" "character varying(255)" [not null]
+  "quantity" numeric(10,2) [default: `1.00`]
+  "unit_price" numeric(15,2) [not null]
+  "amount" numeric(15,2) [not null]
+  "tax_rate" numeric(5,2) [default: `8.00`]
+
+  Indexes {
+    line_id [pk, name: "invoice_lines_pkey"]
+    invoice_id [name: "IX_invoice_lines_invoice_id"]
+    order_id [name: "IX_invoice_lines_order_id"]
+  }
+}
+
+Table "notifications" {
+  "noti_id" uuid [not null, default: `gen_random_uuid()`]
+  "user_id" uuid [not null]
+  "sender_id" uuid
+  "template_id" "character varying(50)" [not null]
+  "params" json [not null]
+  "order_id" uuid
+  "is_read" boolean [default: false]
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    noti_id [pk, name: "notifications_pkey"]
+    order_id [name: "IX_notifications_order_id"]
+    sender_id [name: "IX_notifications_sender_id"]
+    template_id [name: "IX_notifications_template_id"]
+    user_id [name: "IX_notifications_user_id"]
+  }
+}
+
+Table "quotations" {
+  "quote_id" uuid [not null, default: `gen_random_uuid()`]
+  "order_id" uuid
+  "base_freight" numeric(15,2) [not null]
+  "last_mile_surcharge" numeric(15,2) [default: `0`]
+  "vas_amount" numeric(15,2) [default: `0`]
+  "vat_percentage" numeric(5,2) [default: 8.0]
+  "vat_amount" numeric(15,2) [not null]
+  "final_amount" numeric(15,2) [not null]
+  "chargeable_weight_kg" numeric(10,2)
+  "volumetric_weight_kg" numeric(10,2)
+  "price_per_kg" numeric(15,2)
+  "distance_km" numeric(10,2)
+  "system_base_freight" numeric(15,2)
+  "manual_adjustment" numeric(15,2) [default: `0`]
+  "additional_charges" jsonb
+  "override_reason" "character varying(500)"
+  "pricing_source" "character varying(30)" [not null, default: 'AUTO']
+  "file_url" "character varying(255)"
+  "status" "character varying(20)" [not null]
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    quote_id [pk, name: "quotations_pkey"]
+    order_id [name: "IX_quotations_order_id"]
+  }
+}
+
+Table "transport_documents" {
+  "doc_id" uuid [not null, default: `gen_random_uuid()`]
+  "order_id" uuid
+  "doc_type" "character varying(50)" [not null]
+  "image_url" "character varying(255)" [not null]
+  "status" "character varying(20)" [default: `'PENDING'::charactervarying`]
+  "verified_by" uuid
+  "verified_at" timestamp
+  "reject_reason" "character varying(255)"
+  "uploaded_by" uuid [not null]
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    doc_id [pk, name: "transport_documents_pkey"]
+    order_id [name: "IX_transport_documents_order_id"]
+    uploaded_by [name: "IX_transport_documents_uploaded_by"]
+    verified_by [name: "IX_transport_documents_verified_by"]
+  }
+}
+
+Table "warehouse_receipts" {
+  "receipt_id" uuid [not null, default: `gen_random_uuid()`]
+  "receipt_code" "character varying(50)" [not null]
+  "reference_doc_no" "character varying(100)"
+  "order_id" uuid [not null]
+  "warehouse_id" uuid [not null]
+  "receipt_type" "character varying(20)" [not null]
+  "reason" "character varying(255)"
+  "total_expected_qty" numeric(10,2) [default: `0`]
+  "total_actual_qty" numeric(10,2) [default: `0`]
+  "recorded_temperature" numeric(5,2)
+  "deliverer_name" "character varying(100)" [not null]
+  "receiver_id" uuid [not null]
+  "note" text
+  "pdf_url" "character varying(255)"
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    receipt_id [pk, name: "warehouse_receipts_pkey"]
+    order_id [name: "IX_warehouse_receipts_order_id"]
+    receiver_id [name: "IX_warehouse_receipts_receiver_id"]
+    warehouse_id [name: "IX_warehouse_receipts_warehouse_id"]
+    receipt_code [unique, name: "warehouse_receipts_receipt_code_key"]
+  }
+}
+
+Table "seals" {
+  "seal_id" uuid [not null, default: `gen_random_uuid()`]
+  "trip_id" uuid
+  "stop_id" uuid
+  "seal_code" "character varying(50)" [not null]
+  "applied_at" timestamp [default: `CURRENT_TIMESTAMP`]
+  "applied_image_url" "character varying(255)"
+  "removed_at" timestamp
+  "removed_image_url" "character varying(255)"
+  "status" "character varying(20)" [default: `'APPLIED'::charactervarying`]
+  "note" text
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    seal_id [pk, name: "seals_pkey"]
+    stop_id [name: "IX_seals_stop_id"]
+    trip_id [name: "IX_seals_trip_id"]
+  }
+}
+
+Table "expense_receipts" {
+  "receipt_id" uuid [not null, default: `gen_random_uuid()`]
+  "advance_id" uuid
+  "trip_id" uuid
+  "expense_type" "character varying(30)" [not null]
+  "description" "character varying(255)"
+  "amount" numeric(15,2) [not null]
+  "expense_date" date [not null]
+  "image_url" "character varying(255)" [not null]
+  "status" "character varying(20)" [default: `'PENDING'::charactervarying`]
+  "verified_by" uuid
+  "verified_at" timestamp
+  "reject_reason" "character varying(255)"
+  "uploaded_at" timestamp [default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    receipt_id [pk, name: "expense_receipts_pkey"]
+    advance_id [name: "IX_expense_receipts_advance_id"]
+    verified_by [name: "IX_expense_receipts_verified_by"]
+  }
+}
+
+Table "contract_appendices" {
+  "appendix_id" uuid [not null, default: `gen_random_uuid()`]
+  "contract_id" uuid
+  "order_id" uuid [not null]
+  "appendix_number" "character varying(50)" [not null]
+  "adjusted_price" numeric(18,2) [not null]
+  "reason" text
+  "status" "character varying(30)" [not null]
+  "draft_html_content" text
+  "pdf_url" "character varying(255)"
+  "created_at" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "sent_at" timestamp
+  "resolved_at" timestamp
+
+  Indexes {
+    appendix_id [pk, name: "contract_appendices_pkey"]
+    contract_id [name: "IX_contract_appendices_contract_id"]
+    order_id [name: "IX_contract_appendices_order_id"]
+    appendix_number [unique, name: "uq_contract_appendices_number"]
+  }
+}
+
+Table "returned_items" {
+  "return_id" uuid [not null, default: `gen_random_uuid()`]
+  "epod_id" uuid
+  "item_name" "character varying(255)" [not null]
+  "item_code" "character varying(50)"
+  "unit" "character varying(20)" [not null]
+  "returned_qty" numeric(10,2) [not null]
+  "reason_type" "character varying(50)" [not null]
+  "reason_note" text
+  "processing_status" "character varying(30)" [default: `'PENDING_INSPECT'::charactervarying`]
+  "processed_by" uuid
+  "processed_at" timestamp
+  "returned_at" timestamp [default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    return_id [pk, name: "returned_items_pkey"]
+    epod_id [name: "IX_returned_items_epod_id"]
+    processed_by [name: "IX_returned_items_processed_by"]
+  }
+}
+
+Table "claim_evidences" {
+  "evidence_id" uuid [not null, default: `gen_random_uuid()`]
+  "claim_id" uuid
+  "evidence_type" "character varying(30)" [not null]
+  "alert_id" uuid
+  "doc_id" uuid
+  "image_url" "character varying(255)"
+  "uploaded_by" uuid [not null]
+  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    evidence_id [pk, name: "claim_evidences_pkey"]
+    alert_id [name: "IX_claim_evidences_alert_id"]
+    claim_id [name: "IX_claim_evidences_claim_id"]
+    doc_id [name: "IX_claim_evidences_doc_id"]
+    uploaded_by [name: "IX_claim_evidences_uploaded_by"]
+  }
+}
+
+Table "lpns" {
+  "lpn_id" uuid [not null, default: `gen_random_uuid()`]
+  "lpn_code" "character varying(50)" [not null]
+  "order_id" uuid [not null]
+  "customer_id" uuid
+  "receipt_id" uuid [not null]
+  "warehouse_id" uuid
+  "route_id" uuid
+  "trip_id" uuid
+  "quantity" integer [not null]
+  "actual_weight_kg" numeric(18,2) [not null]
+  "actual_cbm" numeric(18,4) [not null]
+  "length_cm" numeric(10,2)
+  "width_cm" numeric(10,2)
+  "height_cm" numeric(10,2)
+  "required_temperature" numeric(8,2)
+  "recorded_temperature" numeric(8,2)
+  "storage_location" "character varying(200)"
+  "state" "character varying(30)" [not null]
+  "discrepancy_reason" text
+  "evidence_image_url" "character varying(255)"
+  "inbound_time" timestamp
+  "sla_deadline" timestamp
+  "created_at" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "updated_at" timestamp
+
+  Indexes {
+    lpn_id [pk, name: "lpns_pkey"]
+    order_id [name: "idx_lpns_order_id"]
+    state [name: "idx_lpns_state"]
+    storage_location [name: "idx_lpns_storage_location"]
+    warehouse_id [name: "idx_lpns_warehouse_id"]
+    customer_id [name: "IX_lpns_customer_id"]
+    receipt_id [name: "IX_lpns_receipt_id"]
+    route_id [name: "IX_lpns_route_id"]
+    trip_id [name: "IX_lpns_trip_id"]
+    lpn_code [unique, name: "uq_lpns_lpn_code"]
+  }
+}
+
+Table "inbound_return_slips" {
+  "return_slip_id" uuid [not null, default: `gen_random_uuid()`]
+  "order_id" uuid [not null]
+  "lpn_id" uuid [not null]
+  "slip_code" "character varying(50)" [not null]
+  "returned_weight_kg" numeric(18,2) [not null]
+  "returned_cbm" numeric(18,4) [not null]
+  "returned_qty" integer [not null]
+  "reason" text
+  "pdf_url" "character varying(255)"
+  "created_at" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    return_slip_id [pk, name: "inbound_return_slips_pkey"]
+    lpn_id [name: "IX_inbound_return_slips_lpn_id"]
+    order_id [name: "IX_inbound_return_slips_order_id"]
+    slip_code [unique, name: "uq_inbound_return_slips_code"]
+  }
+}
+
+Table "lpn_delivery_confirmations" {
+  "confirmation_id" uuid [not null, default: `gen_random_uuid()`]
+  "lpn_id" uuid [not null]
+  "trip_id" uuid [not null]
+  "order_id" uuid [not null]
+  "outcome_type" "character varying(20)" [not null]
+  "receiver_name" "character varying(200)"
+  "receiver_phone" "character varying(20)"
+  "reject_reason" "character varying(50)"
+  "reject_note" text
+  "evidence_image_url" "character varying(500)" [not null]
+  "confirmed_by" uuid [not null]
+  "confirmed_at" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "checkin_at" timestamp
+  "signature_image_url" "character varying(500)"
+  "cod_amount" numeric(15,2) [not null]
+  "cod_payment_method" "character varying(20)"
+  "cod_receipt_image_url" "character varying(500)"
+  "new_seal_number" "character varying(50)"
+  "recorded_temperature" numeric(8,2)
+  "is_cod_verified" boolean [not null, default: false]
+  "cod_verified_at" timestamp
+  "cod_verified_by" uuid
+
+  Indexes {
+    confirmation_id [pk, name: "lpn_delivery_confirmations_pkey"]
+    cod_verified_by [name: "IX_lpn_delivery_confirmations_cod_verified_by"]
+    confirmed_by [name: "IX_lpn_delivery_confirmations_confirmed_by"]
+    order_id [name: "IX_lpn_delivery_confirmations_order_id"]
+    trip_id [name: "IX_lpn_delivery_confirmations_trip_id"]
+    lpn_id [unique, name: "uq_lpn_delivery_confirmations_lpn_id"]
+  }
+}
+
+Table "penalty_bills" {
+  "penalty_bill_id" uuid [not null, default: `gen_random_uuid()`]
+  "bill_code" "character varying(50)" [not null]
+  "lpn_id" uuid [not null]
+  "order_id" uuid [not null]
+  "customer_id" uuid
+  "handling_fee" numeric(18,2) [not null]
+  "storage_fee" numeric(18,2) [not null]
+  "total_amount" numeric(18,2) [not null]
+  "reason" text [not null]
+  "is_paid" boolean [not null]
+  "created_at" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "paid_at" timestamp
+  "paid_by" uuid
+
+  Indexes {
+    penalty_bill_id [pk, name: "penalty_bills_pkey"]
+    is_paid [name: "idx_penalty_bills_is_paid"]
+    lpn_id [name: "idx_penalty_bills_lpn_id"]
+    customer_id [name: "IX_penalty_bills_customer_id"]
+    order_id [name: "IX_penalty_bills_order_id"]
+    paid_by [name: "IX_penalty_bills_paid_by"]
+    bill_code [unique, name: "uq_penalty_bills_bill_code"]
+  }
+}
+
+Ref "fk_inv_customers":"customers"."customer_id" < "invoices"."customer_id"
+
+Ref "fk_loc_customers":"customers"."customer_id" < "locations"."customer_id"
+
+Ref "fk_nt_msgtype":"messagetype"."type_id" < "notification_templates"."type_id"
+
+Ref "fk_rp_perms":"permissions"."perm_id" < "role_permissions"."perm_id"
+
+Ref "fk_rp_roles":"roles"."role_id" < "role_permissions"."role_id"
+
+Ref "fk_users_roles":"roles"."role_id" < "users"."role_id"
+
+Ref "fk_weight_tiers_route":"route_master"."route_id" < "weight_tiers"."route_id" [delete: cascade]
+
+Ref "fk_iot_vehicles":"vehicles"."vehicle_id" < "iot_devices"."vehicle_id"
+
+Ref "fk_vd_vehicles":"vehicles"."vehicle_id" < "vehicle_documents"."vehicle_id"
+
+Ref "fk_warehouse_zones_warehouses":"warehouses"."warehouse_id" < "warehouse_zones"."warehouse_id" [delete: restrict]
+
+Ref "fk_geo_locations":"locations"."location_id" < "geo_fences"."location_id"
+
+Ref "fk_mtrip_dest":"locations"."location_id" < "master_trips"."destination_location_id"
+
+Ref "fk_mtrip_orig":"locations"."location_id" < "master_trips"."origin_location_id"
+
+Ref "fk_mtrip_vehicles":"vehicles"."vehicle_id" < "master_trips"."vehicle_id"
+
+Ref "fk_drivers_users":"users"."user_id" < "drivers"."user_id"
+
+Ref "fk_mt_users":"users"."user_id" < "maintenance_tickets"."created_by"
+
+Ref "fk_mt_vehicles":"vehicles"."vehicle_id" < "maintenance_tickets"."vehicle_id"
+
+Ref "fk_outbound_customer":"customers"."customer_id" < "outbound_orders"."customer_id" [delete: restrict]
+
+Ref "fk_outbound_picker":"users"."user_id" < "outbound_orders"."assigned_picker_id" [delete: restrict]
+
+Ref "fk_warehouse_locations_zones":"warehouse_zones"."zone_id" < "warehouse_locations"."zone_id" [delete: restrict]
+
+Ref "fk_al_mtrip":"master_trips"."trip_id" < "alert_logs"."trip_id"
+
+Ref "fk_al_users":"users"."user_id" < "alert_logs"."resolved_by"
+
+Ref "fk_ir_mtrip":"master_trips"."trip_id" < "incident_reports"."trip_id"
+
+Ref "fk_ir_users":"users"."user_id" < "incident_reports"."reported_by"
+
+Ref "fk_tl_iot":"iot_devices"."device_id" < "telemetry_logs"."device_id"
+
+Ref "fk_tl_mtrip":"master_trips"."trip_id" < "telemetry_logs"."trip_id"
+
+Ref "fk_to_customers":"customers"."customer_id" < "transport_orders"."customer_id"
+
+Ref "fk_to_dest":"locations"."location_id" < "transport_orders"."dest_location"
+
+Ref "fk_to_mtrip":"master_trips"."trip_id" < "transport_orders"."master_trip_id"
+
+Ref "fk_to_pickup":"locations"."location_id" < "transport_orders"."pickup_location"
+
+Ref "fk_transport_orders_route_master":"route_master"."route_id" < "transport_orders"."route_id"
+
+Ref "fk_ts_loc":"locations"."location_id" < "trip_stops"."location_id"
+
+Ref "fk_ts_mtrip":"master_trips"."trip_id" < "trip_stops"."trip_id"
+
+Ref "fk_dl_drivers":"drivers"."driver_id" < "driver_licenses"."driver_id"
+
+Ref "fk_driver_work_logs_driver":"drivers"."driver_id" < "driver_work_logs"."driver_id" [delete: cascade]
+
+Ref "fk_driver_work_logs_trip":"master_trips"."trip_id" < "driver_work_logs"."trip_id" [delete: set null]
+
+Ref "fk_ea_drivers":"drivers"."driver_id" < "expense_advances"."driver_id"
+
+Ref "fk_ea_mtrip":"master_trips"."trip_id" < "expense_advances"."trip_id"
+
+Ref "fk_ea_users":"users"."user_id" < "expense_advances"."approved_by"
+
+Ref "fk_trip_drivers_driver":"drivers"."driver_id" < "trip_drivers"."driver_id" [delete: cascade]
+
+Ref "fk_trip_drivers_trip":"master_trips"."trip_id" < "trip_drivers"."trip_id" [delete: cascade]
+
+Ref "fk_item_outbound_order":"outbound_orders"."outbound_order_id" < "outbound_order_items"."outbound_order_id" [delete: cascade]
+
+Ref "fk_chat_order":"transport_orders"."order_id" < "chat_messages"."order_id" [delete: cascade]
+
+Ref "fk_chat_receiver":"users"."user_id" < "chat_messages"."receiver_id" [delete: cascade]
+
+Ref "fk_chat_sender":"users"."user_id" < "chat_messages"."sender_id" [delete: cascade]
+
+Ref "fk_claims_to":"transport_orders"."order_id" < "claims"."order_id"
+
+Ref "fk_cc_customers":"customers"."customer_id" < "customer_contracts"."customer_id"
+
+Ref "fk_cc_orders":"transport_orders"."order_id" < "customer_contracts"."order_id"
+
+Ref "fk_epod_to":"transport_orders"."order_id" < "delivery_epods"."order_id"
+
+Ref "fk_asn_order":"transport_orders"."order_id" < "inbound_asn"."order_id" [delete: cascade]
+
+Ref "fk_il_inv":"invoices"."invoice_id" < "invoice_lines"."invoice_id"
+
+Ref "fk_il_to":"transport_orders"."order_id" < "invoice_lines"."order_id"
+
+Ref "fk_noti_order":"transport_orders"."order_id" < "notifications"."order_id"
+
+Ref "fk_noti_sender":"users"."user_id" < "notifications"."sender_id"
+
+Ref "fk_noti_template":"notification_templates"."template_id" < "notifications"."template_id"
+
+Ref "fk_noti_users":"users"."user_id" < "notifications"."user_id"
+
+Ref "fk_quote_to":"transport_orders"."order_id" < "quotations"."order_id"
+
+Ref "fk_td_to":"transport_orders"."order_id" < "transport_documents"."order_id"
+
+Ref "fk_td_uploaded":"users"."user_id" < "transport_documents"."uploaded_by"
+
+Ref "fk_td_verified":"users"."user_id" < "transport_documents"."verified_by"
+
+Ref "fk_wr_to":"transport_orders"."order_id" < "warehouse_receipts"."order_id"
+
+Ref "fk_wr_users":"users"."user_id" < "warehouse_receipts"."receiver_id"
+
+Ref "fk_wr_wh":"warehouses"."warehouse_id" < "warehouse_receipts"."warehouse_id"
+
+Ref "fk_seals_mtrip":"master_trips"."trip_id" < "seals"."trip_id"
+
+Ref "fk_seals_ts":"trip_stops"."stop_id" < "seals"."stop_id"
+
+Ref "fk_er_ea":"expense_advances"."advance_id" < "expense_receipts"."advance_id"
+
+Ref "fk_er_users":"users"."user_id" < "expense_receipts"."verified_by"
+
+Ref "fk_contract_appendices_contract":"customer_contracts"."contract_id" < "contract_appendices"."contract_id" [delete: set null]
+
+Ref "fk_contract_appendices_order":"transport_orders"."order_id" < "contract_appendices"."order_id" [delete: cascade]
+
+Ref "fk_ri_epod":"delivery_epods"."epod_id" < "returned_items"."epod_id"
+
+Ref "fk_ri_users":"users"."user_id" < "returned_items"."processed_by"
+
+Ref "fk_ce_alert":"alert_logs"."alert_id" < "claim_evidences"."alert_id"
+
+Ref "fk_ce_claims":"claims"."claim_id" < "claim_evidences"."claim_id"
+
+Ref "fk_ce_doc":"transport_documents"."doc_id" < "claim_evidences"."doc_id"
+
+Ref "fk_ce_users":"users"."user_id" < "claim_evidences"."uploaded_by"
+
+Ref "FK_lpns_warehouse_receipts_receipt_id":"warehouse_receipts"."receipt_id" < "lpns"."receipt_id" [delete: cascade]
+
+Ref "fk_lpns_customer":"customers"."customer_id" < "lpns"."customer_id" [delete: set null]
+
+Ref "fk_lpns_order":"transport_orders"."order_id" < "lpns"."order_id" [delete: cascade]
+
+Ref "fk_lpns_route":"route_master"."route_id" < "lpns"."route_id" [delete: set null]
+
+Ref "fk_lpns_trip":"master_trips"."trip_id" < "lpns"."trip_id" [delete: set null]
+
+Ref "fk_lpns_warehouse":"warehouses"."warehouse_id" < "lpns"."warehouse_id" [delete: set null]
+
+Ref "fk_inbound_return_slips_lpn":"lpns"."lpn_id" < "inbound_return_slips"."lpn_id" [delete: cascade]
+
+Ref "fk_inbound_return_slips_order":"transport_orders"."order_id" < "inbound_return_slips"."order_id" [delete: cascade]
+
+Ref "fk_lpn_delivery_confirmations_driver":"users"."user_id" < "lpn_delivery_confirmations"."confirmed_by" [delete: restrict]
+
+Ref "fk_lpn_delivery_confirmations_lpn":"lpns"."lpn_id" < "lpn_delivery_confirmations"."lpn_id" [delete: cascade]
+
+Ref "fk_lpn_delivery_confirmations_order":"transport_orders"."order_id" < "lpn_delivery_confirmations"."order_id" [delete: cascade]
+
+Ref "fk_lpn_delivery_confirmations_trip":"master_trips"."trip_id" < "lpn_delivery_confirmations"."trip_id" [delete: cascade]
+
+Ref "fk_lpn_delivery_confirmations_verified_by":"users"."user_id" < "lpn_delivery_confirmations"."cod_verified_by" [delete: restrict]
+
+Ref "fk_penalty_bills_customer":"customers"."customer_id" < "penalty_bills"."customer_id" [delete: set null]
+
+Ref "fk_penalty_bills_lpn":"lpns"."lpn_id" < "penalty_bills"."lpn_id" [delete: cascade]
+
+Ref "fk_penalty_bills_order":"transport_orders"."order_id" < "penalty_bills"."order_id" [delete: cascade]
+
+Ref "fk_penalty_bills_paid_by":"users"."user_id" < "penalty_bills"."paid_by" [delete: set null]
+
+Table "trip_stop_events" {
+  "event_id" uuid [not null, default: `gen_random_uuid()`]
+  "stop_id" uuid [not null]
+  "event_type" "character varying(50)" [not null]
+  "event_time" timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  "meta_data" text
+  
+  Indexes {
+    event_id [pk]
+    stop_id [name: "IX_trip_stop_events_stop_id"]
+  }
+}
+
+Ref "fk_trip_stop_events_stop":"trip_stops"."stop_id" < "trip_stop_events"."stop_id" [delete: cascade]
+
+Table "detention_charges" {
+  "charge_id" uuid [not null, default: `gen_random_uuid()`]
+  "stop_id" uuid [not null]
+  "customer_id" uuid
+  "free_minutes_allocated" integer [not null, default: 30]
+  "actual_wait_minutes" integer [not null]
+  "amount_charged" numeric(15,2) [not null]
+  "status" "character varying(20)" [not null, default: `'UNPAID'::charactervarying`]
+  
+  Indexes {
+    charge_id [pk]
+    stop_id [name: "IX_detention_charges_stop_id"]
+    customer_id [name: "IX_detention_charges_customer_id"]
+  }
+}
+
+Ref "fk_detention_charges_stop":"trip_stops"."stop_id" < "detention_charges"."stop_id" [delete: cascade]
+Ref "fk_detention_charges_customer":"customers"."customer_id" < "detention_charges"."customer_id" [delete: set null]
+
+Table "incident_evidences" {
+  "evidence_id" uuid [not null, default: `gen_random_uuid()`]
+  "incident_id" uuid [not null]
+  "evidence_type" "character varying(50)" [not null]
+  "file_url" "character varying(500)" [not null]
+  
+  Indexes {
+    evidence_id [pk]
+    incident_id [name: "IX_incident_evidences_incident_id"]
+  }
+}
+
+Ref "fk_incident_evidences_incident":"incident_reports"."incident_id" < "incident_evidences"."incident_id" [delete: cascade]
+
+Ref "fk_alert_logs_lpn":"lpns"."lpn_id" < "alert_logs"."lpn_id" [delete: set null]
+
+Ref "fk_claims_lpn":"lpns"."lpn_id" < "claims"."lpn_id" [delete: set null]
+
+Ref "fk_expense_receipts_trip":"master_trips"."trip_id" < "expense_receipts"."trip_id" [delete: cascade]
+
+Records public.compliance_zoning_rules(rule_id, created_at, created_by, is_active, product_category, requirement_level, sub_category, updated_at, updated_by) {
+  'b001a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1', `TIMESTAMP'2026-06-14T00:00:00'`, '00000000-0000-0000-0000-000000000000', true, 0, 0, 7, null, null
+  'b001a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a2', `TIMESTAMP'2026-06-14T00:00:00'`, '00000000-0000-0000-0000-000000000000', true, 0, 0, 24, null, null
+  'b001a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a3', `TIMESTAMP'2026-06-14T00:00:00'`, '00000000-0000-0000-0000-000000000000', true, 0, 0, 26, null, null
+  'b002a2a2-a2a2-a2a2-a2a2-a2a2a2a2a2a1', `TIMESTAMP'2026-06-14T00:00:00'`, '00000000-0000-0000-0000-000000000000', true, 1, 0, 7, null, null
+  'b002a2a2-a2a2-a2a2-a2a2-a2a2a2a2a2a2', `TIMESTAMP'2026-06-14T00:00:00'`, '00000000-0000-0000-0000-000000000000', true, 1, 0, 8, null, null
+  'b002a2a2-a2a2-a2a2-a2a2-a2a2a2a2a2a3', `TIMESTAMP'2026-06-14T00:00:00'`, '00000000-0000-0000-0000-000000000000', true, 1, 0, 24, null, null
+  'b002a2a2-a2a2-a2a2-a2a2-a2a2a2a2a2a4', `TIMESTAMP'2026-06-14T00:00:00'`, '00000000-0000-0000-0000-000000000000', true, 1, 0, 26, null, null
+  'b003a3a3-a3a3-a3a3-a3a3-a3a3a3a3a3a1', `TIMESTAMP'2026-06-14T00:00:00'`, '00000000-0000-0000-0000-000000000000', true, 2, 0, 15, null, null
+  'b003a3a3-a3a3-a3a3-a3a3-a3a3a3a3a3a2', `TIMESTAMP'2026-06-14T00:00:00'`, '00000000-0000-0000-0000-000000000000', true, 2, 0, 24, null, null
+  'b004a4a4-a4a4-a4a4-a4a4-a4a4a4a4a4a1', `TIMESTAMP'2026-06-14T00:00:00'`, '00000000-0000-0000-0000-000000000000', true, 3, 0, 10, null, null
+  'b004a4a4-a4a4-a4a4-a4a4-a4a4a4a4a4a2', `TIMESTAMP'2026-06-14T00:00:00'`, '00000000-0000-0000-0000-000000000000', true, 3, 0, 9, null, null
+  'b004a4a4-a4a4-a4a4-a4a4-a4a4a4a4a4a3', `TIMESTAMP'2026-06-14T00:00:00'`, '00000000-0000-0000-0000-000000000000', true, 3, 0, 24, null, null
+  'b004a4a4-a4a4-a4a4-a4a4-a4a4a4a4a4a4', `TIMESTAMP'2026-06-14T00:00:00'`, '00000000-0000-0000-0000-000000000000', true, 3, 0, 26, null, null
+  'b005a5a5-a5a5-a5a5-a5a5-a5a5a5a5a5a1', `TIMESTAMP'2026-06-14T00:00:00'`, '00000000-0000-0000-0000-000000000000', true, 4, 0, 10, null, null
+  'b005a5a5-a5a5-a5a5-a5a5-a5a5a5a5a5a2', `TIMESTAMP'2026-06-14T00:00:00'`, '00000000-0000-0000-0000-000000000000', true, 4, 0, 11, null, null
+  'b005a5a5-a5a5-a5a5-a5a5-a5a5a5a5a5a3', `TIMESTAMP'2026-06-14T00:00:00'`, '00000000-0000-0000-0000-000000000000', true, 4, 0, 9, null, null
+  'b005a5a5-a5a5-a5a5-a5a5-a5a5a5a5a5a4', `TIMESTAMP'2026-06-14T00:00:00'`, '00000000-0000-0000-0000-000000000000', true, 4, 0, 24, null, null
+  'b005a5a5-a5a5-a5a5-a5a5-a5a5a5a5a5a5', `TIMESTAMP'2026-06-14T00:00:00'`, '00000000-0000-0000-0000-000000000000', true, 4, 0, 26, null, null
+  'b006a6a6-a6a6-a6a6-a6a6-a6a6a6a6a6a1', `TIMESTAMP'2026-06-14T00:00:00'`, '00000000-0000-0000-0000-000000000000', true, 5, 0, 12, null, null
+  'b006a6a6-a6a6-a6a6-a6a6-a6a6a6a6a6a2', `TIMESTAMP'2026-06-14T00:00:00'`, '00000000-0000-0000-0000-000000000000', true, 5, 0, 14, null, null
+  'b006a6a6-a6a6-a6a6-a6a6-a6a6a6a6a6a3', `TIMESTAMP'2026-06-14T00:00:00'`, '00000000-0000-0000-0000-000000000000', true, 5, 1, 25, null, null
+  'b006a6a6-a6a6-a6a6-a6a6-a6a6a6a6a6a4', `TIMESTAMP'2026-06-14T00:00:00'`, '00000000-0000-0000-0000-000000000000', true, 5, 0, 24, null, null
+}

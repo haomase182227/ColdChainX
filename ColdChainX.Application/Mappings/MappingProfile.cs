@@ -49,7 +49,7 @@ namespace ColdChainX.Application.Mappings
             //  for any consumer that prefers AutoMapper.)
             CreateMap<Lpn, LpnDto>()
                 .ForMember(d => d.ItemName, o => o.MapFrom(s => s.Order != null ? s.Order.ItemName : null))
-                .ForMember(d => d.ExpectedWeightKg, o => o.MapFrom(s => s.Order != null ? s.Order.ExpectedWeightKg : 0))
+                .ForMember(d => d.ExpectedWeightKg, o => o.MapFrom(s => (s.Order != null && s.Order.OrderDimension != null) ? s.Order.OrderDimension.ExpectedWeightKg : 0))
                 .ForMember(d => d.WarehouseName, o => o.MapFrom(s => s.Warehouse != null ? s.Warehouse.WarehouseName : null))
                 .ForMember(d => d.Condition, o => o.MapFrom(s => s.DiscrepancyReason))
                 .ForMember(d => d.State, o => o.MapFrom(s => s.State.ToString()))

@@ -12,6 +12,14 @@ namespace ColdChainX.API.Controllers;
 [Route("api")]
 public sealed class ColdChainMonitoringController : ControllerBase
 {
+    private static readonly string[] DefaultTrackingTripStatuses =
+    {
+        "IN_TRANSIT",
+        "DELAYED",
+        "SEALED",
+        "DISPATCHED"
+    };
+
     private readonly ApplicationDbContext _db;
     private readonly RedisService _redisService;
     private readonly IColdChainRiskService _riskService;
@@ -80,6 +88,140 @@ public sealed class ColdChainMonitoringController : ControllerBase
         });
     }
 
+
+    [HttpGet("tracking/trips")]
+    public async Task<IActionResult> GetTrackingTrips(
+        [FromQuery] string[]? statuses,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 50,
+        [FromQuery] string? search = null,
+        CancellationToken cancellationToken = default)
+    {
+        var safePageNumber = pageNumber < 1 ? 1 : pageNumber;
+        var safePageSize = Math.Clamp(pageSize < 1 ? 50 : pageSize, 1, 200);
+        var statusFilter = NormalizeTrackingStatuses(statuses);
+
+        var query = _db.MasterTrips
+            .AsNoTracking()
+            .Include(t => t.OriginLocation)
+            .Include(t => t.DestinationLocation)
+            .Include(t => t.Vehicle)
+                .ThenInclude(v => v!.IotDevices)
+            .Include(t => t.TripDrivers)
+                .ThenInclude(td => td.Driver)
+            .AsSplitQuery()
+            .Where(t => t.Status != null && statusFilter.Contains(t.Status));
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var keyword = search.Trim().ToLower();
+            var isGuidSearch = Guid.TryParse(keyword, out var searchedTripId);
+
+            query = query.Where(t =>
+                (isGuidSearch && t.TripId == searchedTripId)
+                || (t.Vehicle != null && t.Vehicle.TruckPlate.ToLower().Contains(keyword))
+                || t.TripDrivers.Any(td => td.Driver.FullName.ToLower().Contains(keyword))
+                || (t.Vehicle != null && t.Vehicle.IotDevices.Any(d =>
+                    d.DeviceCode != null && d.DeviceCode.ToLower().Contains(keyword)))
+                || t.TransportOrders.Any(o => o.TrackingCode.ToLower().Contains(keyword)));
+        }
+
+        var totalRecords = await query.CountAsync(cancellationToken);
+
+        var trips = await query
+            .OrderByDescending(t => t.StartedAt.HasValue)
+            .ThenByDescending(t => t.StartedAt)
+            .ThenByDescending(t => t.PlannedStartTime)
+            .ThenByDescending(t => t.CreatedAt)
+            .Skip((safePageNumber - 1) * safePageSize)
+            .Take(safePageSize)
+            .ToListAsync(cancellationToken);
+
+        var tripIds = trips.Select(t => t.TripId).ToArray();
+        var orders = await _db.TransportOrders
+            .AsNoTracking()
+            .Where(o => o.MasterTripId.HasValue && tripIds.Contains(o.MasterTripId.Value))
+            .Select(o => new TrackingTripOrderRow
+            {
+                MasterTripId = o.MasterTripId!.Value,
+                OrderId = o.OrderId,
+                TrackingCode = o.TrackingCode,
+                ItemName = o.ItemName,
+                Category = o.Category,
+                TempCondition = o.TempCondition
+            })
+            .ToListAsync(cancellationToken);
+
+        var ordersByTripId = orders
+            .GroupBy(o => o.MasterTripId)
+            .ToDictionary(g => g.Key, g => g.Select(o => o.ToResponse()).ToList());
+
+        var data = new List<TrackingTripListItemResponse>(trips.Count);
+        foreach (var trip in trips)
+        {
+            var device = SelectTrackingDevice(trip.Vehicle?.IotDevices);
+            var redisKey = BuildRedisKey(device);
+            var latest = redisKey == null ? null : await _redisService.GetLatestAsync(redisKey);
+            var eta = latest == null
+                ? null
+                : BuildEta(latest.Lat, latest.Lon, (double)trip.DestinationLocation.Latitude, (double)trip.DestinationLocation.Longitude);
+
+            var drivers = trip.TripDrivers
+                .OrderBy(td => td.DriverRole == "PRIMARY" ? 0 : 1)
+                .ThenBy(td => td.CreatedAt)
+                .Select(td => new TrackingTripDriverResponse
+                {
+                    DriverId = td.DriverId,
+                    FullName = td.Driver.FullName,
+                    DriverRole = td.DriverRole
+                })
+                .ToList();
+
+            var tripOrders = ordersByTripId.TryGetValue(trip.TripId, out var foundOrders)
+                ? foundOrders
+                : new List<TrackingTripOrderItemResponse>();
+
+            data.Add(new TrackingTripListItemResponse
+            {
+                TripId = trip.TripId,
+                Status = trip.Status,
+                PlannedStartTime = trip.PlannedStartTime,
+                PlannedEndTime = trip.PlannedEndTime,
+                StartedAt = trip.StartedAt,
+                CompletedAt = trip.CompletedAt,
+                SealNumber = trip.SealNumber,
+                Vehicle = trip.Vehicle == null ? null : new TrackingTripVehicleResponse
+                {
+                    VehicleId = trip.Vehicle.VehicleId,
+                    TruckPlate = trip.Vehicle.TruckPlate
+                },
+                Driver = drivers.Count == 0 ? null : string.Join(", ", drivers.Select(d => d.FullName)),
+                Drivers = drivers,
+                Device = device == null ? null : new TrackingTripDeviceResponse
+                {
+                    DeviceId = device.DeviceId,
+                    DeviceCode = device.DeviceCode,
+                    Status = device.Status,
+                    IsOnline = device.IsOnline,
+                    LastPingTime = device.LastPingTime
+                },
+                Orders = tripOrders,
+                OrderCount = tripOrders.Count,
+                LatestTelemetry = latest,
+                Eta = eta
+            });
+        }
+
+        return Ok(new
+        {
+            Success = true,
+            PageNumber = safePageNumber,
+            PageSize = safePageSize,
+            TotalRecords = totalRecords,
+            TotalPages = (int)Math.Ceiling(totalRecords / (double)safePageSize),
+            Data = data
+        });
+    }
 
 
     [HttpGet("tracking/{tripId:guid}")]
@@ -536,6 +678,40 @@ public sealed class ColdChainMonitoringController : ControllerBase
     }
 
     private static double ToRadians(double degrees) => degrees * Math.PI / 180;
+
+    private static string[] NormalizeTrackingStatuses(string[]? statuses)
+    {
+        var normalized = statuses?
+            .SelectMany(s => (s ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries))
+            .Select(s => s.Trim().ToUpperInvariant())
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Distinct()
+            .ToArray();
+
+        return normalized is { Length: > 0 }
+            ? normalized
+            : DefaultTrackingTripStatuses;
+    }
+
+    private static IotDevice? SelectTrackingDevice(IEnumerable<IotDevice>? devices)
+    {
+        return devices?
+            .OrderBy(d => string.IsNullOrWhiteSpace(d.DeviceCode) ? 1 : 0)
+            .ThenByDescending(d => d.LastPingTime)
+            .FirstOrDefault();
+    }
+
+    private static string? BuildRedisKey(IotDevice? device)
+    {
+        if (device == null)
+        {
+            return null;
+        }
+
+        return string.IsNullOrWhiteSpace(device.DeviceCode)
+            ? device.DeviceId.ToString()
+            : device.DeviceCode;
+    }
 }
 
 public sealed class AssignDeviceRequest
@@ -550,4 +726,106 @@ public sealed class AssignDeviceRequest
 public sealed class StartTripMonitoringRequest
 {
     public Guid TripId { get; set; }
+}
+
+public sealed class TrackingTripListItemResponse
+{
+    public Guid TripId { get; set; }
+
+    public string? Status { get; set; }
+
+    public DateTime PlannedStartTime { get; set; }
+
+    public DateTime PlannedEndTime { get; set; }
+
+    public DateTime? StartedAt { get; set; }
+
+    public DateTime? CompletedAt { get; set; }
+
+    public string? SealNumber { get; set; }
+
+    public TrackingTripVehicleResponse? Vehicle { get; set; }
+
+    public string? Driver { get; set; }
+
+    public List<TrackingTripDriverResponse> Drivers { get; set; } = new();
+
+    public TrackingTripDeviceResponse? Device { get; set; }
+
+    public List<TrackingTripOrderItemResponse> Orders { get; set; } = new();
+
+    public int OrderCount { get; set; }
+
+    public object? LatestTelemetry { get; set; }
+
+    public object? Eta { get; set; }
+}
+
+public sealed class TrackingTripVehicleResponse
+{
+    public Guid VehicleId { get; set; }
+
+    public string TruckPlate { get; set; } = string.Empty;
+}
+
+public sealed class TrackingTripDriverResponse
+{
+    public Guid DriverId { get; set; }
+
+    public string FullName { get; set; } = string.Empty;
+
+    public string DriverRole { get; set; } = string.Empty;
+}
+
+public sealed class TrackingTripDeviceResponse
+{
+    public Guid DeviceId { get; set; }
+
+    public string? DeviceCode { get; set; }
+
+    public string? Status { get; set; }
+
+    public bool IsOnline { get; set; }
+
+    public DateTime? LastPingTime { get; set; }
+}
+
+public sealed class TrackingTripOrderItemResponse
+{
+    public Guid OrderId { get; set; }
+
+    public string TrackingCode { get; set; } = string.Empty;
+
+    public string ItemName { get; set; } = string.Empty;
+
+    public string Category { get; set; } = string.Empty;
+
+    public string TempCondition { get; set; } = string.Empty;
+}
+
+public sealed class TrackingTripOrderRow
+{
+    public Guid MasterTripId { get; set; }
+
+    public Guid OrderId { get; set; }
+
+    public string TrackingCode { get; set; } = string.Empty;
+
+    public string ItemName { get; set; } = string.Empty;
+
+    public string Category { get; set; } = string.Empty;
+
+    public string TempCondition { get; set; } = string.Empty;
+
+    public TrackingTripOrderItemResponse ToResponse()
+    {
+        return new TrackingTripOrderItemResponse
+        {
+            OrderId = OrderId,
+            TrackingCode = TrackingCode,
+            ItemName = ItemName,
+            Category = Category,
+            TempCondition = TempCondition
+        };
+    }
 }

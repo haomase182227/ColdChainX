@@ -24,6 +24,18 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
+        [HttpGet("my-orders")]
+        [Authorize(Roles = "Customer")]
+        public async Task<IActionResult> GetMyOrders([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10, [FromQuery] string? status = null)
+        {
+            var customerIdClaim = User.FindFirst("CustomerId")?.Value;
+            if (!Guid.TryParse(customerIdClaim, out var customerId))
+                return Unauthorized("CustomerId claim is missing from token");
+
+            var result = await _orderService.GetOrdersByCustomerAsync(customerId, pageNumber, pageSize, status);
+            return Ok(result);
+        }
+
         [HttpGet("{orderId:guid}")]
         public async Task<IActionResult> GetOrderById(Guid orderId)
         {
@@ -42,6 +54,34 @@ namespace ColdChainX.API.Controllers
                 return Unauthorized("CustomerId claim is missing from token");
 
             var result = await _orderService.CreateOrderAsync(request, customerId);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        [HttpPut("{orderId:guid}")]
+        [Authorize(Roles = "Customer")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> UpdateOrder(Guid orderId, [FromForm] UpdateOrderRequest request)
+        {
+            var customerIdClaim = User.FindFirst("CustomerId")?.Value;
+            if (!Guid.TryParse(customerIdClaim, out var customerId))
+                return Unauthorized("CustomerId claim is missing from token");
+
+            var result = await _orderService.UpdateOrderAsync(orderId, request, customerId);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        [HttpPut("{orderId:guid}/admin")]
+        [Authorize(Roles = "Admin,Manager,Sales")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> AdminUpdateOrder(Guid orderId, [FromForm] UpdateOrderRequest request)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var salesUserId))
+                return Unauthorized("UserId claim is missing from token");
+
+            var result = await _orderService.AdminUpdateOrderAsync(orderId, request, salesUserId);
             if (!result.Success) return BadRequest(result);
             return Ok(result);
         }
