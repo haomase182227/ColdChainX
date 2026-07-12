@@ -67,6 +67,24 @@ namespace ColdChainX.UnitTests
                 Status = "ACTIVE"
             });
 
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            var documentTypes = new[] { "REGISTRATION", "INSURANCE", "CITY_PERMIT", "FOOD_SAFETY" };
+            foreach (var docType in documentTypes)
+            {
+                _db.VehicleDocuments.Add(new VehicleDocument
+                {
+                    DocId = Guid.NewGuid(),
+                    VehicleId = _vehicleId,
+                    DocumentType = docType,
+                    DocumentNumber = "DOC-" + docType,
+                    Issuer = "Test Authority",
+                    IssueDate = today.AddYears(-1),
+                    ExpireDate = today.AddYears(1),
+                    Status = "ACTIVE",
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
             _db.SaveChanges();
         }
 
@@ -215,13 +233,12 @@ namespace ColdChainX.UnitTests
                 Odometer = 6500.5,
                 LocationText = "Test Location",
                 Reason = OdometerSyncReason.MANUAL_CORRECTION,
-                Note = "Manual correction check",
-                OdometerPhotoUrl = "http://test.image/odo.png"
+                Note = "Manual correction check"
             };
             var updaterId = Guid.NewGuid();
 
             // Act
-            var result = await _service.SyncOdometerAsync(request, updaterId);
+            var result = await _service.SyncOdometerAsync(request, updaterId, "http://test.image/odo.png");
 
             // Assert
             Assert.True(result.Success);
@@ -240,6 +257,159 @@ namespace ColdChainX.UnitTests
             Assert.Equal(updaterId, log.UpdatedBy);
             Assert.Equal("http://test.image/odo.png", log.OdometerPhotoUrl);
             Assert.True((DateTime.Now - log.CreatedAt).TotalSeconds < 5);
+        }
+
+        [Fact]
+        public async Task CompleteMaintenanceTicket_WithExpiredDocs_SetsVehicleStatusToSuspendedDocs()
+        {
+            // Arrange
+            var vehicleId = Guid.NewGuid();
+            var vehicle = new Vehicle
+            {
+                VehicleId = vehicleId,
+                TruckPlate = "51C-EXP1",
+                Brand = "Toyota",
+                VehicleType = "REEFER_TRUCK",
+                CurrentOdometer = 5000,
+                NextMaintenanceOdometer = 10000,
+                Status = "MAINTENANCE"
+            };
+            _db.Vehicles.Add(vehicle);
+
+            var doc = new VehicleDocument
+            {
+                DocId = Guid.NewGuid(),
+                VehicleId = vehicleId,
+                DocumentType = "REGISTRATION",
+                DocumentNumber = "DOC-EXP1",
+                Status = "ACTIVE",
+                ExpireDate = DateOnly.FromDateTime(DateTime.Today.AddDays(-1)) // Expired!
+            };
+            _db.VehicleDocuments.Add(doc);
+
+            var ticketId = Guid.NewGuid();
+            var ticket = new MaintenanceTicket
+            {
+                TicketId = ticketId,
+                TicketCode = "MT-EXP1",
+                VehicleId = vehicleId,
+                MaintenanceType = "ROUTINE_AND_PTI",
+                GarageName = "Gara 1",
+                Description = "General repair",
+                Status = "OPEN"
+            };
+            _db.MaintenanceTickets.Add(ticket);
+            await _db.SaveChangesAsync();
+
+            // Act
+            var request = new CompleteMaintenanceTicketRequest
+            {
+                Cost = 1500000,
+                CompletionDate = DateOnly.FromDateTime(DateTime.Today)
+            };
+            var result = await _service.CompleteMaintenanceTicketAsync(ticketId, request);
+
+            // Assert
+            Assert.True(result.Success);
+            var updatedVehicle = await _db.Vehicles.FindAsync(vehicleId);
+            Assert.Equal("SUSPENDED_DOCS", updatedVehicle!.Status);
+        }
+
+        [Fact]
+        public async Task CancelMaintenanceTicket_WithExpiredDocs_SetsVehicleStatusToSuspendedDocs()
+        {
+            // Arrange
+            var vehicleId = Guid.NewGuid();
+            var vehicle = new Vehicle
+            {
+                VehicleId = vehicleId,
+                TruckPlate = "51C-EXP2",
+                Brand = "Toyota",
+                VehicleType = "REEFER_TRUCK",
+                CurrentOdometer = 5000,
+                NextMaintenanceOdometer = 10000,
+                Status = "MAINTENANCE"
+            };
+            _db.Vehicles.Add(vehicle);
+
+            var doc = new VehicleDocument
+            {
+                DocId = Guid.NewGuid(),
+                VehicleId = vehicleId,
+                DocumentType = "INSURANCE",
+                DocumentNumber = "DOC-EXP2",
+                Status = "ACTIVE",
+                ExpireDate = DateOnly.FromDateTime(DateTime.Today.AddDays(-1)) // Expired!
+            };
+            _db.VehicleDocuments.Add(doc);
+
+            var ticketId = Guid.NewGuid();
+            var ticket = new MaintenanceTicket
+            {
+                TicketId = ticketId,
+                TicketCode = "MT-EXP2",
+                VehicleId = vehicleId,
+                MaintenanceType = "ROUTINE_AND_PTI",
+                GarageName = "Gara 2",
+                Description = "Repair check",
+                Status = "OPEN"
+            };
+            _db.MaintenanceTickets.Add(ticket);
+            await _db.SaveChangesAsync();
+
+            // Act
+            var result = await _service.UpdateMaintenanceTicketStatusAsync(ticketId, "CANCELLED");
+
+            // Assert
+            Assert.True(result.Success);
+            var updatedVehicle = await _db.Vehicles.FindAsync(vehicleId);
+            Assert.Equal("SUSPENDED_DOCS", updatedVehicle!.Status);
+        }
+
+        [Fact]
+        public async Task UpdateVehicle_WithExpiredDocs_EnforcesSuspendedDocs()
+        {
+            // Arrange
+            var vehicleId = Guid.NewGuid();
+            var vehicle = new Vehicle
+            {
+                VehicleId = vehicleId,
+                TruckPlate = "51C-EXP3",
+                Brand = "Toyota",
+                VehicleType = "REEFER_TRUCK",
+                CurrentOdometer = 5000,
+                NextMaintenanceOdometer = 10000,
+                Status = "ACTIVE"
+            };
+            _db.Vehicles.Add(vehicle);
+
+            var doc = new VehicleDocument
+            {
+                DocId = Guid.NewGuid(),
+                VehicleId = vehicleId,
+                DocumentType = "REGISTRATION",
+                DocumentNumber = "DOC-EXP3",
+                Status = "ACTIVE",
+                ExpireDate = DateOnly.FromDateTime(DateTime.Today.AddDays(-1)) // Expired!
+            };
+            _db.VehicleDocuments.Add(doc);
+            await _db.SaveChangesAsync();
+
+            var updateRequest = new ColdChainX.Application.DTOs.VehicleUpdateRequest
+            {
+                Brand = "Toyota Updated",
+                Status = "ACTIVE" // Try to manually force ACTIVE
+            };
+
+            // Act
+            var result = await _service.UpdateVehicleAsync(vehicleId, updateRequest);
+
+            // Assert
+            Assert.True(result.Success);
+            Assert.Equal("SUSPENDED_DOCS", result.Data.Status);
+            var updatedVehicle = await _db.Vehicles.FindAsync(vehicleId);
+            Assert.Equal("SUSPENDED_DOCS", updatedVehicle!.Status);
+            Assert.Equal("Toyota Updated", updatedVehicle.Brand);
         }
     }
 

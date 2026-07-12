@@ -154,6 +154,7 @@ namespace ColdChainX.API.Extensions
             services.AddControllers()
                 .AddJsonOptions(options =>
                 {
+                    options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
                     options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
                 });
 

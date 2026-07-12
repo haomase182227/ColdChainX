@@ -479,6 +479,16 @@ CREATE TABLE Invoice_Lines (
     Tax_Rate DECIMAL(5,2) DEFAULT 8.00
 );
 
+CREATE TABLE Vehicle_Odometer_Logs (
+    Log_ID UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    Vehicle_ID UUID NOT NULL,
+    Odometer_Value DOUBLE PRECISION NOT NULL,
+    Location_Text VARCHAR(500) NULL,
+    Reason VARCHAR(255) NULL,
+    Updated_By UUID NULL,
+    Created_At TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- ==========================================
 -- PHẦN 2: THIẾT LẬP KẾT NỐI KHÓA NGOẠI (FOREIGN KEYS)
 -- ==========================================
@@ -574,6 +584,8 @@ ALTER TABLE Invoices ADD CONSTRAINT fk_inv_customers FOREIGN KEY (Customer_ID) R
 
 ALTER TABLE Invoice_Lines ADD CONSTRAINT fk_il_inv FOREIGN KEY (Invoice_ID) REFERENCES Invoices(Invoice_ID);
 ALTER TABLE Invoice_Lines ADD CONSTRAINT fk_il_to FOREIGN KEY (Order_ID) REFERENCES Transport_Orders(Order_ID);
+ALTER TABLE Vehicle_Odometer_Logs ADD CONSTRAINT fk_vehicle_odometer_logs_vehicle_id FOREIGN KEY (Vehicle_ID) REFERENCES Vehicles(Vehicle_ID) ON DELETE CASCADE;
+ALTER TABLE Vehicle_Odometer_Logs ADD CONSTRAINT fk_vehicle_odometer_logs_updated_by FOREIGN KEY (Updated_By) REFERENCES Users(User_ID);
 
 -- ========================================================
 -- PHẦN 3: DỮ LIỆU MẪU KHỞI TẠO (SEED DATA)

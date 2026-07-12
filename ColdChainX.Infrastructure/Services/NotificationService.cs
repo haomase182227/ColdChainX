@@ -97,20 +97,25 @@ namespace ColdChainX.Infrastructure.Services
             };
         }
 
-        private static string RenderTemplate(string template, string parametersJson)
+        public static string RenderTemplate(string? template, string? parametersJson)
         {
+            if (string.IsNullOrWhiteSpace(template))
+                return string.Empty;
             if (string.IsNullOrWhiteSpace(parametersJson))
                 return template;
 
             try
             {
-                var parameters = JsonSerializer.Deserialize<Dictionary<string, string>>(parametersJson);
+                var parameters = JsonSerializer.Deserialize<Dictionary<string, object>>(parametersJson);
                 if (parameters == null)
                     return template;
 
                 var rendered = template;
                 foreach (var parameter in parameters)
-                    rendered = rendered.Replace($"{{{{{parameter.Key}}}}}", parameter.Value, StringComparison.OrdinalIgnoreCase);
+                {
+                    var valStr = parameter.Value?.ToString() ?? string.Empty;
+                    rendered = rendered.Replace($"{{{{{parameter.Key}}}}}", valStr, StringComparison.OrdinalIgnoreCase);
+                }
 
                 return rendered;
             }

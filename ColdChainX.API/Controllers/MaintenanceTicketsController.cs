@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Authorization;
 using ColdChainX.Application.DTOs.Fleet;
 using ColdChainX.Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
@@ -9,6 +10,7 @@ namespace ColdChainX.API.Controllers;
 
 [ApiController]
 [Route("api/maintenance-tickets")]
+[Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Dispatcher,DISPATCHER")]
 public class MaintenanceTicketsController : ControllerBase
 {
     private readonly IFleetManagementService _fleetService;
