@@ -51,7 +51,7 @@ public class GetLpnDeliveryDetailQueryHandler : IRequestHandler<GetLpnDeliveryDe
         var bankAccount = _configuration?["PaymentSettings:BankAccount"] ?? "1111111111";
         var bankAccountName = _configuration?["PaymentSettings:BankAccountName"] ?? "NGUYEN VAN A";
 
-        var codAmount = confirmation != null ? confirmation.CodAmount : lpn.Order.CargoValue;
+        var codAmount = confirmation != null ? confirmation.CodAmount : 0m;
 
         string? vietQrUrl = null;
         if (lpn.State == LpnState.SHIPPING && codAmount > 0)

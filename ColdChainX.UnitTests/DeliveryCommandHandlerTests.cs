@@ -106,10 +106,10 @@ namespace ColdChainX.UnitTests
                 Quantity = 10,
                 PackingType = "BOX",
                 TempCondition = "FROZEN",
-                ExpectedWeightKg = 100,
+                OrderDimension = new ColdChainX.Core.Entities.OrderDimension { ExpectedWeightKg = 100,
                 ActualWeightKg = 100,
-                ExpectedCbm = 2,
-                CargoValue = 1000,
+                ExpectedCbm = 2 },
+
                 Status = "SHIPPING"
             });
 
@@ -811,3 +811,5 @@ namespace ColdChainX.UnitTests
         public IConfigurationSection GetSection(string key) => null!;
     }
 }
+
+

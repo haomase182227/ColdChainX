@@ -17,17 +17,20 @@ namespace ColdChainX.Application.Services
     public class UserService : IUserService
     {
         private readonly IUserRepository _userRepository;
+        private readonly IWarehouseRepository _warehouseRepository;
         private readonly IPasswordHasher<User> _passwordHasher;
         private readonly IMapper _mapper;
         private readonly IHttpContextAccessor _httpContextAccessor;
 
         public UserService(
             IUserRepository userRepository,
+            IWarehouseRepository warehouseRepository,
             IPasswordHasher<User> passwordHasher,
             IMapper mapper,
             IHttpContextAccessor httpContextAccessor)
         {
             _userRepository = userRepository;
+            _warehouseRepository = warehouseRepository;
             _passwordHasher = passwordHasher;
             _mapper = mapper;
             _httpContextAccessor = httpContextAccessor;
@@ -202,6 +205,33 @@ namespace ColdChainX.Application.Services
             await _userRepository.SaveChangesAsync();
 
             return ApiResponse<bool>.SuccessResponse(true, "User status updated successfully");
+        }
+
+        public async Task<ApiResponse<bool>> UpdateWarehouseAsync(Guid id, UpdateUserWarehouseRequest request)
+        {
+            var currentUserId = GetCurrentUserId();
+            var user = await _userRepository.GetByIdAsync(id);
+            if (user == null)
+                return ApiResponse<bool>.Failure("User not found");
+
+            if (!string.Equals(user.Role?.RoleName, "WarehouseOperator", StringComparison.OrdinalIgnoreCase))
+                return ApiResponse<bool>.Failure("Only WarehouseOperator users can be assigned to a warehouse");
+
+            if (request.WarehouseId == Guid.Empty)
+                return ApiResponse<bool>.Failure("WarehouseId is required");
+
+            var warehouse = await _warehouseRepository.GetByIdAsync(request.WarehouseId);
+            if (warehouse == null)
+                return ApiResponse<bool>.Failure("Warehouse not found");
+
+            user.WarehouseId = warehouse.WarehouseId;
+            user.UpdatedAt = DbNow();
+            user.UpdatedBy = currentUserId;
+
+            await _userRepository.UpdateAsync(user);
+            await _userRepository.SaveChangesAsync();
+
+            return ApiResponse<bool>.SuccessResponse(true, "User warehouse updated successfully");
         }
 
         public async Task<ApiResponse<bool>> ResetPasswordAsync(Guid id, ResetPasswordRequest request)

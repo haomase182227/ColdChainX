@@ -9,6 +9,7 @@ public interface IFleetManagementService
     Task<ApiResponse<IReadOnlyCollection<VehicleFleetResponse>>> GetVehiclesAsync();
     Task<ApiResponse<VehicleFleetResponse>> GetVehicleByIdAsync(Guid vehicleId);
     Task<ApiResponse<VehicleFleetResponse>> CreateVehicleAsync(CreateVehicleRequest request);
+    Task<ApiResponse<VehicleFleetResponse>> UpdateVehicleAsync(Guid vehicleId, ColdChainX.Application.DTOs.VehicleUpdateRequest request);
     Task<ApiResponse<bool>> SoftDeleteVehicleAsync(Guid vehicleId);
     Task<ApiResponse<ImportResultResponse>> ImportVehiclesAsync(IFormFile excelFile);
 
@@ -33,8 +34,15 @@ public interface IFleetManagementService
     Task<ApiResponse<bool>> DeleteDriverLicenseAsync(Guid licenseId);
     Task<ApiResponse<ImportResultResponse>> ImportDriverLicensesAsync(IFormFile excelFile);
 
-    Task<ApiResponse<VehicleFleetResponse>> SyncOdometerAsync(string truckPlate, SyncOdometerRequest request);
+    Task<ApiResponse<VehicleFleetResponse>> SyncOdometerAsync(SyncOdometerRequest request, Guid? updatedBy = null, string? photoUrl = null);
     Task<ApiResponse<MaintenanceTicketResponse>> CreateMaintenanceTicketAsync(Guid vehicleId, CreateMaintenanceTicketRequest request, Guid createdBy);
     Task<ApiResponse<MaintenanceTicketResponse>> CompleteMaintenanceTicketAsync(Guid ticketId, CompleteMaintenanceTicketRequest request);
+    Task<ApiResponse<PagedList<MaintenanceTicketResponse>>> GetMaintenanceTicketsAsync(Guid? vehicleId, string? status, int pageNumber = 1, int pageSize = 10);
+    Task<ApiResponse<MaintenanceTicketResponse>> GetMaintenanceTicketByIdAsync(Guid ticketId);
+    Task<ApiResponse<MaintenanceTicketResponse>> UpdateMaintenanceTicketStatusAsync(Guid ticketId, string status);
+    Task<ApiResponse<string>> UploadMaintenanceTicketDocumentAsync(Guid ticketId, IFormFile file);
+    Task<ApiResponse<IReadOnlyCollection<MaintenanceTicketResponse>>> GetVehicleMaintenanceHistoryAsync(Guid vehicleId);
+    Task<ApiResponse<VehicleFleetResponse>> MarkVehicleUnavailableAsync(Guid vehicleId, string reason);
+    Task<ApiResponse<MaintenanceForecastResponse>> GetVehicleMaintenanceForecastAsync(Guid vehicleId, Guid? tripId);
     Task RunComplianceScanAsync(CancellationToken cancellationToken = default);
 }

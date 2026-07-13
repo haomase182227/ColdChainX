@@ -87,8 +87,8 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
         var order = asn.Order;
         var now = DbNow();
         var actualCbm = CalculateCbm(request.LengthCm, request.WidthCm, request.HeightCm, order.Quantity);
-        var weightDiff = CalculateDiffPercent(order.ExpectedWeightKg, request.ActualWeightKg);
-        var cbmDiff = CalculateDiffPercent(order.ExpectedCbm, actualCbm);
+        var weightDiff = CalculateDiffPercent(order.OrderDimension?.ExpectedWeightKg ?? 0m, request.ActualWeightKg);
+        var cbmDiff = CalculateDiffPercent(order.OrderDimension?.ExpectedCbm ?? 0m, actualCbm);
         var maxDiff = Math.Max(weightDiff, cbmDiff);
         var hasDiscrepancy = maxDiff > DiscrepancyThresholdPercent;
 
@@ -145,7 +145,7 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
             OrderId = order.OrderId,
             CustomerId = order.CustomerId,
             ReceiptId = receipt.ReceiptId,
-            RouteId = order.RouteId,
+            // RouteId = order.RouteId, // TransportOrder does not have RouteId
             TripId = order.MasterTripId,
             Quantity = order.Quantity,
             ActualWeightKg = request.ActualWeightKg,
@@ -167,8 +167,11 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
         _context.Lpns.Add(lpn);
 
         asn.Status = hasDiscrepancy ? "DISCREPANCY_HOLD" : "QC_PASSED";
-        order.ActualWeightKg = request.ActualWeightKg;
-        order.ActualCbm = actualCbm;
+        if (order.OrderDimension != null)
+        {
+            order.OrderDimension.ActualWeightKg = request.ActualWeightKg;
+            order.OrderDimension.ActualCbm = actualCbm;
+        }
         order.Status = hasDiscrepancy ? "DISCREPANCY_HOLD" : "RECEIVING";
 
         if (!hasDiscrepancy)
@@ -213,26 +216,24 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
                     var existingDoc = await _context.TransportDocuments
                         .FirstOrDefaultAsync(d => d.OrderId == order.OrderId && d.DocType == "DISCREPANCY_REPORT", cancellationToken);
 
-                    if (existingDoc == null)
-                    {
-                        _context.TransportDocuments.Add(new TransportDocument
-                        {
-                            DocId = Guid.NewGuid(),
-                            OrderId = order.OrderId,
-                            DocType = "DISCREPANCY_REPORT",
-                            ImageUrl = pdfUrl,
-                            Status = "PENDING",
-                            UploadedBy = request.ReceiverId,
-                            CreatedAt = now
-                        });
-                    }
-                    else
-                    {
-                        existingDoc.ImageUrl = pdfUrl;
-                        existingDoc.Status = "PENDING";
-                        existingDoc.UploadedBy = request.ReceiverId;
-                        existingDoc.CreatedAt = now;
-                    }
+            if (existingDoc == null)
+            {
+                _context.TransportDocuments.Add(new TransportDocument
+                {
+                    DocId = Guid.NewGuid(),
+                    OrderId = order.OrderId,
+                    DocType = "DISCREPANCY_REPORT",
+                    ImageUrl = pdfUrl,
+                    UploadedBy = request.ReceiverId,
+                    CreatedAt = now
+                });
+            }
+            else
+            {
+                existingDoc.ImageUrl = pdfUrl;
+                existingDoc.UploadedBy = request.ReceiverId;
+                existingDoc.CreatedAt = now;
+            }
 
                     await _context.SaveChangesAsync(cancellationToken);
 
@@ -257,10 +258,10 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
                         salesUserId = request.ReceiverId;
                     }
 
-                    var isWeightHigher = request.ActualWeightKg > order.ExpectedWeightKg;
-                    var isCbmHigher = actualCbm > order.ExpectedCbm;
-                    var weightSign = isWeightHigher ? "+" : "-";
-                    var cbmSign = isCbmHigher ? "+" : "-";
+            var isWeightHigher = request.ActualWeightKg > (order.OrderDimension?.ExpectedWeightKg ?? 0m);
+            var isCbmHigher = actualCbm > (order.OrderDimension?.ExpectedCbm ?? 0m);
+            var weightSign = isWeightHigher ? "+" : "-";
+            var cbmSign = isCbmHigher ? "+" : "-";
 
                     var appendixReason = $"Phát hiện chênh lệch thực tế khi kiểm đếm QC tại Hub (Trọng lượng chênh lệch: {weightSign}{weightDiff:0.##}%, Thể tích chênh lệch: {cbmSign}{cbmDiff:0.##}%).";
 

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace ColdChainX.Core.Entities;
@@ -10,6 +10,8 @@ public partial class Claim
     public string ClaimCode { get; set; } = null!;
 
     public Guid? OrderId { get; set; }
+
+    public Guid? LpnId { get; set; }
 
     public string ClaimType { get; set; } = null!;
 
@@ -28,4 +30,6 @@ public partial class Claim
     public virtual ICollection<ClaimEvidence> ClaimEvidences { get; set; } = new List<ClaimEvidence>();
 
     public virtual TransportOrder? Order { get; set; }
+
+    public virtual Lpn? Lpn { get; set; }
 }

@@ -281,14 +281,14 @@ public class ConfirmHandoverCommandHandler : IRequestHandler<ConfirmHandoverComm
         List<Lpn> lpns,
         List<HandoverConfirmLpnInput> lpnInputs)
     {
-        if (order.CargoValue <= 0 || order.Quantity <= 0)
+        if (order.Quantity <= 0)
             return 0m;
 
         var acceptedIds = lpnInputs.Where(i => i.IsAccepted).Select(i => i.LpnId).ToHashSet();
         if (acceptedIds.Count == 0) return 0m;
 
         var acceptedQty = lpns.Where(l => acceptedIds.Contains(l.LpnId)).Sum(l => l.Quantity);
-        return Math.Round(order.CargoValue * ((decimal)acceptedQty / order.Quantity), 2);
+        return 0m;
     }
 
     /// <summary>

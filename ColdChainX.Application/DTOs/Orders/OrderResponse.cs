@@ -4,8 +4,6 @@ namespace ColdChainX.Application.DTOs.Orders
     {
         public Guid OrderId { get; set; }
         public string TrackingCode { get; set; } = null!;
-        public Guid? CustomerId { get; set; }
-        public string? CustomerName { get; set; }
         public string ItemName { get; set; } = null!;
         public string Category { get; set; } = null!;
         public int Quantity { get; set; }
@@ -15,14 +13,13 @@ namespace ColdChainX.Application.DTOs.Orders
         public decimal ActualWeightKg { get; set; }
         public decimal ExpectedCbm { get; set; }
         public decimal? ActualCbm { get; set; }
-        public decimal CargoValue { get; set; }
+
         public string Status { get; set; } = null!;
         public Guid? MasterTripId { get; set; }
         public DateTime? CreatedAt { get; set; }
         public OrderRouteResponse? Route { get; set; }
         public OrderLocationResponse? Destination { get; set; }
         public IReadOnlyCollection<OrderDocumentResponse> Documents { get; set; } = Array.Empty<OrderDocumentResponse>();
-        public IReadOnlyCollection<OrderQuotationResponse> Quotations { get; set; } = Array.Empty<OrderQuotationResponse>();
     }
 
     public class OrderRouteResponse
@@ -39,8 +36,6 @@ namespace ColdChainX.Application.DTOs.Orders
     {
         public Guid LocationId { get; set; }
         public string Address { get; set; } = null!;
-        public decimal Latitude { get; set; }
-        public decimal Longitude { get; set; }
     }
 
     public class OrderDocumentResponse
@@ -48,7 +43,6 @@ namespace ColdChainX.Application.DTOs.Orders
         public Guid DocId { get; set; }
         public string DocType { get; set; } = null!;
         public string ImageUrl { get; set; } = null!;
-        public string? Status { get; set; }
         public DateTime? CreatedAt { get; set; }
     }
 

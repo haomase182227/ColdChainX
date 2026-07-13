@@ -4,15 +4,19 @@ using ColdChainX.Core.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
+using ColdChainX.Application.DTOs.Common;
+
 namespace ColdChainX.Application.Features.Inventory.Queries;
 
-public class GetLpnListQuery : IRequest<List<LpnDto>>
+public class GetLpnListQuery : IRequest<PagedResult<LpnDto>>
 {
     public LpnState? Status { get; set; }
     public string? Keyword { get; set; }
+    public int PageNumber { get; set; } = 1;
+    public int PageSize { get; set; } = 10;
 }
 
-public class GetLpnListQueryHandler : IRequestHandler<GetLpnListQuery, List<LpnDto>>
+public class GetLpnListQueryHandler : IRequestHandler<GetLpnListQuery, PagedResult<LpnDto>>
 {
     private readonly IApplicationDbContext _context;
 
@@ -21,7 +25,7 @@ public class GetLpnListQueryHandler : IRequestHandler<GetLpnListQuery, List<LpnD
         _context = context;
     }
 
-    public async Task<List<LpnDto>> Handle(GetLpnListQuery request, CancellationToken cancellationToken)
+    public async Task<PagedResult<LpnDto>> Handle(GetLpnListQuery request, CancellationToken cancellationToken)
     {
         var query = _context.Lpns.AsQueryable();
 
@@ -42,9 +46,12 @@ public class GetLpnListQueryHandler : IRequestHandler<GetLpnListQuery, List<LpnD
                 x.Order.ItemName.Contains(request.Keyword));
         }
 
+        var totalRecords = await query.CountAsync(cancellationToken);
+
         var lpns = await query
             .OrderByDescending(x => x.CreatedAt)
-            .Take(100) // Simple pagination/limit
+            .Skip((request.PageNumber - 1) * request.PageSize)
+            .Take(request.PageSize)
             .Select(x => new LpnDto
             {
                 LpnId = x.LpnId,
@@ -58,7 +65,7 @@ public class GetLpnListQueryHandler : IRequestHandler<GetLpnListQuery, List<LpnD
                 WarehouseName = x.Warehouse != null ? x.Warehouse.WarehouseName : null,
                 StorageLocation = x.StorageLocation,
                 Quantity = x.Quantity,
-                ExpectedWeightKg = x.Order.ExpectedWeightKg,
+                ExpectedWeightKg = x.Order != null && x.Order.OrderDimension != null ? x.Order.OrderDimension.ExpectedWeightKg : 0m,
                 ActualWeightKg = x.ActualWeightKg,
                 State = x.State.ToString(),
                 Condition = x.DiscrepancyReason,
@@ -67,6 +74,6 @@ public class GetLpnListQueryHandler : IRequestHandler<GetLpnListQuery, List<LpnD
             })
             .ToListAsync(cancellationToken);
 
-        return lpns;
+        return PagedResult<LpnDto>.Create(lpns, totalRecords, request.PageNumber, request.PageSize);
     }
 }

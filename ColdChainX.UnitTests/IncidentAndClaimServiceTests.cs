@@ -137,10 +137,10 @@ namespace ColdChainX.UnitTests
                 Category = "Food", 
                 PackingType = "Pallet", 
                 TempCondition = "Frozen", 
-                ExpectedWeightKg = 100, 
+                OrderDimension = new ColdChainX.Core.Entities.OrderDimension { ExpectedWeightKg = 100, 
                 ActualWeightKg = 100, 
-                ExpectedCbm = 2.5m, 
-                CargoValue = 1000, 
+                ExpectedCbm = 2.5m }, 
+
                 CreatedAt = DateTime.UtcNow 
             };
             _db.TransportOrders.Add(order);
@@ -211,3 +211,6 @@ namespace ColdChainX.UnitTests
         }
     }
 }
+
+
+

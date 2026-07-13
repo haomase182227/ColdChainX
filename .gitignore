@@ -426,3 +426,8 @@ FINAL_API_SUMMARY.md
 DATABASE_FIX_REQUIRED.md
 Motasoluoc.md
 discrepancy_flow_documentation.md
+
+# AI Operating System and Agent Customizations (Local only)
+.agents/
+.ai-os/
+

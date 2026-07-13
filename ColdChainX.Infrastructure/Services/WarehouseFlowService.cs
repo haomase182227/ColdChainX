@@ -25,7 +25,8 @@ public class WarehouseFlowService : IWarehouseFlowService
     public async Task<ApiResponse<LpnResponse>> ProcessInboundQcAsync(Guid orderId, ProcessInboundQcRequest request, Guid receiverId)
     {
         var order = await _db.TransportOrders
-            .Include(o => o.Route)
+            .Include(o => o.Schedule)
+                .ThenInclude(s => s!.Route)
             .FirstOrDefaultAsync(o => o.OrderId == orderId);
 
         if (order == null)
@@ -35,8 +36,8 @@ public class WarehouseFlowService : IWarehouseFlowService
             return ApiResponse<LpnResponse>.Failure("Actual weight and dimensions must be greater than 0.");
 
         var actualCbm = CalculateCbm(request.LengthCm, request.WidthCm, request.HeightCm, order.Quantity);
-        var weightDiff = CalculateDiffPercent(order.ExpectedWeightKg, request.ActualWeightKg);
-        var cbmDiff = CalculateDiffPercent(order.ExpectedCbm, actualCbm);
+        var weightDiff = CalculateDiffPercent((order.OrderDimension?.ExpectedWeightKg ?? 0m), request.ActualWeightKg);
+        var cbmDiff = CalculateDiffPercent((order.OrderDimension?.ExpectedCbm ?? 0m), actualCbm);
         var maxDiff = Math.Max(weightDiff, cbmDiff);
         var hasDiscrepancy = maxDiff > DiscrepancyThresholdPercent;
         var now = DateTime.UtcNow;
@@ -50,7 +51,7 @@ public class WarehouseFlowService : IWarehouseFlowService
             OrderId = order.OrderId,
             Order = order,
             CustomerId = order.CustomerId,
-            RouteId = order.RouteId,
+            RouteId = order.Schedule?.RouteId,
             TripId = order.MasterTripId,
             Quantity = order.Quantity,
             ActualWeightKg = request.ActualWeightKg,
@@ -64,13 +65,13 @@ public class WarehouseFlowService : IWarehouseFlowService
             DiscrepancyReason = hasDiscrepancy
                 ? $"Actual cargo differs from expected by {maxDiff:0.##}% (weight {weightDiff:0.##}%, cbm {cbmDiff:0.##}%). Actual dimensions: {request.LengthCm:0.##} x {request.WidthCm:0.##} x {request.HeightCm:0.##} cm."
                 : null,
-            SlaDeadline = CalculateSlaDeadline(order.Route),
+            SlaDeadline = CalculateSlaDeadline(order.Schedule?.Route),
             CreatedAt = now
         };
 
         _db.Lpns.Add(lpn);
-        order.ActualWeightKg = request.ActualWeightKg;
-        order.ActualCbm = actualCbm;
+        order.OrderDimension.ActualWeightKg = request.ActualWeightKg;
+        order.OrderDimension.ActualCbm = actualCbm;
         order.Status = hasDiscrepancy ? "DISCREPANCY_HOLD" : "RECEIVING";
 
         await _db.SaveChangesAsync();
@@ -376,13 +377,13 @@ public class WarehouseFlowService : IWarehouseFlowService
             WarehouseId = lpn.WarehouseId,
             StorageLocation = lpn.StorageLocation,
             Quantity = lpn.Quantity,
-            ExpectedWeightKg = lpn.Order.ExpectedWeightKg,
+            ExpectedWeightKg = (lpn.Order.OrderDimension?.ExpectedWeightKg ?? 0m),
             ActualWeightKg = lpn.ActualWeightKg,
-            ExpectedCbm = lpn.Order.ExpectedCbm,
+            ExpectedCbm = (lpn.Order.OrderDimension?.ExpectedCbm ?? 0m),
             ActualCbm = lpn.ActualCbm,
             MaxDiffPercent = Math.Max(
-                CalculateDiffPercent(lpn.Order.ExpectedWeightKg, lpn.ActualWeightKg),
-                CalculateDiffPercent(lpn.Order.ExpectedCbm, lpn.ActualCbm)),
+                CalculateDiffPercent((lpn.Order.OrderDimension?.ExpectedWeightKg ?? 0m), lpn.ActualWeightKg),
+                CalculateDiffPercent((lpn.Order.OrderDimension?.ExpectedCbm ?? 0m), lpn.ActualCbm)),
             State = lpn.State,
             DiscrepancyReason = lpn.DiscrepancyReason,
             GrnPdfUrl = lpn.State == LpnState.RECEIVING || lpn.State == LpnState.IN_STOCK
@@ -418,3 +419,6 @@ public class WarehouseFlowService : IWarehouseFlowService
         };
     }
 }
+
+
+

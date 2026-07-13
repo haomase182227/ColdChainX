@@ -60,7 +60,7 @@ namespace ColdChainX.API.Controllers
         }
 
         /// <summary>
-        /// Tạo tài khoản WarehouseWorker.
+        /// Tạo tài khoản nhân viên kho với role WarehouseOperator.
         /// </summary>
         [AllowAnonymous]
         [HttpPost("create-warehouse-worker")]

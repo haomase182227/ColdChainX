@@ -16,7 +16,8 @@ namespace ColdChainX.Application.Mappings
 
             CreateMap<User, UserProfileDto>()
                 .ForMember(d => d.UserId, o => o.MapFrom(s => s.UserId))
-                .ForMember(d => d.Role, o => o.MapFrom(s => s.Role != null ? s.Role.RoleName : null));
+                .ForMember(d => d.Role, o => o.MapFrom(s => s.Role != null ? s.Role.RoleName : null))
+                .ForMember(d => d.WarehouseName, o => o.MapFrom(s => s.Warehouse != null ? s.Warehouse.WarehouseName : null));
 
             // Dispatch — Vehicle + TripDriver architecture.
             // (DispatchService uses manual projections; these maps document the shape and
@@ -49,7 +50,7 @@ namespace ColdChainX.Application.Mappings
             //  for any consumer that prefers AutoMapper.)
             CreateMap<Lpn, LpnDto>()
                 .ForMember(d => d.ItemName, o => o.MapFrom(s => s.Order != null ? s.Order.ItemName : null))
-                .ForMember(d => d.ExpectedWeightKg, o => o.MapFrom(s => s.Order != null ? s.Order.ExpectedWeightKg : 0))
+                .ForMember(d => d.ExpectedWeightKg, o => o.MapFrom(s => (s.Order != null && s.Order.OrderDimension != null) ? s.Order.OrderDimension.ExpectedWeightKg : 0))
                 .ForMember(d => d.WarehouseName, o => o.MapFrom(s => s.Warehouse != null ? s.Warehouse.WarehouseName : null))
                 .ForMember(d => d.Condition, o => o.MapFrom(s => s.DiscrepancyReason))
                 .ForMember(d => d.State, o => o.MapFrom(s => s.State.ToString()))

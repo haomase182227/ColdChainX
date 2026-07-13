@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace ColdChainX.Core.Entities;
@@ -30,6 +30,8 @@ public partial class MaintenanceTicket
     public Guid CreatedBy { get; set; }
 
     public DateTime? CreatedAt { get; set; }
+
+    public string? AttachmentUrl { get; set; }
 
     public virtual User CreatedByNavigation { get; set; } = null!;
 

@@ -11,9 +11,8 @@ namespace ColdChainX.Application.Interfaces
         DbSet<User> Users { get; }
         DbSet<Role> Roles { get; }
         DbSet<Warehouse> Warehouses { get; }
-        DbSet<WarehouseZone> WarehouseZones { get; }
-        DbSet<WarehouseLocation> WarehouseLocations { get; }
         DbSet<WarehouseReceipt> WarehouseReceipts { get; }
+        DbSet<WeightTier> WeightTiers { get; }
         DbSet<InboundAsn> InboundAsns { get; }
 
         DbSet<OutboundOrder> OutboundOrders { get; }
@@ -49,6 +48,11 @@ namespace ColdChainX.Application.Interfaces
         DbSet<Location> Locations { get; }
         DbSet<Vehicle> Vehicles { get; }
         DbSet<ReturnedItem> ReturnedItems { get; }
+        DbSet<MaintenanceTicket> MaintenanceTickets { get; }
+        DbSet<VehicleOdometerLog> VehicleOdometerLogs { get; }
+        DbSet<TripStopEvent> TripStopEvents { get; }
+        DbSet<DetentionCharge> DetentionCharges { get; }
+        DbSet<IncidentEvidence> IncidentEvidences { get; }
 
         DatabaseFacade Database { get; }
         Microsoft.EntityFrameworkCore.ChangeTracking.ChangeTracker ChangeTracker { get; }

@@ -39,7 +39,7 @@ public partial class Warehouse
 
     public virtual ICollection<WarehouseReceipt> WarehouseReceipts { get; set; } = new List<WarehouseReceipt>();
 
-    public virtual ICollection<WarehouseZone> WarehouseZones { get; set; } = new List<WarehouseZone>();
-
     public virtual ICollection<Lpn> Lpns { get; set; } = new List<Lpn>();
+
+    public virtual ICollection<User> Users { get; set; } = new List<User>();
 }

@@ -23,12 +23,14 @@ public class InventoryController : ControllerBase
     }
 
     [HttpGet("lpns")]
-    public async Task<IActionResult> GetLpns([FromQuery] ColdChainX.Core.Enums.LpnState? status, [FromQuery] string? keyword)
+    public async Task<IActionResult> GetLpns([FromQuery] ColdChainX.Core.Enums.LpnState? status, [FromQuery] string? keyword, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
     {
         var query = new ColdChainX.Application.Features.Inventory.Queries.GetLpnListQuery 
         { 
             Status = status, 
-            Keyword = keyword 
+            Keyword = keyword,
+            PageNumber = pageNumber,
+            PageSize = pageSize
         };
         var result = await _mediator.Send(query);
         return Ok(result);

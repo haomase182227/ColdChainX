@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace ColdChainX.Core.Entities;
@@ -34,6 +34,12 @@ public partial class Vehicle
     public double CurrentOdometer { get; set; }
 
     public double NextMaintenanceOdometer { get; set; }
+
+    public DateOnly? NextMaintenanceDate { get; set; }
+
+    public int WarningDaysBeforeDue { get; set; } = 15;
+
+    public double WarningKmBeforeDue { get; set; } = 500.0;
 
     public string? Status { get; set; }
 

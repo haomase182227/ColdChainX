@@ -29,7 +29,7 @@ public class DeliveryController : ControllerBase
     }
 
     /// <summary>
-    /// Lấy danh sách LPN và tiến độ giao hàng của một chuyến xe (Trip).
+    /// Get delivery progress and LPN list for a trip.
     /// </summary>
     [HttpGet("trips/{tripId:guid}/lpns")]
     [ProducesResponseType(typeof(ApiResponse<TripDeliveryProgressResponse>), StatusCodes.Status200OK)]
@@ -42,7 +42,7 @@ public class DeliveryController : ControllerBase
     }
 
     /// <summary>
-    /// Lấy chi tiết thông tin xác nhận giao hàng của một LPN cụ thể trên chuyến đi.
+    /// Get delivery confirmation detail for a specific LPN.
     /// </summary>
     [HttpGet("trips/{tripId:guid}/lpns/{lpnId:guid}")]
     [ProducesResponseType(typeof(ApiResponse<LpnDeliveryStatusResponse>), StatusCodes.Status200OK)]
@@ -55,7 +55,7 @@ public class DeliveryController : ControllerBase
     }
 
     /// <summary>
-    /// Driver thực hiện check-in tại Stop đích (đối chiếu tọa độ GPS và cắt chì cũ).
+    /// Check in driver, validate GPS, and cut the old seal.
     /// </summary>
     [HttpPost("/api/stops/{stopId:guid}/check-ins")]
     [Authorize(Roles = "Driver")]
@@ -83,30 +83,9 @@ public class DeliveryController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// [DEPRECATED] Nghiệm thu ePOD và chốt COD — dùng endpoint mới bên dưới thay thế.
-    /// </summary>
-    [HttpPost("/api/orders/{orderId:guid}/epods")]
-    [Authorize(Roles = "Driver")]
-    [Obsolete("Use POST /api/stops/{stopId}/handover-confirmations then POST /api/epods/{epodId}/payments instead.")]
-    [ProducesResponseType(typeof(ApiResponse<EpodConfirmResponse>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> ConfirmEpodDelivery(Guid orderId, [FromBody] EpodConfirmRequest request)
-    {
-        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
-            return Unauthorized(ApiResponse<object>.Failure("Unauthorized."));
-
-        request.OrderId = orderId;
-        var command = new ConfirmEpodDeliveryCommand { Request = request, UserId = userId };
-        var result = await _mediator.Send(command);
-        return Ok(result);
-    }
 
     /// <summary>
-    /// [BƯỚC 2] Nghiệm thu hàng và ký nhận tại điểm dừng.
-    /// Khách kiểm tra hàng → ký tên → tài xế upload ảnh chữ ký + ảnh bằng chứng hàng lỗi.
-    /// Hệ thống cập nhật trạng thái LPN, sinh Biên bản Giao nhận PDF và gửi cảnh báo về kho nếu có hàng trả.
+    /// Confirm handover at stop, upload signature, and handle partial returns.
     /// </summary>
     [HttpPost("/api/stops/{stopId:guid}/handover-confirmations")]
     [Authorize(Roles = "Driver")]
@@ -132,9 +111,7 @@ public class DeliveryController : ControllerBase
     }
 
     /// <summary>
-    /// [BƯỚC 3] Thu tiền COD sau khi bàn giao hàng xong.
-    /// Bắt buộc gọi sau Bước 2 (handover-confirmations). Upload ảnh biên lai (bắt buộc với tiền mặt).
-    /// Sinh ePOD hoàn chỉnh và thông báo Admin/Sales/Dispatcher.
+    /// Record COD payment (Cash or QR).
     /// </summary>
     [HttpPost("/api/epods/{epodId:guid}/payments")]
     [Authorize(Roles = "Driver")]
@@ -160,7 +137,7 @@ public class DeliveryController : ControllerBase
     }
 
     /// <summary>
-    /// Rời điểm dừng và kẹp chì chặng mới (Depart & Re-seal).
+    /// Depart stop and apply a new seal.
     /// </summary>
     [HttpPost("/api/stops/{stopId:guid}/departures")]
     [Authorize(Roles = "Driver")]
@@ -188,7 +165,7 @@ public class DeliveryController : ControllerBase
     }
 
     /// <summary>
-    /// Quyết toán COD của Tài xế (COD Handover).
+    /// Handle driver COD handover at the end of trip.
     /// </summary>
     [HttpPost("/api/trips/{tripId:guid}/cod-handovers")]
     [Authorize(Roles = "Admin,Manager")]
@@ -216,7 +193,7 @@ public class DeliveryController : ControllerBase
     }
 
     /// <summary>
-    /// Upload ảnh lên Cloudinary để lấy URL chèn vào ePOD / Bằng chứng lỗi.
+    /// Upload an image to Cloudinary.
     /// </summary>
     [HttpPost("/api/deliveries/upload-image")]
     [Authorize(Roles = "Driver,Admin,Manager")]

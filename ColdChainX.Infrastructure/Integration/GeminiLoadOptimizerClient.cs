@@ -38,8 +38,8 @@ Orders to pack:
         foreach (var order in orders)
         {
             // Calculate a mock dimension based on expected Cbm
-            var dim = Math.Pow((double)order.ExpectedCbm, 1.0 / 3.0);
-            prompt += $"- OrderId: {order.OrderId}, Item: {order.ItemName}, Quantity: {order.Quantity}, CBM: {order.ExpectedCbm}, Weight: {order.ExpectedWeightKg}kg, DestLocationId: {order.DestLocation}\n";
+            var dim = Math.Pow((double)(order.OrderDimension?.ExpectedCbm ?? 0m), 1.0 / 3.0);
+            prompt += $"- OrderId: {order.OrderId}, Item: {order.ItemName}, Quantity: {order.Quantity}, CBM: {(order.OrderDimension?.ExpectedCbm ?? 0m)}, Weight: {(order.OrderDimension?.ExpectedWeightKg ?? 0m)}kg, DestLocationId: {order.DestLocation}\n";
         }
 
         prompt += $"\nLoading priority based on LIFO route sequence (Load the last stop FIRST, deep in the truck):\n";
@@ -129,3 +129,4 @@ Please provide the loading instructions in JSON format indicating if they all fi
         }
     }
 }
+

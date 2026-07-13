@@ -43,6 +43,17 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
+        [HttpGet("/api/customers/{customerId:guid}/quotations")]
+        public async Task<IActionResult> GetQuotationsByCustomer(
+            Guid customerId,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10)
+        {
+            var result = await _quotationService.GetQuotationsByCustomerAsync(customerId, pageNumber, pageSize);
+            if (!result.Success) return NotFound(result);
+            return Ok(result);
+        }
+
         [HttpPost]
         [Authorize(Roles = "Sales,Admin,Dispatcher")]
         public async Task<IActionResult> CreateQuotation([FromBody] CreateQuotationRequest request)

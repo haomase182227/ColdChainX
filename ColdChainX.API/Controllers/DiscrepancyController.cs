@@ -57,9 +57,13 @@ public class DiscrepancyController : ControllerBase
     }
 
     [HttpGet("pending")]
-    public async Task<IActionResult> GetPendingDiscrepancies()
+    public async Task<IActionResult> GetPendingDiscrepancies([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
     {
-        var result = await _mediator.Send(new GetPendingDiscrepanciesQuery());
+        var result = await _mediator.Send(new GetPendingDiscrepanciesQuery
+        {
+            PageNumber = pageNumber,
+            PageSize = pageSize
+        });
         return Ok(result);
     }
 
@@ -128,7 +132,6 @@ public class DiscrepancyController : ControllerBase
                         OrderId = receipt.OrderId,
                         DocType = "DISCREPANCY_REPORT",
                         ImageUrl = pdfUrl,
-                        Status = "PENDING",
                         UploadedBy = receipt.ReceiverId,
                         CreatedAt = DateTime.UtcNow
                     });
@@ -136,7 +139,6 @@ public class DiscrepancyController : ControllerBase
                 else
                 {
                     doc.ImageUrl = pdfUrl;
-                    doc.Status = "PENDING";
                     doc.CreatedAt = DateTime.UtcNow;
                 }
 
