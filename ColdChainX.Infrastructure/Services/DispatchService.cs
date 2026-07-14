@@ -689,6 +689,15 @@ public class DispatchService : IDispatchService
 
     public async Task<ManualDispatchResult> ManualDispatchAsync(ManualDispatchRequest request)
     {
+        var schedule = await _context.RouteSchedules
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.ScheduleId == request.ScheduleId)
+            ?? throw new InvalidOperationException("ScheduleId does not exist.");
+
+        if (!string.Equals(schedule.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                $"Schedule '{schedule.ScheduleName}' is not ACTIVE (current status: '{schedule.Status}').");
+
         // 1. Validate kho xuất phát
         var originLocation = await _context.Locations.FindAsync(request.OriginWarehouseLocationId)
             ?? throw new InvalidOperationException("LocationId kho xuất phát không tồn tại.");
@@ -713,6 +722,14 @@ public class DispatchService : IDispatchService
 
         // 2b. Ràng buộc kho — phải chọn kho trước, và mọi LPN phải cùng thuộc kho đã chọn.
         // Không cho phép trộn LPN từ nhiều kho khác nhau vào một chuyến.
+        var lpnsOutsideSchedule = lpns
+            .Where(l => l.Order == null || l.Order.ScheduleId != schedule.ScheduleId)
+            .ToList();
+        if (lpnsOutsideSchedule.Any())
+            throw new InvalidOperationException(
+                $"All selected LPNs must belong to orders in ScheduleId {schedule.ScheduleId}. " +
+                $"Invalid LPNs: {string.Join(", ", lpnsOutsideSchedule.Select(l => l.LpnCode))}.");
+
         if (request.WarehouseId == Guid.Empty)
             throw new InvalidOperationException("Vui lòng chọn kho (WarehouseId) trước khi ghép chuyến.");
 
@@ -857,6 +874,9 @@ public class DispatchService : IDispatchService
             DestinationLocationId = routeResult.StopSequence.Last().LocationId,
             TotalDistanceKm     = routeResult.TotalDistanceKm,
             EstimatedDurationHours = estimatedDurationHours,
+            RouteId             = schedule.RouteId,
+            ScheduleId          = schedule.ScheduleId,
+            DepartureDate       = request.PlannedStartTime.Date,
             TargetTemperature   = requiredMinTemp,
             PlannedStartTime    = request.PlannedStartTime,
             PlannedEndTime      = request.PlannedEndTime,

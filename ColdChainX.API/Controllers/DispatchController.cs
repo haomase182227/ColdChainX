@@ -326,6 +326,9 @@ public class DispatchController : ControllerBase
             return BadRequest(new { Success = false, Error = "PlannedStartTime phải nhỏ hơn PlannedEndTime." });
 
         // Bắt buộc chọn kho trước — chỉ các LPN thuộc kho này mới được ghép chuyến.
+        if (!Guid.TryParse(ExtractGuid(form.ScheduleId), out var selectedScheduleId) || selectedScheduleId == Guid.Empty)
+            return BadRequest(new { Success = false, Error = "ScheduleId is required and must be a valid GUID." });
+
         if (!Guid.TryParse(ExtractGuid(form.WarehouseId), out var selectedWarehouseId) || selectedWarehouseId == Guid.Empty)
             return BadRequest(new { Success = false, Error = "Vui lòng chọn kho (WarehouseId) trước khi ghép chuyến." });
 
@@ -367,6 +370,7 @@ public class DispatchController : ControllerBase
 
         var request = new ManualDispatchRequest
         {
+            ScheduleId = selectedScheduleId,
             WarehouseId = selectedWarehouseId,
             LpnIds = parsedLpnIds,
             VehicleId = Guid.Parse(ExtractGuid(form.VehicleId)),
