@@ -94,9 +94,14 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("{quoteId:guid}/accept")]
+        [Authorize]
         public async Task<IActionResult> AcceptQuotation(Guid quoteId, [FromBody] AcceptQuotationRequest request)
         {
-            var result = await _quotationService.AcceptQuotationAsync(quoteId, request);
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var customerUserId))
+                return Unauthorized("UserId claim is missing from token");
+
+            var result = await _quotationService.AcceptQuotationAsync(quoteId, request, customerUserId);
             if (!result.Success) return BadRequest(result);
             return Ok(result);
         }
