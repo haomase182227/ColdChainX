@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using ColdChainX.Application.DTOs.Common;
 using ColdChainX.Application.DTOs.Routes;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
@@ -86,7 +87,7 @@ namespace ColdChainX.Infrastructure.Services
             return ApiResponse<RouteBookingOptionsDto>.SuccessResponse(result, "Booking options retrieved successfully");
         }
 
-        public async Task<PagedResponse<IReadOnlyCollection<RouteScheduleDto>>> GetRouteSchedulesAsync(Guid routeId, int pageIndex, int pageSize)
+        public async Task<ApiResponse<PagedResult<RouteScheduleDto>>> GetRouteSchedulesAsync(Guid routeId, int pageIndex, int pageSize)
         {
             var query = _db.RouteSchedules.AsNoTracking().Where(s => s.RouteId == routeId);
             var totalCount = await query.CountAsync();
@@ -109,7 +110,8 @@ namespace ColdChainX.Infrastructure.Services
                 })
                 .ToListAsync();
 
-            return PagedResponse<IReadOnlyCollection<RouteScheduleDto>>.SuccessPagedResponse(items, pageIndex, pageSize, totalCount, "Route schedules retrieved successfully");
+            var pagedResult = PagedResult<RouteScheduleDto>.Create(items, totalCount, pageIndex, pageSize);
+            return ApiResponse<PagedResult<RouteScheduleDto>>.SuccessResponse(pagedResult, "Route schedules retrieved successfully");
         }
 
         public async Task<ApiResponse<RouteScheduleDto>> AddRouteScheduleAsync(Guid routeId, CreateRouteScheduleRequest request)
@@ -159,7 +161,7 @@ namespace ColdChainX.Infrastructure.Services
             return ApiResponse<bool>.SuccessResponse(true, "Route schedule deleted successfully");
         }
 
-        public async Task<PagedResponse<IReadOnlyCollection<RouteStopDto>>> GetRouteStopsAsync(Guid routeId, int pageIndex, int pageSize)
+        public async Task<ApiResponse<PagedResult<RouteStopDto>>> GetRouteStopsAsync(Guid routeId, int pageIndex, int pageSize)
         {
             var query = _db.RouteStops.AsNoTracking().Where(s => s.RouteId == routeId);
             var totalCount = await query.CountAsync();
@@ -177,7 +179,8 @@ namespace ColdChainX.Infrastructure.Services
                 })
                 .ToListAsync();
 
-            return PagedResponse<IReadOnlyCollection<RouteStopDto>>.SuccessPagedResponse(items, pageIndex, pageSize, totalCount, "Route stops retrieved successfully");
+            var pagedResult = PagedResult<RouteStopDto>.Create(items, totalCount, pageIndex, pageSize);
+            return ApiResponse<PagedResult<RouteStopDto>>.SuccessResponse(pagedResult, "Route stops retrieved successfully");
         }
 
         public async Task<ApiResponse<RouteStopDto>> AddRouteStopAsync(Guid routeId, CreateRouteStopRequest request)
