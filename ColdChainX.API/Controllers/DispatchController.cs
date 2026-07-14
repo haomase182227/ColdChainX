@@ -171,6 +171,39 @@ public class DispatchController : ControllerBase
     /// <summary>
     /// [Lookup] Danh sách kho hiện có — dùng để chọn kho trước khi ghép chuyến (manual-dispatch).
     /// </summary>
+    /// <summary>
+    /// [Lookup] Danh sach lich chay dang ACTIVE tu bang route_schedules.
+    /// </summary>
+    [HttpGet("lookup/Schedule")]
+    [ProducesResponseType(typeof(object), 200)]
+    public async Task<IActionResult> LookupSchedules()
+    {
+        var items = await _db.RouteSchedules
+            .AsNoTracking()
+            .Where(s => s.Status == "ACTIVE" && s.Route.Status == "ACTIVE")
+            .OrderBy(s => s.Route.RouteCode)
+            .ThenBy(s => s.DayOfWeek)
+            .ThenBy(s => s.DepartureTime)
+            .Select(s => new
+            {
+                s.ScheduleId,
+                s.RouteId,
+                s.Route.RouteCode,
+                RouteName = s.Route.OriginCity + " -> " + s.Route.DestCity,
+                s.ScheduleName,
+                s.DayOfWeek,
+                s.DepartureTime,
+                s.CutOffTime,
+                s.Status,
+                Label = s.ScheduleName + " - " + s.Route.RouteCode
+                    + " | " + s.Route.OriginCity + " -> " + s.Route.DestCity
+                    + " | " + s.DepartureTime
+            })
+            .ToListAsync();
+
+        return Ok(new { Success = true, Count = items.Count, Data = items });
+    }
+
     [HttpGet("lookup/warehouses")]
     [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> LookupWarehouses()
