@@ -5,7 +5,8 @@ namespace ColdChainX.Application.Interfaces
 {
     public interface IRouteService
     {
-        Task<ApiResponse<IReadOnlyCollection<RouteOptionResponse>>> GetRouteOptionsAsync(string? originCity, string? destCity);
+        Task<ApiResponse<IReadOnlyCollection<RouteOptionResponse>>> GetRouteOptionsAsync(string? originCity, string? destCity, string? status = null);
+        Task<ApiResponse<RouteOptionResponse>> GetRouteByIdAsync(Guid routeId);
         Task<ApiResponse<RouteBookingOptionsDto>> GetRouteBookingOptionsAsync(Guid routeId);
         Task<ApiResponse<IReadOnlyCollection<WarehouseOptionDto>>> GetRouteOriginWarehousesAsync(Guid routeId);
         Task<ApiResponse<RouteOptionResponse>> CreateRouteAsync(CreateRouteRequest request);

@@ -18,11 +18,16 @@ namespace ColdChainX.Infrastructure.Services
             _db = db;
         }
 
-        public async Task<ApiResponse<IReadOnlyCollection<RouteOptionResponse>>> GetRouteOptionsAsync(string? originCity, string? destCity)
+        public async Task<ApiResponse<IReadOnlyCollection<RouteOptionResponse>>> GetRouteOptionsAsync(string? originCity, string? destCity, string? status = null)
         {
-            var routes = await _db.RouteMasters
-                .AsNoTracking()
-                .Where(r => r.Status == "ACTIVE")
+            var query = _db.RouteMasters.AsNoTracking().AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                query = query.Where(r => r.Status == status.ToUpper());
+            }
+
+            var routes = await query
                 .OrderBy(r => r.OriginCity)
                 .ThenBy(r => r.DestCity)
                 .ToListAsync();
@@ -110,6 +115,14 @@ namespace ColdChainX.Infrastructure.Services
                 .ToListAsync();
 
             return ApiResponse<IReadOnlyCollection<WarehouseOptionDto>>.SuccessResponse(warehouses, "Warehouses retrieved successfully");
+        }
+
+        public async Task<ApiResponse<RouteOptionResponse>> GetRouteByIdAsync(Guid routeId)
+        {
+            var route = await _db.RouteMasters.AsNoTracking().FirstOrDefaultAsync(r => r.RouteId == routeId);
+            if (route == null) return ApiResponse<RouteOptionResponse>.Failure("Route not found");
+
+            return ApiResponse<RouteOptionResponse>.SuccessResponse(ToResponse(route), "Route retrieved successfully");
         }
 
         public async Task<ApiResponse<RouteOptionResponse>> CreateRouteAsync(CreateRouteRequest request)
@@ -352,7 +365,8 @@ namespace ColdChainX.Infrastructure.Services
                 OriginCity = route.OriginCity,
                 DestCity = route.DestCity,
                 TransitTime = route.TransitTime,
-                Status = route.Status
+                Status = route.Status,
+                CreatedAt = route.CreatedAt
             };
         }
 
