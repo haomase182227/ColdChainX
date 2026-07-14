@@ -14,6 +14,6 @@ namespace ColdChainX.Application.Interfaces
         Task<ApiResponse<QuotationResponse>> GenerateAutoQuotationAsync(Guid orderId);
         Task<ApiResponse<QuotationResponse>> EditQuotationAsync(Guid quoteId, EditQuotationRequest request, Guid salesUserId);
         Task<ApiResponse<QuotationResponse>> SendQuotationAsync(Guid quoteId, Guid salesUserId);
-        Task<ApiResponse<AcceptQuotationResponse>> AcceptQuotationAsync(Guid quoteId, AcceptQuotationRequest request);
+        Task<ApiResponse<AcceptQuotationResponse>> AcceptQuotationAsync(Guid quoteId, AcceptQuotationRequest request, Guid customerUserId);
     }
 }

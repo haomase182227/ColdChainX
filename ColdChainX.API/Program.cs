@@ -35,20 +35,22 @@ builder.Services.AddSingleton(Channel.CreateUnbounded<TelemetryData>(new Unbound
 }));
 builder.Services.AddSingleton<RedisService>();
 
-if (configuration.GetValue("HostedWorkers:TelemetryMqtt", true))
-{
-    builder.Services.AddHostedService<TelemetryMqttWorker>();
-}
+// Tạm thời tắt TelemetryMqttWorker vì lỗi trên Azure Docker
+// if (configuration.GetValue("HostedWorkers:TelemetryMqtt", true))
+// {
+//     builder.Services.AddHostedService<TelemetryMqttWorker>();
+// }
 
 if (configuration.GetValue("HostedWorkers:TelemetryProcessor", true))
 {
     builder.Services.AddHostedService<TelemetryProcessorWorker>();
 }
 
-if (configuration.GetValue("HostedWorkers:IotWatchdog", true))
-{
-    builder.Services.AddHostedService<IotWatchdogWorker>();
-}
+// Tạm thời tắt IotWatchdogWorker vì lỗi trên Azure Docker
+// if (configuration.GetValue("HostedWorkers:IotWatchdog", true))
+// {
+//     builder.Services.AddHostedService<IotWatchdogWorker>();
+// }
 
 if (configuration.GetValue("HostedWorkers:InventoryAging", true))
 {

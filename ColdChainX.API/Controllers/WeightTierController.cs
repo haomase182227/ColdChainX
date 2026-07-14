@@ -51,7 +51,6 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("import")]
-        [Authorize(Roles = "Admin,Manager")]
         public async Task<IActionResult> ImportWeightTiers(Microsoft.AspNetCore.Http.IFormFile file)
         {
             if (file == null || file.Length == 0)

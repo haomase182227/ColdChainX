@@ -14,8 +14,11 @@ namespace ColdChainX.Application.DTOs.Routes
 
     public class CreateRouteStopRequest
     {
-
         public string StopName { get; set; } = string.Empty;
+    }
 
+    public class UpdateRouteStopRequest
+    {
+        public string StopName { get; set; } = string.Empty;
     }
 }

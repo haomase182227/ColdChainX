@@ -197,9 +197,9 @@ namespace ColdChainX.Infrastructure.Services
                 return ApiResponse<QuotationResponse>.Failure("VAT percentage is invalid");
             var additionalCharges = request.AdditionalCharges == null
                 ? DeserializeAdditionalCharges(quotation.AdditionalCharges)
-                : NormalizeAdditionalCharges(request.AdditionalCharges);
+                : await NormalizeAdditionalChargesAsync(request.AdditionalCharges);
             if (additionalCharges == null)
-                return ApiResponse<QuotationResponse>.Failure("Additional charge name is required and amount cannot be negative");
+                return ApiResponse<QuotationResponse>.Failure("Additional charge ServiceCatalogId is invalid");
 
             var baseFreight = request.BaseFreight ?? quotation.BaseFreight;
             var lastMileSurcharge = request.LastMileSurcharge ?? quotation.LastMileSurcharge ?? 0m;
@@ -273,7 +273,7 @@ namespace ColdChainX.Infrastructure.Services
             });
         }
 
-        public async Task<ApiResponse<AcceptQuotationResponse>> AcceptQuotationAsync(Guid quoteId, AcceptQuotationRequest request)
+        public async Task<ApiResponse<AcceptQuotationResponse>> AcceptQuotationAsync(Guid quoteId, AcceptQuotationRequest request, Guid customerUserId)
         {
             var strategy = _db.Database.CreateExecutionStrategy();
 
@@ -292,13 +292,72 @@ namespace ColdChainX.Infrastructure.Services
                 if (quotation.Order == null)
                     return ApiResponse<AcceptQuotationResponse>.Failure("Quotation order was not found");
 
-                if (quotation.Order.CustomerId != request.CustomerId)
-                    return ApiResponse<AcceptQuotationResponse>.Failure("Customer_ID does not match quotation order");
+                var resolvedCustomerUserId = await ResolveCustomerUserIdAsync(quotation.Order.CustomerId.Value);
+                if (resolvedCustomerUserId == null || resolvedCustomerUserId != customerUserId)
+                    return ApiResponse<AcceptQuotationResponse>.Failure("You do not have permission to accept this quotation");
 
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
                 quotation.Status = "ACCEPTED";
                 quotation.Order.Status = "CONTRACT_PENDING";
+
+                var matchedSelectedServices = new List<OptionalServiceItem>();
+                var selectedCatalogs = new List<ServiceCatalog>();
+
+                if (request.SelectedServiceCatalogIds != null && request.SelectedServiceCatalogIds.Any())
+                {
+                    var selectedIds = request.SelectedServiceCatalogIds.Distinct().ToList();
+                    selectedCatalogs = await _db.ServiceCatalogs
+                        .Where(s => selectedIds.Contains(s.ServiceCatalogId) && s.IsActive)
+                        .ToListAsync();
+                    
+                    if (selectedCatalogs.Count != selectedIds.Count)
+                    {
+                        return ApiResponse<AcceptQuotationResponse>.Failure("One or more selected services are invalid or inactive.");
+                    }
+
+                    if (selectedCatalogs.Any(s => s.IsMandatory))
+                    {
+                        return ApiResponse<AcceptQuotationResponse>.Failure("Customers do not have permission to select mandatory services.");
+                    }
+
+                    matchedSelectedServices = selectedCatalogs
+                        .Select(s => new OptionalServiceItem
+                    {
+                        Code = s.ServiceCode,
+                        Name = s.ServiceName,
+                        Price = s.DefaultPrice,
+                        Description = s.Description
+                    }).ToList();
+                }
+
+                // Calculate Final Numbers
+                var baseFreightAndMandatory = quotation.BaseFreight + (quotation.LastMileSurcharge ?? 0m) + (quotation.ManualAdjustment ?? 0m);
+                var selectedOptionalTotal = matchedSelectedServices.Sum(s => s.Price);
+                
+                var subtotal = baseFreightAndMandatory + selectedOptionalTotal;
+                var calculatedVat = Math.Round(subtotal * (quotation.VatPercentage ?? 8m) / 100m, 0);
+                var newContractTotalAmount = subtotal + calculatedVat;
+
+                // Cập nhật lại Báo giá gốc để hiển thị cho Customer
+                if (matchedSelectedServices.Any())
+                {
+                    var existingCharges = DeserializeAdditionalCharges(quotation.AdditionalCharges).ToList();
+                    var optionalCatalogs = selectedCatalogs.Where(s => !s.IsMandatory).ToList();
+                    foreach (var catalog in optionalCatalogs)
+                    {
+                        existingCharges.Add(new QuotationAdditionalCharge(
+                            catalog.ServiceCatalogId,
+                            catalog.ServiceName,
+                            catalog.DefaultPrice,
+                            catalog.Description
+                        ));
+                    }
+                    quotation.AdditionalCharges = SerializeAdditionalCharges(existingCharges);
+                    quotation.VatAmount = calculatedVat;
+                    quotation.FinalAmount = newContractTotalAmount;
+                    quotation.ManualAdjustment = quotation.BaseFreight - (quotation.SystemBaseFreight ?? 0m) + existingCharges.Sum(c => c.Amount);
+                }
 
                 var hasContract = await _db.CustomerContracts.AnyAsync(c => c.OrderId == quotation.Order.OrderId);
                 if (!hasContract)
@@ -312,13 +371,14 @@ namespace ColdChainX.Infrastructure.Services
                         ExpiredDate = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(1)),
                         FileUrl = string.Empty,
                         DraftHtmlContent = null,
+                        SelectedOptionalServices = JsonSerializer.Serialize(matchedSelectedServices),
+                        FinalContractTotalAmount = newContractTotalAmount,
                         Status = "DRAFT",
                         CreatedAt = DbNow()
                     });
                 }
 
                 var salesUserId = await ResolveSalesUserIdAsync();
-                var customerUserId = await ResolveCustomerUserIdAsync(request.CustomerId);
                 await AddNotificationAsync(
                     salesUserId,
                     customerUserId,
@@ -606,6 +666,7 @@ namespace ColdChainX.Infrastructure.Services
                 AdditionalCharges = additionalCharges
                     .Select(c => new QuotationAdditionalChargeResponse
                     {
+                        ServiceCatalogId = c.ServiceCatalogId,
                         Name = c.Name,
                         Amount = c.Amount,
                         Note = c.Note
@@ -629,7 +690,7 @@ namespace ColdChainX.Infrastructure.Services
             };
         }
 
-        private static IReadOnlyCollection<QuotationAdditionalCharge>? NormalizeAdditionalCharges(
+        private async Task<IReadOnlyCollection<QuotationAdditionalCharge>?> NormalizeAdditionalChargesAsync(
             IReadOnlyCollection<QuotationAdditionalChargeRequest>? charges)
         {
             if (charges == null || charges.Count == 0)
@@ -638,14 +699,17 @@ namespace ColdChainX.Infrastructure.Services
             var normalized = new List<QuotationAdditionalCharge>();
             foreach (var charge in charges)
             {
-                var name = charge.Name?.Trim();
-                if (string.IsNullOrWhiteSpace(name) || charge.Amount < 0)
+                var catalog = await _db.ServiceCatalogs
+                    .FirstOrDefaultAsync(s => s.ServiceCatalogId == charge.ServiceCatalogId);
+
+                if (catalog == null)
                     return null;
 
                 normalized.Add(new QuotationAdditionalCharge(
-                    name,
-                    charge.Amount,
-                    string.IsNullOrWhiteSpace(charge.Note) ? null : charge.Note.Trim()));
+                    charge.ServiceCatalogId,
+                    catalog.ServiceName,
+                    catalog.DefaultPrice,
+                    catalog.Description));
             }
 
             return normalized;
@@ -697,7 +761,7 @@ namespace ColdChainX.Infrastructure.Services
             string OriginCity,
             string DestinationCity);
 
-        private sealed record QuotationAdditionalCharge(string Name, decimal Amount, string? Note);
+        private sealed record QuotationAdditionalCharge(Guid? ServiceCatalogId, string Name, decimal Amount, string? Note);
 
         private static string BuildChargeableWeightErrorMessage(
             TransportOrder order,

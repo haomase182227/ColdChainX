@@ -11,10 +11,7 @@ public partial class RouteSchedule
 
     public string ScheduleName { get; set; } = null!;
 
-    /// <summary>
-    /// 1 = Monday, 2 = Tuesday, ..., 7 = Sunday
-    /// </summary>
-    public int DayOfWeek { get; set; }
+    public DateTime DepartureDate { get; set; }
 
     public TimeSpan DepartureTime { get; set; }
 

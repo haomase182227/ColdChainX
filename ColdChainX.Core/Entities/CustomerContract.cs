@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace ColdChainX.Core.Entities;
@@ -20,6 +20,10 @@ public partial class CustomerContract
     public string FileUrl { get; set; } = null!;
 
     public string? DraftHtmlContent { get; set; }
+
+    public string? SelectedOptionalServices { get; set; }
+
+    public decimal? FinalContractTotalAmount { get; set; }
 
     public string? SignedFileUrl { get; set; }
 

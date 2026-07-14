@@ -958,6 +958,33 @@ namespace ColdChainX.Infrastructure.Services
                    + "Vui lòng liên hệ Hotline/Sales để được báo giá riêng.";
         }
 
+        public async Task<ApiResponse<IReadOnlyCollection<ColdChainX.Application.DTOs.Routes.WarehouseOptionDto>>> GetOriginWarehousesForOrderAsync(Guid orderId)
+        {
+            var order = await _db.TransportOrders
+                .Include(o => o.Schedule)
+                .ThenInclude(s => s.Route)
+                .FirstOrDefaultAsync(o => o.OrderId == orderId);
+
+            if (order == null) return ApiResponse<IReadOnlyCollection<ColdChainX.Application.DTOs.Routes.WarehouseOptionDto>>.Failure("Order not found");
+            if (order.Schedule?.Route == null) return ApiResponse<IReadOnlyCollection<ColdChainX.Application.DTOs.Routes.WarehouseOptionDto>>.Failure("Route information not found for this order");
+
+            var originCity = order.Schedule.Route.OriginCity;
+
+            var warehouses = await _db.Warehouses
+                .Where(w => w.WarehouseName.Contains(originCity) || 
+                            w.WarehouseCode.Contains(originCity) || 
+                            (w.Address != null && w.Address.Contains(originCity)))
+                .Select(w => new ColdChainX.Application.DTOs.Routes.WarehouseOptionDto
+                {
+                    WarehouseId = w.WarehouseId,
+                    WarehouseName = w.WarehouseName,
+                    Address = w.Address
+                })
+                .ToListAsync();
+
+            return ApiResponse<IReadOnlyCollection<ColdChainX.Application.DTOs.Routes.WarehouseOptionDto>>.SuccessResponse(warehouses, "Available warehouses retrieved successfully");
+        }
+
         private static string FormatKg(decimal value)
         {
             return value.ToString("#,##0.##", CultureInfo.GetCultureInfo("vi-VN"));
