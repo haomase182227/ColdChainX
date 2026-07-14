@@ -3,6 +3,7 @@ using System;
 using ColdChainX.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ColdChainX.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260711041109_AddServiceCatalog")]
+    partial class AddServiceCatalog
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2986,9 +2989,9 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("interval")
                         .HasColumnName("cut_off_time");
 
-                    b.Property<DateTime>("DepartureDate")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("departure_date");
+                    b.Property<int>("DayOfWeek")
+                        .HasColumnType("integer")
+                        .HasColumnName("day_of_week");
 
                     b.Property<TimeSpan>("DepartureTime")
                         .HasColumnType("interval")
@@ -3177,48 +3180,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasDatabaseName("uq_service_catalogs_code");
 
                     b.ToTable("service_catalogs", "public");
-
-                    b.HasData(
-                        new
-                        {
-                            ServiceCatalogId = new Guid("11111111-1111-1111-1111-111111111111"),
-                            DefaultPrice = 50000m,
-                            Description = "Dịch vụ bốc xếp hàng hóa lên xuống xe",
-                            IsActive = true,
-                            IsMandatory = false,
-                            ServiceCode = "BOC_XEP",
-                            ServiceName = "Bốc xếp hàng hóa"
-                        },
-                        new
-                        {
-                            ServiceCatalogId = new Guid("22222222-2222-2222-2222-222222222222"),
-                            DefaultPrice = 20000m,
-                            Description = "Dịch vụ bọc màng co bảo vệ pallet",
-                            IsActive = true,
-                            IsMandatory = false,
-                            ServiceCode = "BOC_MANG_CO",
-                            ServiceName = "Bọc màng co"
-                        },
-                        new
-                        {
-                            ServiceCatalogId = new Guid("33333333-3333-3333-3333-333333333333"),
-                            DefaultPrice = 15000m,
-                            Description = "Kiểm đếm chi tiết số lượng hàng hóa khi giao nhận",
-                            IsActive = true,
-                            IsMandatory = false,
-                            ServiceCode = "KIEM_DEM",
-                            ServiceName = "Kiểm đếm số lượng"
-                        },
-                        new
-                        {
-                            ServiceCatalogId = new Guid("44444444-4444-4444-4444-444444444444"),
-                            DefaultPrice = 100000m,
-                            Description = "Bảo hiểm rủi ro hư hỏng hàng do biến thiên nhiệt độ",
-                            IsActive = true,
-                            IsMandatory = true,
-                            ServiceCode = "PHI_BAO_HIEM",
-                            ServiceName = "Phí bảo hiểm hàng lạnh"
-                        });
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.SystemConfig", b =>

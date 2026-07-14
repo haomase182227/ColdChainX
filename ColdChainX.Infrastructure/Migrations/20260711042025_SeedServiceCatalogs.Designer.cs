@@ -3,6 +3,7 @@ using System;
 using ColdChainX.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ColdChainX.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260711042025_SeedServiceCatalogs")]
+    partial class SeedServiceCatalogs
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2986,9 +2989,9 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("interval")
                         .HasColumnName("cut_off_time");
 
-                    b.Property<DateTime>("DepartureDate")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("departure_date");
+                    b.Property<int>("DayOfWeek")
+                        .HasColumnType("integer")
+                        .HasColumnName("day_of_week");
 
                     b.Property<TimeSpan>("DepartureTime")
                         .HasColumnType("interval")

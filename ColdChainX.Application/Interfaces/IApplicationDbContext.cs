@@ -51,6 +51,7 @@ namespace ColdChainX.Application.Interfaces
         DbSet<TripStopEvent> TripStopEvents { get; }
         DbSet<DetentionCharge> DetentionCharges { get; }
         DbSet<IncidentEvidence> IncidentEvidences { get; }
+        DbSet<ServiceCatalog> ServiceCatalogs { get; }
 
         DatabaseFacade Database { get; }
         Microsoft.EntityFrameworkCore.ChangeTracking.ChangeTracker ChangeTracker { get; }

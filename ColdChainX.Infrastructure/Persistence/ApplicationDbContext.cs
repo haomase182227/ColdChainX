@@ -15,6 +15,8 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
     }
 
     public virtual DbSet<AlertLog> AlertLogs { get; set; }
+    
+    public virtual DbSet<ServiceCatalog> ServiceCatalogs { get; set; }
 
     public virtual DbSet<Claim> Claims { get; set; }
 
@@ -214,7 +216,7 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.ScheduleId).HasColumnName("schedule_id").HasDefaultValueSql("gen_random_uuid()");
             entity.Property(e => e.RouteId).HasColumnName("route_id");
             entity.Property(e => e.ScheduleName).HasColumnName("schedule_name").HasMaxLength(100);
-            entity.Property(e => e.DayOfWeek).HasColumnName("day_of_week");
+            entity.Property(e => e.DepartureDate).HasColumnName("departure_date");
             entity.Property(e => e.DepartureTime).HasColumnName("departure_time");
             entity.Property(e => e.CutOffTime).HasColumnName("cut_off_time");
             entity.Property(e => e.Status).HasColumnName("status").HasMaxLength(20);
@@ -2498,6 +2500,74 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasForeignKey(d => d.CodVerifiedByUserId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_lpn_delivery_confirmations_verified_by");
+        });
+
+        modelBuilder.Entity<ServiceCatalog>(entity =>
+        {
+            entity.HasKey(e => e.ServiceCatalogId).HasName("pk_service_catalogs");
+            entity.ToTable("service_catalogs");
+            entity.HasIndex(e => e.ServiceCode).IsUnique().HasDatabaseName("uq_service_catalogs_code");
+
+            entity.Property(e => e.ServiceCatalogId).HasColumnName("service_catalog_id");
+            entity.Property(e => e.ServiceCode).HasMaxLength(50).HasColumnName("service_code");
+            entity.Property(e => e.ServiceName).HasMaxLength(200).HasColumnName("service_name");
+            entity.Property(e => e.Description).HasColumnType("text").HasColumnName("description");
+            entity.Property(e => e.DefaultPrice).HasPrecision(15, 2).HasColumnName("default_price");
+            entity.Property(e => e.IsMandatory).HasDefaultValue(false).HasColumnName("is_mandatory");
+            entity.Property(e => e.IsActive).HasDefaultValue(true).HasColumnName("is_active");
+            
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+                
+            entity.Property(e => e.UpdatedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("updated_at");
+
+            // Seed Data
+            entity.HasData(
+                new ServiceCatalog
+                {
+                    ServiceCatalogId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                    ServiceCode = "BOC_XEP",
+                    ServiceName = "Bốc xếp hàng hóa",
+                    Description = "Dịch vụ bốc xếp hàng hóa lên xuống xe",
+                    DefaultPrice = 50000,
+                    IsMandatory = false,
+                    IsActive = true
+                },
+                new ServiceCatalog
+                {
+                    ServiceCatalogId = Guid.Parse("22222222-2222-2222-2222-222222222222"),
+                    ServiceCode = "BOC_MANG_CO",
+                    ServiceName = "Bọc màng co",
+                    Description = "Dịch vụ bọc màng co bảo vệ pallet",
+                    DefaultPrice = 20000,
+                    IsMandatory = false,
+                    IsActive = true
+                },
+                new ServiceCatalog
+                {
+                    ServiceCatalogId = Guid.Parse("33333333-3333-3333-3333-333333333333"),
+                    ServiceCode = "KIEM_DEM",
+                    ServiceName = "Kiểm đếm số lượng",
+                    Description = "Kiểm đếm chi tiết số lượng hàng hóa khi giao nhận",
+                    DefaultPrice = 15000,
+                    IsMandatory = false,
+                    IsActive = true
+                },
+                new ServiceCatalog
+                {
+                    ServiceCatalogId = Guid.Parse("44444444-4444-4444-4444-444444444444"),
+                    ServiceCode = "PHI_BAO_HIEM",
+                    ServiceName = "Phí bảo hiểm hàng lạnh",
+                    Description = "Bảo hiểm rủi ro hư hỏng hàng do biến thiên nhiệt độ",
+                    DefaultPrice = 100000,
+                    IsMandatory = true, // Bắt buộc
+                    IsActive = true
+                }
+            );
         });
 
         OnModelCreatingPartial(modelBuilder);

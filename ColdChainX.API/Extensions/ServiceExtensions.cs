@@ -140,6 +140,7 @@ namespace ColdChainX.API.Extensions
             services.AddHttpClient<ColdChainX.Infrastructure.Integration.GeminiLoadOptimizerClient>();
             services.AddScoped<IDispatchService, DispatchService>();
             services.AddScoped<IDriverAvailabilityService, DriverAvailabilityService>();
+            services.AddScoped<IServiceCatalogService, ServiceCatalogService>();
 
             services.AddSignalR();
 
