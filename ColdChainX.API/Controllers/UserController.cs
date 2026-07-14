@@ -105,6 +105,17 @@ namespace ColdChainX.API.Controllers
         }
 
         /// <summary>
+        /// Change a warehouse operator's assigned warehouse (Admin only).
+        /// </summary>
+        [HttpPatch("{id:guid}/warehouse")]
+        public async Task<IActionResult> UpdateWarehouse(Guid id, [FromBody] UpdateUserWarehouseRequest request)
+        {
+            var result = await _userService.UpdateWarehouseAsync(id, request);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        /// <summary>
         /// Reset a user's password (Admin only).
         /// </summary>
         [HttpPost("{id:guid}/reset-password")]

@@ -5,6 +5,7 @@ using System.Xml.Linq;
 using ColdChainX.Application.DTOs.Fleet;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
+using ColdChainX.Core.Enums;
 using ColdChainX.Infrastructure.Hubs;
 using ColdChainX.Infrastructure.Persistence;
 using ColdChainX.Shared.Responses;
@@ -30,12 +31,14 @@ public class FleetManagementService : IFleetManagementService
     private readonly ApplicationDbContext _db;
     private readonly IHubContext<NotificationHub> _hubContext;
     private readonly IPasswordHasher<User> _passwordHasher;
+    private readonly IFileService _fileService;
 
-    public FleetManagementService(ApplicationDbContext db, IHubContext<NotificationHub> hubContext, IPasswordHasher<User> passwordHasher)
+    public FleetManagementService(ApplicationDbContext db, IHubContext<NotificationHub> hubContext, IPasswordHasher<User> passwordHasher, IFileService fileService)
     {
         _db = db;
         _hubContext = hubContext;
         _passwordHasher = passwordHasher;
+        _fileService = fileService;
     }
 
     public async Task<ApiResponse<IReadOnlyCollection<VehicleFleetResponse>>> GetVehiclesAsync()
@@ -84,6 +87,9 @@ public class FleetManagementService : IFleetManagementService
             NextMaintenanceOdometer = request.NextMaintenanceOdometer > 0
                 ? request.NextMaintenanceOdometer
                 : request.CurrentOdometer + 10000,
+            NextMaintenanceDate = DateOnly.FromDateTime(DateTime.Today).AddDays(365),
+            WarningDaysBeforeDue = 15,
+            WarningKmBeforeDue = 500.0,
             Status = "ACTIVE",
             CreatedAt = DateTime.Now
         };
@@ -765,9 +771,14 @@ public class FleetManagementService : IFleetManagementService
         return ApiResponse<ImportResultResponse>.SuccessResponse(result, "Driver licenses imported");
     }
 
-    public async Task<ApiResponse<VehicleFleetResponse>> SyncOdometerAsync(string truckPlate, SyncOdometerRequest request)
+    public async Task<ApiResponse<VehicleFleetResponse>> SyncOdometerAsync(SyncOdometerRequest request, Guid? updatedBy = null, string? photoUrl = null)
     {
-        var plate = NormalizeRequired(truckPlate);
+        if (request == null || string.IsNullOrWhiteSpace(request.TruckPlate))
+        {
+            return ApiResponse<VehicleFleetResponse>.Failure("Truck plate is required");
+        }
+
+        var plate = NormalizeRequired(request.TruckPlate);
         var vehicle = await _db.Vehicles
             .Include(v => v.VehicleDocuments)
             .FirstOrDefaultAsync(v => v.TruckPlate.ToUpper() == plate.ToUpper() && v.Status != "DELETED");
@@ -777,35 +788,76 @@ public class FleetManagementService : IFleetManagementService
         vehicle.CurrentOdometer = request.Odometer;
         vehicle.CurrentLocation = TrimOrNull(request.LocationText);
 
+        var odometerLog = new VehicleOdometerLog
+        {
+            LogId = Guid.NewGuid(),
+            VehicleId = vehicle.VehicleId,
+            OdometerValue = request.Odometer,
+            LocationText = TrimOrNull(request.LocationText),
+            Reason = string.IsNullOrWhiteSpace(request.Note) ? request.Reason.ToString() : $"{request.Reason} - {TrimOrNull(request.Note)}",
+            UpdatedBy = updatedBy,
+            OdometerPhotoUrl = TrimOrNull(photoUrl),
+            CreatedAt = DateTime.Now
+        };
+        _db.VehicleOdometerLogs.Add(odometerLog);
+
         if (vehicle.Status == "ACTIVE" && vehicle.CurrentOdometer >= vehicle.NextMaintenanceOdometer)
         {
-            var message = $"Xe {vehicle.TruckPlate} đã chạy {vehicle.CurrentOdometer:0.#} KM, vượt mốc bảo dưỡng định kỳ.";
-            Guid? driverUserId = null; // Xe không còn gắn trực tiếp tài xế — chỉ thông báo cho Admin/Dispatcher.
-            await AddNotificationsAsync(
-                new[] { "Admin", "Dispatcher" }, driverUserId,
-                "NOTI_MAINTENANCE_ODOMETER",
-                new { TruckPlate = vehicle.TruckPlate, CurrentOdometer = vehicle.CurrentOdometer },
-                message);
+            // Phase 1: Chống trùng lặp — chỉ gửi notification 1 lần cho mỗi mốc bảo dưỡng
+            var alreadyNotified = await _db.Notifications.AnyAsync(n =>
+                (n.TemplateId == "NOTI_MAINTENANCE_ODOMETER" || n.TemplateId == "NOTI_MAINTENANCE_ODOMETER_IN_TRIP") &&
+                n.IsRead != true &&
+                n.Params.Contains(vehicle.TruckPlate));
 
-            await _hubContext.Clients.Groups("Group_Admin", "Group_Dispatcher")
-                .SendAsync("MaintenanceOdometerWarning", new
+            if (!alreadyNotified)
+            {
+                // Phase 2: Kiểm tra xe có đang trong chuyến hay không
+                var activeStatuses = new[] { "SEALED", "DISPATCHED", "IN_TRANSIT", "DELAYED" };
+                var isInTrip = await _db.MasterTrips.AnyAsync(t =>
+                    t.VehicleId == vehicle.VehicleId &&
+                    t.Status != null && activeStatuses.Contains(t.Status));
+
+                string message;
+                string templateId;
+
+                if (isInTrip)
                 {
-                    vehicle.VehicleId,
-                    vehicle.TruckPlate,
-                    vehicle.CurrentOdometer,
-                    vehicle.NextMaintenanceOdometer,
-                    Message = message
-                });
-                
-            if (driverUserId.HasValue)
-                await _hubContext.Clients.User(driverUserId.Value.ToString()).SendAsync("MaintenanceOdometerWarning", new
+                    // Xe đang trong chuyến → giữ ACTIVE, gửi cảnh báo "sẽ khoá sau chuyến"
+                    templateId = "NOTI_MAINTENANCE_ODOMETER_IN_TRIP";
+                    message = $"Xe {vehicle.TruckPlate} đã chạy {vehicle.CurrentOdometer:0.#} KM, vượt mốc bảo dưỡng. Xe đang trong chuyến, sẽ tự động khoá sau khi kết thúc.";
+                }
+                else
                 {
-                    vehicle.VehicleId,
-                    vehicle.TruckPlate,
-                    vehicle.CurrentOdometer,
-                    vehicle.NextMaintenanceOdometer,
-                    Message = message
-                });
+                    // Xe rảnh → khoá lại bằng MAINTENANCE_PENDING, yêu cầu tạo phiếu bảo trì
+                    vehicle.Status = "MAINTENANCE_PENDING";
+                    templateId = "NOTI_MAINTENANCE_ODOMETER";
+                    message = $"Xe {vehicle.TruckPlate} đã chạy {vehicle.CurrentOdometer:0.#} KM, vượt mốc bảo dưỡng. Xe đã được khoá, vui lòng tạo phiếu bảo trì.";
+                }
+
+                await AddNotificationsAsync(
+                    new[] { "Admin", "Dispatcher" }, null,
+                    templateId,
+                    new { TruckPlate = vehicle.TruckPlate, CurrentOdometer = vehicle.CurrentOdometer },
+                    message);
+
+                await _hubContext.Clients.Groups("Group_Admin", "Group_Dispatcher")
+                    .SendAsync("MaintenanceOdometerWarning", new
+                    {
+                        vehicle.VehicleId,
+                        vehicle.TruckPlate,
+                        vehicle.CurrentOdometer,
+                        vehicle.NextMaintenanceOdometer,
+                        IsInTrip = isInTrip,
+                        VehicleStatus = vehicle.Status,
+                        Message = message
+                    });
+            }
+
+            // Phase 3: Nếu reason = POST_TRIP_REPORT (kết thúc chuyến) và xe vẫn vượt mốc → khoá xe
+            if (request.Reason == OdometerSyncReason.POST_TRIP_REPORT && vehicle.Status == "ACTIVE")
+            {
+                vehicle.Status = "MAINTENANCE_PENDING";
+            }
         }
 
         await _db.SaveChangesAsync();
@@ -834,7 +886,6 @@ public class FleetManagementService : IFleetManagementService
         };
 
         vehicle.Status = "MAINTENANCE";
-        vehicle.NextMaintenanceOdometer = vehicle.CurrentOdometer + 10000;
         _db.MaintenanceTickets.Add(ticket);
         await _db.SaveChangesAsync();
 
@@ -845,6 +896,7 @@ public class FleetManagementService : IFleetManagementService
     {
         var ticket = await _db.MaintenanceTickets
             .Include(t => t.Vehicle)
+                .ThenInclude(v => v!.VehicleDocuments)
             .FirstOrDefaultAsync(t => t.TicketId == ticketId);
         if (ticket == null) return ApiResponse<MaintenanceTicketResponse>.Failure("Maintenance ticket not found");
 
@@ -853,7 +905,35 @@ public class FleetManagementService : IFleetManagementService
         ticket.CompletionDate = request.CompletionDate;
 
         if (ticket.Vehicle != null)
-            ticket.Vehicle.Status = "ACTIVE";
+        {
+            var odometerInterval = await GetSystemConfigDoubleAsync("MaintenanceIntervalOdometer", 10000.0);
+            var daysInterval = await GetSystemConfigIntAsync("MaintenanceIntervalDays", 365);
+
+            ticket.Vehicle.NextMaintenanceOdometer = ticket.Vehicle.CurrentOdometer + odometerInterval;
+            ticket.Vehicle.NextMaintenanceDate = DateOnly.FromDateTime(DateTime.Today).AddDays(daysInterval);
+
+            var hasOtherActiveTickets = await _db.MaintenanceTickets.AnyAsync(t =>
+                t.VehicleId == ticket.VehicleId &&
+                t.TicketId != ticket.TicketId &&
+                (t.Status == "OPEN" || t.Status == "IN_PROGRESS"));
+
+            if (!hasOtherActiveTickets)
+            {
+                ticket.Vehicle.Status = "ACTIVE";
+                await RefreshVehicleStatusAsync(ticket.Vehicle);
+            }
+
+            // Phase 4: Dọn dẹp notification bảo dưỡng cũ khi bảo trì xong
+            var truckPlate = ticket.Vehicle.TruckPlate;
+            var oldNotifications = await _db.Notifications
+                .Where(n => (n.TemplateId == "NOTI_MAINTENANCE_ODOMETER" || n.TemplateId == "NOTI_MAINTENANCE_ODOMETER_IN_TRIP") &&
+                            n.IsRead != true &&
+                            n.Params.Contains(truckPlate))
+                .ToListAsync();
+
+            foreach (var noti in oldNotifications)
+                noti.IsRead = true;
+        }
 
         await _db.SaveChangesAsync();
         return ApiResponse<MaintenanceTicketResponse>.SuccessResponse(ToMaintenanceTicketResponse(ticket), "Maintenance ticket completed successfully");
@@ -1049,7 +1129,7 @@ public class FleetManagementService : IFleetManagementService
 
     private async Task RefreshVehicleStatusAsync(Vehicle vehicle)
     {
-        if (vehicle.Status is "DELETED" or "MAINTENANCE") return;
+        if (vehicle.Status is "DELETED" or "MAINTENANCE" or "INACTIVE") return;
 
         var today = DateOnly.FromDateTime(DateTime.Today);
         var docs = vehicle.VehicleDocuments.Where(d => d.VehicleId == vehicle.VehicleId || d.VehicleId == null).ToList();
@@ -1122,7 +1202,8 @@ public class FleetManagementService : IFleetManagementService
         await EnsureTemplateAsync(type.TypeId, "NOTI_FLEET_DOC_EXPIRED", "Chứng từ xe đã hết hạn", "Chứng từ {{DocumentType}} của xe {{TruckPlate}} đã hết hạn.", cancellationToken);
         await EnsureTemplateAsync(type.TypeId, "NOTI_DRIVER_LICENSE_EXPIRING", "Bằng lái sắp hết hạn", "Bằng lái {{LicenseClass}} của tài xế {{FullName}} sẽ hết hạn sau {{Days}} ngày.", cancellationToken);
         await EnsureTemplateAsync(type.TypeId, "NOTI_DRIVER_LICENSE_EXPIRED", "Bằng lái đã hết hạn", "Bằng lái {{LicenseClass}} của tài xế {{FullName}} đã hết hạn.", cancellationToken);
-        await EnsureTemplateAsync(type.TypeId, "NOTI_MAINTENANCE_ODOMETER", "Xe đến mốc bảo dưỡng", "Xe {{TruckPlate}} đã chạy {{CurrentOdometer}} KM, cần sắp xếp bảo dưỡng.", cancellationToken);
+        await EnsureTemplateAsync(type.TypeId, "NOTI_MAINTENANCE_ODOMETER", "Xe đến mốc bảo dưỡng", "Xe {{TruckPlate}} đã chạy {{CurrentOdometer}} KM, vượt mốc bảo dưỡng. Xe đã được khoá, vui lòng tạo phiếu bảo trì.", cancellationToken);
+        await EnsureTemplateAsync(type.TypeId, "NOTI_MAINTENANCE_ODOMETER_IN_TRIP", "Xe cần bảo dưỡng sau chuyến", "Xe {{TruckPlate}} đã chạy {{CurrentOdometer}} KM, vượt mốc bảo dưỡng. Xe đang trong chuyến, sẽ tự động khoá sau khi kết thúc.", cancellationToken);
     }
 
     private async Task EnsureTemplateAsync(Guid typeId, string templateId, string title, string body, CancellationToken cancellationToken)
@@ -1155,6 +1236,9 @@ public class FleetManagementService : IFleetManagementService
         CurrentLocation = vehicle.CurrentLocation,
         CurrentOdometer = vehicle.CurrentOdometer,
         NextMaintenanceOdometer = vehicle.NextMaintenanceOdometer,
+        NextMaintenanceDate = vehicle.NextMaintenanceDate,
+        WarningDaysBeforeDue = vehicle.WarningDaysBeforeDue,
+        WarningKmBeforeDue = vehicle.WarningKmBeforeDue,
         Status = vehicle.Status,
         Documents = vehicle.VehicleDocuments.Select(ToVehicleDocumentResponse).ToList()
     };
@@ -1208,7 +1292,8 @@ public class FleetManagementService : IFleetManagementService
         Cost = ticket.Cost,
         IssueDate = ticket.IssueDate,
         CompletionDate = ticket.CompletionDate,
-        Status = ticket.Status
+        Status = ticket.Status,
+        AttachmentUrl = ticket.AttachmentUrl
     };
 
     private static string NormalizeRequired(string? value)
@@ -1270,6 +1355,310 @@ public class FleetManagementService : IFleetManagementService
 
     private static string NormalizeHeader(string value)
         => value.Trim().Replace(" ", string.Empty).Replace("_", string.Empty).ToUpperInvariant();
+
+    public async Task<ApiResponse<PagedList<MaintenanceTicketResponse>>> GetMaintenanceTicketsAsync(Guid? vehicleId, string? status, int pageNumber = 1, int pageSize = 10)
+    {
+        var query = _db.MaintenanceTickets.AsNoTracking().AsQueryable();
+
+        if (vehicleId.HasValue)
+            query = query.Where(t => t.VehicleId == vehicleId.Value);
+
+        if (!string.IsNullOrWhiteSpace(status))
+            query = query.Where(t => t.Status == status);
+
+        var totalRecords = await query.CountAsync();
+
+        var tickets = await query
+            .OrderByDescending(t => t.CreatedAt)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        var responses = tickets.Select(ToMaintenanceTicketResponse).ToList();
+        var pagedList = new PagedList<MaintenanceTicketResponse>(responses, totalRecords, pageNumber, pageSize);
+        return ApiResponse<PagedList<MaintenanceTicketResponse>>.SuccessResponse(pagedList);
+    }
+
+    public async Task<ApiResponse<MaintenanceTicketResponse>> GetMaintenanceTicketByIdAsync(Guid ticketId)
+    {
+        var ticket = await _db.MaintenanceTickets
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.TicketId == ticketId);
+
+        if (ticket == null)
+            return ApiResponse<MaintenanceTicketResponse>.Failure("Maintenance ticket not found");
+
+        return ApiResponse<MaintenanceTicketResponse>.SuccessResponse(ToMaintenanceTicketResponse(ticket));
+    }
+
+    public async Task<ApiResponse<MaintenanceTicketResponse>> UpdateMaintenanceTicketStatusAsync(Guid ticketId, string status)
+    {
+        var ticket = await _db.MaintenanceTickets
+            .Include(t => t.Vehicle)
+                .ThenInclude(v => v!.VehicleDocuments)
+            .FirstOrDefaultAsync(t => t.TicketId == ticketId);
+
+        if (ticket == null)
+            return ApiResponse<MaintenanceTicketResponse>.Failure("Maintenance ticket not found");
+
+        var normalizedStatus = status.ToUpperInvariant();
+        if (normalizedStatus != "OPEN" && normalizedStatus != "IN_PROGRESS" && normalizedStatus != "CANCELLED" && normalizedStatus != "RESOLVED")
+            return ApiResponse<MaintenanceTicketResponse>.Failure("Invalid status");
+
+        ticket.Status = normalizedStatus;
+
+        if (ticket.Vehicle != null)
+        {
+            if (normalizedStatus == "IN_PROGRESS" || normalizedStatus == "OPEN")
+            {
+                ticket.Vehicle.Status = "MAINTENANCE";
+            }
+            else if (normalizedStatus == "CANCELLED")
+            {
+                var hasOtherActive = await _db.MaintenanceTickets.AnyAsync(t =>
+                    t.VehicleId == ticket.VehicleId &&
+                    t.TicketId != ticket.TicketId &&
+                    (t.Status == "OPEN" || t.Status == "IN_PROGRESS"));
+
+                if (!hasOtherActive)
+                {
+                    ticket.Vehicle.Status = "ACTIVE";
+                    await RefreshVehicleStatusAsync(ticket.Vehicle);
+                }
+            }
+        }
+
+        await _db.SaveChangesAsync();
+        return ApiResponse<MaintenanceTicketResponse>.SuccessResponse(ToMaintenanceTicketResponse(ticket), $"Status updated to {normalizedStatus}");
+    }
+
+    public async Task<ApiResponse<string>> UploadMaintenanceTicketDocumentAsync(Guid ticketId, IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+            return ApiResponse<string>.Failure("No file uploaded or file is empty");
+
+        var ticket = await _db.MaintenanceTickets.FirstOrDefaultAsync(t => t.TicketId == ticketId);
+        if (ticket == null)
+            return ApiResponse<string>.Failure("Maintenance ticket not found");
+
+        var uploadResult = await _fileService.UploadFileAsync(file);
+        if (uploadResult == null)
+            return ApiResponse<string>.Failure("Failed to upload document");
+
+        ticket.AttachmentUrl = uploadResult;
+        await _db.SaveChangesAsync();
+
+        return ApiResponse<string>.SuccessResponse(uploadResult, "Document uploaded successfully");
+    }
+
+    public async Task<ApiResponse<IReadOnlyCollection<MaintenanceTicketResponse>>> GetVehicleMaintenanceHistoryAsync(Guid vehicleId)
+    {
+        var tickets = await _db.MaintenanceTickets
+            .AsNoTracking()
+            .Where(t => t.VehicleId == vehicleId && t.Status == "RESOLVED")
+            .OrderByDescending(t => t.CompletionDate)
+            .ToListAsync();
+
+        var responses = tickets.Select(ToMaintenanceTicketResponse).ToList();
+        return ApiResponse<IReadOnlyCollection<MaintenanceTicketResponse>>.SuccessResponse(responses);
+    }
+
+    public async Task<ApiResponse<VehicleFleetResponse>> MarkVehicleUnavailableAsync(Guid vehicleId, string reason)
+    {
+        var vehicle = await _db.Vehicles.FirstOrDefaultAsync(v => v.VehicleId == vehicleId && v.Status != "DELETED");
+        if (vehicle == null)
+            return ApiResponse<VehicleFleetResponse>.Failure("Vehicle not found");
+
+        vehicle.Status = "INACTIVE";
+        await _db.SaveChangesAsync();
+
+        return ApiResponse<VehicleFleetResponse>.SuccessResponse(ToVehicleResponse(vehicle), "Vehicle marked unavailable successfully");
+    }
+
+    public async Task<ApiResponse<VehicleFleetResponse>> UpdateVehicleAsync(Guid vehicleId, ColdChainX.Application.DTOs.VehicleUpdateRequest request)
+    {
+        var vehicle = await _db.Vehicles
+            .Include(v => v.VehicleDocuments)
+            .FirstOrDefaultAsync(v => v.VehicleId == vehicleId && v.Status != "DELETED");
+
+        if (vehicle == null)
+            return ApiResponse<VehicleFleetResponse>.Failure("Vehicle not found");
+
+        if (!string.IsNullOrWhiteSpace(request.TruckPlate))
+        {
+            var truckPlate = request.TruckPlate.Trim();
+            var existing = await _db.Vehicles.FirstOrDefaultAsync(v => v.TruckPlate.ToUpper() == truckPlate.ToUpper() && v.VehicleId != vehicleId && v.Status != "DELETED");
+            if (existing != null)
+                return ApiResponse<VehicleFleetResponse>.Failure("Truck plate already exists");
+
+            vehicle.TruckPlate = truckPlate;
+        }
+
+        if (request.ChassisNumber != null)
+        {
+            var chassisNumber = request.ChassisNumber.Trim();
+            if (!string.IsNullOrWhiteSpace(chassisNumber))
+            {
+                var existing = await _db.Vehicles.FirstOrDefaultAsync(v => v.ChassisNumber != null && v.ChassisNumber.ToUpper() == chassisNumber.ToUpper() && v.VehicleId != vehicleId && v.Status != "DELETED");
+                if (existing != null)
+                    return ApiResponse<VehicleFleetResponse>.Failure("Chassis number already exists");
+
+                vehicle.ChassisNumber = chassisNumber;
+            }
+            else
+            {
+                vehicle.ChassisNumber = null;
+            }
+        }
+
+        if (request.EngineNumber != null)
+        {
+            var engineNumber = request.EngineNumber.Trim();
+            if (!string.IsNullOrWhiteSpace(engineNumber))
+            {
+                var existing = await _db.Vehicles.FirstOrDefaultAsync(v => v.EngineNumber != null && v.EngineNumber.ToUpper() == engineNumber.ToUpper() && v.VehicleId != vehicleId && v.Status != "DELETED");
+                if (existing != null)
+                    return ApiResponse<VehicleFleetResponse>.Failure("Engine number already exists");
+
+                vehicle.EngineNumber = engineNumber;
+            }
+            else
+            {
+                vehicle.EngineNumber = null;
+            }
+        }
+
+        if (request.Brand != null)
+            vehicle.Brand = string.IsNullOrWhiteSpace(request.Brand) ? null : request.Brand.Trim();
+
+        if (request.ManufactureYear.HasValue)
+            vehicle.ManufactureYear = request.ManufactureYear;
+
+        if (request.StandardFuelLiters.HasValue)
+            vehicle.StandardFuelLiters = request.StandardFuelLiters;
+
+        if (!string.IsNullOrWhiteSpace(request.VehicleType))
+            vehicle.VehicleType = request.VehicleType.Trim();
+
+        if (request.MaxWeight.HasValue)
+            vehicle.MaxWeight = request.MaxWeight.Value;
+
+        if (request.MaxCbm.HasValue)
+            vehicle.MaxCbm = request.MaxCbm.Value;
+
+        if (request.MinTemp.HasValue)
+            vehicle.MinTemp = request.MinTemp.Value;
+
+        if (request.MaxTemp.HasValue)
+            vehicle.MaxTemp = request.MaxTemp.Value;
+
+        if (request.Status != null)
+        {
+            var normalizedStatus = request.Status.Trim().ToUpperInvariant();
+            vehicle.Status = normalizedStatus;
+        }
+
+        await RefreshVehicleStatusAsync(vehicle);
+        await _db.SaveChangesAsync();
+
+        return ApiResponse<VehicleFleetResponse>.SuccessResponse(ToVehicleResponse(vehicle), "Vehicle updated successfully");
+    }
+
+    public async Task<ApiResponse<MaintenanceForecastResponse>> GetVehicleMaintenanceForecastAsync(Guid vehicleId, Guid? tripId)
+    {
+        var vehicle = await _db.Vehicles.FirstOrDefaultAsync(v => v.VehicleId == vehicleId && v.Status != "DELETED");
+        if (vehicle == null)
+            return ApiResponse<MaintenanceForecastResponse>.Failure("Vehicle not found");
+
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var isDueByDate = vehicle.NextMaintenanceDate.HasValue && today >= vehicle.NextMaintenanceDate.Value;
+        var isDueByKm = vehicle.CurrentOdometer >= vehicle.NextMaintenanceOdometer;
+
+        var isWarningByDate = vehicle.NextMaintenanceDate.HasValue && !isDueByDate &&
+            (vehicle.NextMaintenanceDate.Value.DayNumber - today.DayNumber <= vehicle.WarningDaysBeforeDue);
+        var isWarningByKm = !isDueByKm &&
+            (vehicle.NextMaintenanceOdometer - vehicle.CurrentOdometer <= vehicle.WarningKmBeforeDue);
+
+        var isOverrunForecast = false;
+        double? tripDistance = null;
+
+        if (tripId.HasValue)
+        {
+            var trip = await _db.MasterTrips.AsNoTracking().FirstOrDefaultAsync(t => t.TripId == tripId.Value);
+            if (trip != null && trip.TotalDistanceKm.HasValue)
+            {
+                tripDistance = (double)trip.TotalDistanceKm.Value;
+                if (vehicle.CurrentOdometer + tripDistance.Value > vehicle.NextMaintenanceOdometer)
+                {
+                    isOverrunForecast = true;
+                }
+            }
+        }
+
+        var headroomKm = vehicle.NextMaintenanceOdometer - vehicle.CurrentOdometer;
+        var remainingDays = vehicle.NextMaintenanceDate.HasValue
+            ? vehicle.NextMaintenanceDate.Value.DayNumber - today.DayNumber
+            : 365;
+
+        var forecastStatus = "SAFE";
+        var message = "Vehicle is safe for dispatch";
+
+        if (isDueByDate || isDueByKm || isOverrunForecast)
+        {
+            forecastStatus = "OVERDUE";
+            message = isOverrunForecast
+                ? $"Trip distance of {tripDistance:F1} km exceeds available odometer headroom of {headroomKm:F1} km"
+                : (isDueByKm ? "Vehicle has exceeded maintenance mileage limit" : "Vehicle is overdue for scheduled maintenance date");
+        }
+        else if (isWarningByDate || isWarningByKm)
+        {
+            forecastStatus = "WARNING";
+            message = isWarningByKm
+                ? $"Vehicle is approaching mileage limit. Headroom: {headroomKm:F1} km"
+                : $"Vehicle is approaching due date. Remaining days: {remainingDays}";
+        }
+
+        var forecast = new MaintenanceForecastResponse
+        {
+            VehicleId = vehicle.VehicleId,
+            TruckPlate = vehicle.TruckPlate,
+            IsDueByDate = isDueByDate,
+            IsDueByKm = isDueByKm,
+            IsWarningByDate = isWarningByDate,
+            IsWarningByKm = isWarningByKm,
+            IsOverrunForecast = isOverrunForecast,
+            HeadroomKm = headroomKm,
+            RemainingDays = remainingDays,
+            ForecastStatus = forecastStatus,
+            Message = message
+        };
+
+        return ApiResponse<MaintenanceForecastResponse>.SuccessResponse(forecast);
+    }
+
+    private async Task<double> GetSystemConfigDoubleAsync(string key, double fallback)
+    {
+        var value = await _db.SystemConfigs
+            .AsNoTracking()
+            .Where(c => c.Key == key)
+            .Select(c => c.Value)
+            .FirstOrDefaultAsync();
+
+        return double.TryParse(value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : fallback;
+    }
+
+    private async Task<int> GetSystemConfigIntAsync(string key, int fallback)
+    {
+        var value = await _db.SystemConfigs
+            .AsNoTracking()
+            .Where(c => c.Key == key)
+            .Select(c => c.Value)
+            .FirstOrDefaultAsync();
+
+        return int.TryParse(value, out var parsed) ? parsed : fallback;
+    }
 
     private static class SpreadsheetReader
     {

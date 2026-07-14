@@ -11,6 +11,10 @@ namespace ColdChainX.API.Middleware
     public class ExceptionMiddleware
     {
         private readonly RequestDelegate _next;
+        private static readonly JsonSerializerOptions JsonOptions = new()
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
 
         public ExceptionMiddleware(RequestDelegate next)
         {
@@ -46,7 +50,7 @@ namespace ColdChainX.API.Middleware
             var response = ApiResponse<object>.Failure(message);
             context.Response.ContentType = "application/json";
             context.Response.StatusCode = statusCode;
-            var result = JsonSerializer.Serialize(response);
+            var result = JsonSerializer.Serialize(response, JsonOptions);
             return context.Response.WriteAsync(result);
         }
     }

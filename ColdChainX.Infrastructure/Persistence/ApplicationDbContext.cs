@@ -128,6 +128,8 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
 
     public virtual DbSet<LpnDeliveryConfirmation> LpnDeliveryConfirmations { get; set; }
 
+    public virtual DbSet<VehicleOdometerLog> VehicleOdometerLogs { get; set; }
+
 
 
 
@@ -997,6 +999,9 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasColumnName("ticket_code");
             entity.Property(e => e.TriggeredAtOdometer).HasColumnName("triggered_at_odometer");
             entity.Property(e => e.VehicleId).HasColumnName("vehicle_id");
+            entity.Property(e => e.AttachmentUrl)
+                .HasMaxLength(500)
+                .HasColumnName("attachment_url");
 
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.MaintenanceTickets)
                 .HasForeignKey(d => d.CreatedBy)
@@ -1775,6 +1780,10 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasForeignKey(d => d.RoleId)
                 .HasConstraintName("fk_users_roles");
 
+            entity.HasOne(d => d.Warehouse).WithMany(p => p.Users)
+                .HasForeignKey(d => d.WarehouseId)
+                .HasConstraintName("fk_users_warehouse");
+
             entity.HasQueryFilter(e => e.DeletedAt == null);
         });
 
@@ -1824,6 +1833,13 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasPrecision(5, 2)
                 .HasColumnName("min_temp");
             entity.Property(e => e.NextMaintenanceOdometer).HasColumnName("next_maintenance_odometer");
+            entity.Property(e => e.NextMaintenanceDate).HasColumnName("next_maintenance_date");
+            entity.Property(e => e.WarningDaysBeforeDue)
+                .HasDefaultValueSql("15")
+                .HasColumnName("warning_days_before_due");
+            entity.Property(e => e.WarningKmBeforeDue)
+                .HasDefaultValueSql("500.0")
+                .HasColumnName("warning_km_before_due");
             entity.Property(e => e.StandardFuelLiters)
                 .HasPrecision(5, 2)
                 .HasColumnName("standard_fuel_liters");
@@ -2500,6 +2516,33 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasForeignKey(d => d.CodVerifiedByUserId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_lpn_delivery_confirmations_verified_by");
+        });
+
+        modelBuilder.Entity<VehicleOdometerLog>(entity =>
+        {
+            entity.HasKey(e => e.LogId).HasName("vehicle_odometer_logs_pkey");
+            entity.ToTable("vehicle_odometer_logs");
+
+            entity.Property(e => e.LogId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("log_id");
+
+            entity.Property(e => e.VehicleId).HasColumnName("vehicle_id");
+            entity.Property(e => e.OdometerValue).HasColumnName("odometer_value");
+            entity.Property(e => e.LocationText).HasMaxLength(500).HasColumnName("location_text");
+            entity.Property(e => e.Reason).HasMaxLength(255).HasColumnName("reason");
+            entity.Property(e => e.UpdatedBy).HasColumnName("updated_by");
+            entity.Property(e => e.OdometerPhotoUrl).HasMaxLength(1000).HasColumnName("odometer_photo_url");
+
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+
+            entity.HasOne(d => d.Vehicle).WithMany()
+                .HasForeignKey(d => d.VehicleId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_vehicle_odometer_logs_vehicle_id");
         });
 
         modelBuilder.Entity<ServiceCatalog>(entity =>

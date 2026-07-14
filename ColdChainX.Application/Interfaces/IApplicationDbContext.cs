@@ -48,6 +48,8 @@ namespace ColdChainX.Application.Interfaces
         DbSet<Location> Locations { get; }
         DbSet<Vehicle> Vehicles { get; }
         DbSet<ReturnedItem> ReturnedItems { get; }
+        DbSet<MaintenanceTicket> MaintenanceTickets { get; }
+        DbSet<VehicleOdometerLog> VehicleOdometerLogs { get; }
         DbSet<TripStopEvent> TripStopEvents { get; }
         DbSet<DetentionCharge> DetentionCharges { get; }
         DbSet<IncidentEvidence> IncidentEvidences { get; }

@@ -22,21 +22,26 @@ namespace ColdChainX.API.Controllers
         public async Task<IActionResult> GetAllNotifications()
         {
             var notifications = await _context.Notifications
+                .AsNoTracking()
+                .Include(n => n.Template)
                 .OrderByDescending(n => n.CreatedAt)
-                .Select(n => new
-                {
-                    n.NotiId,
-                    n.UserId,
-                    n.SenderId,
-                    n.TemplateId,
-                    n.Params,
-                    n.OrderId,
-                    n.IsRead,
-                    n.CreatedAt
-                })
                 .ToListAsync();
 
-            return Ok(notifications);
+            var response = notifications.Select(n => new
+            {
+                n.NotiId,
+                n.UserId,
+                n.SenderId,
+                n.TemplateId,
+                Title = ColdChainX.Infrastructure.Services.NotificationService.RenderTemplate(n.Template?.TitleTemplate, n.Params),
+                Body = ColdChainX.Infrastructure.Services.NotificationService.RenderTemplate(n.Template?.BodyTemplate, n.Params),
+                n.Params,
+                n.OrderId,
+                n.IsRead,
+                n.CreatedAt
+            });
+
+            return Ok(response);
         }
 
         [HttpGet("users/{userId:guid}")]

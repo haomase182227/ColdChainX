@@ -155,30 +155,48 @@ SELECT * FROM roles;
 - status (varchar(20))
 - created_at (timestamp)
 
-## Next Steps
+## Resolution Status (Updated: 2026-07-06)
 
-1. **Apply migrations** to create all tables
-2. **Seed roles data** if not already present:
+### 1. Local Database Reset & Synchronization (SUCCESS)
+The Local Docker database has been successfully reset and updated:
+- **Action**: Cleaned local volume and executed `dotnet ef database update`.
+- **Applied Migrations**: All **40 codebase migrations** have been successfully applied in chronological order.
+- **Verification**: Verified that key tables and columns are correctly created on `localhost:5432`.
+
+### 2. Specific Columns & Tables Confirmed Locally
+- **`IotDevice.IsOnline`**: Confirmed to exist as a `boolean NOT NULL` column named `IsOnline` in the `iot_devices` table.
+- **Vehicle & Maintenance-related Tables**: Confirmed existence of `vehicles`, `vehicle_documents`, and `maintenance_tickets` tables. Note that `maintenance_logs` and `fleet_maintenance_schedules` are not defined in the C# codebase and therefore do not exist (this matches entity mappings).
+
+### 3. Schema Synchronization (Local vs. Azure) (SUCCESS)
+The Local DB has been fully aligned with the Deployed Azure DB schema by applying the following SQL updates on `localhost:5432` to resolve column and timezone mismatches without losing local data:
 ```sql
-INSERT INTO roles (role_id, role_name, created_at) VALUES
-(gen_random_uuid(), 'Admin', CURRENT_TIMESTAMP),
-(gen_random_uuid(), 'Customer', CURRENT_TIMESTAMP),
-(gen_random_uuid(), 'Driver', CURRENT_TIMESTAMP),
-(gen_random_uuid(), 'Manager', CURRENT_TIMESTAMP)
-ON CONFLICT DO NOTHING;
-```
-3. **Test the register endpoint** again
-4. **Verify** data is being inserted correctly
+-- 1. URL fields to varchar(500)
+ALTER TABLE customer_contracts ALTER COLUMN file_url TYPE varchar(500);
+ALTER TABLE delivery_epods ALTER COLUMN pdf_url TYPE varchar(500);
+ALTER TABLE invoices ALTER COLUMN pdf_url TYPE varchar(500);
+ALTER TABLE quotations ALTER COLUMN file_url TYPE varchar(500);
+ALTER TABLE warehouse_receipts ALTER COLUMN pdf_url TYPE varchar(500);
 
-## Connection String
-Your current connection (from appsettings.json):
-```
-Host=coldchainx-db-server.postgres.database.azure.com;
-Port=5432;
-Database=postgres;
-Username=postgres;
-Password=ColdChainX@2026;
-Include Error Detail=true
+-- 2. outbound_orders.receiver_phone to varchar(100)
+ALTER TABLE outbound_orders ALTER COLUMN receiver_phone TYPE varchar(100);
+
+-- 3. users.refresh_token to varchar(255)
+ALTER TABLE users ALTER COLUMN refresh_token TYPE varchar(255);
+
+-- 4. users.refresh_token_expiry_time and users.updated_at to timestamp without time zone (timestamptz -> timestamp)
+ALTER TABLE users ALTER COLUMN refresh_token_expiry_time TYPE timestamp without time zone USING refresh_token_expiry_time AT TIME ZONE 'UTC';
+ALTER TABLE users ALTER COLUMN updated_at TYPE timestamp without time zone USING updated_at AT TIME ZONE 'UTC';
+
+-- 5. Add legacy/missing columns if they don't exist
+ALTER TABLE users ADD COLUMN IF NOT EXISTS "WarehouseId" uuid;
+ALTER TABLE lpns ADD COLUMN IF NOT EXISTS temperature numeric;
 ```
 
-Contact your database administrator if you don't have permissions to run migrations or create tables.
+### 4. Local Connection Reverted
+The application's default database connection in `appsettings.json` has been pointed back to the local database to use the local Docker container for development:
+```json
+"LocalConnection": "Host=localhost;Port=5432;Database=postgres;Username=postgres;Password=ColdChainX@2026;Include Error Detail=true"
+```
+It is now safe to proceed with local development and testing using the local database.
+
+
