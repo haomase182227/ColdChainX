@@ -23,7 +23,7 @@ const char gprsUser[]    = "";
 const char gprsPass[]    = "";
 
 // ===== CẤU HÌNH MQTT BROKER =====
-const char* MQTT_HOST = "coldchainx-mqtt-demo.hycub5daehamhke8.southeastasia.azurecontainer.io";
+const char* MQTT_HOST = "8.231.129.222";
 const uint16_t MQTT_PORT = 1883;
 const char* MQTT_USERNAME = "esp32user";
 const char* MQTT_PASSWORD = "123456";
