@@ -39,10 +39,18 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
-        [HttpGet("options")]
-        public async Task<IActionResult> GetRouteOptions([FromQuery] string? originCity, [FromQuery] string? destCity)
+        [HttpGet("{routeId}/detail")]
+        public async Task<IActionResult> GetRoute(Guid routeId)
         {
-            var result = await _routeService.GetRouteOptionsAsync(originCity, destCity);
+            var result = await _routeService.GetRouteByIdAsync(routeId);
+            if (!result.Success) return NotFound(result);
+            return Ok(result);
+        }
+
+        [HttpGet("options")]
+        public async Task<IActionResult> GetRouteOptions([FromQuery] string? originCity, [FromQuery] string? destCity, [FromQuery] RouteStatusFilter? status)
+        {
+            var result = await _routeService.GetRouteOptionsAsync(originCity, destCity, status?.ToString());
             return Ok(result);
         }
 

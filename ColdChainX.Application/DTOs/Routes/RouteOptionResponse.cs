@@ -8,5 +8,6 @@ namespace ColdChainX.Application.DTOs.Routes
         public string DestCity { get; set; } = null!;
         public string TransitTime { get; set; } = null!;
         public string Status { get; set; } = null!;
+        public DateTime? CreatedAt { get; set; }
     }
 }
