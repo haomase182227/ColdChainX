@@ -180,8 +180,8 @@ namespace ColdChainX.Infrastructure.Services
             int rowNumber = 1;
 
             // Load existing routes for faster validation
-            var existingRouteIds = await _db.RouteMasters.Select(r => r.RouteId).ToListAsync();
-            var existingRouteIdsSet = new HashSet<Guid>(existingRouteIds);
+            var existingRoutes = await _db.RouteMasters.Select(r => new { r.RouteId, r.RouteCode }).ToListAsync();
+            var existingRouteCodesMap = existingRoutes.ToDictionary(r => r.RouteCode, r => r.RouteId, StringComparer.OrdinalIgnoreCase);
 
             while (!reader.EndOfStream)
             {
@@ -199,10 +199,11 @@ namespace ColdChainX.Infrastructure.Services
                     continue;
                 }
 
-                if (!Guid.TryParse(parts[0].Trim('"').Trim(), out var routeId) || !existingRouteIdsSet.Contains(routeId))
+                var routeCode = parts[0].Trim('"').Trim();
+                if (!existingRouteCodesMap.TryGetValue(routeCode, out var routeId))
                 {
                     result.FailedRows++;
-                    result.Errors.Add($"Row {rowNumber}: Invalid or non-existent RouteId.");
+                    result.Errors.Add($"Row {rowNumber}: Invalid or non-existent RouteCode.");
                     continue;
                 }
 

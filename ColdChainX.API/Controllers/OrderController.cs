@@ -24,6 +24,14 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
+        [HttpGet("{orderId}/origin-warehouses")]
+        public async Task<IActionResult> GetOriginWarehouses(Guid orderId)
+        {
+            var result = await _orderService.GetOriginWarehousesForOrderAsync(orderId);
+            if (!result.Success) return NotFound(result);
+            return Ok(result);
+        }
+
         [HttpGet("my-orders")]
         [Authorize(Roles = "Customer")]
         public async Task<IActionResult> GetMyOrders([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10, [FromQuery] string? status = null)
