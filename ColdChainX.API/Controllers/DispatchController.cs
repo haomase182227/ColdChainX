@@ -326,6 +326,7 @@ public class DispatchController : ControllerBase
         return Ok(ApiResponse<PagedResult<object>>.SuccessResponse(pagedResult, "Lấy danh sách LPN thành công."));
     }
 
+    [AllowAnonymous]
     [HttpPost("preview-load-plan")]
     public async Task<IActionResult> PreviewLoadPlan([FromBody] PreviewLoadPlanRequest request)
     {
