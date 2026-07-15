@@ -89,6 +89,15 @@ public class DispatchController : ControllerBase
                 v.VehicleType,
                 v.MaxWeight,
                 v.MaxCbm,
+                v.InnerLengthCm,
+                v.InnerWidthCm,
+                v.InnerHeightCm,
+                UsableCbm = v.InnerLengthCm.HasValue && v.InnerWidthCm.HasValue && v.InnerHeightCm.HasValue
+                    && v.InnerLengthCm.Value > 0 && v.InnerWidthCm.Value > 0 && v.InnerHeightCm.Value > 0
+                        ? Math.Min(
+                            v.MaxCbm,
+                            v.InnerLengthCm.Value * v.InnerWidthCm.Value * v.InnerHeightCm.Value / 1_000_000m) * 0.8m
+                        : (decimal?)null,
                 v.MinTemp,
                 v.MaxTemp
             })
