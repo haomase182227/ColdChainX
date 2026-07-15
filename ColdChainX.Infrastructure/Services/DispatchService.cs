@@ -853,6 +853,14 @@ public class DispatchService : IDispatchService
         var driverLicenses = new Dictionary<Guid, DriverLicense>();
         foreach (var driver in drivers)
         {
+            // Tự động cập nhật giờ nghỉ (nếu có)
+            await _driverAvailability.ReconcileStatusAsync(driver);
+
+            // Chặn nếu trạng thái tài xế không phải ACTIVE (ví dụ: SUSPENDED_DOCS, RELAX, MAINTENANCE...)
+            if (driver.Status != "ACTIVE")
+                throw new InvalidOperationException(
+                    $"Tài xế {driver.FullName} không thể ghép chuyến — trạng thái hiện tại: '{driver.Status}'.");
+
             // Bằng lái còn hạn
             var activeLicense = driver.DriverLicenses
                 .Where(l => l.ExpiryDate >= today && (l.Status == null || l.Status == "ACTIVE"))
@@ -860,12 +868,6 @@ public class DispatchService : IDispatchService
                 .FirstOrDefault()
                 ?? throw new InvalidOperationException($"Tài xế {driver.FullName} không có bằng lái còn hạn.");
             driverLicenses[driver.DriverId] = activeLicense;
-
-            // Tự động gỡ RELAX nếu đã qua ngày/tuần giới hạn; chặn nếu vẫn đang RELAX
-            await _driverAvailability.ReconcileStatusAsync(driver);
-            if (driver.Status == "RELAX")
-                throw new InvalidOperationException(
-                    $"Tài xế {driver.FullName} đang trong thời gian nghỉ bắt buộc (RELAX) do vượt giới hạn giờ lái. Chưa thể gán chuyến.");
 
             // Chặn double-book: tài xế đang gắn với một chuyến khác còn hoạt động
             var driverBusy = await _context.TripDrivers
@@ -906,6 +908,38 @@ public class DispatchService : IDispatchService
 
         // 6. Tính lộ trình (TSP + Goong)
         var routeResult = await BuildOptimalRouteAsync(originLocation, orders, vehicle);
+
+        // 6b. Thuật toán 3D Packing (C# Engine)
+        decimal vLength = vehicle.InnerLengthCm ?? (vehicle.VehicleType == "TRUCK_1T" ? 300m : 200m);
+        decimal vWidth = vehicle.InnerWidthCm ?? (vehicle.VehicleType == "TRUCK_1T" ? 180m : 140m);
+        decimal vHeight = vehicle.InnerHeightCm ?? (vehicle.VehicleType == "TRUCK_1T" ? 190m : 140m);
+
+        var engineItems = new List<ColdChainX.Application.Services.LpnDims>();
+        foreach (var lpn in lpns)
+        {
+            var stop = routeResult.StopSequence.FirstOrDefault(s => s.LocationId == lpn.Order?.DestLocation);
+            int seq = stop?.Sequence ?? 1;
+
+            engineItems.Add(new ColdChainX.Application.Services.LpnDims
+            {
+                LpnId = lpn.LpnId,
+                Length = lpn.LengthCm ?? 120m,
+                Width = lpn.WidthCm ?? 100m,
+                Height = lpn.HeightCm ?? 150m,
+                RouteStopSequence = seq
+            });
+        }
+
+        var engine = new ColdChainX.Application.Services.CargoPackingEngine();
+        var packingResult = engine.Pack(
+            new ColdChainX.Application.Services.ContainerDims { Length = vLength, Width = vWidth, Height = vHeight }, 
+            engineItems);
+
+        if (packingResult.UnplacedLpnIds.Any())
+        {
+            var unplacedCodes = lpns.Where(l => packingResult.UnplacedLpnIds.Contains(l.LpnId)).Select(l => l.LpnCode);
+            throw new InvalidOperationException($"Lỗi xếp xe (3D Packing): Không đủ không gian (thể tích/kích thước) để xếp tất cả các LPN. Không thể xếp: {string.Join(", ", unplacedCodes)}");
+        }
 
         // 7. LIFO load plan dựa trên LPNs
         var loadPlan = BuildLpnLIFOLoadPlan(lpns, routeResult.StopSequence);

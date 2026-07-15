@@ -88,6 +88,23 @@ namespace ColdChainX.Infrastructure.Repositories
             await Task.CompletedTask;
         }
 
+        public async Task<(IReadOnlyCollection<Lpn> Data, int TotalCount)> GetLpnsInWarehouseAsync(Guid warehouseId, int page, int pageSize)
+        {
+            var query = _db.Lpns
+                .Include(l => l.Receipt)
+                .Where(l => l.WarehouseId == warehouseId && l.State == ColdChainX.Core.Enums.LpnState.IN_STOCK)
+                .AsNoTracking();
+
+            var totalCount = await query.CountAsync();
+            var lpns = await query
+                .OrderBy(l => l.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return (lpns, totalCount);
+        }
+
         public async Task SaveChangesAsync()
         {
             await _db.SaveChangesAsync();
