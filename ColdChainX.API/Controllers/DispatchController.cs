@@ -349,14 +349,18 @@ public class DispatchController : ControllerBase
         for (int i = 0; i < orderedLpns.Count; i++)
         {
             var lpn = orderedLpns[i];
-            engineItems.Add(new ColdChainX.Application.Services.LpnDims
+            int qty = Math.Max(1, lpn.Quantity);
+            for (int j = 0; j < qty; j++)
             {
-                LpnId = lpn.LpnId,
-                Length = lpn.LengthCm ?? 120m,
-                Width = lpn.WidthCm ?? 100m,
-                Height = lpn.HeightCm ?? 150m,
-                RouteStopSequence = orderedLpns.Count - i
-            });
+                engineItems.Add(new ColdChainX.Application.Services.LpnDims
+                {
+                    LpnId = lpn.LpnId,
+                    Length = lpn.LengthCm ?? 120m,
+                    Width = lpn.WidthCm ?? 100m,
+                    Height = lpn.HeightCm ?? 150m,
+                    RouteStopSequence = orderedLpns.Count - i
+                });
+            }
         }
 
         var engine = new ColdChainX.Application.Services.CargoPackingEngine();

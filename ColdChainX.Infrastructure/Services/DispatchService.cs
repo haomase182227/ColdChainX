@@ -920,14 +920,18 @@ public class DispatchService : IDispatchService
             var stop = routeResult.StopSequence.FirstOrDefault(s => s.LocationId == lpn.Order?.DestLocation);
             int seq = stop?.Sequence ?? 1;
 
-            engineItems.Add(new ColdChainX.Application.Services.LpnDims
+            int qty = Math.Max(1, lpn.Quantity);
+            for (int i = 0; i < qty; i++)
             {
-                LpnId = lpn.LpnId,
-                Length = lpn.LengthCm ?? 120m,
-                Width = lpn.WidthCm ?? 100m,
-                Height = lpn.HeightCm ?? 150m,
-                RouteStopSequence = seq
-            });
+                engineItems.Add(new ColdChainX.Application.Services.LpnDims
+                {
+                    LpnId = lpn.LpnId,
+                    Length = lpn.LengthCm ?? 120m,
+                    Width = lpn.WidthCm ?? 100m,
+                    Height = lpn.HeightCm ?? 150m,
+                    RouteStopSequence = seq
+                });
+            }
         }
 
         var engine = new ColdChainX.Application.Services.CargoPackingEngine();
