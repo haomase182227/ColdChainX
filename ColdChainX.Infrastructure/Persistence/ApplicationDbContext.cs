@@ -1823,6 +1823,15 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.MaxCbm)
                 .HasPrecision(8, 2)
                 .HasColumnName("max_cbm");
+            entity.Property(e => e.InnerLengthCm)
+                .HasPrecision(10, 2)
+                .HasColumnName("InnerLengthCm");
+            entity.Property(e => e.InnerWidthCm)
+                .HasPrecision(10, 2)
+                .HasColumnName("InnerWidthCm");
+            entity.Property(e => e.InnerHeightCm)
+                .HasPrecision(10, 2)
+                .HasColumnName("InnerHeightCm");
             entity.Property(e => e.MaxTemp)
                 .HasPrecision(5, 2)
                 .HasColumnName("max_temp");
