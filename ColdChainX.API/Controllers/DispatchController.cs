@@ -370,6 +370,8 @@ public class DispatchController : ControllerBase
 
         var colors = new[] { "#ff9999", "#99ff99", "#9999ff", "#ffff99", "#ff99ff", "#99ffff" };
 
+        var distinctLpnIds = lpns.Select(l => l.LpnId).Distinct().ToList();
+
         var response = new PreviewLoadPlanResponse
         {
             VehicleType = vehicle.VehicleType,
@@ -379,8 +381,8 @@ public class DispatchController : ControllerBase
             Utilisation = packingResult.Utilisation,
             UnplacedLpnIds = packingResult.UnplacedLpnIds,
             PlacedItems = packingResult.PlacedItems.Select(pi => {
-                var lpnIndex = lpns.FindIndex(l => l.LpnId == pi.LpnId);
-                var lpn = lpns[lpnIndex];
+                var lpn = lpns.First(l => l.LpnId == pi.LpnId);
+                int colorIdx = distinctLpnIds.IndexOf(pi.LpnId);
                 return new PreviewPlacedItem
                 {
                     LpnId = pi.LpnId,
@@ -391,7 +393,7 @@ public class DispatchController : ControllerBase
                     W = pi.W,
                     H = pi.H,
                     D = pi.D,
-                    Color = colors[lpnIndex % colors.Length]
+                    Color = colors[colorIdx % colors.Length]
                 };
             }).ToList()
         };
