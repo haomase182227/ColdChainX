@@ -192,7 +192,7 @@ public class DispatchController : ControllerBase
             .AsNoTracking()
             .Where(s => s.Status == "ACTIVE" && s.Route.Status == "ACTIVE")
             .OrderBy(s => s.Route.RouteCode)
-            .ThenBy(s => s.DayOfWeek)
+            .ThenBy(s => s.DepartureDate)
             .ThenBy(s => s.DepartureTime)
             .Select(s => new
             {
@@ -201,7 +201,7 @@ public class DispatchController : ControllerBase
                 s.Route.RouteCode,
                 RouteName = s.Route.OriginCity + " -> " + s.Route.DestCity,
                 s.ScheduleName,
-                s.DayOfWeek,
+                DayOfWeek = (int)s.DepartureDate.DayOfWeek,
                 s.DepartureTime,
                 s.CutOffTime,
                 s.Status,

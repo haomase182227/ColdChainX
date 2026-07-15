@@ -122,7 +122,7 @@ public class ManualDispatchFlowTests
             RouteId = route.RouteId,
             Route = route,
             ScheduleName = "Morning schedule",
-            DayOfWeek = 1,
+            DepartureDate = DateTime.Today.AddDays(1),
             DepartureTime = new TimeSpan(8, 0, 0),
             CutOffTime = new TimeSpan(17, 0, 0),
             Status = "ACTIVE"
