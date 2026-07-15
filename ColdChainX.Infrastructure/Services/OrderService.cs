@@ -933,6 +933,23 @@ namespace ColdChainX.Infrastructure.Services
                         ImageUrl = d.ImageUrl,
                         CreatedAt = d.CreatedAt
                     })
+                    .ToList(),
+                CustomerId = order.CustomerId,
+                CustomerName = order.Customer?.CompanyName,
+                Quotations = order.Quotations
+                    .OrderByDescending(q => q.CreatedAt)
+                    .Select(q => new OrderQuotationResponse
+                    {
+                        QuoteId = q.QuoteId,
+                        BaseFreight = q.BaseFreight,
+                        LastMileSurcharge = q.LastMileSurcharge,
+                        VatPercentage = q.VatPercentage,
+                        VatAmount = q.VatAmount,
+                        FinalAmount = q.FinalAmount,
+                        FileUrl = q.FileUrl,
+                        Status = q.Status,
+                        CreatedAt = q.CreatedAt
+                    })
                     .ToList()
             };
         }

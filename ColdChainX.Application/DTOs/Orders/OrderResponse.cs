@@ -19,6 +19,10 @@ namespace ColdChainX.Application.DTOs.Orders
         public OrderRouteResponse? Route { get; set; }
         public OrderLocationResponse? Destination { get; set; }
         public IReadOnlyCollection<OrderDocumentResponse> Documents { get; set; } = Array.Empty<OrderDocumentResponse>();
+
+        public Guid? CustomerId { get; set; }
+        public string? CustomerName { get; set; }
+        public IReadOnlyCollection<OrderQuotationResponse> Quotations { get; set; } = Array.Empty<OrderQuotationResponse>();
     }
 
     public class OrderRouteResponse
