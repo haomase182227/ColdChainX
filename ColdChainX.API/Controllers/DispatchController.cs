@@ -12,6 +12,7 @@ using System.Text;
 using System.Text.Json;
 using ColdChainX.Application.DTOs.Common;
 using ColdChainX.Application.DTOs.Dispatch;
+using ColdChainX.Shared.Responses;
 using ColdChainX.Infrastructure.Persistence;
 using ColdChainX.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -93,7 +94,7 @@ public class DispatchController : ControllerBase
                 v.MaxTemp
             })
             .ToList();
-        return Ok(new { Success = true, Data = items });
+        return Ok(ApiResponse<object>.SuccessResponse(items, "Lấy danh sách xe tải thành công."));
     }
 
     /// <summary>
@@ -142,7 +143,7 @@ public class DispatchController : ControllerBase
             .OrderBy(x => x.FullName)
             .ToList();
 
-        return Ok(new { Success = true, Count = items.Count, Data = items });
+        return Ok(ApiResponse<object>.SuccessResponse(items, "Lấy danh sách tài xế thành công."));
     }
 
     /// <summary>
@@ -165,7 +166,7 @@ public class DispatchController : ControllerBase
             })
             .ToListAsync();
 
-        return Ok(new { Success = true, Data = locations });
+        return Ok(ApiResponse<object>.SuccessResponse(locations, "Lấy danh sách kho/điểm đến thành công."));
     }
 
     /// <summary>
@@ -187,7 +188,7 @@ public class DispatchController : ControllerBase
             })
             .ToListAsync();
 
-        return Ok(new { Success = true, Count = items.Count, Data = items });
+        return Ok(ApiResponse<object>.SuccessResponse(items, "Lấy danh sách kho xuất phát thành công."));
     }
 
     /// <summary>
@@ -278,16 +279,76 @@ public class DispatchController : ControllerBase
             x.CreatedAt
         }).ToList();
 
-        return Ok(new
+        var pagedResult = PagedResult<object>.Create(items, totalRecords, safePageNumber, safePageSize);
+
+        return Ok(ApiResponse<PagedResult<object>>.SuccessResponse(pagedResult, "Lấy danh sách LPN thành công."));
+    }
+
+    [HttpPost("preview-load-plan")]
+    public async Task<IActionResult> PreviewLoadPlan([FromBody] PreviewLoadPlanRequest request)
+    {
+        var vehicle = await _db.Vehicles.FindAsync(request.VehicleId);
+        if (vehicle == null) return NotFound(ApiResponse<object>.Failure("Vehicle not found"));
+
+        decimal vLength = vehicle.InnerLengthCm ?? (vehicle.VehicleType == "TRUCK_1T" ? 300m : 200m);
+        decimal vWidth = vehicle.InnerWidthCm ?? (vehicle.VehicleType == "TRUCK_1T" ? 180m : 140m);
+        decimal vHeight = vehicle.InnerHeightCm ?? (vehicle.VehicleType == "TRUCK_1T" ? 190m : 140m);
+
+        var lpns = await _db.Lpns
+            .Include(l => l.Order)
+            .Where(l => request.LpnIds.Contains(l.LpnId))
+            .ToListAsync();
+
+        var engineItems = new List<ColdChainX.Application.Services.LpnDims>();
+        
+        // LIFO logic: rank by SlaDeadline. Latest deadline = delivered last = packed first (highest sequence)
+        var orderedLpns = lpns.OrderByDescending(l => l.SlaDeadline).ToList();
+        for (int i = 0; i < orderedLpns.Count; i++)
         {
-            Success = true,
-            PageNumber = safePageNumber,
-            PageSize = safePageSize,
-            TotalRecords = totalRecords,
-            TotalPages = totalPages,
-            Count = items.Count,
-            Data = items
-        });
+            var lpn = orderedLpns[i];
+            engineItems.Add(new ColdChainX.Application.Services.LpnDims
+            {
+                LpnId = lpn.LpnId,
+                Length = lpn.LengthCm ?? 120m,
+                Width = lpn.WidthCm ?? 100m,
+                Height = lpn.HeightCm ?? 150m,
+                RouteStopSequence = orderedLpns.Count - i
+            });
+        }
+
+        var engine = new ColdChainX.Application.Services.CargoPackingEngine();
+        var packingResult = engine.Pack(
+            new ColdChainX.Application.Services.ContainerDims { Length = vLength, Width = vWidth, Height = vHeight }, 
+            engineItems);
+
+        var colors = new[] { "#ff9999", "#99ff99", "#9999ff", "#ffff99", "#ff99ff", "#99ffff" };
+
+        var response = new PreviewLoadPlanResponse
+        {
+            VehicleType = vehicle.VehicleType,
+            ContainerLength = vLength,
+            ContainerWidth = vWidth,
+            ContainerHeight = vHeight,
+            Utilisation = packingResult.Utilisation,
+            UnplacedLpnIds = packingResult.UnplacedLpnIds,
+            PlacedItems = packingResult.PlacedItems.Select((pi, idx) => {
+                var lpn = lpns.First(l => l.LpnId == pi.LpnId);
+                return new PreviewPlacedItem
+                {
+                    LpnId = pi.LpnId,
+                    LpnCode = lpn.LpnCode,
+                    X = pi.X,
+                    Y = pi.Y,
+                    Z = pi.Z,
+                    W = pi.W,
+                    H = pi.H,
+                    D = pi.D,
+                    Color = colors[idx % colors.Length]
+                };
+            }).ToList()
+        };
+
+        return Ok(ApiResponse<PreviewLoadPlanResponse>.SuccessResponse(response, "Preview load plan successful."));
     }
 
     /// <summary>
@@ -320,14 +381,14 @@ public class DispatchController : ControllerBase
         [FromForm] ManualDispatchFormRequest form)
     {
         if (lpnIds == null || !lpnIds.Any())
-            return BadRequest(new { Success = false, Error = "Vui lòng chọn ít nhất một LPN." });
+            return BadRequest(ApiResponse<object>.Failure("Vui lòng chọn ít nhất một LPN."));
 
         if (form.PlannedStartTime >= form.PlannedEndTime)
-            return BadRequest(new { Success = false, Error = "PlannedStartTime phải nhỏ hơn PlannedEndTime." });
+            return BadRequest(ApiResponse<object>.Failure("PlannedStartTime phải nhỏ hơn PlannedEndTime."));
 
         // Bắt buộc chọn kho trước — chỉ các LPN thuộc kho này mới được ghép chuyến.
         if (!Guid.TryParse(ExtractGuid(form.WarehouseId), out var selectedWarehouseId) || selectedWarehouseId == Guid.Empty)
-            return BadRequest(new { Success = false, Error = "Vui lòng chọn kho (WarehouseId) trước khi ghép chuyến." });
+            return BadRequest(ApiResponse<object>.Failure("Vui lòng chọn kho (WarehouseId) trước khi ghép chuyến."));
 
         // Tài xế: 1–2 người, gán theo chuyến qua TripDriver
         var driverIds = (form.DriverIds ?? new List<string>())
@@ -339,7 +400,7 @@ public class DispatchController : ControllerBase
             .ToList();
 
         if (driverIds.Count < 1 || driverIds.Count > 2)
-            return BadRequest(new { Success = false, Error = "Vui lòng chọn 1 hoặc 2 tài xế cho chuyến." });
+            return BadRequest(ApiResponse<object>.Failure("Vui lòng chọn 1 hoặc 2 tài xế cho chuyến."));
 
         var parsedLpnIds = lpnIds.Select(id => Guid.Parse(ExtractGuid(id))).ToList();
 
@@ -347,7 +408,7 @@ public class DispatchController : ControllerBase
         var firstLpnId = parsedLpnIds.First();
         var firstLpn = await _db.Lpns.Include(l => l.Order).FirstOrDefaultAsync(l => l.LpnId == firstLpnId);
         if (firstLpn == null)
-            return BadRequest(new { Success = false, Error = $"Không tìm thấy LPN {firstLpnId}." });
+            return BadRequest(ApiResponse<object>.Failure($"Không tìm thấy LPN {firstLpnId}."));
 
         Guid originLocId;
         if (firstLpn.Order != null && firstLpn.Order.PickupLocation.HasValue)
@@ -361,7 +422,7 @@ public class DispatchController : ControllerBase
                 .Select(l => l.LocationId)
                 .FirstOrDefaultAsync();
             if (fallbackLocId == Guid.Empty)
-                return BadRequest(new { Success = false, Error = "Không tìm thấy vị trí kho xuất phát nào trong hệ thống." });
+                return BadRequest(ApiResponse<object>.Failure("Không tìm thấy vị trí kho xuất phát nào trong hệ thống."));
             originLocId = fallbackLocId;
         }
 
@@ -387,15 +448,15 @@ public class DispatchController : ControllerBase
 
             result.LifoPdfUrl = pdfUrl;
 
-            return Ok(new { Success = true, Data = result });
+            return Ok(ApiResponse<ManualDispatchResult>.SuccessResponse(result, "Ghép chuyến thành công!"));
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { Success = false, Error = ex.Message });
+            return BadRequest(ApiResponse<object>.Failure(ex.Message));
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { Success = false, Error = "Lỗi hệ thống khi manual-dispatch.", Detail = ex.Message });
+            return StatusCode(500, ApiResponse<object>.Failure($"Lỗi hệ thống khi manual-dispatch: {ex.Message}"));
         }
     }
 

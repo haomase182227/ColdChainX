@@ -14,5 +14,6 @@ namespace ColdChainX.Core.Interfaces
         Task AddAsync(Warehouse warehouse);
         Task UpdateAsync(Warehouse warehouse);
         Task SaveChangesAsync();
+        Task<(IReadOnlyCollection<Lpn> Data, int TotalCount)> GetLpnsInWarehouseAsync(Guid warehouseId, int page, int pageSize);
     }
 }
