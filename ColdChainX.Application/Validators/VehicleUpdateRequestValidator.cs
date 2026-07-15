@@ -45,6 +45,18 @@ namespace ColdChainX.Application.Validators
                 .GreaterThan(0).When(x => x.MaxCbm.HasValue)
                 .WithMessage("Max CBM must be greater than zero");
 
+            RuleFor(x => x.InnerLengthCm)
+                .GreaterThan(0).When(x => x.InnerLengthCm.HasValue)
+                .WithMessage("Inner length must be greater than zero");
+
+            RuleFor(x => x.InnerWidthCm)
+                .GreaterThan(0).When(x => x.InnerWidthCm.HasValue)
+                .WithMessage("Inner width must be greater than zero");
+
+            RuleFor(x => x.InnerHeightCm)
+                .GreaterThan(0).When(x => x.InnerHeightCm.HasValue)
+                .WithMessage("Inner height must be greater than zero");
+
             RuleFor(x => x.MinTemp)
                 .InclusiveBetween(-100, 100).When(x => x.MinTemp.HasValue)
                 .WithMessage("Min temp must be between -100 and 100");

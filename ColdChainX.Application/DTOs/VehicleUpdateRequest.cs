@@ -11,6 +11,9 @@ namespace ColdChainX.Application.DTOs
         public string? VehicleType { get; set; }
         public decimal? MaxWeight { get; set; }
         public decimal? MaxCbm { get; set; }
+        public decimal? InnerLengthCm { get; set; }
+        public decimal? InnerWidthCm { get; set; }
+        public decimal? InnerHeightCm { get; set; }
         public decimal? MinTemp { get; set; }
         public decimal? MaxTemp { get; set; }
         public string? Status { get; set; }

@@ -184,6 +184,8 @@ public class DispatchInstruction
 /// </summary>
 public class ManualDispatchRequest
 {
+    public Guid ScheduleId { get; set; }
+
     /// <summary>Kho được chọn — chỉ các LPN thuộc kho này mới được ghép chuyến.</summary>
     public Guid WarehouseId { get; set; }
 
@@ -209,6 +211,8 @@ public class ManualDispatchRequest
 /// <summary>Form request cho manual-dispatch endpoint (multipart/form-data).</summary>
 public class ManualDispatchFormRequest
 {
+    public string ScheduleId { get; set; } = string.Empty;
+
     /// <summary>Kho được chọn (WarehouseId, có thể kèm hậu tố ":label"). Bắt buộc chọn trước.</summary>
     public string WarehouseId { get; set; } = string.Empty;
 
