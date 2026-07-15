@@ -378,8 +378,9 @@ public class DispatchController : ControllerBase
             ContainerHeight = vHeight,
             Utilisation = packingResult.Utilisation,
             UnplacedLpnIds = packingResult.UnplacedLpnIds,
-            PlacedItems = packingResult.PlacedItems.Select((pi, idx) => {
-                var lpn = lpns.First(l => l.LpnId == pi.LpnId);
+            PlacedItems = packingResult.PlacedItems.Select(pi => {
+                var lpnIndex = lpns.FindIndex(l => l.LpnId == pi.LpnId);
+                var lpn = lpns[lpnIndex];
                 return new PreviewPlacedItem
                 {
                     LpnId = pi.LpnId,
@@ -390,7 +391,7 @@ public class DispatchController : ControllerBase
                     W = pi.W,
                     H = pi.H,
                     D = pi.D,
-                    Color = colors[idx % colors.Length]
+                    Color = colors[lpnIndex % colors.Length]
                 };
             }).ToList()
         };
