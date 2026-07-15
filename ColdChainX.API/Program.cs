@@ -35,6 +35,7 @@ builder.Services.AddSingleton(Channel.CreateUnbounded<TelemetryData>(new Unbound
 }));
 builder.Services.AddSingleton<RedisService>();
 
+// Đã bật lại TelemetryMqttWorker
 if (configuration.GetValue("HostedWorkers:TelemetryMqtt", true))
 {
     builder.Services.AddHostedService<TelemetryMqttWorker>();
@@ -45,6 +46,7 @@ if (configuration.GetValue("HostedWorkers:TelemetryProcessor", true))
     builder.Services.AddHostedService<TelemetryProcessorWorker>();
 }
 
+// Đã bật lại IotWatchdogWorker
 if (configuration.GetValue("HostedWorkers:IotWatchdog", true))
 {
     builder.Services.AddHostedService<IotWatchdogWorker>();

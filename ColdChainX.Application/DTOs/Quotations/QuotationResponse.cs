@@ -29,6 +29,7 @@ namespace ColdChainX.Application.DTOs.Quotations
 
     public class QuotationAdditionalChargeResponse
     {
+        public Guid? ServiceCatalogId { get; set; }
         public string Name { get; set; } = null!;
         public decimal Amount { get; set; }
         public string? Note { get; set; }

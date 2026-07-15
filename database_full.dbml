@@ -168,6 +168,36 @@ Table "route_master" {
   }
 }
 
+
+Table "route_stops" {
+  "stop_id" uuid [pk, not null]
+  "route_id" uuid [not null]
+  "stop_name" "character varying(100)" [not null]
+  "created_at" timestamp
+}
+
+Table "route_schedules" {
+  "schedule_id" uuid [pk, not null]
+  "route_id" uuid [not null]
+  "schedule_name" "character varying(100)" [not null]
+  "day_of_week" integer [not null]
+  "departure_time" time [not null]
+  "cut_off_time" time [not null]
+  "status" "character varying(50)" [not null]
+  "created_at" timestamp
+}
+
+Table "service_catalogs" {
+  "service_catalog_id" uuid [pk, not null]
+  "service_code" "character varying(50)" [not null]
+  "service_name" "character varying(150)" [not null]
+  "description" text
+  "default_price" numeric(18,2) [not null]
+  "is_mandatory" boolean [not null]
+  "is_active" boolean [not null]
+  "created_at" timestamp
+  "updated_at" timestamp
+}
 Table "system_configs" {
   "id" uuid [not null]
   "key" "character varying(100)" [not null]
@@ -366,31 +396,6 @@ Table "vehicle_documents" {
   }
 }
 
-Table "warehouse_zones" {
-  "zone_id" uuid [not null, default: `gen_random_uuid()`]
-  "warehouse_id" uuid [not null]
-  "zone_code" "character varying(20)" [not null]
-  "zone_name" "character varying(100)" [not null]
-  "zone_type" "character varying(30)" [not null]
-  "storage_type" "character varying(30)" [not null]
-  "temperature_min" numeric(5,2)
-  "temperature_max" numeric(5,2)
-  "max_capacity_pallets" integer [not null]
-  "current_pallets" integer [not null, default: 0]
-  "status" "character varying(20)" [not null, default: `'ACTIVE'::charactervarying`]
-  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
-  "created_by" uuid
-  "updated_at" timestamp
-  "updated_by" uuid
-  "deleted_at" timestamp
-  "deleted_by" uuid
-
-  Indexes {
-    zone_id [pk, name: "warehouse_zones_pkey"]
-    (warehouse_id, zone_code) [unique, name: "IX_warehouse_zones_warehouse_id_zone_code"]
-  }
-}
-
 Table "geo_fences" {
   "fence_id" uuid [not null, default: `gen_random_uuid()`]
   "location_id" uuid
@@ -488,30 +493,6 @@ Table "outbound_orders" {
     assigned_picker_id [name: "IX_outbound_orders_assigned_picker_id"]
     customer_id [name: "IX_outbound_orders_customer_id"]
     order_code [unique, name: "uq_outbound_order_code"]
-  }
-}
-
-Table "warehouse_locations" {
-  "location_id" uuid [not null, default: `gen_random_uuid()`]
-  "zone_id" uuid [not null]
-  "location_code" "character varying(50)" [not null]
-  "rack_code" "character varying(20)"
-  "bay_code" "character varying(20)"
-  "level_code" "character varying(20)"
-  "max_capacity_pallets" integer [not null]
-  "current_pallets" integer [not null, default: 0]
-  "status" "character varying(20)" [not null, default: `'ACTIVE'::charactervarying`]
-  "description" text
-  "created_at" timestamp [default: `CURRENT_TIMESTAMP`]
-  "created_by" uuid
-  "updated_at" timestamp
-  "updated_by" uuid
-  "deleted_at" timestamp
-  "deleted_by" uuid
-
-  Indexes {
-    location_id [pk, name: "warehouse_locations_pkey"]
-    (zone_id, location_code) [unique, name: "IX_warehouse_locations_zone_id_location_code"]
   }
 }
 
@@ -1178,8 +1159,6 @@ Ref "fk_iot_vehicles":"vehicles"."vehicle_id" < "iot_devices"."vehicle_id"
 
 Ref "fk_vd_vehicles":"vehicles"."vehicle_id" < "vehicle_documents"."vehicle_id"
 
-Ref "fk_warehouse_zones_warehouses":"warehouses"."warehouse_id" < "warehouse_zones"."warehouse_id" [delete: restrict]
-
 Ref "fk_geo_locations":"locations"."location_id" < "geo_fences"."location_id"
 
 Ref "fk_mtrip_dest":"locations"."location_id" < "master_trips"."destination_location_id"
@@ -1197,8 +1176,6 @@ Ref "fk_mt_vehicles":"vehicles"."vehicle_id" < "maintenance_tickets"."vehicle_id
 Ref "fk_outbound_customer":"customers"."customer_id" < "outbound_orders"."customer_id" [delete: restrict]
 
 Ref "fk_outbound_picker":"users"."user_id" < "outbound_orders"."assigned_picker_id" [delete: restrict]
-
-Ref "fk_warehouse_locations_zones":"warehouse_zones"."zone_id" < "warehouse_locations"."zone_id" [delete: restrict]
 
 Ref "fk_al_mtrip":"master_trips"."trip_id" < "alert_logs"."trip_id"
 
@@ -1422,3 +1399,6 @@ Records public.compliance_zoning_rules(rule_id, created_at, created_by, is_activ
   'b006a6a6-a6a6-a6a6-a6a6-a6a6a6a6a6a3', `TIMESTAMP'2026-06-14T00:00:00'`, '00000000-0000-0000-0000-000000000000', true, 5, 1, 25, null, null
   'b006a6a6-a6a6-a6a6-a6a6-a6a6a6a6a6a4', `TIMESTAMP'2026-06-14T00:00:00'`, '00000000-0000-0000-0000-000000000000', true, 5, 0, 24, null, null
 }
+
+Ref "fk_route_stops_route_master":"route_master"."route_id" < "route_stops"."route_id"
+Ref "fk_route_schedules_route_master":"route_master"."route_id" < "route_schedules"."route_id"

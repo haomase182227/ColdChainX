@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using ColdChainX.Application.DTOs.Common;
 using ColdChainX.Application.DTOs.Routes;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
@@ -18,11 +19,16 @@ namespace ColdChainX.Infrastructure.Services
             _db = db;
         }
 
-        public async Task<ApiResponse<IReadOnlyCollection<RouteOptionResponse>>> GetRouteOptionsAsync(string? originCity, string? destCity)
+        public async Task<ApiResponse<IReadOnlyCollection<RouteOptionResponse>>> GetRouteOptionsAsync(string? originCity, string? destCity, string? status = null)
         {
-            var routes = await _db.RouteMasters
-                .AsNoTracking()
-                .Where(r => r.Status == "ACTIVE")
+            var query = _db.RouteMasters.AsNoTracking().AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                query = query.Where(r => r.Status == status.ToUpper());
+            }
+
+            var routes = await query
                 .OrderBy(r => r.OriginCity)
                 .ThenBy(r => r.DestCity)
                 .ToListAsync();
@@ -54,14 +60,14 @@ namespace ColdChainX.Infrastructure.Services
             var schedules = await _db.RouteSchedules
                 .AsNoTracking()
                 .Where(s => s.RouteId == routeId && s.Status == "ACTIVE")
-                .OrderBy(s => s.DayOfWeek).ThenBy(s => s.DepartureTime)
+                .OrderBy(s => s.DepartureDate).ThenBy(s => s.DepartureTime)
                 .Select(s => new ScheduleOptionDto
                 {
                     ScheduleId = s.ScheduleId,
                     ScheduleName = s.ScheduleName,
-                    DayOfWeek = s.DayOfWeek,
-                    DepartureTime = s.DepartureTime,
-                    CutOffTime = s.CutOffTime
+                    DepartureDate = DateOnly.FromDateTime(s.DepartureDate),
+                    DepartureTime = TimeOnly.FromTimeSpan(s.DepartureTime),
+                    CutOffTime = TimeOnly.FromTimeSpan(s.CutOffTime),
                 })
                 .ToListAsync();
 
@@ -86,13 +92,92 @@ namespace ColdChainX.Infrastructure.Services
             return ApiResponse<RouteBookingOptionsDto>.SuccessResponse(result, "Booking options retrieved successfully");
         }
 
-        public async Task<PagedResponse<IReadOnlyCollection<RouteScheduleDto>>> GetRouteSchedulesAsync(Guid routeId, int pageIndex, int pageSize)
+        public async Task<ApiResponse<IReadOnlyCollection<WarehouseOptionDto>>> GetRouteOriginWarehousesAsync(Guid routeId)
+        {
+            var route = await _db.RouteMasters.FirstOrDefaultAsync(r => r.RouteId == routeId);
+            if (route == null)
+            {
+                return ApiResponse<IReadOnlyCollection<WarehouseOptionDto>>.Failure("Route not found");
+            }
+
+            var originCity = route.OriginCity;
+            
+            // Find warehouses in the origin city
+            var warehouses = await _db.Warehouses
+                .Where(w => w.WarehouseName.Contains(originCity) || 
+                            w.WarehouseCode.Contains(originCity) || 
+                            (w.Address != null && w.Address.Contains(originCity)))
+                .Select(w => new WarehouseOptionDto
+                {
+                    WarehouseId = w.WarehouseId,
+                    WarehouseName = w.WarehouseName,
+                    Address = w.Address
+                })
+                .ToListAsync();
+
+            return ApiResponse<IReadOnlyCollection<WarehouseOptionDto>>.SuccessResponse(warehouses, "Warehouses retrieved successfully");
+        }
+
+        public async Task<ApiResponse<RouteOptionResponse>> GetRouteByIdAsync(Guid routeId)
+        {
+            var route = await _db.RouteMasters.AsNoTracking().FirstOrDefaultAsync(r => r.RouteId == routeId);
+            if (route == null) return ApiResponse<RouteOptionResponse>.Failure("Route not found");
+
+            return ApiResponse<RouteOptionResponse>.SuccessResponse(ToResponse(route), "Route retrieved successfully");
+        }
+
+        public async Task<ApiResponse<RouteOptionResponse>> CreateRouteAsync(CreateRouteRequest request)
+        {
+            var route = new RouteMaster
+            {
+                RouteId = Guid.NewGuid(),
+                RouteCode = request.RouteCode,
+                OriginCity = request.OriginCity,
+                DestCity = request.DestCity,
+                TransitTime = request.TransitTime,
+                Status = "ACTIVE",
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _db.RouteMasters.Add(route);
+            await _db.SaveChangesAsync();
+
+            return ApiResponse<RouteOptionResponse>.SuccessResponse(ToResponse(route), "Route created successfully");
+        }
+
+        public async Task<ApiResponse<RouteOptionResponse>> UpdateRouteAsync(Guid routeId, UpdateRouteRequest request)
+        {
+            var route = await _db.RouteMasters.FirstOrDefaultAsync(r => r.RouteId == routeId);
+            if (route == null) return ApiResponse<RouteOptionResponse>.Failure("Route not found");
+
+            route.RouteCode = request.RouteCode;
+            route.OriginCity = request.OriginCity;
+            route.DestCity = request.DestCity;
+            route.TransitTime = request.TransitTime;
+            route.Status = request.Status;
+
+            await _db.SaveChangesAsync();
+            return ApiResponse<RouteOptionResponse>.SuccessResponse(ToResponse(route), "Route updated successfully");
+        }
+
+        public async Task<ApiResponse<bool>> DeleteRouteAsync(Guid routeId)
+        {
+            var route = await _db.RouteMasters.FirstOrDefaultAsync(r => r.RouteId == routeId);
+            if (route == null) return ApiResponse<bool>.Failure("Route not found");
+
+            _db.RouteMasters.Remove(route);
+            await _db.SaveChangesAsync();
+
+            return ApiResponse<bool>.SuccessResponse(true, "Route deleted successfully");
+        }
+
+        public async Task<ApiResponse<PagedResult<RouteScheduleDto>>> GetRouteSchedulesAsync(Guid routeId, int pageIndex, int pageSize)
         {
             var query = _db.RouteSchedules.AsNoTracking().Where(s => s.RouteId == routeId);
             var totalCount = await query.CountAsync();
 
             var items = await query
-                .OrderBy(s => s.DayOfWeek)
+                .OrderBy(s => s.DepartureDate)
                 .ThenBy(s => s.DepartureTime)
                 .Skip((pageIndex - 1) * pageSize)
                 .Take(pageSize)
@@ -101,30 +186,32 @@ namespace ColdChainX.Infrastructure.Services
                     ScheduleId = s.ScheduleId,
                     RouteId = s.RouteId,
                     ScheduleName = s.ScheduleName,
-                    DayOfWeek = s.DayOfWeek,
-                    DepartureTime = s.DepartureTime,
-                    CutOffTime = s.CutOffTime,
+                    DepartureDate = DateOnly.FromDateTime(s.DepartureDate),
+                    DepartureTime = TimeOnly.FromTimeSpan(s.DepartureTime),
+                    CutOffTime = TimeOnly.FromTimeSpan(s.CutOffTime),
                     Status = s.Status,
                     CreatedAt = s.CreatedAt
                 })
                 .ToListAsync();
 
-            return PagedResponse<IReadOnlyCollection<RouteScheduleDto>>.SuccessPagedResponse(items, pageIndex, pageSize, totalCount, "Route schedules retrieved successfully");
+            var pagedResult = PagedResult<RouteScheduleDto>.Create(items, totalCount, pageIndex, pageSize);
+            return ApiResponse<PagedResult<RouteScheduleDto>>.SuccessResponse(pagedResult, "Route schedules retrieved successfully");
         }
 
         public async Task<ApiResponse<RouteScheduleDto>> AddRouteScheduleAsync(Guid routeId, CreateRouteScheduleRequest request)
         {
-            if (!await _db.RouteMasters.AnyAsync(r => r.RouteId == routeId))
+            var route = await _db.RouteMasters.FirstOrDefaultAsync(r => r.RouteId == routeId);
+            if (route == null)
                 return ApiResponse<RouteScheduleDto>.Failure("Route not found");
 
             var entity = new RouteSchedule
             {
                 ScheduleId = Guid.NewGuid(),
                 RouteId = routeId,
-                ScheduleName = request.ScheduleName,
-                DayOfWeek = request.DayOfWeek,
-                DepartureTime = request.DepartureTime,
-                CutOffTime = request.CutOffTime,
+                ScheduleName = $"{route.RouteCode} ({GetVietnameseDayOfWeek(request.DepartureDate.ToDateTime(TimeOnly.MinValue))})",
+                DepartureDate = request.DepartureDate.ToDateTime(TimeOnly.MinValue),
+                DepartureTime = request.DepartureTime.ToTimeSpan(),
+                CutOffTime = request.CutOffTime.ToTimeSpan(),
                 Status = "ACTIVE",
                 CreatedAt = DateTime.UtcNow
             };
@@ -137,14 +224,45 @@ namespace ColdChainX.Infrastructure.Services
                 ScheduleId = entity.ScheduleId,
                 RouteId = entity.RouteId,
                 ScheduleName = entity.ScheduleName,
-                DayOfWeek = entity.DayOfWeek,
-                DepartureTime = entity.DepartureTime,
-                CutOffTime = entity.CutOffTime,
+                DepartureDate = DateOnly.FromDateTime(entity.DepartureDate),
+                DepartureTime = TimeOnly.FromTimeSpan(entity.DepartureTime),
+                CutOffTime = TimeOnly.FromTimeSpan(entity.CutOffTime),
                 Status = entity.Status,
                 CreatedAt = entity.CreatedAt
             };
 
             return ApiResponse<RouteScheduleDto>.SuccessResponse(dto, "Route schedule added successfully");
+        }
+
+        public async Task<ApiResponse<RouteScheduleDto>> UpdateRouteScheduleAsync(Guid routeId, Guid scheduleId, UpdateRouteScheduleRequest request)
+        {
+            var route = await _db.RouteMasters.FirstOrDefaultAsync(r => r.RouteId == routeId);
+            if (route == null) return ApiResponse<RouteScheduleDto>.Failure("Route not found");
+
+            var entity = await _db.RouteSchedules.FirstOrDefaultAsync(s => s.RouteId == routeId && s.ScheduleId == scheduleId);
+            if (entity == null) return ApiResponse<RouteScheduleDto>.Failure("Route schedule not found");
+
+            entity.ScheduleName = $"{route.RouteCode} ({GetVietnameseDayOfWeek(request.DepartureDate.ToDateTime(TimeOnly.MinValue))})";
+            entity.DepartureDate = request.DepartureDate.ToDateTime(TimeOnly.MinValue);
+            entity.DepartureTime = request.DepartureTime.ToTimeSpan();
+            entity.CutOffTime = request.CutOffTime.ToTimeSpan();
+            entity.Status = request.Status;
+
+            await _db.SaveChangesAsync();
+
+            var dto = new RouteScheduleDto
+            {
+                ScheduleId = entity.ScheduleId,
+                RouteId = entity.RouteId,
+                ScheduleName = entity.ScheduleName,
+                DepartureDate = DateOnly.FromDateTime(entity.DepartureDate),
+                DepartureTime = TimeOnly.FromTimeSpan(entity.DepartureTime),
+                CutOffTime = TimeOnly.FromTimeSpan(entity.CutOffTime),
+                Status = entity.Status,
+                CreatedAt = entity.CreatedAt
+            };
+
+            return ApiResponse<RouteScheduleDto>.SuccessResponse(dto, "Route schedule updated successfully");
         }
 
         public async Task<ApiResponse<bool>> DeleteRouteScheduleAsync(Guid routeId, Guid scheduleId)
@@ -159,7 +277,7 @@ namespace ColdChainX.Infrastructure.Services
             return ApiResponse<bool>.SuccessResponse(true, "Route schedule deleted successfully");
         }
 
-        public async Task<PagedResponse<IReadOnlyCollection<RouteStopDto>>> GetRouteStopsAsync(Guid routeId, int pageIndex, int pageSize)
+        public async Task<ApiResponse<PagedResult<RouteStopDto>>> GetRouteStopsAsync(Guid routeId, int pageIndex, int pageSize)
         {
             var query = _db.RouteStops.AsNoTracking().Where(s => s.RouteId == routeId);
             var totalCount = await query.CountAsync();
@@ -177,7 +295,8 @@ namespace ColdChainX.Infrastructure.Services
                 })
                 .ToListAsync();
 
-            return PagedResponse<IReadOnlyCollection<RouteStopDto>>.SuccessPagedResponse(items, pageIndex, pageSize, totalCount, "Route stops retrieved successfully");
+            var pagedResult = PagedResult<RouteStopDto>.Create(items, totalCount, pageIndex, pageSize);
+            return ApiResponse<PagedResult<RouteStopDto>>.SuccessResponse(pagedResult, "Route stops retrieved successfully");
         }
 
         public async Task<ApiResponse<RouteStopDto>> AddRouteStopAsync(Guid routeId, CreateRouteStopRequest request)
@@ -209,6 +328,25 @@ namespace ColdChainX.Infrastructure.Services
             return ApiResponse<RouteStopDto>.SuccessResponse(dto, "Route stop added successfully");
         }
 
+        public async Task<ApiResponse<RouteStopDto>> UpdateRouteStopAsync(Guid routeId, Guid stopId, UpdateRouteStopRequest request)
+        {
+            var entity = await _db.RouteStops.FirstOrDefaultAsync(s => s.RouteId == routeId && s.StopId == stopId);
+            if (entity == null) return ApiResponse<RouteStopDto>.Failure("Route stop not found");
+
+            entity.StopName = request.StopName;
+            await _db.SaveChangesAsync();
+
+            var dto = new RouteStopDto
+            {
+                StopId = entity.StopId,
+                RouteId = entity.RouteId,
+                StopName = entity.StopName,
+                CreatedAt = entity.CreatedAt
+            };
+
+            return ApiResponse<RouteStopDto>.SuccessResponse(dto, "Route stop updated successfully");
+        }
+
         public async Task<ApiResponse<bool>> DeleteRouteStopAsync(Guid routeId, Guid stopId)
         {
             var entity = await _db.RouteStops.FirstOrDefaultAsync(s => s.RouteId == routeId && s.StopId == stopId);
@@ -230,7 +368,23 @@ namespace ColdChainX.Infrastructure.Services
                 OriginCity = route.OriginCity,
                 DestCity = route.DestCity,
                 TransitTime = route.TransitTime,
-                Status = route.Status
+                Status = route.Status,
+                CreatedAt = route.CreatedAt
+            };
+        }
+
+        private string GetVietnameseDayOfWeek(DateTime date)
+        {
+            return date.DayOfWeek switch
+            {
+                DayOfWeek.Monday => "T2",
+                DayOfWeek.Tuesday => "T3",
+                DayOfWeek.Wednesday => "T4",
+                DayOfWeek.Thursday => "T5",
+                DayOfWeek.Friday => "T6",
+                DayOfWeek.Saturday => "T7",
+                DayOfWeek.Sunday => "CN",
+                _ => ""
             };
         }
 

@@ -933,6 +933,23 @@ namespace ColdChainX.Infrastructure.Services
                         ImageUrl = d.ImageUrl,
                         CreatedAt = d.CreatedAt
                     })
+                    .ToList(),
+                CustomerId = order.CustomerId,
+                CustomerName = order.Customer?.CompanyName,
+                Quotations = order.Quotations
+                    .OrderByDescending(q => q.CreatedAt)
+                    .Select(q => new OrderQuotationResponse
+                    {
+                        QuoteId = q.QuoteId,
+                        BaseFreight = q.BaseFreight,
+                        LastMileSurcharge = q.LastMileSurcharge,
+                        VatPercentage = q.VatPercentage,
+                        VatAmount = q.VatAmount,
+                        FinalAmount = q.FinalAmount,
+                        FileUrl = q.FileUrl,
+                        Status = q.Status,
+                        CreatedAt = q.CreatedAt
+                    })
                     .ToList()
             };
         }
@@ -956,6 +973,33 @@ namespace ColdChainX.Infrastructure.Services
                    + "Bạn vui lòng kiểm tra lại đã nhập đúng kích thước theo đơn vị Centimet (CM) chưa nhé. "
                    + "Nếu kích thước bạn nhập là chính xác, đơn hàng này cần được vận chuyển theo hình thức Bao Nguyên Xe (FTL). "
                    + "Vui lòng liên hệ Hotline/Sales để được báo giá riêng.";
+        }
+
+        public async Task<ApiResponse<IReadOnlyCollection<ColdChainX.Application.DTOs.Routes.WarehouseOptionDto>>> GetOriginWarehousesForOrderAsync(Guid orderId)
+        {
+            var order = await _db.TransportOrders
+                .Include(o => o.Schedule)
+                .ThenInclude(s => s.Route)
+                .FirstOrDefaultAsync(o => o.OrderId == orderId);
+
+            if (order == null) return ApiResponse<IReadOnlyCollection<ColdChainX.Application.DTOs.Routes.WarehouseOptionDto>>.Failure("Order not found");
+            if (order.Schedule?.Route == null) return ApiResponse<IReadOnlyCollection<ColdChainX.Application.DTOs.Routes.WarehouseOptionDto>>.Failure("Route information not found for this order");
+
+            var originCity = order.Schedule.Route.OriginCity;
+
+            var warehouses = await _db.Warehouses
+                .Where(w => w.WarehouseName.Contains(originCity) || 
+                            w.WarehouseCode.Contains(originCity) || 
+                            (w.Address != null && w.Address.Contains(originCity)))
+                .Select(w => new ColdChainX.Application.DTOs.Routes.WarehouseOptionDto
+                {
+                    WarehouseId = w.WarehouseId,
+                    WarehouseName = w.WarehouseName,
+                    Address = w.Address
+                })
+                .ToListAsync();
+
+            return ApiResponse<IReadOnlyCollection<ColdChainX.Application.DTOs.Routes.WarehouseOptionDto>>.SuccessResponse(warehouses, "Available warehouses retrieved successfully");
         }
 
         private static string FormatKg(decimal value)

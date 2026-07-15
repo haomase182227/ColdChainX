@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using ColdChainX.Application.DTOs.Warehouse;
 using ColdChainX.Application.DTOs.Common;
 using ColdChainX.Application.Interfaces;
+using ColdChainX.Application.DTOs.WarehouseFlow;
 using ColdChainX.Shared.Responses;
 
 namespace ColdChainX.API.Controllers
@@ -199,6 +200,23 @@ namespace ColdChainX.API.Controllers
         {
             var result = await _warehouseService.GetListAsync(pageNumber, pageSize, search);
             return Ok(result);
+        }
+
+        /// <summary>
+        /// Retrieves all IN_STOCK LPNs in a specific warehouse.
+        /// </summary>
+        /// <param name="warehouseId">The unique identifier of the warehouse.</param>
+        /// <param name="page">Page number (default 1).</param>
+        /// <param name="pageSize">Page size (default 10).</param>
+        /// <returns>A paginated list of LPNs.</returns>
+        [HttpGet("{warehouseId}/lpns")]
+        public async Task<ActionResult<ApiResponse<PagedResult<LpnResponse>>>> GetLpnsInWarehouse(
+            [FromRoute] Guid warehouseId,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10)
+        {
+            var response = await _warehouseService.GetLpnsInWarehouseAsync(warehouseId, page, pageSize);
+            return Ok(response);
         }
     }
 }

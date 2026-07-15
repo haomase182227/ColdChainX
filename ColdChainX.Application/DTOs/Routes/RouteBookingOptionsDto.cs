@@ -14,9 +14,9 @@ namespace ColdChainX.Application.DTOs.Routes
     {
         public Guid ScheduleId { get; set; }
         public string ScheduleName { get; set; } = null!;
-        public int DayOfWeek { get; set; }
-        public TimeSpan DepartureTime { get; set; }
-        public TimeSpan CutOffTime { get; set; }
+        public DateOnly DepartureDate { get; set; }
+        public TimeOnly DepartureTime { get; set; }
+        public TimeOnly CutOffTime { get; set; }
     }
 
     public class StopOptionDto

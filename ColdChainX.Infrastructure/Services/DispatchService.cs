@@ -37,6 +37,9 @@ public class DispatchService : IDispatchService
     // TemplateId thông báo lệnh điều động (phải tồn tại trong bảng notification_templates)
     private const string LoadingOrderTemplateId = "DISPATCH_LOADING_ORDER";
 
+    // Chỉ sử dụng tối đa 80% thể tích thùng xe để bảo đảm lưu thông khí lạnh.
+    private const decimal MaxColdAirflowVolumeUtilization = 0.80m;
+
     public DispatchService(
         ApplicationDbContext context,
         GeminiLoadOptimizerClient geminiClient,
@@ -662,6 +665,76 @@ public class DispatchService : IDispatchService
         return (decimal)Math.Round(R * c, 2);
     }
 
+    private static void ValidateColdStorageCapacity(
+        IReadOnlyCollection<Lpn> lpns,
+        Vehicle vehicle,
+        decimal recordedTotalCbm)
+    {
+        if (!HasPositiveDimensions(vehicle.InnerLengthCm, vehicle.InnerWidthCm, vehicle.InnerHeightCm))
+            throw new InvalidOperationException(
+                $"Xe {vehicle.TruckPlate} chưa có đủ kích thước thùng xe (dài, rộng, cao) để kiểm tra xếp hàng.");
+
+        var lpnsWithoutDimensions = lpns
+            .Where(l => !HasPositiveDimensions(l.LengthCm, l.WidthCm, l.HeightCm))
+            .Select(l => l.LpnCode)
+            .ToList();
+        if (lpnsWithoutDimensions.Count > 0)
+            throw new InvalidOperationException(
+                $"Các LPN sau chưa có đủ kích thước dài, rộng, cao: {string.Join(", ", lpnsWithoutDimensions)}.");
+
+        var vehicleDimensions = new[]
+        {
+            vehicle.InnerLengthCm!.Value,
+            vehicle.InnerWidthCm!.Value,
+            vehicle.InnerHeightCm!.Value
+        };
+        Array.Sort(vehicleDimensions);
+
+        var oversizedLpn = lpns.FirstOrDefault(l =>
+        {
+            var lpnDimensions = new[]
+            {
+                l.LengthCm!.Value,
+                l.WidthCm!.Value,
+                l.HeightCm!.Value
+            };
+            Array.Sort(lpnDimensions);
+
+            // Cho phép xoay kiện hàng; sau khi sắp xếp, từng chiều vẫn phải lọt thùng xe.
+            return lpnDimensions[0] > vehicleDimensions[0]
+                || lpnDimensions[1] > vehicleDimensions[1]
+                || lpnDimensions[2] > vehicleDimensions[2];
+        });
+
+        if (oversizedLpn != null)
+            throw new InvalidOperationException(
+                $"LPN {oversizedLpn.LpnCode} ({oversizedLpn.LengthCm:F2} x {oversizedLpn.WidthCm:F2} x {oversizedLpn.HeightCm:F2} cm) " +
+                $"không lọt thùng xe {vehicle.TruckPlate} ({vehicle.InnerLengthCm:F2} x {vehicle.InnerWidthCm:F2} x {vehicle.InnerHeightCm:F2} cm), kể cả khi xoay kiện.");
+
+        var vehicleDimensionCbm = vehicle.InnerLengthCm.Value
+            * vehicle.InnerWidthCm.Value
+            * vehicle.InnerHeightCm.Value
+            / 1_000_000m;
+        var nominalVehicleCbm = vehicle.MaxCbm > 0
+            ? Math.Min(vehicle.MaxCbm, vehicleDimensionCbm)
+            : vehicleDimensionCbm;
+        var allowedCbm = nominalVehicleCbm * MaxColdAirflowVolumeUtilization;
+
+        var calculatedTotalCbm = lpns.Sum(l =>
+            l.LengthCm!.Value * l.WidthCm!.Value * l.HeightCm!.Value
+            * Math.Max(l.Quantity, 1) / 1_000_000m);
+        var occupiedCbm = Math.Max(recordedTotalCbm, calculatedTotalCbm);
+
+        if (occupiedCbm > allowedCbm)
+            throw new InvalidOperationException(
+                $"Tổng thể tích hàng {occupiedCbm:F2}m³ vượt mức cho phép {allowedCbm:F2}m³ " +
+                $"(80% dung tích thùng xe {nominalVehicleCbm:F2}m³). " +
+                "Cần chừa 20% khoảng trống để khí lạnh lưu thông và làm lạnh đều.");
+    }
+
+    private static bool HasPositiveDimensions(decimal? lengthCm, decimal? widthCm, decimal? heightCm)
+        => lengthCm > 0 && widthCm > 0 && heightCm > 0;
+
     private static double ToRad(double deg) => deg * Math.PI / 180.0;
 
 
@@ -689,6 +762,15 @@ public class DispatchService : IDispatchService
 
     public async Task<ManualDispatchResult> ManualDispatchAsync(ManualDispatchRequest request)
     {
+        var schedule = await _context.RouteSchedules
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.ScheduleId == request.ScheduleId)
+            ?? throw new InvalidOperationException("ScheduleId does not exist.");
+
+        if (!string.Equals(schedule.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                $"Schedule '{schedule.ScheduleName}' is not ACTIVE (current status: '{schedule.Status}').");
+
         // 1. Validate kho xuất phát
         var originLocation = await _context.Locations.FindAsync(request.OriginWarehouseLocationId)
             ?? throw new InvalidOperationException("LocationId kho xuất phát không tồn tại.");
@@ -713,6 +795,14 @@ public class DispatchService : IDispatchService
 
         // 2b. Ràng buộc kho — phải chọn kho trước, và mọi LPN phải cùng thuộc kho đã chọn.
         // Không cho phép trộn LPN từ nhiều kho khác nhau vào một chuyến.
+        var lpnsOutsideSchedule = lpns
+            .Where(l => l.Order == null || l.Order.ScheduleId != schedule.ScheduleId)
+            .ToList();
+        if (lpnsOutsideSchedule.Any())
+            throw new InvalidOperationException(
+                $"All selected LPNs must belong to orders in ScheduleId {schedule.ScheduleId}. " +
+                $"Invalid LPNs: {string.Join(", ", lpnsOutsideSchedule.Select(l => l.LpnCode))}.");
+
         if (request.WarehouseId == Guid.Empty)
             throw new InvalidOperationException("Vui lòng chọn kho (WarehouseId) trước khi ghép chuyến.");
 
@@ -763,6 +853,14 @@ public class DispatchService : IDispatchService
         var driverLicenses = new Dictionary<Guid, DriverLicense>();
         foreach (var driver in drivers)
         {
+            // Tự động cập nhật giờ nghỉ (nếu có)
+            await _driverAvailability.ReconcileStatusAsync(driver);
+
+            // Chặn nếu trạng thái tài xế không phải ACTIVE (ví dụ: SUSPENDED_DOCS, RELAX, MAINTENANCE...)
+            if (driver.Status != "ACTIVE")
+                throw new InvalidOperationException(
+                    $"Tài xế {driver.FullName} không thể ghép chuyến — trạng thái hiện tại: '{driver.Status}'.");
+
             // Bằng lái còn hạn
             var activeLicense = driver.DriverLicenses
                 .Where(l => l.ExpiryDate >= today && (l.Status == null || l.Status == "ACTIVE"))
@@ -770,12 +868,6 @@ public class DispatchService : IDispatchService
                 .FirstOrDefault()
                 ?? throw new InvalidOperationException($"Tài xế {driver.FullName} không có bằng lái còn hạn.");
             driverLicenses[driver.DriverId] = activeLicense;
-
-            // Tự động gỡ RELAX nếu đã qua ngày/tuần giới hạn; chặn nếu vẫn đang RELAX
-            await _driverAvailability.ReconcileStatusAsync(driver);
-            if (driver.Status == "RELAX")
-                throw new InvalidOperationException(
-                    $"Tài xế {driver.FullName} đang trong thời gian nghỉ bắt buộc (RELAX) do vượt giới hạn giờ lái. Chưa thể gán chuyến.");
 
             // Chặn double-book: tài xế đang gắn với một chuyến khác còn hoạt động
             var driverBusy = await _context.TripDrivers
@@ -808,12 +900,46 @@ public class DispatchService : IDispatchService
         var totalCbm = lpns.Sum(l => l.ActualCbm);
         var requiredMinTemp = GetTargetTemperature(orders);
 
-        if (totalWeight > vehicle.MaxWeight || totalCbm > vehicle.MaxCbm)
+        ValidateColdStorageCapacity(lpns, vehicle, totalCbm);
+
+        if (totalWeight > vehicle.MaxWeight)
             throw new InvalidOperationException(
-                $"Quá tải: Tổng hàng hóa (Weight: {totalWeight:F1}kg, CBM: {totalCbm:F1}m³) vượt quá sức chứa của xe (MaxWeight: {vehicle.MaxWeight}kg, MaxCbm: {vehicle.MaxCbm}m³).");
+                $"Quá tải: Tổng khối lượng {totalWeight:F1}kg vượt tải trọng tối đa {vehicle.MaxWeight:F1}kg của xe {vehicle.TruckPlate}.");
 
         // 6. Tính lộ trình (TSP + Goong)
         var routeResult = await BuildOptimalRouteAsync(originLocation, orders, vehicle);
+
+        // 6b. Thuật toán 3D Packing (C# Engine)
+        decimal vLength = vehicle.InnerLengthCm ?? (vehicle.VehicleType == "TRUCK_1T" ? 300m : 200m);
+        decimal vWidth = vehicle.InnerWidthCm ?? (vehicle.VehicleType == "TRUCK_1T" ? 180m : 140m);
+        decimal vHeight = vehicle.InnerHeightCm ?? (vehicle.VehicleType == "TRUCK_1T" ? 190m : 140m);
+
+        var engineItems = new List<ColdChainX.Application.Services.LpnDims>();
+        foreach (var lpn in lpns)
+        {
+            var stop = routeResult.StopSequence.FirstOrDefault(s => s.LocationId == lpn.Order?.DestLocation);
+            int seq = stop?.Sequence ?? 1;
+
+            engineItems.Add(new ColdChainX.Application.Services.LpnDims
+            {
+                LpnId = lpn.LpnId,
+                Length = lpn.LengthCm ?? 120m,
+                Width = lpn.WidthCm ?? 100m,
+                Height = lpn.HeightCm ?? 150m,
+                RouteStopSequence = seq
+            });
+        }
+
+        var engine = new ColdChainX.Application.Services.CargoPackingEngine();
+        var packingResult = engine.Pack(
+            new ColdChainX.Application.Services.ContainerDims { Length = vLength, Width = vWidth, Height = vHeight }, 
+            engineItems);
+
+        if (packingResult.UnplacedLpnIds.Any())
+        {
+            var unplacedCodes = lpns.Where(l => packingResult.UnplacedLpnIds.Contains(l.LpnId)).Select(l => l.LpnCode);
+            throw new InvalidOperationException($"Lỗi xếp xe (3D Packing): Không đủ không gian (thể tích/kích thước) để xếp tất cả các LPN. Không thể xếp: {string.Join(", ", unplacedCodes)}");
+        }
 
         // 7. LIFO load plan dựa trên LPNs
         var loadPlan = BuildLpnLIFOLoadPlan(lpns, routeResult.StopSequence);
@@ -857,6 +983,9 @@ public class DispatchService : IDispatchService
             DestinationLocationId = routeResult.StopSequence.Last().LocationId,
             TotalDistanceKm     = routeResult.TotalDistanceKm,
             EstimatedDurationHours = estimatedDurationHours,
+            RouteId             = schedule.RouteId,
+            ScheduleId          = schedule.ScheduleId,
+            DepartureDate       = request.PlannedStartTime.Date,
             TargetTemperature   = requiredMinTemp,
             PlannedStartTime    = request.PlannedStartTime,
             PlannedEndTime      = request.PlannedEndTime,

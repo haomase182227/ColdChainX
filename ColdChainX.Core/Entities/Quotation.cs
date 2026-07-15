@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace ColdChainX.Core.Entities;
@@ -34,6 +34,10 @@ public partial class Quotation
     public decimal? ManualAdjustment { get; set; }
 
     public string? AdditionalCharges { get; set; }
+
+    public string? MandatoryCharges { get; set; }
+
+    public string? OptionalServicesMenu { get; set; }
 
     public string? OverrideReason { get; set; }
 

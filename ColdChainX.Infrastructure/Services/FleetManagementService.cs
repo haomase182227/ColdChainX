@@ -80,6 +80,9 @@ public class FleetManagementService : IFleetManagementService
             VehicleType = NormalizeRequired(request.VehicleType),
             MaxWeight = request.MaxWeight,
             MaxCbm = request.MaxCbm,
+            InnerLengthCm = request.InnerLengthCm,
+            InnerWidthCm = request.InnerWidthCm,
+            InnerHeightCm = request.InnerHeightCm,
             MinTemp = request.MinTemp,
             MaxTemp = request.MaxTemp,
             CurrentLocation = TrimOrNull(request.CurrentLocation),
@@ -159,6 +162,9 @@ public class FleetManagementService : IFleetManagementService
                 vehicle.StandardFuelLiters = GetDecimal(row, vehicle.StandardFuelLiters, "StandardFuelLiters", "DinhMucNhienLieu");
                 vehicle.MaxWeight = GetDecimal(row, vehicle.MaxWeight, "MaxWeight", "Tai trong");
                 vehicle.MaxCbm = GetDecimal(row, vehicle.MaxCbm, "MaxCbm", "So khoi");
+                vehicle.InnerLengthCm = GetDecimal(row, vehicle.InnerLengthCm, "InnerLengthCm", "Chieu dai long thung");
+                vehicle.InnerWidthCm = GetDecimal(row, vehicle.InnerWidthCm, "InnerWidthCm", "Chieu rong long thung");
+                vehicle.InnerHeightCm = GetDecimal(row, vehicle.InnerHeightCm, "InnerHeightCm", "Chieu cao long thung");
                 vehicle.MinTemp = GetDecimal(row, vehicle.MinTemp, "MinTemp", "Nhiet do min");
                 vehicle.MaxTemp = GetDecimal(row, vehicle.MaxTemp, "MaxTemp", "Nhiet do max");
                 vehicle.CurrentLocation = TrimOrNull(Get(row, "CurrentLocation", "Vi tri")) ?? vehicle.CurrentLocation;
@@ -1228,6 +1234,24 @@ public class FleetManagementService : IFleetManagementService
         await _db.SaveChangesAsync(cancellationToken);
     }
 
+    private static decimal? CalculateUsableCbm(Vehicle vehicle)
+    {
+        if (vehicle.InnerLengthCm is not > 0
+            || vehicle.InnerWidthCm is not > 0
+            || vehicle.InnerHeightCm is not > 0)
+            return null;
+
+        var dimensionCbm = vehicle.InnerLengthCm.Value
+            * vehicle.InnerWidthCm.Value
+            * vehicle.InnerHeightCm.Value
+            / 1_000_000m;
+        var nominalCbm = vehicle.MaxCbm > 0
+            ? Math.Min(vehicle.MaxCbm, dimensionCbm)
+            : dimensionCbm;
+
+        return Math.Round(nominalCbm * 0.80m, 2);
+    }
+
     private static VehicleFleetResponse ToVehicleResponse(Vehicle vehicle) => new()
     {
         VehicleId = vehicle.VehicleId,
@@ -1237,6 +1261,10 @@ public class FleetManagementService : IFleetManagementService
         VehicleType = vehicle.VehicleType,
         MaxWeight = vehicle.MaxWeight,
         MaxCbm = vehicle.MaxCbm,
+        InnerLengthCm = vehicle.InnerLengthCm,
+        InnerWidthCm = vehicle.InnerWidthCm,
+        InnerHeightCm = vehicle.InnerHeightCm,
+        UsableCbm = CalculateUsableCbm(vehicle),
         MinTemp = vehicle.MinTemp,
         MaxTemp = vehicle.MaxTemp,
         CurrentLocation = vehicle.CurrentLocation,
@@ -1551,6 +1579,15 @@ public class FleetManagementService : IFleetManagementService
 
         if (request.MaxCbm.HasValue)
             vehicle.MaxCbm = request.MaxCbm.Value;
+
+        if (request.InnerLengthCm.HasValue)
+            vehicle.InnerLengthCm = request.InnerLengthCm.Value;
+
+        if (request.InnerWidthCm.HasValue)
+            vehicle.InnerWidthCm = request.InnerWidthCm.Value;
+
+        if (request.InnerHeightCm.HasValue)
+            vehicle.InnerHeightCm = request.InnerHeightCm.Value;
 
         if (request.MinTemp.HasValue)
             vehicle.MinTemp = request.MinTemp.Value;

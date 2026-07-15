@@ -7,6 +7,8 @@ using ColdChainX.Application.DTOs.Common;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
 using ColdChainX.Core.Interfaces;
+using Microsoft.EntityFrameworkCore;
+using ColdChainX.Application.DTOs.WarehouseFlow;
 using ColdChainX.Shared.Responses;
 
 namespace ColdChainX.Application.Services
@@ -14,7 +16,6 @@ namespace ColdChainX.Application.Services
     public class WarehouseService : IWarehouseService
     {
         private readonly IWarehouseRepository _repository;
-
         public WarehouseService(IWarehouseRepository repository)
         {
             _repository = repository;
@@ -142,6 +143,28 @@ namespace ColdChainX.Application.Services
                 UpdatedAt = warehouse.UpdatedAt,
                 UpdatedBy = warehouse.UpdatedBy
             };
+        }
+
+        public async Task<ApiResponse<PagedResult<LpnResponse>>> GetLpnsInWarehouseAsync(Guid warehouseId, int page, int pageSize)
+        {
+            var (lpns, totalCount) = await _repository.GetLpnsInWarehouseAsync(warehouseId, page, pageSize);
+
+            var mappedList = lpns.Select(l => new LpnResponse
+            {
+                LpnId = l.LpnId,
+                LpnCode = l.LpnCode,
+                OrderId = l.OrderId,
+                WarehouseId = l.WarehouseId,
+                StorageLocation = l.StorageLocation ?? string.Empty,
+                Quantity = l.Quantity,
+                ActualWeightKg = l.ActualWeightKg,
+                ActualCbm = l.ActualCbm,
+                State = l.State,
+                InboundTime = l.CreatedAt
+            }).ToList();
+
+            var result = PagedResult<LpnResponse>.Create(mappedList, totalCount, page, pageSize);
+            return ApiResponse<PagedResult<LpnResponse>>.SuccessResponse(result, "Lấy danh sách LPN trong kho thành công.");
         }
     }
 }

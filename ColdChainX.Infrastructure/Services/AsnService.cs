@@ -196,16 +196,23 @@ namespace ColdChainX.Infrastructure.Services
                 return ApiResponse<AsnResponse>.Failure("Order has no selected route");
 
             var requestedDropoff = DateTime.SpecifyKind(request.RequestedDropoffTime, DateTimeKind.Unspecified);
-            var latestDropoffTime = order.Schedule!.Route!.CutOffTime.Subtract(TimeSpan.FromHours(2));
+            var now = DbNow();
             
-            if (requestedDropoff.TimeOfDay > latestDropoffTime)
+            if (now.AddHours(6) > requestedDropoff)
             {
                 return ApiResponse<AsnResponse>.Failure(
-                    $"Requested_Dropoff_Time must be at least 2 hours before the route cut-off time ({order.Schedule!.Route.CutOffTime:hh\\:mm\\:ss}). Latest allowed drop-off time is {latestDropoffTime:hh\\:mm\\:ss}");
+                    $"ASN must be created at least 6 hours before the requested drop-off time. Earliest allowed drop-off time is {now.AddHours(6):dd/MM/yyyy HH:mm}.");
             }
 
             var asnCode = await GenerateUniqueAsnCodeAsync();
             var qrValue = $"ASN|{asnCode}|ORDER|{order.OrderId}|ROUTE|{order.Schedule!.Route.RouteCode}|DROPOFF|{requestedDropoff:O}";
+
+            var originWarehouse = await _db.Warehouses.FirstOrDefaultAsync(w => w.WarehouseId == request.WarehouseId);
+
+            if (originWarehouse == null)
+            {
+                return ApiResponse<AsnResponse>.Failure("Warehouse not found.");
+            }
 
             var asn = new Core.Entities.InboundAsn
             {
@@ -217,7 +224,7 @@ namespace ColdChainX.Infrastructure.Services
                 Status = "SCHEDULED",
                 Phone = request.Phone,
                 WarehouseId = request.WarehouseId,
-                CustomerId = request.CustomerId ?? customerId,
+                CustomerId = customerId,
                 CreatedAt = DbNow()
             };
 
@@ -242,7 +249,6 @@ namespace ColdChainX.Infrastructure.Services
             {
                 AsnId = asn.AsnId,
                 AsnCode = asn.AsnCode,
-                OrderId = asn.OrderId,
                 RouteId = order.Schedule!.Route!.RouteId,
                 RouteCode = order.Schedule!.Route.RouteCode,
                 RequestedDropoffTime = asn.RequestedDropoffTime,
@@ -250,8 +256,8 @@ namespace ColdChainX.Infrastructure.Services
                 QrCodeValue = asn.QrCodeValue,
                 Status = asn.Status,
                 Phone = asn.Phone,
-                WarehouseId = asn.WarehouseId,
-                CustomerId = asn.CustomerId,
+                WarehouseName = originWarehouse.WarehouseName,
+                WarehouseAddress = originWarehouse.Address,
                 FileUrl = asn.FileUrl,
                 CreatedAt = asn.CreatedAt
             }, "ASN created successfully");
@@ -337,7 +343,6 @@ namespace ColdChainX.Infrastructure.Services
                 {
                     a.AsnId,
                     a.AsnCode,
-                    a.OrderId,
                     RouteId = a.Order.Schedule != null ? a.Order.Schedule.RouteId : (Guid?)null,
                     RouteCode = (a.Order.Schedule != null && a.Order.Schedule.Route != null) ? a.Order.Schedule.Route.RouteCode : string.Empty,
                     a.RequestedDropoffTime,
@@ -345,8 +350,8 @@ namespace ColdChainX.Infrastructure.Services
                     a.QrCodeValue,
                     a.Status,
                     a.Phone,
-                    a.WarehouseId,
-                    a.CustomerId,
+                    WarehouseName = _db.Warehouses.Where(w => w.WarehouseId == a.WarehouseId).Select(w => w.WarehouseName).FirstOrDefault() ?? string.Empty,
+                    WarehouseAddress = _db.Warehouses.Where(w => w.WarehouseId == a.WarehouseId).Select(w => w.Address).FirstOrDefault(),
                     a.FileUrl,
                     a.CreatedAt
                 })
@@ -356,7 +361,6 @@ namespace ColdChainX.Infrastructure.Services
             {
                 AsnId = a.AsnId,
                 AsnCode = a.AsnCode,
-                OrderId = a.OrderId,
                 RouteId = a.RouteId ?? Guid.Empty,
                 RouteCode = a.RouteCode,
                 RequestedDropoffTime = a.RequestedDropoffTime,
@@ -364,8 +368,8 @@ namespace ColdChainX.Infrastructure.Services
                 QrCodeValue = a.QrCodeValue,
                 Status = a.Status,
                 Phone = a.Phone,
-                WarehouseId = a.WarehouseId,
-                CustomerId = a.CustomerId,
+                WarehouseName = a.WarehouseName,
+                WarehouseAddress = a.WarehouseAddress,
                 FileUrl = a.FileUrl,
                 CreatedAt = a.CreatedAt
             }).ToList();
