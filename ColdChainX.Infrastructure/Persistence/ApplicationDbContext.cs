@@ -747,29 +747,6 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasConstraintName("fk_geo_locations");
         });
 
-        modelBuilder.Entity<IncidentEvidence>(entity =>
-        {
-            entity.HasKey(e => e.EvidenceId).HasName("incident_evidences_pkey");
-
-            entity.ToTable("incident_evidences");
-
-            entity.Property(e => e.EvidenceId)
-                .HasDefaultValueSql("gen_random_uuid()")
-                .HasColumnName("evidence_id");
-            entity.Property(e => e.EvidenceType)
-                .HasMaxLength(50)
-                .HasColumnName("evidence_type");
-            entity.Property(e => e.FileUrl)
-                .HasMaxLength(500)
-                .HasColumnName("file_url");
-            entity.Property(e => e.IncidentId).HasColumnName("incident_id");
-
-            entity.HasOne(d => d.Incident).WithMany(p => p.IncidentEvidences)
-                .HasForeignKey(d => d.IncidentId)
-                .OnDelete(DeleteBehavior.Cascade)
-                .HasConstraintName("fk_incident_evidences_incident");
-        });
-
         modelBuilder.Entity<IncidentReport>(entity =>
         {
             entity.HasKey(e => e.IncidentId).HasName("incident_reports_pkey");

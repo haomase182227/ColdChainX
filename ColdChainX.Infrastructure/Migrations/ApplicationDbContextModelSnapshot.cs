@@ -221,9 +221,7 @@ namespace ColdChainX.Infrastructure.Migrations
                 {
                     b.Property<Guid>("EvidenceId")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("evidence_id")
-                        .HasDefaultValueSql("gen_random_uuid()");
+                        .HasColumnType("uuid");
 
                     b.Property<Guid?>("AlertId")
                         .HasColumnType("uuid")
@@ -1422,26 +1420,20 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.Property<string>("EvidenceType")
                         .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("evidence_type");
+                        .HasColumnType("text");
 
                     b.Property<string>("FileUrl")
                         .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("file_url");
+                        .HasColumnType("text");
 
                     b.Property<Guid>("IncidentId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("incident_id");
+                        .HasColumnType("uuid");
 
-                    b.HasKey("EvidenceId")
-                        .HasName("incident_evidences_pkey");
+                    b.HasKey("EvidenceId");
 
                     b.HasIndex("IncidentId");
 
-                    b.ToTable("incident_evidences", "public");
+                    b.ToTable("IncidentEvidences", "public");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.IncidentReport", b =>
@@ -4527,8 +4519,7 @@ namespace ColdChainX.Infrastructure.Migrations
                         .WithMany("IncidentEvidences")
                         .HasForeignKey("IncidentId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_incident_evidences_incident");
+                        .IsRequired();
 
                     b.Navigation("Incident");
                 });
