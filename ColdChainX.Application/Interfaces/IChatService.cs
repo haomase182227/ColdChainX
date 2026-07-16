@@ -11,5 +11,11 @@ namespace ColdChainX.Application.Interfaces
         Task<ApiResponse<ChatMessageResponse>> SendMessageAsync(Guid orderId, Guid senderId, IEnumerable<string> senderRoles, Guid? senderCustomerId, SendChatMessageRequest request);
 
         Task<ApiResponse<ChatParticipantResponse>> GetOrderParticipantsAsync(Guid orderId, Guid requesterId, IEnumerable<string> requesterRoles, Guid? requesterCustomerId);
+
+        Task<ApiResponse<bool>> CanAccessOrderChatAsync(Guid orderId, Guid requesterId, IEnumerable<string> requesterRoles, Guid? requesterCustomerId);
+
+        Task<ApiResponse<MarkChatMessagesReadResponse>> MarkMessagesAsReadAsync(Guid orderId, Guid requesterId, IEnumerable<string> requesterRoles, Guid? requesterCustomerId);
+
+        Task<ApiResponse<ChatUnreadCountResponse>> GetUnreadCountAsync(Guid orderId, Guid requesterId, IEnumerable<string> requesterRoles, Guid? requesterCustomerId);
     }
 }
