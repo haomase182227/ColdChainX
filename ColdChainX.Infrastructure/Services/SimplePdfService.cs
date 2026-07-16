@@ -244,7 +244,8 @@ namespace ColdChainX.Infrastructure.Services
             // Navigate to the URL and wait until network is mostly idle
             await page.GoToAsync(url, new NavigationOptions
             {
-                WaitUntil = new[] { WaitUntilNavigation.Networkidle0 }
+                WaitUntil = new[] { WaitUntilNavigation.Networkidle2 },
+                Timeout = 60000
             });
 
             // Wait an additional 2 seconds for 3D scripts/charts to fully render
@@ -281,13 +282,15 @@ namespace ColdChainX.Infrastructure.Services
             {
                 Headless = true,
                 ExecutablePath = executablePath,
+                
                 Args =
                 [
                     "--no-sandbox",
                     "--disable-setuid-sandbox",
                     "--disable-dev-shm-usage",
                     "--disable-gpu",
-                    "--no-zygote"
+                    "--no-zygote",
+                    "--ignore-certificate-errors"
                 ]
             });
         }
