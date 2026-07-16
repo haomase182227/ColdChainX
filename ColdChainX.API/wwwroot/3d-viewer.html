@@ -1,12 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>3D Load Plan Viewer - ColdChainX</title>
-    <!-- Use Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Three.js and OrbitControls via ES modules -->
     <script type="importmap">
         {
             "imports": {
@@ -17,17 +16,18 @@
     </script>
     <style>
         :root {
-            --bg-color: #0f172a; /* Slate 900 */
-            --panel-bg: #1e293b; /* Slate 800 */
-            --text-main: #f8fafc; /* Slate 50 */
-            --text-muted: #94a3b8; /* Slate 400 */
-            --accent: #3b82f6; /* Blue 500 */
-            --accent-hover: #2563eb; /* Blue 600 */
-            --border: #334155; /* Slate 700 */
-            --success: #10b981; /* Emerald 500 */
-            --error: #ef4444; /* Red 500 */
+            --bg-color: #0f172a;
+            --panel-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --border: #334155;
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
         }
-        
+
         * {
             box-sizing: border-box;
             margin: 0;
@@ -38,78 +38,54 @@
             font-family: 'Inter', sans-serif;
             background-color: var(--bg-color);
             color: var(--text-main);
-            overflow: hidden; /* Prevent scroll, let 3D canvas fill */
+            overflow: hidden;
             display: flex;
             height: 100vh;
         }
 
-        /* Sidebar */
+        /* Layout */
         .sidebar {
-            width: 380px;
-            background-color: var(--panel-bg);
-            border-right: 1px solid var(--border);
+            position: absolute;
+            top: 24px;
+            left: 24px;
+            width: 340px;
+            background-color: rgba(30, 41, 59, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
             display: flex;
             flex-direction: column;
-            padding: 24px;
             z-index: 10;
-            box-shadow: 4px 0 15px rgba(0,0,0,0.3);
-            overflow-y: auto;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
         }
 
-        .header {
-            margin-bottom: 24px;
+        .sidebar-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        .header h1 {
-            font-size: 20px;
+        .sidebar-header h1 {
+            font-size: 16px;
             font-weight: 600;
-            margin-bottom: 8px;
+            margin-bottom: 4px;
             background: linear-gradient(90deg, #60a5fa, #a78bfa);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
-        .header p {
-            font-size: 13px;
+        .sidebar-header p {
+            font-size: 11px;
             color: var(--text-muted);
-            line-height: 1.5;
         }
 
-        .form-group {
-            margin-bottom: 16px;
+        .sidebar-content {
+            padding: 20px;
+            overflow: hidden;
         }
 
-        .form-group label {
-            display: block;
-            font-size: 12px;
-            font-weight: 500;
-            margin-bottom: 6px;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .form-control {
-            width: 100%;
-            background-color: var(--bg-color);
-            border: 1px solid var(--border);
-            color: var(--text-main);
-            border-radius: 6px;
-            padding: 10px 12px;
-            font-size: 14px;
-            font-family: inherit;
-            transition: all 0.2s ease;
-        }
-
-        .form-control:focus {
-            outline: none;
-            border-color: var(--accent);
-            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-        }
-
-        textarea.form-control {
-            resize: vertical;
-            min-height: 80px;
+        .sidebar-footer {
+            padding: 16px 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .btn {
@@ -117,7 +93,6 @@
             align-items: center;
             justify-content: center;
             width: 100%;
-            background-color: var(--accent);
             color: white;
             border: none;
             border-radius: 6px;
@@ -126,15 +101,14 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s ease;
-            margin-top: 8px;
         }
 
-        .btn:hover {
+        .btn-primary {
+            background-color: var(--accent);
+        }
+
+        .btn-primary:hover:not(:disabled) {
             background-color: var(--accent-hover);
-        }
-
-        .btn:active {
-            transform: translateY(1px);
         }
 
         .btn:disabled {
@@ -143,12 +117,48 @@
             cursor: not-allowed;
         }
 
-        /* Results Panel */
-        .results-panel {
-            margin-top: 24px;
-            padding-top: 24px;
-            border-top: 1px solid var(--border);
-            display: none; /* Hidden initially */
+        .loader {
+            display: none;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .message-box {
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            margin-bottom: 16px;
+            display: none;
+        }
+
+        .message-box.error {
+            background-color: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #fca5a5;
+        }
+
+        .message-box.success {
+            background-color: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #6ee7b7;
+        }
+
+        /* Main View */
+        .main-view {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+            display: flex;
+            flex-direction: column;
         }
 
         .stat-grid {
@@ -159,7 +169,7 @@
         }
 
         .stat-box {
-            background-color: var(--bg-color);
+            background-color: rgba(15, 23, 42, 0.6);
             border: 1px solid var(--border);
             border-radius: 6px;
             padding: 12px;
@@ -184,8 +194,10 @@
         }
 
         .details-list {
-            font-size: 13px;
+            font-size: 12px;
             color: var(--text-muted);
+            list-style: none;
+            padding: 0;
         }
 
         .details-list li {
@@ -193,28 +205,18 @@
             display: flex;
             justify-content: space-between;
         }
-        
+
         .details-list li span:last-child {
             color: var(--text-main);
             font-weight: 500;
         }
 
-        .error-message {
-            margin-top: 16px;
-            padding: 12px;
-            background-color: rgba(239, 68, 68, 0.1);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            border-radius: 6px;
-            color: #fca5a5;
-            font-size: 13px;
-            display: none;
-        }
-
-        /* 3D Canvas Area */
         .canvas-container {
-            flex: 1;
-            position: relative;
-            background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+            position: absolute;
+            left: 388px;
+            top: 0;
+            right: 0;
+            bottom: 0;
         }
 
         #webgl-canvas {
@@ -240,91 +242,47 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.3);
             backdrop-filter: blur(4px);
         }
-
-        .controls-hint {
-            position: absolute;
-            bottom: 24px;
-            left: 24px;
-            background: rgba(30, 41, 59, 0.7);
-            padding: 12px 16px;
-            border-radius: 6px;
-            font-size: 12px;
-            color: var(--text-muted);
-            pointer-events: none;
-            border: 1px solid rgba(255,255,255,0.1);
-            backdrop-filter: blur(4px);
-        }
-
-        .loader {
-            display: none;
-            width: 16px;
-            height: 16px;
-            border: 2px solid rgba(255,255,255,0.3);
-            border-radius: 50%;
-            border-top-color: white;
-            animation: spin 1s ease-in-out infinite;
-            margin-right: 8px;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
     </style>
 </head>
+
 <body>
 
+    <!-- Split View: Left Sidebar -->
     <div class="sidebar">
-        <div class="header">
-            <h1>3D Load Plan Viewer</h1>
-            <p>Preview ColdChainX 3D Packing Algorithm visually. Paste Vehicle ID and LPN IDs to generate.</p>
+        <div class="sidebar-header">
+            <h1>Kết Quả Xếp Xe 3D</h1>
+            <p>Mô phỏng 3D thuật toán Packing LIFO.</p>
         </div>
 
-        <div class="form-group">
-            <label for="vehicleId">Vehicle ID</label>
-            <input type="text" id="vehicleId" class="form-control" placeholder="e.g. 8f88b901-7fa8-485a-8b80-0a2db72db3bd" value="">
-        </div>
+        <div class="sidebar-content">
+            <div id="msg-box" class="message-box"></div>
 
-        <div class="form-group">
-            <label for="lpnIds">LPN IDs (One per line or comma-separated)</label>
-            <textarea id="lpnIds" class="form-control" placeholder="ID1&#10;ID2&#10;ID3"></textarea>
-        </div>
-
-        <button id="btn-preview" class="btn">
-            <div class="loader" id="btn-loader"></div>
-            <span>Generate 3D Plan</span>
-        </button>
-
-        <div id="error-msg" class="error-message"></div>
-
-        <div class="results-panel" id="results-panel">
-            <div class="stat-grid">
-                <div class="stat-box">
-                    <div class="value" id="res-util">0%</div>
-                    <div class="label">Utilisation</div>
+            <div id="results-panel">
+                <div class="stat-grid">
+                    <div class="stat-box">
+                        <div class="value" id="res-util">0%</div>
+                        <div class="label">Utilisation</div>
+                    </div>
+                    <div class="stat-box" id="unplaced-box">
+                        <div class="value" id="res-unplaced">0</div>
+                        <div class="label">Unplaced LPNs</div>
+                    </div>
                 </div>
-                <div class="stat-box" id="unplaced-box">
-                    <div class="value" id="res-unplaced">0</div>
-                    <div class="label">Unplaced LPNs</div>
-                </div>
+
+                <ul class="details-list">
+                    <li><span>Loại Xe:</span> <span id="res-type">-</span></li>
+                    <li><span>Kích thước:</span> <span id="res-dims">-</span></li>
+                    <li><span>Đã xếp:</span> <span id="res-placed">0 kiện</span></li>
+                </ul>
             </div>
-            
-            <ul class="details-list">
-                <li><span>Vehicle Type:</span> <span id="res-type">-</span></li>
-                <li><span>Container (W x H x D):</span> <span id="res-dims">-</span></li>
-                <li><span>Total Placed:</span> <span id="res-placed">0 items</span></li>
-            </ul>
         </div>
     </div>
 
-    <div class="canvas-container">
-        <canvas id="webgl-canvas"></canvas>
-        <div class="tooltip" id="tooltip"></div>
-        <div class="controls-hint">
-            <strong>Controls:</strong><br>
-            Left Click + Drag: Rotate<br>
-            Right Click + Drag: Pan<br>
-            Scroll: Zoom
+    <!-- Split View: Right Main Area -->
+    <div class="main-view">
+        <div class="canvas-container">
+            <canvas id="webgl-canvas"></canvas>
+            <div class="tooltip" id="tooltip"></div>
         </div>
     </div>
 
@@ -332,34 +290,94 @@
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        // Globals
+        // Globals for 3D
         let scene, camera, renderer, controls;
         let containerMesh, itemsGroup;
         let raycaster, mouse;
         let interactableMeshes = [];
         const tooltip = document.getElementById('tooltip');
 
+        // Initialize
         initThreeJS();
         animate();
+        checkUrlParamsAndSimulate();
+
+        // Parse URL parameters and auto-simulate
+        async function checkUrlParamsAndSimulate() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const vId = urlParams.get('vehicleId');
+            let lpnIdsRaw = urlParams.get('lpnIds');
+
+            if (vId && lpnIdsRaw) {
+                setTimeout(async () => {
+                    const ids = lpnIdsRaw.split(',').map(id => id.trim()).filter(id => id);
+                    await simulateFromUrl(vId, ids);
+                }, 500);
+            } else {
+                showMessage("Vui lòng truyền vehicleId và lpnIds vào URL để xem 3D.", "error");
+            }
+        }
+
+        async function simulateFromUrl(vehicleId, lpnIds) {
+            try {
+                const response = await fetch('/api/Dispatch/simulate-packing?for3d=true', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ vehicleId, lpnIds })
+                });
+
+                const data = await response.json();
+                if (!response.ok || !data.success) throw new Error(data.message || data.error || 'Failed to simulate');
+
+                const plan = data.data;
+
+                // Update UI Sidebar
+                document.getElementById('res-util').textContent = plan.utilisation.toFixed(1) + '%';
+                document.getElementById('res-unplaced').textContent = plan.unplacedLpnIds.length;
+                document.getElementById('res-type').textContent = plan.vehicleType;
+                document.getElementById('res-dims').textContent = `${plan.containerWidth}x${plan.containerHeight}x${plan.containerLength} cm`;
+                document.getElementById('res-placed').textContent = `${plan.placedItems.length} kiện`;
+
+                const unplacedBox = document.getElementById('unplaced-box');
+                if (plan.unplacedLpnIds.length > 0) {
+                    unplacedBox.classList.add('warning');
+                } else {
+                    unplacedBox.classList.remove('warning');
+                }
+
+                drawPlan(plan);
+
+            } catch (err) {
+                showMessage(err.message, "error");
+            }
+        }
+
+        function showMessage(text, type) {
+            const box = document.getElementById('msg-box');
+            box.className = `message-box ${type}`;
+            box.textContent = text;
+            box.style.display = 'block';
+            setTimeout(() => box.style.display = 'none', 5000);
+        }
+
+        // --- Three.js Implementation ---
 
         function initThreeJS() {
             const canvas = document.getElementById('webgl-canvas');
             const container = document.querySelector('.canvas-container');
 
-            scene = new THREE.Scene();
-            
-            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 1, 5000);
-            camera.position.set(400, 300, 500);
-
-            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
             renderer.setSize(container.clientWidth, container.clientHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
+
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 1, 5000);
+            camera.position.set(400, 300, 500);
 
             controls = new OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
             controls.dampingFactor = 0.05;
 
-            // Lights
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
             scene.add(ambientLight);
 
@@ -371,58 +389,39 @@
             dirLight2.position.set(-200, 200, -300);
             scene.add(dirLight2);
 
-            // Groups
             itemsGroup = new THREE.Group();
             scene.add(itemsGroup);
 
-            // Raycaster for hover
             raycaster = new THREE.Raycaster();
             mouse = new THREE.Vector2();
 
-            window.addEventListener('resize', onWindowResize);
-            canvas.addEventListener('mousemove', onMouseMove);
-        }
+            window.addEventListener('resize', () => {
+                camera.aspect = container.clientWidth / container.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container.clientWidth, container.clientHeight);
+            });
 
-        function onWindowResize() {
-            const container = document.querySelector('.canvas-container');
-            camera.aspect = container.clientWidth / container.clientHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(container.clientWidth, container.clientHeight);
-        }
-
-        function onMouseMove(event) {
-            const container = document.querySelector('.canvas-container');
-            const rect = container.getBoundingClientRect();
-            
-            // Normalize mouse coordinates (-1 to +1)
-            mouse.x = ((event.clientX - rect.left) / container.clientWidth) * 2 - 1;
-            mouse.y = -((event.clientY - rect.top) / container.clientHeight) * 2 + 1;
-
-            // Update tooltip position
-            tooltip.style.left = event.clientX + 'px';
-            tooltip.style.top = event.clientY + 'px';
+            canvas.addEventListener('mousemove', (event) => {
+                const rect = container.getBoundingClientRect();
+                mouse.x = ((event.clientX - rect.left) / container.clientWidth) * 2 - 1;
+                mouse.y = -((event.clientY - rect.top) / container.clientHeight) * 2 + 1;
+                tooltip.style.left = event.clientX + 'px';
+                tooltip.style.top = event.clientY + 'px';
+            });
         }
 
         function animate() {
             requestAnimationFrame(animate);
             controls.update();
 
-            // Raycasting logic
             if (interactableMeshes.length > 0) {
                 raycaster.setFromCamera(mouse, camera);
                 const intersects = raycaster.intersectObjects(interactableMeshes);
 
                 if (intersects.length > 0) {
-                    const object = intersects[0].object;
-                    const data = object.userData;
-                    
-                    tooltip.innerHTML = `
-                        <strong>${data.lpnCode}</strong><br>
-                        Dim: ${data.w}x${data.h}x${data.d} cm
-                    `;
+                    const data = intersects[0].object.userData;
+                    tooltip.innerHTML = `<strong>${data.lpnCode}</strong><br>Dim: ${data.w}x${data.h}x${data.d} cm`;
                     tooltip.style.opacity = 1;
-                    
-                    // Highlight effect
                     document.body.style.cursor = 'pointer';
                 } else {
                     tooltip.style.opacity = 0;
@@ -436,147 +435,77 @@
         }
 
         function drawPlan(plan) {
-            // Clear existing
             if (containerMesh) scene.remove(containerMesh);
             itemsGroup.clear();
             interactableMeshes = [];
 
-            const cW = plan.containerWidth;   // X-axis
-            const cH = plan.containerHeight;  // Y-axis
-            const cL = plan.containerLength;  // Z-axis
+            const cW = plan.containerWidth;
+            const cH = plan.containerHeight;
+            const cL = plan.containerLength;
 
-            // 1. Draw Container (Wireframe box)
             const boxGeo = new THREE.BoxGeometry(cW, cH, cL);
             const edges = new THREE.EdgesGeometry(boxGeo);
             const lineMat = new THREE.LineBasicMaterial({ color: 0x94a3b8, linewidth: 2 });
             containerMesh = new THREE.LineSegments(edges, lineMat);
-            // Move container so its bottom-back-left corner is at origin (0,0,0)
             containerMesh.position.set(cW / 2, cH / 2, cL / 2);
             scene.add(containerMesh);
 
-            // Add grid helper at the bottom
+            // 1. Evaporator (Lốc lạnh) at the Front (Cabin)
+            const evapW = cW * 0.7;
+            const evapH = Math.min(cH * 0.3, 60);
+            const evapD = 30;
+            const evapGeo = new THREE.BoxGeometry(evapW, evapH, evapD);
+            const evapMat = new THREE.MeshPhongMaterial({ color: 0xcbd5e1 }); // Silver
+            const evaporator = new THREE.Mesh(evapGeo, evapMat);
+            evaporator.position.set(cW / 2, cH - evapH / 2 - 5, evapD / 2);
+            itemsGroup.add(evaporator);
+
+            // 2. Rear Doors (Cửa xe) at the Back
+            const doorW = (cW / 2) - 2;
+            const doorH = cH - 4;
+            const doorD = 4;
+            const doorGeo = new THREE.BoxGeometry(doorW, doorH, doorD);
+            const doorMat = new THREE.MeshPhongMaterial({ color: 0x334155, transparent: true, opacity: 0.8 }); // Dark gray
+            
+            // Left Door
+            const leftDoor = new THREE.Mesh(doorGeo, doorMat);
+            leftDoor.position.set(doorW / 2 + 1, cH / 2, cL);
+            const leftDoorEdges = new THREE.EdgesGeometry(doorGeo);
+            leftDoor.add(new THREE.LineSegments(leftDoorEdges, new THREE.LineBasicMaterial({ color: 0xf87171 }))); // Red border
+            itemsGroup.add(leftDoor);
+
+            // Right Door
+            const rightDoor = new THREE.Mesh(doorGeo, doorMat);
+            rightDoor.position.set(cW - doorW / 2 - 1, cH / 2, cL);
+            const rightDoorEdges = new THREE.EdgesGeometry(doorGeo);
+            rightDoor.add(new THREE.LineSegments(rightDoorEdges, new THREE.LineBasicMaterial({ color: 0xf87171 }))); // Red border
+            itemsGroup.add(rightDoor);
+
             const gridHelper = new THREE.GridHelper(Math.max(cW, cL) * 1.5, 20, 0x334155, 0x1e293b);
-            gridHelper.position.set(cW/2, 0, cL/2);
+            gridHelper.position.set(cW / 2, 0, cL / 2);
             itemsGroup.add(gridHelper);
 
-            // 2. Draw Items
             plan.placedItems.forEach(item => {
                 const geo = new THREE.BoxGeometry(item.w, item.h, item.d);
-                
-                // Parse hex color from string
                 const colorHex = parseInt(item.color.replace('#', '0x'), 16) || 0x3b82f6;
-                
-                const mat = new THREE.MeshPhongMaterial({ 
-                    color: colorHex,
-                    transparent: true,
-                    opacity: 0.85,
-                    shininess: 60
-                });
-                
+                const mat = new THREE.MeshPhongMaterial({ color: colorHex, transparent: true, opacity: 0.85, shininess: 60 });
                 const mesh = new THREE.Mesh(geo, mat);
-                
-                // Position: X, Y, Z from API is the corner. ThreeJS Box is centered.
-                mesh.position.set(
-                    item.x + (item.w / 2),
-                    item.y + (item.h / 2),
-                    item.z + (item.d / 2)
-                );
+                mesh.position.set(item.x + (item.w / 2), item.y + (item.h / 2), item.z + (item.d / 2));
 
-                // Add edges to items to make them distinct
                 const itemEdges = new THREE.EdgesGeometry(geo);
                 const itemEdgeMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 });
-                const edgeLines = new THREE.LineSegments(itemEdges, itemEdgeMat);
-                mesh.add(edgeLines);
+                mesh.add(new THREE.LineSegments(itemEdges, itemEdgeMat));
 
-                // Store data for raycaster tooltip
-                mesh.userData = {
-                    lpnCode: item.lpnCode,
-                    w: item.w,
-                    h: item.h,
-                    d: item.d
-                };
-
+                mesh.userData = { lpnCode: item.lpnCode, w: item.w, h: item.h, d: item.d };
                 itemsGroup.add(mesh);
                 interactableMeshes.push(mesh);
             });
 
-            // Auto-adjust camera to fit container
-            const maxDim = Math.max(cW, cH, cL);
             camera.position.set(cW * 1.5, cH * 1.5, cL * 1.5);
             controls.target.set(cW / 2, cH / 2, cL / 2);
             controls.update();
         }
-
-        // UI Interactions
-        document.getElementById('btn-preview').addEventListener('click', async () => {
-            const btn = document.getElementById('btn-preview');
-            const loader = document.getElementById('btn-loader');
-            const errorMsg = document.getElementById('error-msg');
-            const resultsPanel = document.getElementById('results-panel');
-
-            const vehicleId = document.getElementById('vehicleId').value.trim();
-            const rawLpns = document.getElementById('lpnIds').value;
-            
-            // Extract UUIDs from text (handles newlines, commas, quotes)
-            const lpnIds = [...rawLpns.matchAll(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi)]
-                            .map(m => m[0]);
-
-            if (!vehicleId || lpnIds.length === 0) {
-                errorMsg.textContent = "Please enter a valid Vehicle ID and at least one LPN ID.";
-                errorMsg.style.display = 'block';
-                return;
-            }
-
-            errorMsg.style.display = 'none';
-            btn.disabled = true;
-            loader.style.display = 'inline-block';
-
-            try {
-                // Endpoint dynamically detects current origin
-                let endpoint = '/api/dispatch/preview-load-plan';
-
-                const response = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ vehicleId, lpnIds })
-                });
-
-                const data = await response.json();
-
-                if (!response.ok || !data.success) {
-                    throw new Error(data.message || data.error || 'Failed to fetch load plan');
-                }
-
-                const plan = data.data; // ApiResponse<T> wrapper
-                
-                // Update UI
-                document.getElementById('res-util').textContent = plan.utilisation.toFixed(1) + '%';
-                document.getElementById('res-unplaced').textContent = plan.unplacedLpnIds.length;
-                document.getElementById('res-type').textContent = plan.vehicleType;
-                document.getElementById('res-dims').textContent = `${plan.containerWidth} x ${plan.containerHeight} x ${plan.containerLength} cm`;
-                document.getElementById('res-placed').textContent = `${plan.placedItems.length} items`;
-                
-                const unplacedBox = document.getElementById('unplaced-box');
-                if(plan.unplacedLpnIds.length > 0) {
-                    unplacedBox.classList.add('warning');
-                } else {
-                    unplacedBox.classList.remove('warning');
-                }
-
-                resultsPanel.style.display = 'block';
-
-                // Draw 3D
-                drawPlan(plan);
-
-            } catch (err) {
-                errorMsg.textContent = err.message;
-                errorMsg.style.display = 'block';
-            } finally {
-                btn.disabled = false;
-                loader.style.display = 'none';
-            }
-        });
-
     </script>
 </body>
+
 </html>
