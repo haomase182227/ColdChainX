@@ -610,7 +610,6 @@ public class DispatchController : ControllerBase
         }
 
         // Warehouse check removed
-            return BadRequest(ApiResponse<object>.Failure("Vui lÃƒÆ’Ã‚Â²ng chÃƒÂ¡Ã‚Â»Ã‚Ân kho (WarehouseId) trÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºc khi ghÃƒÆ’Ã‚Â©p chuyÃƒÂ¡Ã‚ÂºÃ‚Â¿n."));
 
         // TÃƒÆ’Ã‚Â i xÃƒÂ¡Ã‚ÂºÃ‚Â¿: 1ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“2 ngÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Âi, gÃƒÆ’Ã‚Â¡n theo chuyÃƒÂ¡Ã‚ÂºÃ‚Â¿n qua TripDriver
         var driverIds = (form.DriverIds ?? new List<string>())
