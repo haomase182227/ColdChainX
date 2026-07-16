@@ -5,10 +5,13 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.AspNetCore.Http;
 using ColdChainX.Application.DTOs.Claim;
 using ColdChainX.Application.DTOs.Incident;
+using ColdChainX.Application.Interfaces;
 using ColdChainX.Application.Services;
 using ColdChainX.Core.Entities;
+using ColdChainX.Core.Enums;
 using ColdChainX.Infrastructure.Persistence;
 using Xunit;
 
@@ -19,6 +22,8 @@ namespace ColdChainX.UnitTests
         private readonly ApplicationDbContext _db;
         private readonly IncidentReportService _incidentService;
         private readonly ClaimService _claimService;
+        private readonly FakePdfGeneratorService _pdfGeneratorService;
+        private readonly FakeFileService _fileService;
 
         public IncidentAndClaimServiceTests()
         {
@@ -28,7 +33,13 @@ namespace ColdChainX.UnitTests
                 .Options;
 
             _db = new ApplicationDbContext(options);
-            _incidentService = new IncidentReportService(_db, NullLogger<IncidentReportService>.Instance);
+            _pdfGeneratorService = new FakePdfGeneratorService();
+            _fileService = new FakeFileService();
+            _incidentService = new IncidentReportService(
+                _db,
+                _pdfGeneratorService,
+                _fileService,
+                NullLogger<IncidentReportService>.Instance);
             _claimService = new ClaimService(_db, NullLogger<ClaimService>.Instance);
         }
 
@@ -62,11 +73,12 @@ namespace ColdChainX.UnitTests
             var request = new CreateIncidentRequest
             {
                 TripId = tripId,
-                IncidentType = "Cargo_Damage",
-                Severity = "High",
+                IncidentType = IncidentType.DAMAGE_CARGO,
+                Severity = IncidentSeverity.HIGH,
                 Description = "Pallet tipped over during sharp turn",
                 CurrentLatitude = 10.7m,
-                CurrentLongitude = 106.7m
+                CurrentLongitude = 106.7m,
+                DriverPaidAmount = 1_250_000m
             };
 
             // Act
@@ -78,12 +90,15 @@ namespace ColdChainX.UnitTests
             Assert.Equal("CARGO_DAMAGE", response.Data.IncidentType);
             Assert.Equal("HIGH", response.Data.Severity);
             Assert.Equal("REPORTED", response.Data.Status);
+            Assert.Equal(1_250_000m, response.Data.DriverPaidAmount);
+            Assert.Null(response.Data.ReimbursedAmount);
             Assert.Equal(tripId.ToString(), response.Data.TripCode);
             Assert.Equal("driver_john", response.Data.ReportedByUsername);
 
             var dbIncident = await _db.IncidentReports.FirstOrDefaultAsync(i => i.IncidentId == response.Data.IncidentId);
             Assert.NotNull(dbIncident);
             Assert.Equal("Pallet tipped over during sharp turn", dbIncident.Description);
+            Assert.Equal(1_250_000m, dbIncident.DriverPaidAmount);
         }
 
         [Fact]
@@ -98,6 +113,7 @@ namespace ColdChainX.UnitTests
                 IncidentType = "ACCIDENT",
                 Severity = "MEDIUM",
                 Description = "Minor scratch",
+                DriverPaidAmount = 800_000m,
                 Status = "REPORTED",
                 ReportedBy = userId,
                 ReportedAt = DateTime.UtcNow
@@ -106,15 +122,108 @@ namespace ColdChainX.UnitTests
             await _db.SaveChangesAsync();
 
             // Act
-            var response = await _incidentService.ResolveIncidentAsync(incidentId, "Vehicle inspected and cleared to proceed.", userId);
+            var response = await _incidentService.ResolveIncidentAsync(
+                incidentId,
+                new ResolveIncidentRequest
+                {
+                    ResolutionNote = "Vehicle inspected and cleared to proceed.",
+                    ReimbursedAmount = 750_000m
+                },
+                userId);
 
             // Assert
             Assert.True(response.Success);
             
-            var dbIncident = await _db.IncidentReports.FindAsync(incidentId);
+            var dbIncident = await _db.IncidentReports
+                .Include(i => i.IncidentEvidences)
+                .FirstAsync(i => i.IncidentId == incidentId);
             Assert.Equal("RESOLVED", dbIncident!.Status);
             Assert.Contains("Vehicle inspected and cleared to proceed.", dbIncident.Description);
             Assert.NotNull(dbIncident.ResolvedAt);
+            Assert.Equal(750_000m, dbIncident.ReimbursedAmount);
+            var evidence = Assert.Single(dbIncident.IncidentEvidences);
+            Assert.Equal("RESOLUTION_PDF", evidence.EvidenceType);
+            Assert.Equal(FakeFileService.UploadedUrl, evidence.FileUrl);
+            Assert.Equal(1, _pdfGeneratorService.CallCount);
+            Assert.EndsWith($"{incidentId:N}.pdf", _fileService.LastFileName);
+
+            var getResponse = await _incidentService.GetIncidentByIdAsync(incidentId);
+            Assert.True(getResponse.Success);
+            Assert.NotNull(getResponse.Data);
+            Assert.Equal(800_000m, getResponse.Data.DriverPaidAmount);
+            Assert.Equal(750_000m, getResponse.Data.ReimbursedAmount);
+            Assert.Equal(FakeFileService.UploadedUrl, Assert.Single(getResponse.Data.Evidences).FileUrl);
+        }
+
+        [Fact]
+        public async Task GetPagedIncidents_ReturnsEvidenceFileUrl()
+        {
+            var incidentId = Guid.NewGuid();
+            var incident = new IncidentReport
+            {
+                IncidentId = incidentId,
+                IncidentType = "VEHICLE_BREAKDOWN",
+                Severity = "HIGH",
+                Description = "Cooling unit stopped",
+                DriverPaidAmount = 2_000_000m,
+                ReimbursedAmount = 2_000_000m,
+                Status = "RESOLVED",
+                ReportedBy = Guid.NewGuid(),
+                ReportedAt = DateTime.UtcNow,
+                IncidentEvidences = new List<IncidentEvidence>
+                {
+                    new()
+                    {
+                        EvidenceId = Guid.NewGuid(),
+                        IncidentId = incidentId,
+                        EvidenceType = "RESOLUTION_PDF",
+                        FileUrl = FakeFileService.UploadedUrl
+                    }
+                }
+            };
+            _db.IncidentReports.Add(incident);
+            await _db.SaveChangesAsync();
+
+            var response = await _incidentService.GetPagedIncidentsAsync(null, 1, 10);
+
+            Assert.True(response.Success);
+            var item = Assert.Single(response.Data!.Data);
+            Assert.Equal(FakeFileService.UploadedUrl, Assert.Single(item.Evidences).FileUrl);
+        }
+
+        [Fact]
+        public async Task ResolveIncident_WhenUploadFails_DoesNotResolveOrSaveEvidence()
+        {
+            var incidentId = Guid.NewGuid();
+            _db.IncidentReports.Add(new IncidentReport
+            {
+                IncidentId = incidentId,
+                IncidentType = "ACCIDENT",
+                Severity = "MEDIUM",
+                Description = "Minor accident",
+                DriverPaidAmount = 300_000m,
+                Status = "REPORTED",
+                ReportedBy = Guid.NewGuid(),
+                ReportedAt = DateTime.UtcNow
+            });
+            await _db.SaveChangesAsync();
+            _fileService.ThrowOnUpload = true;
+
+            var response = await _incidentService.ResolveIncidentAsync(
+                incidentId,
+                new ResolveIncidentRequest
+                {
+                    ResolutionNote = "Repair completed.",
+                    ReimbursedAmount = 300_000m
+                },
+                Guid.NewGuid());
+
+            Assert.False(response.Success);
+            var incident = await _db.IncidentReports.FindAsync(incidentId);
+            Assert.Equal("REPORTED", incident!.Status);
+            Assert.Null(incident.ResolvedAt);
+            Assert.Null(incident.ReimbursedAmount);
+            Assert.Empty(await _db.IncidentEvidences.ToListAsync());
         }
 
         [Fact]
@@ -208,6 +317,43 @@ namespace ColdChainX.UnitTests
             Assert.Equal("DRIVER", dbClaim.FaultOwner);
             Assert.Equal("Compensated customer $200", dbClaim.ResolutionNote);
             Assert.NotNull(dbClaim.ResolvedAt);
+        }
+
+        private sealed class FakePdfGeneratorService : IPdfGeneratorService
+        {
+            public int CallCount { get; private set; }
+
+            public Task<byte[]> GeneratePdfAsync<T>(string templateName, T data)
+            {
+                Assert.Equal("IncidentResolution", templateName);
+                CallCount++;
+                return Task.FromResult(new byte[] { 0x25, 0x50, 0x44, 0x46 });
+            }
+        }
+
+        private sealed class FakeFileService : IFileService
+        {
+            public const string UploadedUrl = "https://res.cloudinary.com/coldchainx/incident-resolution.pdf";
+
+            public bool ThrowOnUpload { get; set; }
+            public string LastFileName { get; private set; } = string.Empty;
+
+            public Task<string> UploadFileAsync(IFormFile file)
+                => throw new NotSupportedException();
+
+            public Task<string> UploadFileAsync(Stream stream, string fileName)
+                => throw new NotSupportedException();
+
+            public Task<string> UploadFileAsync(byte[] fileBytes, string fileName)
+            {
+                if (ThrowOnUpload)
+                    throw new InvalidOperationException("Cloudinary upload failed.");
+
+                LastFileName = fileName;
+                return Task.FromResult(UploadedUrl);
+            }
+
+            public string GetSignedUrl(string publicId) => UploadedUrl;
         }
     }
 }
