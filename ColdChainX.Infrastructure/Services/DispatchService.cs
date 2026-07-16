@@ -756,14 +756,7 @@ public class DispatchService : IDispatchService
             throw new InvalidOperationException(
                 $"Xe {vehicle.TruckPlate} chưa có đủ kích thước thùng xe (dài, rộng, cao) để kiểm tra xếp hàng.");
 
-        var lpnsWithoutDimensions = lpns
-            .Where(l => !HasPositiveDimensions(l.LengthCm, l.WidthCm, l.HeightCm))
-            .Select(l => l.LpnCode)
-            .ToList();
-        if (lpnsWithoutDimensions.Count > 0)
-            throw new InvalidOperationException(
-                $"Các LPN sau chưa có đủ kích thước dài, rộng, cao: {string.Join(", ", lpnsWithoutDimensions)}.");
-
+        // Bỏ qua kiểm tra LPN thiếu kích thước mà dùng giá trị mặc định (120x100x150)
         var vehicleDimensions = new[]
         {
             vehicle.InnerLengthCm!.Value,
@@ -776,9 +769,9 @@ public class DispatchService : IDispatchService
         {
             var lpnDimensions = new[]
             {
-                l.LengthCm!.Value,
-                l.WidthCm!.Value,
-                l.HeightCm!.Value
+                (l.LengthCm ?? 120m),
+                (l.WidthCm ?? 100m),
+                (l.HeightCm ?? 150m)
             };
             Array.Sort(lpnDimensions);
 
@@ -790,7 +783,7 @@ public class DispatchService : IDispatchService
 
         if (oversizedLpn != null)
             throw new InvalidOperationException(
-                $"LPN {oversizedLpn.LpnCode} ({oversizedLpn.LengthCm:F2} x {oversizedLpn.WidthCm:F2} x {oversizedLpn.HeightCm:F2} cm) " +
+                $"LPN {oversizedLpn.LpnCode} ({(oversizedLpn.LengthCm ?? 120m):F2} x {(oversizedLpn.WidthCm ?? 100m):F2} x {(oversizedLpn.HeightCm ?? 150m):F2} cm) " +
                 $"không lọt thùng xe {vehicle.TruckPlate} ({vehicle.InnerLengthCm:F2} x {vehicle.InnerWidthCm:F2} x {vehicle.InnerHeightCm:F2} cm), kể cả khi xoay kiện.");
 
         var vehicleDimensionCbm = vehicle.InnerLengthCm.Value
@@ -803,7 +796,7 @@ public class DispatchService : IDispatchService
         var allowedCbm = nominalVehicleCbm * MaxColdAirflowVolumeUtilization;
 
         var calculatedTotalCbm = lpns.Sum(l =>
-            l.LengthCm!.Value * l.WidthCm!.Value * l.HeightCm!.Value
+            (l.LengthCm ?? 120m) * (l.WidthCm ?? 100m) * (l.HeightCm ?? 150m)
             * Math.Max(l.Quantity, 1) / 1_000_000m);
         var occupiedCbm = Math.Max(recordedTotalCbm, calculatedTotalCbm);
 
