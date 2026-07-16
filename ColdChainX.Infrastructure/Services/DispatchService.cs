@@ -189,6 +189,7 @@ public class DispatchService : IDispatchService
         var notifiedCount = await SendLoadingNotificationsAsync(
             masterTrip, orders, vehicle, loadPlan,
             request.DispatchCoordinatorId);
+        var customerNotifiedCount = await SendCustomerNotificationsAsync(masterTrip, orders);
 
         await _context.SaveChangesAsync();
 
@@ -539,6 +540,87 @@ public class DispatchService : IDispatchService
     //  Gửi Notification cho Dispatcher
     // ═══════════════════════════════════════════════════════════════════════
 
+
+    private const string CustomerEtaTemplateId = "DISPATCH_CUSTOMER_ETA";
+
+    private async Task<int> SendCustomerNotificationsAsync(MasterTrip trip, List<TransportOrder> orders)
+    {
+        var templateExists = await _context.NotificationTemplates
+            .AnyAsync(t => t.TemplateId == CustomerEtaTemplateId
+                        && (t.Status == null || t.Status == "ACTIVE"));
+
+        if (!templateExists)
+        {
+            var msgType = await _context.Messagetypes.FirstOrDefaultAsync();
+            if (msgType != null)
+            {
+                _context.NotificationTemplates.Add(new NotificationTemplate
+                {
+                    TemplateId = CustomerEtaTemplateId,
+                    TypeId = msgType.TypeId,
+                    TitleTemplate = "Đơn hàng {orderCode} đã được xếp lên xe",
+                    BodyTemplate = "Đơn hàng của bạn đã được xếp lên xe {vehicle}. Dự kiến giao hàng lúc {eta} tại {address}.",
+                    Channel = "IN_APP",
+                    Status = "ACTIVE"
+                });
+                await _context.SaveChangesAsync();
+            }
+        }
+
+        var actualTemplateId = await _context.NotificationTemplates
+            .AnyAsync(t => t.TemplateId == CustomerEtaTemplateId
+                        && (t.Status == null || t.Status == "ACTIVE"))
+            ? CustomerEtaTemplateId
+            : await GetFallbackTemplateIdAsync();
+
+        if (actualTemplateId == null) return 0;
+
+        int notifiedCount = 0;
+        
+        var ordersByCustomer = orders.Where(o => o.CustomerId != null).GroupBy(o => o.CustomerId.Value);
+
+        foreach (var customerGroup in ordersByCustomer)
+        {
+            var customerId = customerGroup.Key;
+            var customer = await _context.Customers.FirstOrDefaultAsync(c => c.CustomerId == customerId);
+            if (customer == null || string.IsNullOrWhiteSpace(customer.Email)) continue;
+
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == customer.Email);
+            if (user == null) continue;
+
+            var destLocationId = customerGroup.First().DestLocation;
+            var stop = await _context.TripStops.FirstOrDefaultAsync(s => s.TripId == trip.TripId && s.LocationId == destLocationId);
+            var eta = stop != null ? stop.PlannedArrivalTime.ToString("dd/MM/yyyy HH:mm") : "N/A";
+            var address = customerGroup.First().DestLocationNavigation?.Address ?? "N/A";
+
+            var orderCodes = string.Join(", ", customerGroup.Select(o => o.TrackingCode));
+
+            var notifParams = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, string>
+            {
+                { "orderCode", orderCodes },
+                { "vehicle",   trip.Vehicle?.TruckPlate ?? "N/A" },
+                { "eta",       eta },
+                { "address",   address }
+            });
+
+            _context.Notifications.Add(new Notification
+            {
+                NotiId     = Guid.NewGuid(),
+                UserId     = user.UserId,
+                SenderId   = null,
+                TemplateId = actualTemplateId,
+                Params     = notifParams,
+                OrderId    = customerGroup.First().OrderId,
+                IsRead     = false,
+                CreatedAt  = DateTime.UtcNow
+            });
+            notifiedCount++;
+        }
+
+        await _context.SaveChangesAsync();
+        return notifiedCount;
+    }
+
     private async Task<int> SendLoadingNotificationsAsync(
         MasterTrip trip,
         List<TransportOrder> orders,
@@ -803,17 +885,11 @@ public class DispatchService : IDispatchService
                 $"All selected LPNs must belong to orders in ScheduleId {schedule.ScheduleId}. " +
                 $"Invalid LPNs: {string.Join(", ", lpnsOutsideSchedule.Select(l => l.LpnCode))}.");
 
-        if (request.WarehouseId == Guid.Empty)
-            throw new InvalidOperationException("Vui lòng chọn kho (WarehouseId) trước khi ghép chuyến.");
-
-        var lpnsNotInWarehouse = lpns
-            .Where(l => l.WarehouseId != request.WarehouseId)
-            .ToList();
-        if (lpnsNotInWarehouse.Any())
-            throw new InvalidOperationException(
-                $"Chỉ được ghép chuyến các LPN cùng thuộc kho đã chọn. " +
-                $"Các LPN sau không thuộc kho này (hoặc chưa được putaway vào kho): " +
-                $"{string.Join(", ", lpnsNotInWarehouse.Select(l => l.LpnCode))}.");
+        var distinctWarehouses = lpns.Select(l => l.WarehouseId).Distinct().ToList();
+        if (distinctWarehouses.Count > 1)
+        {
+            throw new InvalidOperationException("Chỉ được phép ghép các kiện hàng (LPN) nằm trong cùng một kho.");
+        }
 
         var orders = lpns
             .GroupBy(l => l.OrderId)
@@ -987,8 +1063,8 @@ public class DispatchService : IDispatchService
             DestinationLocationId = routeResult.StopSequence.Last().LocationId,
             TotalDistanceKm     = routeResult.TotalDistanceKm,
             EstimatedDurationHours = estimatedDurationHours,
-            RouteId             = schedule.RouteId,
-            ScheduleId          = schedule.ScheduleId,
+            RouteId             = schedule?.RouteId,
+            ScheduleId          = schedule?.ScheduleId,
             DepartureDate       = request.PlannedStartTime.Date,
             TargetTemperature   = requiredMinTemp,
             PlannedStartTime    = request.PlannedStartTime,
