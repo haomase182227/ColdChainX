@@ -256,6 +256,87 @@ namespace ColdChainX.UnitTests
         }
 
         [Fact]
+        public async Task IncidentFullFlow_ReportResolveAndRetrieveEvidence()
+        {
+            var userId = Guid.NewGuid();
+            var tripId = Guid.NewGuid();
+            _db.Users.Add(new User
+            {
+                UserId = userId,
+                Username = "full_flow_driver",
+                PasswordHash = "hash",
+                RoleId = Guid.NewGuid(),
+                Email = "full.flow.driver@test.com",
+                FullName = "Full Flow Driver"
+            });
+            _db.MasterTrips.Add(new MasterTrip
+            {
+                TripId = tripId,
+                Status = "DEPARTED",
+                VehicleId = Guid.NewGuid(),
+                PlannedStartTime = DateTime.UtcNow,
+                PlannedEndTime = DateTime.UtcNow.AddHours(4),
+                OriginLocationId = Guid.NewGuid(),
+                DestinationLocationId = Guid.NewGuid()
+            });
+            await _db.SaveChangesAsync();
+
+            var reportResult = await _incidentService.ReportIncidentAsync(
+                new CreateIncidentRequest
+                {
+                    TripId = tripId,
+                    IncidentType = IncidentType.VEHICLE_BREAKDOWN,
+                    Severity = IncidentSeverity.HIGH,
+                    Description = "Cooling system failed while in transit.",
+                    CurrentLatitude = 10.762622m,
+                    CurrentLongitude = 106.660172m,
+                    DriverPaidAmount = 1_500_000m
+                },
+                userId);
+
+            Assert.True(reportResult.Success);
+            var incidentId = reportResult.Data!.IncidentId;
+            Assert.Equal("REPORTED", reportResult.Data.Status);
+            Assert.Equal(1_500_000m, reportResult.Data.DriverPaidAmount);
+            Assert.Empty(reportResult.Data.Evidences);
+
+            var resolveResult = await _incidentService.ResolveIncidentAsync(
+                incidentId,
+                new ResolveIncidentRequest
+                {
+                    ResolutionNote = "Cooling unit repaired and trip cleared to continue.",
+                    ReimbursedAmount = 1_500_000m
+                },
+                userId);
+
+            Assert.True(resolveResult.Success);
+            Assert.Equal(1, _pdfGeneratorService.CallCount);
+            Assert.Equal($"incident_resolution_{incidentId:N}.pdf", _fileService.LastFileName);
+
+            var detailResult = await _incidentService.GetIncidentByIdAsync(incidentId);
+            Assert.True(detailResult.Success);
+            var detail = detailResult.Data!;
+            Assert.Equal("RESOLVED", detail.Status);
+            Assert.Equal("VEHICLE_BREAKDOWN", detail.IncidentType);
+            Assert.Equal(1_500_000m, detail.DriverPaidAmount);
+            Assert.Equal(1_500_000m, detail.ReimbursedAmount);
+            Assert.Equal("Cooling unit repaired and trip cleared to continue.", detail.ResolutionNote);
+            var detailEvidence = Assert.Single(detail.Evidences);
+            Assert.Equal("RESOLUTION_PDF", detailEvidence.EvidenceType);
+            Assert.Equal(FakeFileService.UploadedUrl, detailEvidence.FileUrl);
+
+            var listResult = await _incidentService.GetPagedIncidentsAsync(tripId, 1, 10);
+            Assert.True(listResult.Success);
+            var listItem = Assert.Single(listResult.Data!.Data);
+            Assert.Equal(incidentId, listItem.IncidentId);
+            Assert.Equal(FakeFileService.UploadedUrl, Assert.Single(listItem.Evidences).FileUrl);
+
+            var savedEvidence = Assert.Single(await _db.IncidentEvidences.ToListAsync());
+            Assert.Equal(incidentId, savedEvidence.IncidentId);
+            Assert.Equal(FakeFileService.UploadedUrl, savedEvidence.FileUrl);
+        }
+
+        [Fact]
         public async Task CreateClaim_SavesClaimAndEvidences()
         {
             // Arrange
