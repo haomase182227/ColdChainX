@@ -3,6 +3,7 @@ using System;
 using ColdChainX.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ColdChainX.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260716081148_AddIncidentFinancialsAndResolutionEvidence")]
+    partial class AddIncidentFinancialsAndResolutionEvidence
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -3723,8 +3726,6 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.HasIndex("RoleId");
 
-                    b.HasIndex("WarehouseId");
-
                     b.HasIndex(new[] { "Username" }, "users_username_key")
                         .IsUnique();
 
@@ -3783,15 +3784,6 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasPrecision(10, 2)
                         .HasColumnType("numeric(10,2)")
                         .HasColumnName("InnerWidthCm");
-
-                    b.Property<decimal?>("InnerHeightCm")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal?>("InnerLengthCm")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal?>("InnerWidthCm")
-                        .HasColumnType("numeric");
 
                     b.Property<int?>("ManufactureYear")
                         .HasColumnType("integer")
@@ -5100,14 +5092,7 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasForeignKey("RoleId")
                         .HasConstraintName("fk_users_roles");
 
-                    b.HasOne("ColdChainX.Core.Entities.Warehouse", "Warehouse")
-                        .WithMany("Users")
-                        .HasForeignKey("WarehouseId")
-                        .HasConstraintName("fk_users_warehouse");
-
                     b.Navigation("Role");
-
-                    b.Navigation("Warehouse");
                 });
 
             modelBuilder.Entity("ColdChainX.Core.Entities.VehicleDocument", b =>
@@ -5400,8 +5385,6 @@ namespace ColdChainX.Infrastructure.Migrations
             modelBuilder.Entity("ColdChainX.Core.Entities.Warehouse", b =>
                 {
                     b.Navigation("Lpns");
-
-                    b.Navigation("Users");
 
                     b.Navigation("WarehouseReceipts");
                 });

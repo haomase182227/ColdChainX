@@ -9,7 +9,7 @@ namespace ColdChainX.Application.Interfaces
     public interface IIncidentReportService
     {
         Task<ApiResponse<IncidentResponse>> ReportIncidentAsync(CreateIncidentRequest request, Guid userId);
-        Task<ApiResponse<bool>> ResolveIncidentAsync(Guid incidentId, string resolutionNote, Guid userId);
+        Task<ApiResponse<bool>> ResolveIncidentAsync(Guid incidentId, ResolveIncidentRequest request, Guid userId);
         Task<ApiResponse<IncidentResponse>> GetIncidentByIdAsync(Guid incidentId);
         Task<ApiResponse<PagedResult<IncidentResponse>>> GetPagedIncidentsAsync(Guid? tripId, int pageNumber, int pageSize);
     }
