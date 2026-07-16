@@ -228,6 +228,13 @@ namespace ColdChainX.Infrastructure.Services
 <p style='margin-bottom: 10px; font-style: italic; text-align: center;'>Quy tắc LIFO: Hàng bốc vào trước nằm ở phía trong (CABIN), hàng bốc vào sau nằm ở phía ngoài (CỬA).</p>
 {topSb}
 
+{(string.IsNullOrWhiteSpace(result.ScreenshotBase64) ? "" : $@"
+<div class='section-title'>MÔ PHỎNG 3D XẾP HÀNG LIFO</div>
+<div style='text-align:center; margin-bottom: 20px;'>
+    <img src='{result.ScreenshotBase64}' style='max-width: 100%; height: auto; border: 1px solid #ccc; border-radius: 4px;' />
+</div>
+")}
+
 <div class='section-title'>II. DANH SÁCH KIỆN HÀNG VÀ THỨ TỰ BỐC</div>
 {tableSb}
 
