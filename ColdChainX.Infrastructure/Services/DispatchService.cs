@@ -793,25 +793,7 @@ public class DispatchService : IDispatchService
                 $"LPN {oversizedLpn.LpnCode} ({oversizedLpn.LengthCm:F2} x {oversizedLpn.WidthCm:F2} x {oversizedLpn.HeightCm:F2} cm) " +
                 $"không lọt thùng xe {vehicle.TruckPlate} ({vehicle.InnerLengthCm:F2} x {vehicle.InnerWidthCm:F2} x {vehicle.InnerHeightCm:F2} cm), kể cả khi xoay kiện.");
 
-        var vehicleDimensionCbm = vehicle.InnerLengthCm.Value
-            * vehicle.InnerWidthCm.Value
-            * vehicle.InnerHeightCm.Value
-            / 1_000_000m;
-        var nominalVehicleCbm = vehicle.MaxCbm > 0
-            ? Math.Min(vehicle.MaxCbm, vehicleDimensionCbm)
-            : vehicleDimensionCbm;
-        var allowedCbm = nominalVehicleCbm * MaxColdAirflowVolumeUtilization;
 
-        var calculatedTotalCbm = lpns.Sum(l =>
-            l.LengthCm!.Value * l.WidthCm!.Value * l.HeightCm!.Value
-            * Math.Max(l.Quantity, 1) / 1_000_000m);
-        var occupiedCbm = Math.Max(recordedTotalCbm, calculatedTotalCbm);
-
-        if (occupiedCbm > allowedCbm)
-            throw new InvalidOperationException(
-                $"Tổng thể tích hàng {occupiedCbm:F2}m³ vượt mức cho phép {allowedCbm:F2}m³ " +
-                $"(80% dung tích thùng xe {nominalVehicleCbm:F2}m³). " +
-                "Cần chừa 20% khoảng trống để khí lạnh lưu thông và làm lạnh đều.");
     }
 
     private static bool HasPositiveDimensions(decimal? lengthCm, decimal? widthCm, decimal? heightCm)
