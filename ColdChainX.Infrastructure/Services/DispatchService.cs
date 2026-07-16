@@ -1016,10 +1016,17 @@ public class DispatchService : IDispatchService
             new ColdChainX.Application.Services.ContainerDims { Length = vLength, Width = vWidth, Height = vHeight }, 
             engineItems);
 
-        if (packingResult.UnplacedLpnIds.Any())
+                if (packingResult.UnplacedLpnIds.Any())
         {
             var unplacedCodes = lpns.Where(l => packingResult.UnplacedLpnIds.Contains(l.LpnId)).Select(l => l.LpnCode);
-            throw new InvalidOperationException($"Lỗi xếp xe (3D Packing): Không đủ không gian (thể tích/kích thước) để xếp tất cả các LPN. Không thể xếp: {string.Join(", ", unplacedCodes)}");
+            if (packingResult.Utilisation < 30.0m)
+            {
+                throw new InvalidOperationException($"Lỗi xếp xe (3D Packing): Thể tích xe mới sử dụng {packingResult.Utilisation:F1}% (< 30%) nhưng đã có kiện rớt. Không thể ghép chuyến, vui lòng đổi xe. Kiện rớt: {string.Join(", ", unplacedCodes)}");
+            }
+            else
+            {
+                throw new InvalidOperationException($"Lỗi xếp xe (3D Packing): Xe đã đạt {packingResult.Utilisation:F1}% nhưng vẫn rớt hàng. Vui lòng bỏ bớt các kiện sau để tạo chuyến: {string.Join(", ", unplacedCodes)}");
+            }
         }
 
         // 7. LIFO load plan dựa trên LPNs
