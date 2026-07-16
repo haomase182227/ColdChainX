@@ -87,7 +87,7 @@ namespace ColdChainX.UnitTests
             // Assert
             Assert.True(response.Success);
             Assert.NotNull(response.Data);
-            Assert.Equal("CARGO_DAMAGE", response.Data.IncidentType);
+            Assert.Equal("DAMAGE_CARGO", response.Data.IncidentType);
             Assert.Equal("HIGH", response.Data.Severity);
             Assert.Equal("REPORTED", response.Data.Status);
             Assert.Equal(1_250_000m, response.Data.DriverPaidAmount);
@@ -107,6 +107,15 @@ namespace ColdChainX.UnitTests
             // Arrange
             var userId = Guid.NewGuid();
             var incidentId = Guid.NewGuid();
+            _db.Users.Add(new User
+            {
+                UserId = userId,
+                Username = "incident_driver",
+                PasswordHash = "hash",
+                RoleId = Guid.NewGuid(),
+                Email = "incident.driver@test.com",
+                FullName = "Incident Driver"
+            });
             var incident = new IncidentReport
             {
                 IncidentId = incidentId,
@@ -159,6 +168,16 @@ namespace ColdChainX.UnitTests
         public async Task GetPagedIncidents_ReturnsEvidenceFileUrl()
         {
             var incidentId = Guid.NewGuid();
+            var reporterId = Guid.NewGuid();
+            _db.Users.Add(new User
+            {
+                UserId = reporterId,
+                Username = "paged_driver",
+                PasswordHash = "hash",
+                RoleId = Guid.NewGuid(),
+                Email = "paged.driver@test.com",
+                FullName = "Paged Driver"
+            });
             var incident = new IncidentReport
             {
                 IncidentId = incidentId,
@@ -168,7 +187,7 @@ namespace ColdChainX.UnitTests
                 DriverPaidAmount = 2_000_000m,
                 ReimbursedAmount = 2_000_000m,
                 Status = "RESOLVED",
-                ReportedBy = Guid.NewGuid(),
+                ReportedBy = reporterId,
                 ReportedAt = DateTime.UtcNow,
                 IncidentEvidences = new List<IncidentEvidence>
                 {
@@ -195,6 +214,16 @@ namespace ColdChainX.UnitTests
         public async Task ResolveIncident_WhenUploadFails_DoesNotResolveOrSaveEvidence()
         {
             var incidentId = Guid.NewGuid();
+            var reporterId = Guid.NewGuid();
+            _db.Users.Add(new User
+            {
+                UserId = reporterId,
+                Username = "upload_driver",
+                PasswordHash = "hash",
+                RoleId = Guid.NewGuid(),
+                Email = "upload.driver@test.com",
+                FullName = "Upload Driver"
+            });
             _db.IncidentReports.Add(new IncidentReport
             {
                 IncidentId = incidentId,
@@ -203,7 +232,7 @@ namespace ColdChainX.UnitTests
                 Description = "Minor accident",
                 DriverPaidAmount = 300_000m,
                 Status = "REPORTED",
-                ReportedBy = Guid.NewGuid(),
+                ReportedBy = reporterId,
                 ReportedAt = DateTime.UtcNow
             });
             await _db.SaveChangesAsync();
