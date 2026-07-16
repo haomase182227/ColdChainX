@@ -41,6 +41,30 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
+        [HttpPatch("{orderId:guid}/messages/read")]
+        public async Task<IActionResult> MarkMessagesAsRead(Guid orderId)
+        {
+            var requesterId = GetUserId();
+            if (requesterId == Guid.Empty)
+                return Unauthorized("UserId claim is missing from token");
+
+            var result = await _chatService.MarkMessagesAsReadAsync(orderId, requesterId, GetRoles(), GetCustomerId());
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        [HttpGet("{orderId:guid}/unread-count")]
+        public async Task<IActionResult> GetUnreadCount(Guid orderId)
+        {
+            var requesterId = GetUserId();
+            if (requesterId == Guid.Empty)
+                return Unauthorized("UserId claim is missing from token");
+
+            var result = await _chatService.GetUnreadCountAsync(orderId, requesterId, GetRoles(), GetCustomerId());
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
         [HttpPost("{orderId:guid}/messages")]
         public async Task<IActionResult> SendMessage(Guid orderId, [FromBody] SendChatMessageRequest request)
         {

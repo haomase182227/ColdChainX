@@ -932,8 +932,9 @@ public class DispatchService : IDispatchService
             // Tự động cập nhật giờ nghỉ (nếu có)
             await _driverAvailability.ReconcileStatusAsync(driver);
 
-            // Chặn nếu trạng thái tài xế không phải ACTIVE (ví dụ: SUSPENDED_DOCS, RELAX, MAINTENANCE...)
-            if (driver.Status != "ACTIVE")
+            // Chặn nếu trạng thái tài xế không phải ACTIVE hoặc AVAILABLE (ví dụ: SUSPENDED_DOCS, RELAX, MAINTENANCE...)
+            // NOTE (DEC-017): Chấp nhận cả ACTIVE (luồng Compliance của Thắng) và AVAILABLE (luồng Availability của Hào) hoạt động song song.
+            if (driver.Status != "ACTIVE" && driver.Status?.ToUpperInvariant() != "AVAILABLE")
                 throw new InvalidOperationException(
                     $"Tài xế {driver.FullName} không thể ghép chuyến — trạng thái hiện tại: '{driver.Status}'.");
 

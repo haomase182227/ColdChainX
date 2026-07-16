@@ -67,7 +67,7 @@ namespace ColdChainX.API.Controllers
             if (!Guid.TryParse(userIdClaim, out var userId))
                 return Unauthorized(ApiResponse<object>.Failure("User ID claim is missing or invalid in the token."));
 
-            var result = await _incidentService.ResolveIncidentAsync(id, request.ResolutionNote, userId);
+            var result = await _incidentService.ResolveIncidentAsync(id, request, userId);
             if (!result.Success)
                 return BadRequest(result);
 

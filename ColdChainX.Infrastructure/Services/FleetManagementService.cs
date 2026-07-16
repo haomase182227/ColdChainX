@@ -810,10 +810,13 @@ public class FleetManagementService : IFleetManagementService
         if (vehicle.Status == "ACTIVE" && vehicle.CurrentOdometer >= vehicle.NextMaintenanceOdometer)
         {
             // Phase 1: Chống trùng lặp — chỉ gửi notification 1 lần cho mỗi mốc bảo dưỡng
-            var alreadyNotified = await _db.Notifications.AnyAsync(n =>
-                (n.TemplateId == "NOTI_MAINTENANCE_ODOMETER" || n.TemplateId == "NOTI_MAINTENANCE_ODOMETER_IN_TRIP") &&
-                n.IsRead != true &&
-                n.Params.Contains(vehicle.TruckPlate));
+            var unreadOdometerNotifications = await _db.Notifications
+                .Where(n => (n.TemplateId == "NOTI_MAINTENANCE_ODOMETER" || n.TemplateId == "NOTI_MAINTENANCE_ODOMETER_IN_TRIP") &&
+                            n.IsRead != true)
+                .ToListAsync();
+
+            var alreadyNotified = unreadOdometerNotifications
+                .Any(n => n.Params.Contains(vehicle.TruckPlate));
 
             if (!alreadyNotified)
             {
@@ -933,11 +936,14 @@ public class FleetManagementService : IFleetManagementService
             var truckPlate = ticket.Vehicle.TruckPlate;
             var oldNotifications = await _db.Notifications
                 .Where(n => (n.TemplateId == "NOTI_MAINTENANCE_ODOMETER" || n.TemplateId == "NOTI_MAINTENANCE_ODOMETER_IN_TRIP") &&
-                            n.IsRead != true &&
-                            n.Params.Contains(truckPlate))
+                            n.IsRead != true)
                 .ToListAsync();
 
-            foreach (var noti in oldNotifications)
+            var matchingNotifications = oldNotifications
+                .Where(n => n.Params.Contains(truckPlate))
+                .ToList();
+
+            foreach (var noti in matchingNotifications)
                 noti.IsRead = true;
         }
 

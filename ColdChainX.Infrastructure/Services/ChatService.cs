@@ -35,6 +35,8 @@ namespace ColdChainX.Infrastructure.Services
 
             var query = _db.ChatMessages
                 .AsNoTracking()
+                .Include(m => m.Sender).ThenInclude(u => u.Role)
+                .Include(m => m.Receiver).ThenInclude(u => u.Role)
                 .Where(m => m.OrderId == orderId)
                 .OrderByDescending(m => m.CreatedAt);
 
@@ -42,11 +44,11 @@ namespace ColdChainX.Infrastructure.Services
             var safePageSize = Math.Clamp(pageSize <= 0 ? 10 : pageSize, 1, 100);
             var safePageNumber = pageNumber <= 0 ? 1 : pageNumber;
 
-            var data = await query
+            var messages = await query
                 .Skip((safePageNumber - 1) * safePageSize)
                 .Take(safePageSize)
-                .Select(m => ToResponse(m))
                 .ToListAsync();
+            var data = messages.Select(ToResponse).ToList();
 
             return ApiResponse<PagedResult<ChatMessageResponse>>.SuccessResponse(
                 PagedResult<ChatMessageResponse>.Create(data, totalRecords, safePageNumber, safePageSize),
@@ -83,7 +85,7 @@ namespace ColdChainX.Infrastructure.Services
             _db.ChatMessages.Add(message);
             await _db.SaveChangesAsync();
 
-            var response = ToResponse(message);
+            var response = await GetMessageResponseAsync(message.Id);
             await _hubContext.Clients.Group(ChatHub.BuildOrderGroup(orderId)).SendAsync("ReceiveMessage", response);
 
             return ApiResponse<ChatMessageResponse>.SuccessResponse(response, "Message sent");
@@ -116,17 +118,99 @@ namespace ColdChainX.Infrastructure.Services
             }, "Chat participants retrieved successfully");
         }
 
+        public async Task<ApiResponse<bool>> CanAccessOrderChatAsync(
+            Guid orderId,
+            Guid requesterId,
+            IEnumerable<string> requesterRoles,
+            Guid? requesterCustomerId)
+        {
+            var access = await ValidateOrderChatAccessAsync(orderId, requesterId, requesterRoles, requesterCustomerId, null);
+            if (!access.Success)
+                return ApiResponse<bool>.Failure(access.Message, access.StatusCode);
+
+            return ApiResponse<bool>.SuccessResponse(true);
+        }
+
+        public async Task<ApiResponse<MarkChatMessagesReadResponse>> MarkMessagesAsReadAsync(
+            Guid orderId,
+            Guid requesterId,
+            IEnumerable<string> requesterRoles,
+            Guid? requesterCustomerId)
+        {
+            var access = await ValidateOrderChatAccessAsync(orderId, requesterId, requesterRoles, requesterCustomerId, null);
+            if (!access.Success)
+                return ApiResponse<MarkChatMessagesReadResponse>.Failure(access.Message, access.StatusCode);
+
+            var unreadMessages = await _db.ChatMessages
+                .Where(m => m.OrderId == orderId
+                            && m.ReceiverId == requesterId
+                            && !m.IsRead)
+                .ToListAsync();
+
+            foreach (var message in unreadMessages)
+            {
+                message.IsRead = true;
+            }
+
+            await _db.SaveChangesAsync();
+
+            return ApiResponse<MarkChatMessagesReadResponse>.SuccessResponse(new MarkChatMessagesReadResponse
+            {
+                UpdatedCount = unreadMessages.Count
+            }, "Messages marked as read");
+        }
+
+        public async Task<ApiResponse<ChatUnreadCountResponse>> GetUnreadCountAsync(
+            Guid orderId,
+            Guid requesterId,
+            IEnumerable<string> requesterRoles,
+            Guid? requesterCustomerId)
+        {
+            var access = await ValidateOrderChatAccessAsync(orderId, requesterId, requesterRoles, requesterCustomerId, null);
+            if (!access.Success)
+                return ApiResponse<ChatUnreadCountResponse>.Failure(access.Message, access.StatusCode);
+
+            var unreadCount = await _db.ChatMessages
+                .AsNoTracking()
+                .CountAsync(m => m.OrderId == orderId
+                                 && m.ReceiverId == requesterId
+                                 && !m.IsRead);
+
+            return ApiResponse<ChatUnreadCountResponse>.SuccessResponse(new ChatUnreadCountResponse
+            {
+                OrderId = orderId,
+                UnreadCount = unreadCount
+            }, "Unread count retrieved successfully");
+        }
+
         private static ChatMessageResponse ToResponse(ChatMessage message)
             => new()
             {
                 Id = message.Id,
                 OrderId = message.OrderId,
                 SenderId = message.SenderId,
+                SenderName = message.Sender.FullName,
+                SenderEmail = message.Sender.Email,
+                SenderRole = message.Sender.Role?.RoleName,
                 ReceiverId = message.ReceiverId,
+                ReceiverName = message.Receiver.FullName,
+                ReceiverEmail = message.Receiver.Email,
+                ReceiverRole = message.Receiver.Role?.RoleName,
                 MessageContent = message.MessageContent,
                 CreatedAt = message.CreatedAt,
                 IsRead = message.IsRead
             };
+
+        private async Task<ChatMessageResponse> GetMessageResponseAsync(Guid messageId)
+        {
+            var message = await _db.ChatMessages
+                .AsNoTracking()
+                .Include(m => m.Sender).ThenInclude(u => u.Role)
+                .Include(m => m.Receiver).ThenInclude(u => u.Role)
+                .FirstAsync(m => m.Id == messageId);
+
+            return ToResponse(message);
+        }
 
         private async Task<ApiResponse<object>> ValidateOrderChatAccessAsync(
             Guid orderId,

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -15,11 +16,19 @@ namespace ColdChainX.Application.Services
     public class IncidentReportService : IIncidentReportService
     {
         private readonly IApplicationDbContext _db;
+        private readonly IPdfGeneratorService _pdfGeneratorService;
+        private readonly IFileService _fileService;
         private readonly ILogger<IncidentReportService> _logger;
 
-        public IncidentReportService(IApplicationDbContext db, ILogger<IncidentReportService> logger)
+        public IncidentReportService(
+            IApplicationDbContext db,
+            IPdfGeneratorService pdfGeneratorService,
+            IFileService fileService,
+            ILogger<IncidentReportService> logger)
         {
             _db = db;
+            _pdfGeneratorService = pdfGeneratorService;
+            _fileService = fileService;
             _logger = logger;
         }
 
@@ -27,6 +36,18 @@ namespace ColdChainX.Application.Services
         {
             if (request == null)
                 return ApiResponse<IncidentResponse>.Failure("Request is null");
+
+            if (!request.IncidentType.HasValue)
+                return ApiResponse<IncidentResponse>.Failure("Incident type is required.");
+
+            if (!request.Severity.HasValue)
+                return ApiResponse<IncidentResponse>.Failure("Severity is required.");
+
+            if (string.IsNullOrWhiteSpace(request.Description))
+                return ApiResponse<IncidentResponse>.Failure("Description is required.");
+
+            if (request.DriverPaidAmount < 0)
+                return ApiResponse<IncidentResponse>.Failure("Driver-paid amount cannot be negative.");
 
             try
             {
@@ -45,11 +66,12 @@ namespace ColdChainX.Application.Services
                 {
                     IncidentId = Guid.NewGuid(),
                     TripId = request.TripId,
-                    IncidentType = request.IncidentType.Trim().ToUpperInvariant(),
-                    Severity = request.Severity.Trim().ToUpperInvariant(),
+                    IncidentType = request.IncidentType.Value.ToString(),
+                    Severity = request.Severity.Value.ToString(),
                     Description = request.Description.Trim(),
                     CurrentLatitude = request.CurrentLatitude,
                     CurrentLongitude = request.CurrentLongitude,
+                    DriverPaidAmount = request.DriverPaidAmount,
                     Status = "REPORTED",
                     ReportedBy = userId,
                     ReportedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
@@ -62,6 +84,7 @@ namespace ColdChainX.Application.Services
                 var savedIncident = await _db.IncidentReports
                     .Include(i => i.ReportedByNavigation)
                     .Include(i => i.Trip)
+                    .Include(i => i.IncidentEvidences)
                     .FirstOrDefaultAsync(i => i.IncidentId == incident.IncidentId);
 
                 var response = MapToResponse(savedIncident!);
@@ -74,23 +97,74 @@ namespace ColdChainX.Application.Services
             }
         }
 
-        public async Task<ApiResponse<bool>> ResolveIncidentAsync(Guid incidentId, string resolutionNote, Guid userId)
+        public async Task<ApiResponse<bool>> ResolveIncidentAsync(Guid incidentId, ResolveIncidentRequest request, Guid userId)
         {
-            if (string.IsNullOrWhiteSpace(resolutionNote))
+            if (request == null)
+                return ApiResponse<bool>.Failure("Request is null.");
+
+            if (string.IsNullOrWhiteSpace(request.ResolutionNote))
                 return ApiResponse<bool>.Failure("Resolution note is required.");
+
+            if (request.ReimbursedAmount < 0)
+                return ApiResponse<bool>.Failure("Reimbursed amount cannot be negative.");
 
             try
             {
-                var incident = await _db.IncidentReports.FindAsync(incidentId);
+                var incident = await _db.IncidentReports
+                    .Include(i => i.ReportedByNavigation)
+                    .Include(i => i.Trip)
+                    .Include(i => i.IncidentEvidences)
+                    .FirstOrDefaultAsync(i => i.IncidentId == incidentId);
+
                 if (incident == null)
                     return ApiResponse<bool>.Failure("Incident not found.");
 
                 if (incident.Status == "RESOLVED")
                     return ApiResponse<bool>.Failure("Incident is already resolved.");
 
+                var resolvedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+                var resolutionNote = request.ResolutionNote.Trim();
+                var resolver = await _db.Users.FindAsync(userId);
+                var viCulture = CultureInfo.GetCultureInfo("vi-VN");
+                var documentData = new
+                {
+                    IncidentId = incident.IncidentId.ToString(),
+                    TripId = incident.TripId?.ToString() ?? "N/A",
+                    incident.IncidentType,
+                    incident.Severity,
+                    incident.Description,
+                    ResolutionNote = resolutionNote,
+                    Location = FormatLocation(incident.CurrentLatitude, incident.CurrentLongitude),
+                    DriverPaidAmount = incident.DriverPaidAmount.ToString("N2", viCulture),
+                    ReimbursedAmount = request.ReimbursedAmount.ToString("N2", viCulture),
+                    ReporterName = incident.ReportedByNavigation?.FullName
+                        ?? incident.ReportedByNavigation?.Username
+                        ?? incident.ReportedBy.ToString(),
+                    ResolverName = resolver?.FullName ?? resolver?.Username ?? userId.ToString(),
+                    ReportedAt = FormatDateTime(incident.ReportedAt),
+                    ResolvedAt = FormatDateTime(resolvedAt)
+                };
+
+                var pdfBytes = await _pdfGeneratorService.GeneratePdfAsync("IncidentResolution", documentData);
+                var fileUrl = await _fileService.UploadFileAsync(
+                    pdfBytes,
+                    $"incident_resolution_{incident.IncidentId:N}.pdf");
+
                 incident.Status = "RESOLVED";
-                incident.Description = $"{incident.Description} | Resolution: {resolutionNote.Trim()}";
-                incident.ResolvedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+                incident.Description = $"{incident.Description} | Resolution: {resolutionNote}";
+                incident.ReimbursedAmount = request.ReimbursedAmount;
+                incident.ResolvedAt = resolvedAt;
+
+                var evidence = new IncidentEvidence
+                {
+                    EvidenceId = Guid.NewGuid(),
+                    IncidentId = incident.IncidentId,
+                    EvidenceType = "RESOLUTION_PDF",
+                    FileUrl = fileUrl,
+                    Incident = incident
+                };
+
+                _db.IncidentEvidences.Add(evidence);
 
                 await _db.SaveChangesAsync();
                 return ApiResponse<bool>.SuccessResponse(true, "Incident resolved successfully.");
@@ -109,6 +183,7 @@ namespace ColdChainX.Application.Services
                 var incident = await _db.IncidentReports
                     .Include(i => i.ReportedByNavigation)
                     .Include(i => i.Trip)
+                    .Include(i => i.IncidentEvidences)
                     .FirstOrDefaultAsync(i => i.IncidentId == incidentId);
 
                 if (incident == null)
@@ -131,6 +206,7 @@ namespace ColdChainX.Application.Services
                 var query = _db.IncidentReports
                     .Include(i => i.ReportedByNavigation)
                     .Include(i => i.Trip)
+                    .Include(i => i.IncidentEvidences)
                     .AsQueryable();
 
                 if (tripId.HasValue)
@@ -178,13 +254,32 @@ namespace ColdChainX.Application.Services
                 Description = description,
                 CurrentLatitude = incident.CurrentLatitude,
                 CurrentLongitude = incident.CurrentLongitude,
+                DriverPaidAmount = incident.DriverPaidAmount,
+                ReimbursedAmount = incident.ReimbursedAmount,
                 Status = incident.Status ?? "REPORTED",
                 ReportedBy = incident.ReportedBy,
                 ReportedByUsername = incident.ReportedByNavigation?.Username ?? "Unknown",
                 ReportedAt = incident.ReportedAt,
                 ResolvedAt = incident.ResolvedAt,
-                ResolutionNote = resolutionNote
+                ResolutionNote = resolutionNote,
+                Evidences = incident.IncidentEvidences.Select(e => new IncidentEvidenceResponse
+                {
+                    EvidenceId = e.EvidenceId,
+                    EvidenceType = e.EvidenceType,
+                    FileUrl = e.FileUrl
+                }).ToList()
             };
         }
+
+        private static string FormatLocation(decimal? latitude, decimal? longitude)
+        {
+            if (!latitude.HasValue || !longitude.HasValue)
+                return "N/A";
+
+            return $"{latitude.Value:0.#######}, {longitude.Value:0.#######}";
+        }
+
+        private static string FormatDateTime(DateTime? value)
+            => value.HasValue ? value.Value.ToString("dd/MM/yyyy HH:mm:ss") : "N/A";
     }
 }
