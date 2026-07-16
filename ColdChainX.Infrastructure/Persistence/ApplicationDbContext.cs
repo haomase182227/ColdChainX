@@ -747,6 +747,29 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasConstraintName("fk_geo_locations");
         });
 
+        modelBuilder.Entity<IncidentEvidence>(entity =>
+        {
+            entity.HasKey(e => e.EvidenceId).HasName("incident_evidences_pkey");
+
+            entity.ToTable("incident_evidences");
+
+            entity.Property(e => e.EvidenceId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("evidence_id");
+            entity.Property(e => e.EvidenceType)
+                .HasMaxLength(50)
+                .HasColumnName("evidence_type");
+            entity.Property(e => e.FileUrl)
+                .HasMaxLength(500)
+                .HasColumnName("file_url");
+            entity.Property(e => e.IncidentId).HasColumnName("incident_id");
+
+            entity.HasOne(d => d.Incident).WithMany(p => p.IncidentEvidences)
+                .HasForeignKey(d => d.IncidentId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_incident_evidences_incident");
+        });
+
         modelBuilder.Entity<IncidentReport>(entity =>
         {
             entity.HasKey(e => e.IncidentId).HasName("incident_reports_pkey");
@@ -763,6 +786,10 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasPrecision(10, 7)
                 .HasColumnName("current_longitude");
             entity.Property(e => e.Description).HasColumnName("description");
+            entity.Property(e => e.DriverPaidAmount)
+                .HasPrecision(15, 2)
+                .HasDefaultValue(0m)
+                .HasColumnName("driver_paid_amount");
             entity.Property(e => e.IncidentType)
                 .HasMaxLength(50)
                 .HasColumnName("incident_type");
@@ -774,6 +801,9 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.ResolvedAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("resolved_at");
+            entity.Property(e => e.ReimbursedAmount)
+                .HasPrecision(15, 2)
+                .HasColumnName("reimbursed_amount");
             entity.Property(e => e.Severity)
                 .HasMaxLength(20)
                 .HasColumnName("severity");
