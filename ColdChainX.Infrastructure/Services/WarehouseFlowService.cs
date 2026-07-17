@@ -42,6 +42,24 @@ public class WarehouseFlowService : IWarehouseFlowService
         var hasDiscrepancy = maxDiff > DiscrepancyThresholdPercent;
         var now = DateTime.UtcNow;
 
+        bool isFastTrack = false;
+        if (order.Schedule != null)
+        {
+            var cutoffTime = order.Schedule.DepartureDate.Date.Add(order.Schedule.CutOffTime);
+            var minutesLate = (now - cutoffTime).TotalMinutes;
+            
+            if (minutesLate > 60)
+            {
+                return ApiResponse<LpnResponse>.Failure($"CẢNH BÁO ĐỎ: Hàng tới trễ hơn 60 phút so với giờ Cut-off ({cutoffTime:HH:mm}). Hệ thống chặn (Hard-block). Bắt buộc phải dời chuyến (Push to Next Trip)!");
+            }
+            else if (minutesLate > 0)
+            {
+                isFastTrack = true;
+            }
+        }
+
+        var initialState = hasDiscrepancy ? LpnState.DISCREPANCY_HOLD : (isFastTrack ? LpnState.IN_STOCK : LpnState.RECEIVING);
+
         await using var tx = await _db.Database.BeginTransactionAsync();
 
         var lpn = new Lpn
@@ -61,18 +79,20 @@ public class WarehouseFlowService : IWarehouseFlowService
             HeightCm = request.HeightCm,
             RequiredTemperature = ParseTemperature(order.TempCondition),
             RecordedTemperature = request.RecordedTemperature,
-            State = hasDiscrepancy ? LpnState.DISCREPANCY_HOLD : LpnState.RECEIVING,
+            State = initialState,
             DiscrepancyReason = hasDiscrepancy
                 ? $"Actual cargo differs from expected by {maxDiff:0.##}% (weight {weightDiff:0.##}%, cbm {cbmDiff:0.##}%). Actual dimensions: {request.LengthCm:0.##} x {request.WidthCm:0.##} x {request.HeightCm:0.##} cm."
                 : null,
-            SlaDeadline = CalculateSlaDeadline(order.Schedule?.Route),
+            SlaDeadline = CalculateSlaDeadline(order.Schedule),
+            InboundTime = now,
+            IsFastTrack = isFastTrack,
             CreatedAt = now
         };
 
         _db.Lpns.Add(lpn);
         order.OrderDimension.ActualWeightKg = request.ActualWeightKg;
         order.OrderDimension.ActualCbm = actualCbm;
-        order.Status = hasDiscrepancy ? "DISCREPANCY_HOLD" : "RECEIVING";
+        order.Status = hasDiscrepancy ? "DISCREPANCY_HOLD" : (isFastTrack ? "IN_STOCK" : "RECEIVING");
 
         await _db.SaveChangesAsync();
         await tx.CommitAsync();
@@ -328,13 +348,13 @@ public class WarehouseFlowService : IWarehouseFlowService
         return decimal.TryParse(normalized, out var temp) ? temp : null;
     }
 
-    private static DateTime? CalculateSlaDeadline(RouteMaster? route)
+    private static DateTime? CalculateSlaDeadline(RouteSchedule? schedule)
     {
-        if (route == null)
+        if (schedule == null)
             return null;
 
-        var todayCutoff = DateTime.UtcNow.Date.Add(route.CutOffTime);
-        return todayCutoff > DateTime.UtcNow ? todayCutoff : todayCutoff.AddDays(1);
+        // Deadline is exactly on the Scheduled Departure Date at the CutOff Time
+        return schedule.DepartureDate.Date.Add(schedule.CutOffTime);
     }
 
     private static string GenerateCode(string prefix)

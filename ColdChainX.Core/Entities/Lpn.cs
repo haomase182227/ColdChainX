@@ -44,6 +44,8 @@ public partial class Lpn
 
     public string? EvidenceImageUrl { get; set; }
 
+    public bool IsFastTrack { get; set; }
+
     public DateTime? InboundTime { get; set; }
 
     public DateTime? SlaDeadline { get; set; }

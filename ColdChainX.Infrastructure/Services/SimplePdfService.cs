@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using ColdChainX.Application.Interfaces;
@@ -68,7 +68,7 @@ namespace ColdChainX.Infrastructure.Services
                 .Include(t => t.DestinationLocation)
                 .Include(t => t.TripStops).ThenInclude(ts => ts.Location)
                 .FirstOrDefaultAsync(t => t.TripId == tripId)
-                ?? throw new KeyNotFoundException($"Không tìm thấy chuyến hàng {tripId}.");
+                ?? throw new KeyNotFoundException($"KhÃ´ng tÃ¬m tháº¥y chuyáº¿n hÃ ng {tripId}.");
 
             var lpns = await _context.Lpns
                 .Include(l => l.Order)
@@ -89,22 +89,22 @@ namespace ColdChainX.Infrastructure.Services
             sb.AppendLine(".sign-box{text-align:center;width:200px}");
             sb.AppendLine(".sign-box p{border-top:1px solid #333;margin-top:50px;padding-top:4px}</style></head><body>");
 
-            sb.AppendLine("<h1>Biên Bản Hàng Ghép Chuyến (Manifest)</h1>");
+            sb.AppendLine("<h1>BiÃªn Báº£n HÃ ng GhÃ©p Chuyáº¿n (Manifest)</h1>");
             sb.AppendLine("<table class='info'>");
-            sb.AppendLine($"<tr><td><b>Số chuyến:</b></td><td>{tripId.ToString()[..8].ToUpper()}</td>");
-            sb.AppendLine($"<td><b>Ngày lập:</b></td><td>{issuedAt}</td></tr>");
+            sb.AppendLine($"<tr><td><b>Sá»‘ chuyáº¿n:</b></td><td>{tripId.ToString()[..8].ToUpper()}</td>");
+            sb.AppendLine($"<td><b>NgÃ y láº­p:</b></td><td>{issuedAt}</td></tr>");
             sb.AppendLine($"<tr><td><b>Xe:</b></td><td>{trip.Vehicle?.TruckPlate ?? "N/A"} ({trip.Vehicle?.VehicleType ?? ""})</td>");
             var manifestPrimary = trip.TripDrivers.OrderBy(td => td.DriverRole == "PRIMARY" ? 0 : 1).Select(td => td.Driver).FirstOrDefault(d => d != null);
             var manifestDriverNames = trip.TripDrivers.Count > 0 ? string.Join(", ", trip.TripDrivers.Select(td => td.Driver != null ? td.Driver.FullName : null).Where(n => !string.IsNullOrEmpty(n))) : "N/A";
-            sb.AppendLine($"<td><b>Tài xế:</b></td><td>{manifestDriverNames} — {manifestPrimary?.PhoneNumber ?? ""}</td></tr>");
-            sb.AppendLine($"<tr><td><b>Kho xuất:</b></td><td>{trip.OriginLocation?.Address ?? "N/A"}</td>");
-            sb.AppendLine($"<td><b>Điểm đến:</b></td><td>{trip.DestinationLocation?.Address ?? "N/A"}</td></tr>");
-            sb.AppendLine($"<tr><td><b>Số seal:</b></td><td>{trip.SealNumber ?? "—"}</td>");
-            sb.AppendLine($"<td><b>Trạng thái:</b></td><td>{trip.Status}</td></tr>");
+            sb.AppendLine($"<td><b>TÃ i xáº¿:</b></td><td>{manifestDriverNames} â€” {manifestPrimary?.PhoneNumber ?? ""}</td></tr>");
+            sb.AppendLine($"<tr><td><b>Kho xuáº¥t:</b></td><td>{trip.OriginLocation?.Address ?? "N/A"}</td>");
+            sb.AppendLine($"<td><b>Äiá»ƒm Ä‘áº¿n:</b></td><td>{trip.DestinationLocation?.Address ?? "N/A"}</td></tr>");
+            sb.AppendLine($"<tr><td><b>Sá»‘ seal:</b></td><td>{trip.SealNumber ?? "â€”"}</td>");
+            sb.AppendLine($"<td><b>Tráº¡ng thÃ¡i:</b></td><td>{trip.Status}</td></tr>");
             sb.AppendLine("</table>");
 
             sb.AppendLine("<table class='lpn'>");
-            sb.AppendLine("<thead><tr><th>STT</th><th>Mã LPN</th><th>Đơn hàng</th><th>Hàng hóa</th><th>SL</th><th>Trọng lượng (kg)</th><th>CBM (m³)</th><th>Nhiệt độ</th></tr></thead><tbody>");
+            sb.AppendLine("<thead><tr><th>STT</th><th>MÃ£ LPN</th><th>ÄÆ¡n hÃ ng</th><th>HÃ ng hÃ³a</th><th>SL</th><th>Trá»ng lÆ°á»£ng (kg)</th><th>CBM (mÂ³)</th><th>Nhiá»‡t Ä‘á»™</th></tr></thead><tbody>");
             var totalWeight = 0m; var totalCbm = 0m;
             for (int i = 0; i < lpns.Count; i++)
             {
@@ -114,13 +114,13 @@ namespace ColdChainX.Infrastructure.Services
                 sb.AppendLine($"<td>{l.ActualWeightKg:F2}</td><td>{l.ActualCbm:F3}</td><td>{l.Order?.TempCondition ?? "AMBIENT"}</td></tr>");
                 totalWeight += l.ActualWeightKg; totalCbm += l.ActualCbm;
             }
-            sb.AppendLine($"<tr><td colspan='5'><b>Tổng cộng</b></td><td><b>{totalWeight:F2}</b></td><td><b>{totalCbm:F3}</b></td><td></td></tr>");
+            sb.AppendLine($"<tr><td colspan='5'><b>Tá»•ng cá»™ng</b></td><td><b>{totalWeight:F2}</b></td><td><b>{totalCbm:F3}</b></td><td></td></tr>");
             sb.AppendLine("</tbody></table>");
 
             sb.AppendLine("<div class='footer'>");
-            sb.AppendLine("<div class='sign-box'><p>Người lập biên bản</p></div>");
-            sb.AppendLine("<div class='sign-box'><p>Thủ kho</p></div>");
-            sb.AppendLine("<div class='sign-box'><p>Tài xế</p></div>");
+            sb.AppendLine("<div class='sign-box'><p>NgÆ°á»i láº­p biÃªn báº£n</p></div>");
+            sb.AppendLine("<div class='sign-box'><p>Thá»§ kho</p></div>");
+            sb.AppendLine("<div class='sign-box'><p>TÃ i xáº¿</p></div>");
             sb.AppendLine("</div></body></html>");
 
             return await SavePdfAsync(sb.ToString(), tripId.ToString(), "manifest");
@@ -133,7 +133,7 @@ namespace ColdChainX.Infrastructure.Services
                 .Include(t => t.TripDrivers).ThenInclude(td => td.Driver)
                 .Include(t => t.OriginLocation)
                 .FirstOrDefaultAsync(t => t.TripId == tripId)
-                ?? throw new KeyNotFoundException($"Không tìm thấy chuyến hàng {tripId}.");
+                ?? throw new KeyNotFoundException($"KhÃ´ng tÃ¬m tháº¥y chuyáº¿n hÃ ng {tripId}.");
 
             var lpns = await _context.Lpns
                 .Include(l => l.Order)
@@ -155,20 +155,20 @@ namespace ColdChainX.Infrastructure.Services
             sb.AppendLine(".sign-box{text-align:center;width:200px}");
             sb.AppendLine(".sign-box p{border-top:1px solid #333;margin-top:50px;padding-top:4px}</style></head><body>");
 
-            sb.AppendLine("<h1>Phiếu Xuất Kho</h1>");
-            sb.AppendLine($"<h2>Số: XK-{tripId.ToString()[..8].ToUpper()} &nbsp;|&nbsp; Ngày: {issuedAt}</h2>");
+            sb.AppendLine("<h1>Phiáº¿u Xuáº¥t Kho</h1>");
+            sb.AppendLine($"<h2>Sá»‘: XK-{tripId.ToString()[..8].ToUpper()} &nbsp;|&nbsp; NgÃ y: {issuedAt}</h2>");
 
             sb.AppendLine("<table class='info'>");
-            sb.AppendLine($"<tr><td><b>Kho xuất:</b></td><td>{trip.OriginLocation?.Address ?? "N/A"}</td>");
-            sb.AppendLine($"<td><b>Biển số xe:</b></td><td>{trip.Vehicle?.TruckPlate ?? "N/A"}</td></tr>");
-            sb.AppendLine($"<tr><td><b>Tài xế:</b></td><td>{(trip.TripDrivers.Count > 0 ? string.Join(", ", trip.TripDrivers.Select(td => td.Driver != null ? td.Driver.FullName : null).Where(n => !string.IsNullOrEmpty(n))) : "N/A")}</td>");
-            sb.AppendLine($"<td><b>Số seal:</b></td><td>{trip.SealNumber ?? "—"}</td></tr>");
-            sb.AppendLine($"<tr><td><b>Giờ xuất:</b></td><td>{issuedAt}</td>");
-            sb.AppendLine($"<td><b>Tổng LPN:</b></td><td>{lpns.Count}</td></tr>");
+            sb.AppendLine($"<tr><td><b>Kho xuáº¥t:</b></td><td>{trip.OriginLocation?.Address ?? "N/A"}</td>");
+            sb.AppendLine($"<td><b>Biá»ƒn sá»‘ xe:</b></td><td>{trip.Vehicle?.TruckPlate ?? "N/A"}</td></tr>");
+            sb.AppendLine($"<tr><td><b>TÃ i xáº¿:</b></td><td>{(trip.TripDrivers.Count > 0 ? string.Join(", ", trip.TripDrivers.Select(td => td.Driver != null ? td.Driver.FullName : null).Where(n => !string.IsNullOrEmpty(n))) : "N/A")}</td>");
+            sb.AppendLine($"<td><b>Sá»‘ seal:</b></td><td>{trip.SealNumber ?? "â€”"}</td></tr>");
+            sb.AppendLine($"<tr><td><b>Giá» xuáº¥t:</b></td><td>{issuedAt}</td>");
+            sb.AppendLine($"<td><b>Tá»•ng LPN:</b></td><td>{lpns.Count}</td></tr>");
             sb.AppendLine("</table>");
 
             sb.AppendLine("<table class='lpn'>");
-            sb.AppendLine("<thead><tr><th>STT</th><th>Mã LPN</th><th>Mã vận đơn</th><th>Hàng hóa</th><th>Số lượng</th><th>KG</th><th>CBM</th></tr></thead><tbody>");
+            sb.AppendLine("<thead><tr><th>STT</th><th>MÃ£ LPN</th><th>MÃ£ váº­n Ä‘Æ¡n</th><th>HÃ ng hÃ³a</th><th>Sá»‘ lÆ°á»£ng</th><th>KG</th><th>CBM</th></tr></thead><tbody>");
             var tw = 0m; var tc = 0m;
             for (int i = 0; i < lpns.Count; i++)
             {
@@ -178,13 +178,13 @@ namespace ColdChainX.Infrastructure.Services
                 sb.AppendLine($"<td style='text-align:center'>{l.Quantity}</td><td style='text-align:right'>{l.ActualWeightKg:F2}</td><td style='text-align:right'>{l.ActualCbm:F3}</td></tr>");
                 tw += l.ActualWeightKg; tc += l.ActualCbm;
             }
-            sb.AppendLine($"<tr><td colspan='5' style='text-align:right'><b>Tổng</b></td><td style='text-align:right'><b>{tw:F2}</b></td><td style='text-align:right'><b>{tc:F3}</b></td></tr>");
+            sb.AppendLine($"<tr><td colspan='5' style='text-align:right'><b>Tá»•ng</b></td><td style='text-align:right'><b>{tw:F2}</b></td><td style='text-align:right'><b>{tc:F3}</b></td></tr>");
             sb.AppendLine("</tbody></table>");
 
             sb.AppendLine("<div class='footer'>");
-            sb.AppendLine("<div class='sign-box'><p>Thủ kho (Xuất)</p></div>");
-            sb.AppendLine("<div class='sign-box'><p>Người nhận hàng / Tài xế</p></div>");
-            sb.AppendLine("<div class='sign-box'><p>Điều phối viên</p></div>");
+            sb.AppendLine("<div class='sign-box'><p>Thá»§ kho (Xuáº¥t)</p></div>");
+            sb.AppendLine("<div class='sign-box'><p>NgÆ°á»i nháº­n hÃ ng / TÃ i xáº¿</p></div>");
+            sb.AppendLine("<div class='sign-box'><p>Äiá»u phá»‘i viÃªn</p></div>");
             sb.AppendLine("</div></body></html>");
 
             return await SavePdfAsync(sb.ToString(), tripId.ToString(), "phieu-xuat-kho");
@@ -234,6 +234,40 @@ namespace ColdChainX.Infrastructure.Services
             return await _fileService.UploadFileAsync(pdfBytes, fileName);
         }
 
+                public async Task<string> SavePdfFromUrlAsync(string url, string fileId, string prefix)
+        {
+            var fileName = $"{prefix}_{SanitizeFileName(fileId)}.pdf";
+
+            await using var browser = await LaunchBrowserAsync();
+            await using var page = await browser.NewPageAsync();
+            
+            // Navigate to the URL and wait until network is mostly idle
+            await page.GoToAsync(url, new NavigationOptions
+            {
+                WaitUntil = new[] { WaitUntilNavigation.Networkidle2 },
+                Timeout = 60000
+            });
+
+            // Wait an additional 2 seconds for 3D scripts/charts to fully render
+            await Task.Delay(2000);
+
+            var pdfBytes = await page.PdfDataAsync(new PdfOptions
+            {
+                Format = PaperFormat.A4,
+                PrintBackground = true,
+                PreferCSSPageSize = true,
+                MarginOptions = new MarginOptions
+                {
+                    Top = "12mm",
+                    Bottom = "12mm",
+                    Left = "10mm",
+                    Right = "10mm"
+                }
+            });
+
+            return await _fileService.UploadFileAsync(pdfBytes, fileName);
+        }
+
         private static async Task<IBrowser> LaunchBrowserAsync()
         {
             var executablePath = Environment.GetEnvironmentVariable(ChromeExecutablePathEnv);
@@ -248,13 +282,15 @@ namespace ColdChainX.Infrastructure.Services
             {
                 Headless = true,
                 ExecutablePath = executablePath,
+                
                 Args =
                 [
                     "--no-sandbox",
                     "--disable-setuid-sandbox",
                     "--disable-dev-shm-usage",
                     "--disable-gpu",
-                    "--no-zygote"
+                    "--no-zygote",
+                    "--ignore-certificate-errors"
                 ]
             });
         }

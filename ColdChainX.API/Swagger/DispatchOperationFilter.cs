@@ -80,24 +80,28 @@ var rawOrders = (from r in db.WarehouseReceipts
                             ApplyEnum(mediaType.Schema, "WarehouseId", warehouses);
                             ApplyEnum(mediaType.Schema, "warehouseId", warehouses);
 
-                            var vehicles = db.Vehicles
-                                .Where(v => v.Status == "ACTIVE")
-                                .Select(v => $"{v.VehicleId}: {v.TruckPlate} — {v.VehicleType} | Tải: {v.MaxWeight}kg | Temp: {v.MinTemp}°C đến {v.MaxTemp}°C")
-                                .ToList();
+                            var isManualDispatch = path.Contains("manual-dispatch", StringComparison.OrdinalIgnoreCase);
+                            if (!isManualDispatch)
+                            {
+                                var vehicles = db.Vehicles
+                                    .Where(v => v.Status == "ACTIVE")
+                                    .Select(v => $"{v.VehicleId}: {v.TruckPlate} — {v.VehicleType} | Tải: {v.MaxWeight}kg | Temp: {v.MinTemp}°C đến {v.MaxTemp}°C")
+                                    .ToList();
 
-                            ApplyEnum(mediaType.Schema, "VehicleId", vehicles);
-                            ApplyEnum(mediaType.Schema, "vehicleId", vehicles);
+                                ApplyEnum(mediaType.Schema, "VehicleId", vehicles);
+                                ApplyEnum(mediaType.Schema, "vehicleId", vehicles);
 
-                            // Tài xế khả dụng (không RELAX/Offline/Inactive) — chọn 1–2 người cho chuyến
-                            var driversList = db.Drivers
-                                .Where(d => d.Status != "RELAX" && d.Status != "Offline"
-                                         && d.Status != "Inactive" && d.Status != "DELETED")
-                                .OrderBy(d => d.FullName)
-                                .Select(d => $"{d.DriverId}: {d.FullName} — {d.PhoneNumber} ({d.Status})")
-                                .ToList();
+                                // Tài xế khả dụng (không RELAX/Offline/Inactive) — chọn 1–2 người cho chuyến
+                                var driversList = db.Drivers
+                                    .Where(d => d.Status != "RELAX" && d.Status != "Offline"
+                                             && d.Status != "Inactive" && d.Status != "DELETED")
+                                    .OrderBy(d => d.FullName)
+                                    .Select(d => $"{d.DriverId}: {d.FullName} — {d.PhoneNumber} ({d.Status})")
+                                    .ToList();
 
-                            ApplyArrayEnum(mediaType.Schema, "DriverIds", driversList);
-                            ApplyArrayEnum(mediaType.Schema, "driverIds", driversList);
+                                ApplyArrayEnum(mediaType.Schema, "DriverIds", driversList);
+                                ApplyArrayEnum(mediaType.Schema, "driverIds", driversList);
+                            }
 
                             ApplyDateTimeExample(mediaType.Schema, "PlannedStartTime", DateTime.Now.AddHours(2).ToString("yyyy-MM-ddTHH:mm:ss"));
                             ApplyDateTimeExample(mediaType.Schema, "plannedStartTime", DateTime.Now.AddHours(2).ToString("yyyy-MM-ddTHH:mm:ss"));

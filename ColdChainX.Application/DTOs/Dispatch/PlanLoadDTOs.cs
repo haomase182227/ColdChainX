@@ -23,6 +23,7 @@ public class PlanLoadRequest
 
     /// <summary>Thời gian dự kiến hoàn thành chuyến.</summary>
     public DateTime PlannedEndTime { get; set; }
+    public string? ScreenshotBase64 { get; set; }
 
     /// <summary>
     /// UserId của điều phối viên sẽ nhận thông báo.
@@ -47,6 +48,8 @@ public class PlanLoadResult
 
     /// <summary>Kế hoạch xếp hàng theo thuật toán LIFO nội bộ.</summary>
     public List<LoadInstruction> LoadPlan { get; set; } = new();
+
+    public string? ScreenshotBase64 { get; set; }
 
     /// <summary>Lệnh điều động — thay đổi trạng thái hàng trong kho.</summary>
     public List<DispatchInstruction> DispatchInstructions { get; set; } = new();
@@ -184,45 +187,37 @@ public class DispatchInstruction
 /// </summary>
 public class ManualDispatchRequest
 {
-    public Guid ScheduleId { get; set; }
+    public Guid? ScheduleId { get; set; }
 
-    /// <summary>Kho được chọn — chỉ các LPN thuộc kho này mới được ghép chuyến.</summary>
-    public Guid WarehouseId { get; set; }
-
-    /// <summary>Danh sách LpnId do người dùng chọn (IN_STOCK, cùng một kho).</summary>
     public List<Guid> LpnIds { get; set; } = new();
 
-    /// <summary>VehicleId do người dùng chọn (mỗi chuyến đúng 1 xe).</summary>
     public Guid VehicleId { get; set; }
 
-    /// <summary>Danh sách tài xế được gán cho chuyến (1–2 tài xế).</summary>
     public List<Guid> DriverIds { get; set; } = new();
 
-    /// <summary>LocationId kho xuất phát.</summary>
     public Guid OriginWarehouseLocationId { get; set; }
 
-    /// <summary>Thời gian dự kiến xuất phát.</summary>
     public DateTime PlannedStartTime { get; set; }
 
-    /// <summary>Thời gian dự kiến hoàn thành chuyến.</summary>
     public DateTime PlannedEndTime { get; set; }
+
+    public string? ScreenshotBase64 { get; set; }
 }
 
 /// <summary>Form request cho manual-dispatch endpoint (multipart/form-data).</summary>
 public class ManualDispatchFormRequest
 {
-    public string ScheduleId { get; set; } = string.Empty;
-
-    /// <summary>Kho được chọn (WarehouseId, có thể kèm hậu tố ":label"). Bắt buộc chọn trước.</summary>
-    public string WarehouseId { get; set; } = string.Empty;
+    public string? ScheduleId { get; set; }
 
     public string VehicleId { get; set; } = string.Empty;
 
-    /// <summary>1–2 tài xế được gán cho chuyến (DriverId, có thể kèm hậu tố ":label").</summary>
     public List<string> DriverIds { get; set; } = new();
 
     public DateTime PlannedStartTime { get; set; }
+    
     public DateTime PlannedEndTime { get; set; }
+    
+    public string? ScreenshotBase64 { get; set; }
 }
 
 /// <summary>Kết quả manual-dispatch — mở rộng từ PlanLoadResult.</summary>
@@ -245,6 +240,8 @@ public class ManualDispatchResult
 
     /// <summary>Kế hoạch xếp hàng LIFO.</summary>
     public List<LoadInstruction> LoadPlan { get; set; } = new();
+
+    public string? ScreenshotBase64 { get; set; }
 
     /// <summary>Lệnh điều động.</summary>
     public List<DispatchInstruction> DispatchInstructions { get; set; } = new();
@@ -418,6 +415,7 @@ public class ProcessBacklogRequest
 
     public DateTime PlannedStartTime { get; set; }
     public DateTime PlannedEndTime { get; set; }
+    public string? ScreenshotBase64 { get; set; }
 }
 
 /// <summary>Kết quả xử lý hàng tồn.</summary>

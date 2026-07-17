@@ -10,7 +10,9 @@ namespace ColdChainX.Application.Services
         public decimal Length { get; set; }
         public decimal Width { get; set; }
         public decimal Height { get; set; }
-        public int RouteStopSequence { get; set; } 
+        public int RouteStopSequence { get; set; }
+        public decimal WeightKg { get; set; }
+        public decimal RequiredTemperature { get; set; }
     }
 
     public class ContainerDims
@@ -50,15 +52,49 @@ namespace ColdChainX.Application.Services
                 return result;
             }
 
-            // LIFO sorting: items delivered last (highest RouteStopSequence) are packed first
-            // If same sequence, pack largest volume first
+            // 1. Airflow Circulation: Reduce usable dimensions
+            decimal usableLength = container.Length - 20m; // Front 10cm + Rear 10cm
+            decimal usableHeight = container.Height - 20m; // Top 20cm
+
+            if (usableLength <= 0 || usableHeight <= 0)
+            {
+                result.UnplacedLpnIds = itemsToPack.Select(i => i.LpnId).ToList();
+                return result;
+            }
+
+            // 2. Sorting Rules (LIFO, Temperature, Weight, Volume)
             var sortedItems = itemsToPack
                 .OrderByDescending(i => i.RouteStopSequence)
+                .ThenBy(i => i.RequiredTemperature) // Colder items first (front)
+                .ThenByDescending(i => i.WeightKg) // Heavier items first (bottom)
                 .ThenByDescending(i => i.Length * i.Width * i.Height)
                 .ToList();
 
             var placedItems = new List<PlacedItem>();
             var unplacedIds = new List<Guid>();
+
+            // 3. Keep-out Zone: Evaporator (Lốc lạnh) Obstacle
+            // Calculate physical dimensions
+            decimal evapH_physical = Math.Min(container.Height * 0.3m, 60m);
+            decimal evapD_physical = 30m;
+            
+            // Map to packing coordinate system (which already reduced top 20cm and front 10cm)
+            decimal packingEvapH = evapH_physical - 20m;
+            decimal packingEvapD = evapD_physical - 10m;
+
+            if (packingEvapH > 0 && packingEvapD > 0)
+            {
+                placedItems.Add(new PlacedItem
+                {
+                    LpnId = Guid.Empty, // Dummy ID for obstacle
+                    X = 0, // Block full width
+                    Y = usableHeight - packingEvapH,
+                    Z = 0,
+                    W = container.Width,
+                    H = packingEvapH,
+                    D = packingEvapD
+                });
+            }
 
             foreach (var item in sortedItems)
             {
@@ -87,10 +123,10 @@ namespace ColdChainX.Application.Services
                 {
                     foreach (var (w, h, d) in orientations)
                     {
-                        // Check container boundaries
+                        // Check container boundaries (using reduced dimensions for Airflow)
                         if (point.x + w > container.Width ||
-                            point.y + h > container.Height ||
-                            point.z + d > container.Length)
+                            point.y + h > usableHeight ||
+                            point.z + d > usableLength)
                         {
                             continue;
                         }
@@ -130,6 +166,24 @@ namespace ColdChainX.Application.Services
                 if (!placed)
                 {
                     unplacedIds.Add(item.LpnId);
+                }
+            }
+
+            // Remove dummy obstacles (like Evaporator)
+            placedItems.RemoveAll(pi => pi.LpnId == Guid.Empty);
+
+            // Center the cargo horizontally (along X-axis) to distribute weight evenly
+            // AND offset along Z-axis for Front Bulkhead clearance (10cm)
+            if (placedItems.Any())
+            {
+                decimal maxPlacedX = placedItems.Max(pi => pi.X + pi.W);
+                decimal unusedX = container.Width - maxPlacedX;
+                decimal offsetX = unusedX > 0 ? unusedX / 2m : 0;
+                
+                foreach (var pi in placedItems)
+                {
+                    if (offsetX > 0) pi.X += offsetX;
+                    pi.Z += 10m; // Front Bulkhead clearance
                 }
             }
 
