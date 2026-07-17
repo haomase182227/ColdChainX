@@ -189,6 +189,7 @@ public class DispatchService : IDispatchService
         var notifiedCount = await SendLoadingNotificationsAsync(
             masterTrip, orders, vehicle, loadPlan,
             request.DispatchCoordinatorId);
+        var customerNotifiedCount = await SendCustomerNotificationsAsync(masterTrip, orders);
 
         await _context.SaveChangesAsync();
 
@@ -539,6 +540,87 @@ public class DispatchService : IDispatchService
     //  Gửi Notification cho Dispatcher
     // ═══════════════════════════════════════════════════════════════════════
 
+
+    private const string CustomerEtaTemplateId = "DISPATCH_CUSTOMER_ETA";
+
+    private async Task<int> SendCustomerNotificationsAsync(MasterTrip trip, List<TransportOrder> orders)
+    {
+        var templateExists = await _context.NotificationTemplates
+            .AnyAsync(t => t.TemplateId == CustomerEtaTemplateId
+                        && (t.Status == null || t.Status == "ACTIVE"));
+
+        if (!templateExists)
+        {
+            var msgType = await _context.Messagetypes.FirstOrDefaultAsync();
+            if (msgType != null)
+            {
+                _context.NotificationTemplates.Add(new NotificationTemplate
+                {
+                    TemplateId = CustomerEtaTemplateId,
+                    TypeId = msgType.TypeId,
+                    TitleTemplate = "Đơn hàng {orderCode} đã được xếp lên xe",
+                    BodyTemplate = "Đơn hàng của bạn đã được xếp lên xe {vehicle}. Dự kiến giao hàng lúc {eta} tại {address}.",
+                    Channel = "IN_APP",
+                    Status = "ACTIVE"
+                });
+                await _context.SaveChangesAsync();
+            }
+        }
+
+        var actualTemplateId = await _context.NotificationTemplates
+            .AnyAsync(t => t.TemplateId == CustomerEtaTemplateId
+                        && (t.Status == null || t.Status == "ACTIVE"))
+            ? CustomerEtaTemplateId
+            : await GetFallbackTemplateIdAsync();
+
+        if (actualTemplateId == null) return 0;
+
+        int notifiedCount = 0;
+        
+        var ordersByCustomer = orders.Where(o => o.CustomerId != null).GroupBy(o => o.CustomerId.Value);
+
+        foreach (var customerGroup in ordersByCustomer)
+        {
+            var customerId = customerGroup.Key;
+            var customer = await _context.Customers.FirstOrDefaultAsync(c => c.CustomerId == customerId);
+            if (customer == null || string.IsNullOrWhiteSpace(customer.Email)) continue;
+
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == customer.Email);
+            if (user == null) continue;
+
+            var destLocationId = customerGroup.First().DestLocation;
+            var stop = await _context.TripStops.FirstOrDefaultAsync(s => s.TripId == trip.TripId && s.LocationId == destLocationId);
+            var eta = stop != null ? stop.PlannedArrivalTime.ToString("dd/MM/yyyy HH:mm") : "N/A";
+            var address = customerGroup.First().DestLocationNavigation?.Address ?? "N/A";
+
+            var orderCodes = string.Join(", ", customerGroup.Select(o => o.TrackingCode));
+
+            var notifParams = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, string>
+            {
+                { "orderCode", orderCodes },
+                { "vehicle",   trip.Vehicle?.TruckPlate ?? "N/A" },
+                { "eta",       eta },
+                { "address",   address }
+            });
+
+            _context.Notifications.Add(new Notification
+            {
+                NotiId     = Guid.NewGuid(),
+                UserId     = user.UserId,
+                SenderId   = null,
+                TemplateId = actualTemplateId,
+                Params     = notifParams,
+                OrderId    = customerGroup.First().OrderId,
+                IsRead     = false,
+                CreatedAt  = DateTime.UtcNow
+            });
+            notifiedCount++;
+        }
+
+        await _context.SaveChangesAsync();
+        return notifiedCount;
+    }
+
     private async Task<int> SendLoadingNotificationsAsync(
         MasterTrip trip,
         List<TransportOrder> orders,
@@ -711,25 +793,7 @@ public class DispatchService : IDispatchService
                 $"LPN {oversizedLpn.LpnCode} ({oversizedLpn.LengthCm:F2} x {oversizedLpn.WidthCm:F2} x {oversizedLpn.HeightCm:F2} cm) " +
                 $"không lọt thùng xe {vehicle.TruckPlate} ({vehicle.InnerLengthCm:F2} x {vehicle.InnerWidthCm:F2} x {vehicle.InnerHeightCm:F2} cm), kể cả khi xoay kiện.");
 
-        var vehicleDimensionCbm = vehicle.InnerLengthCm.Value
-            * vehicle.InnerWidthCm.Value
-            * vehicle.InnerHeightCm.Value
-            / 1_000_000m;
-        var nominalVehicleCbm = vehicle.MaxCbm > 0
-            ? Math.Min(vehicle.MaxCbm, vehicleDimensionCbm)
-            : vehicleDimensionCbm;
-        var allowedCbm = nominalVehicleCbm * MaxColdAirflowVolumeUtilization;
 
-        var calculatedTotalCbm = lpns.Sum(l =>
-            l.LengthCm!.Value * l.WidthCm!.Value * l.HeightCm!.Value
-            * Math.Max(l.Quantity, 1) / 1_000_000m);
-        var occupiedCbm = Math.Max(recordedTotalCbm, calculatedTotalCbm);
-
-        if (occupiedCbm > allowedCbm)
-            throw new InvalidOperationException(
-                $"Tổng thể tích hàng {occupiedCbm:F2}m³ vượt mức cho phép {allowedCbm:F2}m³ " +
-                $"(80% dung tích thùng xe {nominalVehicleCbm:F2}m³). " +
-                "Cần chừa 20% khoảng trống để khí lạnh lưu thông và làm lạnh đều.");
     }
 
     private static bool HasPositiveDimensions(decimal? lengthCm, decimal? widthCm, decimal? heightCm)
@@ -762,14 +826,18 @@ public class DispatchService : IDispatchService
 
     public async Task<ManualDispatchResult> ManualDispatchAsync(ManualDispatchRequest request)
     {
-        var schedule = await _context.RouteSchedules
-            .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.ScheduleId == request.ScheduleId)
-            ?? throw new InvalidOperationException("ScheduleId does not exist.");
+        RouteSchedule? schedule = null;
+        if (request.ScheduleId.HasValue && request.ScheduleId.Value != Guid.Empty)
+        {
+            schedule = await _context.RouteSchedules
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.ScheduleId == request.ScheduleId)
+                ?? throw new InvalidOperationException($"ScheduleId '{request.ScheduleId}' does not exist.");
 
-        if (!string.Equals(schedule.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException(
-                $"Schedule '{schedule.ScheduleName}' is not ACTIVE (current status: '{schedule.Status}').");
+            if (!string.Equals(schedule.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    $"Schedule '{schedule.ScheduleName}' is not ACTIVE (current status: '{schedule.Status}').");
+        }
 
         // 1. Validate kho xuất phát
         var originLocation = await _context.Locations.FindAsync(request.OriginWarehouseLocationId)
@@ -795,25 +863,13 @@ public class DispatchService : IDispatchService
 
         // 2b. Ràng buộc kho — phải chọn kho trước, và mọi LPN phải cùng thuộc kho đã chọn.
         // Không cho phép trộn LPN từ nhiều kho khác nhau vào một chuyến.
-        var lpnsOutsideSchedule = lpns
-            .Where(l => l.Order == null || l.Order.ScheduleId != schedule.ScheduleId)
-            .ToList();
-        if (lpnsOutsideSchedule.Any())
-            throw new InvalidOperationException(
-                $"All selected LPNs must belong to orders in ScheduleId {schedule.ScheduleId}. " +
-                $"Invalid LPNs: {string.Join(", ", lpnsOutsideSchedule.Select(l => l.LpnCode))}.");
 
-        if (request.WarehouseId == Guid.Empty)
-            throw new InvalidOperationException("Vui lòng chọn kho (WarehouseId) trước khi ghép chuyến.");
 
-        var lpnsNotInWarehouse = lpns
-            .Where(l => l.WarehouseId != request.WarehouseId)
-            .ToList();
-        if (lpnsNotInWarehouse.Any())
-            throw new InvalidOperationException(
-                $"Chỉ được ghép chuyến các LPN cùng thuộc kho đã chọn. " +
-                $"Các LPN sau không thuộc kho này (hoặc chưa được putaway vào kho): " +
-                $"{string.Join(", ", lpnsNotInWarehouse.Select(l => l.LpnCode))}.");
+        var distinctWarehouses = lpns.Select(l => l.WarehouseId).Distinct().ToList();
+        if (distinctWarehouses.Count > 1)
+        {
+            throw new InvalidOperationException("Chỉ được phép ghép các kiện hàng (LPN) nằm trong cùng một kho.");
+        }
 
         var orders = lpns
             .GroupBy(l => l.OrderId)
@@ -921,14 +977,18 @@ public class DispatchService : IDispatchService
             var stop = routeResult.StopSequence.FirstOrDefault(s => s.LocationId == lpn.Order?.DestLocation);
             int seq = stop?.Sequence ?? 1;
 
-            engineItems.Add(new ColdChainX.Application.Services.LpnDims
+            int qty = Math.Max(1, lpn.Quantity);
+            for (int i = 0; i < qty; i++)
             {
-                LpnId = lpn.LpnId,
-                Length = lpn.LengthCm ?? 120m,
-                Width = lpn.WidthCm ?? 100m,
-                Height = lpn.HeightCm ?? 150m,
-                RouteStopSequence = seq
-            });
+                engineItems.Add(new ColdChainX.Application.Services.LpnDims
+                {
+                    LpnId = lpn.LpnId,
+                    Length = lpn.LengthCm ?? 120m,
+                    Width = lpn.WidthCm ?? 100m,
+                    Height = lpn.HeightCm ?? 150m,
+                    RouteStopSequence = seq
+                });
+            }
         }
 
         var engine = new ColdChainX.Application.Services.CargoPackingEngine();
@@ -936,10 +996,17 @@ public class DispatchService : IDispatchService
             new ColdChainX.Application.Services.ContainerDims { Length = vLength, Width = vWidth, Height = vHeight }, 
             engineItems);
 
-        if (packingResult.UnplacedLpnIds.Any())
+                if (packingResult.UnplacedLpnIds.Any())
         {
             var unplacedCodes = lpns.Where(l => packingResult.UnplacedLpnIds.Contains(l.LpnId)).Select(l => l.LpnCode);
-            throw new InvalidOperationException($"Lỗi xếp xe (3D Packing): Không đủ không gian (thể tích/kích thước) để xếp tất cả các LPN. Không thể xếp: {string.Join(", ", unplacedCodes)}");
+            if (packingResult.Utilisation < 30.0m)
+            {
+                throw new InvalidOperationException($"Lỗi xếp xe (3D Packing): Thể tích xe mới sử dụng {packingResult.Utilisation:F1}% (< 30%) nhưng đã có kiện rớt. Không thể ghép chuyến, vui lòng đổi xe. Kiện rớt: {string.Join(", ", unplacedCodes)}");
+            }
+            else
+            {
+                throw new InvalidOperationException($"Lỗi xếp xe (3D Packing): Xe đã đạt {packingResult.Utilisation:F1}% nhưng vẫn rớt hàng. Vui lòng bỏ bớt các kiện sau để tạo chuyến: {string.Join(", ", unplacedCodes)}");
+            }
         }
 
         // 7. LIFO load plan dựa trên LPNs
@@ -984,8 +1051,8 @@ public class DispatchService : IDispatchService
             DestinationLocationId = routeResult.StopSequence.Last().LocationId,
             TotalDistanceKm     = routeResult.TotalDistanceKm,
             EstimatedDurationHours = estimatedDurationHours,
-            RouteId             = schedule.RouteId,
-            ScheduleId          = schedule.ScheduleId,
+            RouteId             = schedule?.RouteId,
+            ScheduleId          = schedule?.ScheduleId,
             DepartureDate       = request.PlannedStartTime.Date,
             TargetTemperature   = requiredMinTemp,
             PlannedStartTime    = request.PlannedStartTime,

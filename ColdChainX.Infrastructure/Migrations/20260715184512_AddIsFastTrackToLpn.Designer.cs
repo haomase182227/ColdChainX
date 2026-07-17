@@ -3,6 +3,7 @@ using System;
 using ColdChainX.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ColdChainX.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260715184512_AddIsFastTrackToLpn")]
+    partial class AddIsFastTrackToLpn
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -221,7 +224,9 @@ namespace ColdChainX.Infrastructure.Migrations
                 {
                     b.Property<Guid>("EvidenceId")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("evidence_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<Guid?>("AlertId")
                         .HasColumnType("uuid")
@@ -1414,9 +1419,7 @@ namespace ColdChainX.Infrastructure.Migrations
                 {
                     b.Property<Guid>("EvidenceId")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("evidence_id")
-                        .HasDefaultValueSql("gen_random_uuid()");
+                        .HasColumnType("uuid");
 
                     b.Property<string>("EvidenceType")
                         .IsRequired()
@@ -1459,23 +1462,11 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("description");
 
-                    b.Property<decimal>("DriverPaidAmount")
-                        .ValueGeneratedOnAdd()
-                        .HasPrecision(15, 2)
-                        .HasColumnType("numeric(15,2)")
-                        .HasDefaultValue(0m)
-                        .HasColumnName("driver_paid_amount");
-
                     b.Property<string>("IncidentType")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)")
                         .HasColumnName("incident_type");
-
-                    b.Property<decimal?>("ReimbursedAmount")
-                        .HasPrecision(15, 2)
-                        .HasColumnType("numeric(15,2)")
-                        .HasColumnName("reimbursed_amount");
 
                     b.Property<DateTime?>("ReportedAt")
                         .ValueGeneratedOnAdd()

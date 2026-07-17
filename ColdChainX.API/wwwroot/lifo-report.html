@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LIFO PDF Report</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', sans-serif; background-color: #525659; }
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            background: white;
+            margin: 20px auto;
+            padding: 20mm;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            position: relative;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 4px solid #b2d235;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .header h1 { color: #b2d235; font-size: 24px; text-transform: uppercase; }
+        .header .logo { font-weight: 700; font-size: 28px; color: #333; }
+        
+        .title { text-align: center; font-size: 20px; font-weight: 700; margin-bottom: 20px; }
+        
+        .grid-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: auto auto;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .grid-item {
+            border: 1px solid #ddd;
+            padding: 5px;
+            text-align: center;
+        }
+        .grid-item img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        
+        .tables-container {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            border-top: 2px dotted #999;
+            padding-top: 20px;
+        }
+        .table-box {
+            width: 48%;
+        }
+        .table-box h3 {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: #333;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        th, td {
+            border: 1px solid #333;
+            padding: 8px;
+            text-align: left;
+            vertical-align: middle;
+        }
+        th {
+            background-color: white;
+            font-weight: normal;
+            color: #555;
+            border-bottom: 1px solid #333;
+        }
+        .input-cell {
+            background-color: #f0f4fa;
+            height: 28px;
+            margin: 2px;
+        }
+        
+        /* Hidden WebGL Container */
+        #webgl-container { position: absolute; width: 800px; height: 600px; left: -9999px; }
+        
+        .loading-overlay {
+            position: fixed; inset: 0; background: rgba(255,255,255,0.9);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            font-size: 20px; font-weight: bold; color: #333; z-index: 9999;
+        }
+        
+        @media print {
+            body { background: white; margin: 0; }
+            .page { margin: 0; padding: 10mm; box-shadow: none; width: 100%; min-height: 100%; }
+            .loading-overlay { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+    <div id="loading" class="loading-overlay">
+        <div>Đang render 3D và tạo PDF...</div>
+    </div>
+
+    <div id="webgl-container">
+        <canvas id="webgl-canvas"></canvas>
+    </div>
+
+    <div class="page">
+        <div class="header">
+            <div class="logo">ColdChainX</div>
+            <h1>Load Plan Report</h1>
+        </div>
+        
+        <div class="title" id="report-title">10 LPNs in Vehicle [ID]</div>
+        
+        <div class="grid-container">
+            <div class="grid-item">
+                <img id="img-perspective" src="" alt="Perspective View">
+            </div>
+            <div class="grid-item">
+                <img id="img-front" src="" alt="Front View">
+            </div>
+            <div class="grid-item">
+                <img id="img-top" src="" alt="Top View">
+            </div>
+            <div class="grid-item" style="display: flex; flex-direction: column; justify-content: center;">
+                <h4 style="font-size: 14px; margin-bottom: 10px;">LIFO Information</h4>
+                <p style="font-size: 12px; color: #555; text-align: left; padding: 10px;">
+                    - Hàng giao chặng xa xếp sát lốc lạnh.<br>
+                    - Hàng giao chặng gần xếp sát cửa xe.<br>
+                    - Tự động duy trì khe hở 20cm tuần hoàn gió.<br>
+                    - Hàng nặng (WeightKg) được ưu tiên xếp dưới sàn.
+                </p>
+            </div>
+        </div>
+        
+        <div class="tables-container">
+            <div class="table-box">
+                <h3>Danh sách hàng hóa</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 45%;">Tên hàng</th>
+                            <th style="width: 35%;">Mã hàng</th>
+                            <th style="width: 20%;">Số lượng</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-items">
+                        <!-- Populated dynamically -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="table-box">
+                <h3>Vị trí lấy hàng</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 60%;">Mã hàng</th>
+                            <th style="width: 40%;">Vị trí trong kho</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-locations">
+                        <!-- Populated dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        let scene, camera, renderer, containerMesh, itemsGroup;
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const vehicleId = urlParams.get('vehicleId');
+        const lpnIds = urlParams.get('lpnIds');
+
+        async function init() {
+            if (!vehicleId || !lpnIds) {
+                document.getElementById('loading').innerHTML = "Lỗi: Thiếu thông tin VehicleId hoặc LpnIds";
+                return;
+            }
+
+            try {
+                // The lpnIds from URL might be a string like "id1,id2", so we split it into an array
+                const idsArray = lpnIds.split(',').map(id => id.trim()).filter(id => id);
+                
+                const response = await fetch(`/api/Dispatch/simulate-packing?for3d=true`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ vehicleId: vehicleId, lpnIds: idsArray })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    populateData(data.data);
+                    render3D(data.data);
+                } else {
+                    document.getElementById('loading').innerHTML = "Lỗi API: " + data.message;
+                }
+            } catch (err) {
+                document.getElementById('loading').innerHTML = "Lỗi kết nối: " + err.message;
+            }
+        }
+
+        function populateData(plan) {
+            
+            const tbodyItems = document.getElementById('table-items');
+            const tbodyLocations = document.getElementById('table-locations');
+            
+            tbodyItems.innerHTML = '';
+            tbodyLocations.innerHTML = '';
+            
+            // Group by LPN to show only unique LPNs in the table
+            const uniqueLpns = [];
+            const lpnMap = new Map();
+            
+            plan.placedItems.forEach(item => {
+                if (!lpnMap.has(item.lpnId)) {
+                    lpnMap.set(item.lpnId, true);
+                    uniqueLpns.push(item);
+                }
+            });
+            
+            // Update title to show unique LPN count
+            document.getElementById('report-title').textContent = `${uniqueLpns.length} LPNs in Vehicle ${vehicleId.split('-')[0]}`;
+            
+            // Fill minimum 5 rows to maintain the look, even if fewer items
+            const maxRows = Math.max(5, uniqueLpns.length);
+            
+            for (let i = 0; i < maxRows; i++) {
+                const item = uniqueLpns[i];
+                
+                const tr1 = document.createElement('tr');
+                if (item) {
+                    tr1.innerHTML = `<td><div class="input-cell" style="padding: 4px 8px;">${item.itemName || 'N/A'}</div></td><td><div class="input-cell" style="padding: 4px 8px;">${item.lpnCode}</div></td><td><div class="input-cell" style="padding: 4px 8px; text-align: center;">${item.quantity || 1}</div></td>`;
+                } else {
+                    tr1.innerHTML = `<td><div class="input-cell"></div></td><td><div class="input-cell"></div></td><td><div class="input-cell"></div></td>`;
+                }
+                tbodyItems.appendChild(tr1);
+                
+                const tr2 = document.createElement('tr');
+                if (item) {
+                    tr2.innerHTML = `<td><div class="input-cell" style="padding: 4px 8px;">${item.lpnCode}</div></td><td><div class="input-cell" style="padding: 4px 8px;">${item.location || 'N/A'}</div></td>`;
+                } else {
+                    tr2.innerHTML = `<td><div class="input-cell"></div></td><td><div class="input-cell"></div></td>`;
+                }
+                tbodyLocations.appendChild(tr2);
+            }
+        }
+
+        function render3D(plan) {
+            const canvas = document.getElementById('webgl-canvas');
+            const container = document.getElementById('webgl-container');
+
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(2); // High res for print
+
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 1, 5000);
+            
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(200, 500, 300);
+            scene.add(dirLight);
+
+            itemsGroup = new THREE.Group();
+            scene.add(itemsGroup);
+
+            // Draw container & items
+            const cW = plan.containerWidth;
+            const cH = plan.containerHeight;
+            const cL = plan.containerLength;
+
+            // Draw container walls (Floor, Left Wall, Front Wall) to look like a real open container
+            const wallMat = new THREE.MeshPhongMaterial({ color: 0x334155, side: THREE.DoubleSide });
+            
+            // Floor
+            const floorGeo = new THREE.BoxGeometry(cW, 2, cL);
+            const floor = new THREE.Mesh(floorGeo, wallMat);
+            floor.position.set(cW / 2, -1, cL / 2);
+            scene.add(floor);
+
+            // Left Wall
+            const leftWallGeo = new THREE.BoxGeometry(2, cH, cL);
+            const leftWall = new THREE.Mesh(leftWallGeo, wallMat);
+            leftWall.position.set(-1, cH / 2, cL / 2);
+            scene.add(leftWall);
+
+            // Front Wall (Cabin side, z=0)
+            const frontWallGeo = new THREE.BoxGeometry(cW, cH, 2);
+            const frontWall = new THREE.Mesh(frontWallGeo, wallMat);
+            frontWall.position.set(cW / 2, cH / 2, -1);
+            scene.add(frontWall);
+
+            // Draw edges for the bounding box
+            const boxGeo = new THREE.BoxGeometry(cW, cH, cL);
+            const edges = new THREE.EdgesGeometry(boxGeo);
+            containerMesh = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x94a3b8, linewidth: 1 }));
+            containerMesh.position.set(cW / 2, cH / 2, cL / 2);
+            scene.add(containerMesh);
+
+            // Evaporator
+            const evapW = cW * 0.7;
+            const evapH = Math.min(cH * 0.3, 60);
+            const evapGeo = new THREE.BoxGeometry(evapW, evapH, 30);
+            const evaporator = new THREE.Mesh(evapGeo, new THREE.MeshPhongMaterial({ color: 0xcbd5e1 }));
+            evaporator.position.set(cW / 2, cH - evapH / 2 - 5, 15);
+            itemsGroup.add(evaporator);
+
+            plan.placedItems.forEach(item => {
+                const geo = new THREE.BoxGeometry(item.w, item.h, item.d);
+                const colorHex = parseInt(item.color.replace('#', '0x'), 16) || 0x3b82f6;
+                const mat = new THREE.MeshPhongMaterial({ color: colorHex });
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(item.x + (item.w / 2), item.y + (item.h / 2), item.z + (item.d / 2));
+                
+                mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0xffffff, opacity: 0.5 })));
+                itemsGroup.add(mesh);
+            });
+
+            // Center scene
+            const target = new THREE.Vector3(cW / 2, cH / 2, cL / 2);
+
+            // Angle 1: Perspective (isometric-like)
+            // To get a tight fit, position camera relative to the max dimension
+            const maxDim = Math.max(cW, cH, cL);
+            camera.position.set(cW * 1.5, maxDim * 0.8, cL * 1.5);
+            camera.lookAt(target);
+            renderer.render(scene, camera);
+            document.getElementById('img-perspective').src = canvas.toDataURL('image/png');
+
+            // Angle 2: Front/Door view (Looking from the back doors into the container)
+            camera.position.set(cW / 2, cH / 2, cL + (cW * 1.2));
+            camera.lookAt(target);
+            renderer.render(scene, camera);
+            document.getElementById('img-front').src = canvas.toDataURL('image/png');
+
+            // Angle 3: Top View (Looking straight down)
+            camera.position.set(cW / 2, maxDim * 1.5, cL / 2);
+            // Fix camera up vector for top-down
+            camera.up.set(0, 0, -1);
+            camera.lookAt(target);
+            renderer.render(scene, camera);
+            document.getElementById('img-top').src = canvas.toDataURL('image/png');
+
+            // Done rendering! Hide loading and trigger print
+            document.getElementById('loading').style.display = 'none';
+            setTimeout(() => {
+                window.print();
+            }, 500);
+        }
+
+        init();
+    </script>
+</body>
+</html>

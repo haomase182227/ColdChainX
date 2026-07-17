@@ -763,6 +763,10 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasPrecision(10, 7)
                 .HasColumnName("current_longitude");
             entity.Property(e => e.Description).HasColumnName("description");
+            entity.Property(e => e.DriverPaidAmount)
+                .HasPrecision(15, 2)
+                .HasDefaultValue(0m)
+                .HasColumnName("driver_paid_amount");
             entity.Property(e => e.IncidentType)
                 .HasMaxLength(50)
                 .HasColumnName("incident_type");
@@ -774,6 +778,9 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.ResolvedAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("resolved_at");
+            entity.Property(e => e.ReimbursedAmount)
+                .HasPrecision(15, 2)
+                .HasColumnName("reimbursed_amount");
             entity.Property(e => e.Severity)
                 .HasMaxLength(20)
                 .HasColumnName("severity");

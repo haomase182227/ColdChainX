@@ -19,6 +19,10 @@ public partial class IncidentReport
 
     public decimal? CurrentLongitude { get; set; }
 
+    public decimal DriverPaidAmount { get; set; }
+
+    public decimal? ReimbursedAmount { get; set; }
+
     public string? Status { get; set; }
 
     public Guid ReportedBy { get; set; }

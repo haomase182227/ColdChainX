@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Load Plan Viewer - ColdChainX</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --panel-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --border: #334155;
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            overflow: hidden;
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Layout */
+        .sidebar {
+            position: absolute;
+            top: 24px;
+            left: 24px;
+            width: 340px;
+            background-color: rgba(30, 41, 59, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            z-index: 10;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+        }
+
+        .sidebar-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .sidebar-header h1 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            background: linear-gradient(90deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .sidebar-header p {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .sidebar-content {
+            padding: 20px;
+            overflow: hidden;
+        }
+
+        .sidebar-footer {
+            padding: 16px 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 12px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background-color: var(--accent);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background-color: var(--accent-hover);
+        }
+
+        .btn:disabled {
+            background-color: var(--border);
+            color: var(--text-muted);
+            cursor: not-allowed;
+        }
+
+        .loader {
+            display: none;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .message-box {
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            margin-bottom: 16px;
+            display: none;
+        }
+
+        .message-box.error {
+            background-color: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #fca5a5;
+        }
+
+        .message-box.success {
+            background-color: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #6ee7b7;
+        }
+
+        /* Main View */
+        .main-view {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .stat-box {
+            background-color: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .stat-box .value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--success);
+            margin-bottom: 4px;
+        }
+
+        .stat-box.warning .value {
+            color: var(--error);
+        }
+
+        .stat-box .label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .details-list {
+            font-size: 12px;
+            color: var(--text-muted);
+            list-style: none;
+            padding: 0;
+        }
+
+        .details-list li {
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .details-list li span:last-child {
+            color: var(--text-main);
+            font-weight: 500;
+        }
+
+        .canvas-container {
+            position: absolute;
+            left: 388px;
+            top: 0;
+            right: 0;
+            bottom: 0;
+        }
+
+        #webgl-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid var(--border);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            transform: translate(-50%, -100%);
+            margin-top: -10px;
+            z-index: 20;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            backdrop-filter: blur(4px);
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Split View: Left Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h1>Kết Quả Xếp Xe 3D</h1>
+            <p>Mô phỏng 3D thuật toán Packing LIFO.</p>
+        </div>
+
+        <div class="sidebar-content">
+            <div id="msg-box" class="message-box"></div>
+
+            <div id="results-panel">
+                <div class="stat-grid">
+                    <div class="stat-box">
+                        <div class="value" id="res-util">0%</div>
+                        <div class="label">Utilisation</div>
+                    </div>
+                    <div class="stat-box" id="unplaced-box">
+                        <div class="value" id="res-unplaced">0</div>
+                        <div class="label">Unplaced LPNs</div>
+                    </div>
+                </div>
+
+                <ul class="details-list">
+                    <li><span>Loại Xe:</span> <span id="res-type">-</span></li>
+                    <li><span>Kích thước:</span> <span id="res-dims">-</span></li>
+                    <li><span>Đã xếp:</span> <span id="res-placed">0 kiện</span></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Split View: Right Main Area -->
+    <div class="main-view">
+        <div class="canvas-container">
+            <canvas id="webgl-canvas"></canvas>
+            <div class="tooltip" id="tooltip"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Globals for 3D
+        let scene, camera, renderer, controls;
+        let containerMesh, itemsGroup;
+        let raycaster, mouse;
+        let interactableMeshes = [];
+        const tooltip = document.getElementById('tooltip');
+
+        // Initialize
+        initThreeJS();
+        animate();
+        checkUrlParamsAndSimulate();
+
+        // Parse URL parameters and auto-simulate
+        async function checkUrlParamsAndSimulate() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const vId = urlParams.get('vehicleId');
+            let lpnIdsRaw = urlParams.get('lpnIds');
+
+            if (vId && lpnIdsRaw) {
+                setTimeout(async () => {
+                    const ids = lpnIdsRaw.split(',').map(id => id.trim()).filter(id => id);
+                    await simulateFromUrl(vId, ids);
+                }, 500);
+            } else {
+                showMessage("Vui lòng truyền vehicleId và lpnIds vào URL để xem 3D.", "error");
+            }
+        }
+
+        async function simulateFromUrl(vehicleId, lpnIds) {
+            try {
+                const response = await fetch('/api/Dispatch/simulate-packing?for3d=true', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ vehicleId, lpnIds })
+                });
+
+                const data = await response.json();
+                if (!response.ok || !data.success) throw new Error(data.message || data.error || 'Failed to simulate');
+
+                const plan = data.data;
+
+                // Update UI Sidebar
+                document.getElementById('res-util').textContent = plan.utilisation.toFixed(1) + '%';
+                document.getElementById('res-unplaced').textContent = plan.unplacedLpnIds.length;
+                document.getElementById('res-type').textContent = plan.vehicleType;
+                document.getElementById('res-dims').textContent = `${plan.containerWidth}x${plan.containerHeight}x${plan.containerLength} cm`;
+                document.getElementById('res-placed').textContent = `${plan.placedItems.length} kiện`;
+
+                const unplacedBox = document.getElementById('unplaced-box');
+                if (plan.unplacedLpnIds.length > 0) {
+                    unplacedBox.classList.add('warning');
+                } else {
+                    unplacedBox.classList.remove('warning');
+                }
+
+                drawPlan(plan);
+
+            } catch (err) {
+                showMessage(err.message, "error");
+            }
+        }
+
+        function showMessage(text, type) {
+            const box = document.getElementById('msg-box');
+            box.className = `message-box ${type}`;
+            box.textContent = text;
+            box.style.display = 'block';
+            setTimeout(() => box.style.display = 'none', 5000);
+        }
+
+        // --- Three.js Implementation ---
+
+        function initThreeJS() {
+            const canvas = document.getElementById('webgl-canvas');
+            const container = document.querySelector('.canvas-container');
+
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 1, 5000);
+            camera.position.set(400, 300, 500);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(200, 500, 300);
+            scene.add(dirLight);
+
+            const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.3);
+            dirLight2.position.set(-200, 200, -300);
+            scene.add(dirLight2);
+
+            itemsGroup = new THREE.Group();
+            scene.add(itemsGroup);
+
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            window.addEventListener('resize', () => {
+                camera.aspect = container.clientWidth / container.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container.clientWidth, container.clientHeight);
+            });
+
+            canvas.addEventListener('mousemove', (event) => {
+                const rect = container.getBoundingClientRect();
+                mouse.x = ((event.clientX - rect.left) / container.clientWidth) * 2 - 1;
+                mouse.y = -((event.clientY - rect.top) / container.clientHeight) * 2 + 1;
+                tooltip.style.left = event.clientX + 'px';
+                tooltip.style.top = event.clientY + 'px';
+            });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+
+            if (interactableMeshes.length > 0) {
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(interactableMeshes);
+
+                if (intersects.length > 0) {
+                    const data = intersects[0].object.userData;
+                    tooltip.innerHTML = `<strong>${data.lpnCode}</strong><br>Dim: ${data.w}x${data.h}x${data.d} cm`;
+                    tooltip.style.opacity = 1;
+                    document.body.style.cursor = 'pointer';
+                } else {
+                    tooltip.style.opacity = 0;
+                    document.body.style.cursor = 'default';
+                }
+            } else {
+                tooltip.style.opacity = 0;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function drawPlan(plan) {
+            if (containerMesh) scene.remove(containerMesh);
+            itemsGroup.clear();
+            interactableMeshes = [];
+
+            const cW = plan.containerWidth;
+            const cH = plan.containerHeight;
+            const cL = plan.containerLength;
+
+            const boxGeo = new THREE.BoxGeometry(cW, cH, cL);
+            const edges = new THREE.EdgesGeometry(boxGeo);
+            const lineMat = new THREE.LineBasicMaterial({ color: 0x94a3b8, linewidth: 2 });
+            containerMesh = new THREE.LineSegments(edges, lineMat);
+            containerMesh.position.set(cW / 2, cH / 2, cL / 2);
+            scene.add(containerMesh);
+
+            // 1. Evaporator (Lốc lạnh) at the Front (Cabin)
+            const evapW = cW * 0.7;
+            const evapH = Math.min(cH * 0.3, 60);
+            const evapD = 30;
+            const evapGeo = new THREE.BoxGeometry(evapW, evapH, evapD);
+            const evapMat = new THREE.MeshPhongMaterial({ color: 0xcbd5e1 }); // Silver
+            const evaporator = new THREE.Mesh(evapGeo, evapMat);
+            evaporator.position.set(cW / 2, cH - evapH / 2 - 5, evapD / 2);
+            itemsGroup.add(evaporator);
+
+            // 2. Rear Doors (Cửa xe) at the Back
+            const doorW = (cW / 2) - 2;
+            const doorH = cH - 4;
+            const doorD = 4;
+            const doorGeo = new THREE.BoxGeometry(doorW, doorH, doorD);
+            const doorMat = new THREE.MeshPhongMaterial({ color: 0x334155, transparent: true, opacity: 0.8 }); // Dark gray
+            
+            // Left Door
+            const leftDoor = new THREE.Mesh(doorGeo, doorMat);
+            leftDoor.position.set(doorW / 2 + 1, cH / 2, cL);
+            const leftDoorEdges = new THREE.EdgesGeometry(doorGeo);
+            leftDoor.add(new THREE.LineSegments(leftDoorEdges, new THREE.LineBasicMaterial({ color: 0xf87171 }))); // Red border
+            itemsGroup.add(leftDoor);
+
+            // Right Door
+            const rightDoor = new THREE.Mesh(doorGeo, doorMat);
+            rightDoor.position.set(cW - doorW / 2 - 1, cH / 2, cL);
+            const rightDoorEdges = new THREE.EdgesGeometry(doorGeo);
+            rightDoor.add(new THREE.LineSegments(rightDoorEdges, new THREE.LineBasicMaterial({ color: 0xf87171 }))); // Red border
+            itemsGroup.add(rightDoor);
+
+            const gridHelper = new THREE.GridHelper(Math.max(cW, cL) * 1.5, 20, 0x334155, 0x1e293b);
+            gridHelper.position.set(cW / 2, 0, cL / 2);
+            itemsGroup.add(gridHelper);
+
+            plan.placedItems.forEach(item => {
+                const geo = new THREE.BoxGeometry(item.w, item.h, item.d);
+                const colorHex = parseInt(item.color.replace('#', '0x'), 16) || 0x3b82f6;
+                const mat = new THREE.MeshPhongMaterial({ color: colorHex, transparent: true, opacity: 0.85, shininess: 60 });
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(item.x + (item.w / 2), item.y + (item.h / 2), item.z + (item.d / 2));
+
+                const itemEdges = new THREE.EdgesGeometry(geo);
+                const itemEdgeMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 });
+                mesh.add(new THREE.LineSegments(itemEdges, itemEdgeMat));
+
+                mesh.userData = { lpnCode: item.lpnCode, w: item.w, h: item.h, d: item.d };
+                itemsGroup.add(mesh);
+                interactableMeshes.push(mesh);
+            });
+
+            camera.position.set(cW * 1.5, cH * 1.5, cL * 1.5);
+            controls.target.set(cW / 2, cH / 2, cL / 2);
+            controls.update();
+        }
+    </script>
+</body>
+
+</html>
