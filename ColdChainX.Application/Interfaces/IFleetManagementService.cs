@@ -19,6 +19,7 @@ public interface IFleetManagementService
     Task<ApiResponse<DriverFleetResponse>> UpdateDriverAsync(Guid driverId, UpdateDriverRequest request);
     Task<ApiResponse<bool>> SoftDeleteDriverAsync(Guid driverId);
     Task<ApiResponse<ImportResultResponse>> ImportDriversAsync(IFormFile excelFile);
+    Task<ApiResponse<PagedList<DriverTripHistoryResponseDto>>> GetDriverTripHistoryAsync(Guid driverId, int pageNumber = 1, int pageSize = 10);
 
     Task<ApiResponse<IReadOnlyCollection<VehicleDocumentResponse>>> GetVehicleDocumentsAsync(Guid? vehicleId);
     Task<ApiResponse<VehicleDocumentResponse>> GetVehicleDocumentByIdAsync(Guid docId);

@@ -72,6 +72,13 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
+        [HttpGet("{id:guid}/trip-history")]
+        public async Task<IActionResult> GetTripHistory(Guid id, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+        {
+            var result = await _fleetService.GetDriverTripHistoryAsync(id, pageNumber, pageSize);
+            return Ok(result);
+        }
+
         [HttpDelete("{id:guid}")]
         public async Task<ActionResult<ApiResponse<bool>>> Delete(Guid id)
         {
