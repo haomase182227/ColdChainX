@@ -30,7 +30,9 @@ public class GenerateDiscrepancyPdfQueryHandler : IRequestHandler<GenerateDiscre
         var receipt = await _context.WarehouseReceipts
             .Include(x => x.Lpns)
                 .ThenInclude(l => l.Order)
+                    .ThenInclude(o => o.OrderDimension)
             .Include(x => x.Order)
+                .ThenInclude(o => o.OrderDimension)
             .Include(x => x.Warehouse)
             .FirstOrDefaultAsync(x => x.ReceiptId == request.ReceiptId, cancellationToken);
 

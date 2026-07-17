@@ -76,6 +76,7 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
 
         var asn = await _context.InboundAsns
             .Include(a => a.Order)
+                .ThenInclude(o => o.OrderDimension)
             .FirstOrDefaultAsync(a => a.AsnId == request.AsnId, cancellationToken);
 
         if (asn?.Order == null)
