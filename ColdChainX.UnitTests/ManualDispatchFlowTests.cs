@@ -48,19 +48,7 @@ public class ManualDispatchFlowTests
         Assert.Empty(fixture.Db.MasterTrips);
     }
 
-    [Fact]
-    public async Task ManualDispatch_RejectsLpnFromAnotherSchedule()
-    {
-        await using var fixture = await CreateFixtureAsync();
-        fixture.Order.ScheduleId = Guid.NewGuid();
-        await fixture.Db.SaveChangesAsync();
-
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => fixture.Service.ManualDispatchAsync(fixture.Request));
-
-        Assert.Contains("must belong to orders", error.Message);
-        Assert.Empty(fixture.Db.MasterTrips);
-    }
+    // LPN schedule constraint was removed in main to support flexible dispatching.
 
     [Fact]
     public async Task ManualDispatch_RejectsLpnThatCannotFitInsideVehicle()
@@ -80,7 +68,7 @@ public class ManualDispatchFlowTests
     }
 
     [Fact]
-    public async Task ManualDispatch_RejectsLoadAboveEightyPercentCapacity()
+    public async Task ManualDispatch_RejectsUnpackableLoad()
     {
         await using var fixture = await CreateFixtureAsync();
         fixture.Vehicle.MaxCbm = 1m;
@@ -96,7 +84,7 @@ public class ManualDispatchFlowTests
         var error = await Assert.ThrowsAsync<InvalidOperationException>(
             () => fixture.Service.ManualDispatchAsync(fixture.Request));
 
-        Assert.Contains("80%", error.Message);
+        Assert.Contains("3D Packing", error.Message);
         Assert.Empty(fixture.Db.MasterTrips);
     }
 
@@ -244,7 +232,6 @@ public class ManualDispatchFlowTests
         var request = new ManualDispatchRequest
         {
             ScheduleId = schedule.ScheduleId,
-            WarehouseId = warehouseId,
             LpnIds = new List<Guid> { lpn.LpnId },
             VehicleId = vehicle.VehicleId,
             DriverIds = new List<Guid> { driver.DriverId },
