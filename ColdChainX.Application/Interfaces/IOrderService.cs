@@ -16,6 +16,8 @@ namespace ColdChainX.Application.Interfaces
         Task<ApiResponse<ReviewOrderResponse>> ReviewOrderAsync(Guid orderId, ReviewOrderRequest request, Guid salesUserId);
         Task<ApiResponse<IReadOnlyCollection<ColdChainX.Application.DTOs.Routes.WarehouseOptionDto>>> GetOriginWarehousesForOrderAsync(Guid orderId);
         Task<ApiResponse<PublicTrackingResponseDto>> GetPublicTrackingAsync(string trackingCode);
+        Task<ApiResponse<object>> GetPublicTemperatureChartAsync(string trackingCode, int maxPoints = 200);
+
 
     }
 }

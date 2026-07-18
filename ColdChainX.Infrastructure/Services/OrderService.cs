@@ -1079,6 +1079,72 @@ namespace ColdChainX.Infrastructure.Services
         {
             return deg * (Math.PI / 180);
         }
+
+        public async Task<ApiResponse<object>> GetPublicTemperatureChartAsync(string trackingCode, int maxPoints = 200)
+        {
+            var order = await _db.TransportOrders
+                .Include(o => o.MasterTrip)
+                .Include(o => o.DeliveryEpods)
+                .FirstOrDefaultAsync(o => o.TrackingCode == trackingCode);
+
+            if (order == null)
+            {
+                return ApiResponse<object>.Failure("Không tìm thấy đơn hàng với mã này.", 404);
+            }
+
+            if (order.MasterTripId == null)
+            {
+                return ApiResponse<object>.Failure("Đơn hàng chưa được điều phối hoặc chưa có dữ liệu hành trình.", 400);
+            }
+
+            var startTime = order.MasterTrip?.StartedAt ?? order.MasterTrip?.PlannedStartTime ?? DateTime.UtcNow;
+            var endTime = DateTime.UtcNow;
+
+            if (order.Status == "COMPLETED")
+            {
+                var epod = order.DeliveryEpods.FirstOrDefault();
+                if (epod != null && (epod.CreatedAt.HasValue || epod.SignedAt.HasValue))
+                {
+                    endTime = epod.CreatedAt ?? epod.SignedAt ?? DateTime.UtcNow;
+                }
+                else if (order.MasterTrip?.CompletedAt != null)
+                {
+                    endTime = order.MasterTrip.CompletedAt.Value;
+                }
+            }
+
+            var rawLogs = await _db.TelemetryLogs
+                .Where(t => t.TripId == order.MasterTripId.Value && t.Timestamp >= startTime && t.Timestamp <= endTime)
+                .OrderBy(t => t.Timestamp)
+                .Select(t => new
+                {
+                    t.Timestamp,
+                    t.Temperature,
+                    t.Latitude,
+                    t.Longitude
+                })
+                .ToListAsync();
+
+            var points = rawLogs
+                .Select(t => new ColdChainX.Application.Helpers.TrackingPoint(t.Timestamp, t.Temperature, t.Latitude, t.Longitude))
+                .ToList();
+                
+            var sampledPoints = ColdChainX.Application.Helpers.TrackingDownsampler.Downsample(points, Math.Clamp(maxPoints, 20, 1000));
+
+            return ApiResponse<object>.SuccessResponse(new
+            {
+                TrackingCode = trackingCode,
+                StartTime = startTime,
+                EndTime = endTime,
+                RawPointCount = points.Count,
+                SampledPointCount = sampledPoints.Count,
+                Points = sampledPoints.Select(t => new
+                {
+                    t.Timestamp,
+                    TempC = t.TempC
+                })
+            });
+        }
     }
 }
 
