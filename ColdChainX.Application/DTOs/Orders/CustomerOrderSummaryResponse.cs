@@ -14,6 +14,7 @@ namespace ColdChainX.Application.DTOs.Orders
         public decimal ExpectedWeightKg { get; set; }
         public decimal ExpectedCbm { get; set; }
         public string Status { get; set; } = null!;
+        public Guid? MasterTripId { get; set; }
         public DateTime? CreatedAt { get; set; }
     }
 }

@@ -15,6 +15,7 @@ namespace ColdChainX.Application.DTOs.Orders
         public decimal? ActualCbm { get; set; }
 
         public string Status { get; set; } = null!;
+        public Guid? MasterTripId { get; set; }
         public DateTime? CreatedAt { get; set; }
         public OrderRouteResponse? Route { get; set; }
         public OrderLocationResponse? Destination { get; set; }

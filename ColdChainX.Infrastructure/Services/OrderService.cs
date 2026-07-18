@@ -106,6 +106,7 @@ namespace ColdChainX.Infrastructure.Services
                     ExpectedWeightKg = o.OrderDimension != null ? o.OrderDimension.ExpectedWeightKg : 0,
                     ExpectedCbm = o.OrderDimension != null ? o.OrderDimension.ExpectedCbm : 0,
                     Status = o.Status,
+                    MasterTripId = o.MasterTripId,
                     CreatedAt = o.CreatedAt
                 })
                 .ToListAsync();
@@ -905,6 +906,7 @@ namespace ColdChainX.Infrastructure.Services
                 ExpectedCbm = (order.OrderDimension?.ExpectedCbm ?? 0m),
                 ActualCbm = (order.OrderDimension?.ActualCbm ?? 0m),
                 Status = order.Status,
+                MasterTripId = order.MasterTripId,
                 CreatedAt = order.CreatedAt,
                 Route = order.Schedule?.Route == null
                     ? null
