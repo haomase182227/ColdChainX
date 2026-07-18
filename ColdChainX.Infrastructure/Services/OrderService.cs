@@ -1006,6 +1006,79 @@ namespace ColdChainX.Infrastructure.Services
         {
             return value.ToString("#,##0.##", CultureInfo.GetCultureInfo("vi-VN"));
         }
+
+        public async Task<ApiResponse<PublicTrackingResponseDto>> GetPublicTrackingAsync(string trackingCode)
+        {
+            var order = await _db.TransportOrders
+                .Include(o => o.DestLocationNavigation)
+                .Include(o => o.DropoffStop)
+                
+                .FirstOrDefaultAsync(o => o.TrackingCode == trackingCode);
+
+            if (order == null)
+            {
+                return ApiResponse<PublicTrackingResponseDto>.Failure("Không tìm thấy đơn hàng với mã này.", 404);
+            }
+
+            var destLat = order.DestLocationNavigation?.Latitude ?? order.DestLocationNavigation?.Latitude;
+            var destLng = order.DestLocationNavigation?.Longitude ?? order.DestLocationNavigation?.Longitude;
+            var destAddress = order.DestLocationNavigation?.Address ?? order.DestLocationNavigation?.Address ?? "N/A";
+
+            var response = new PublicTrackingResponseDto
+            {
+                TrackingCode = order.TrackingCode,
+                Status = order.Status,
+                ItemName = order.ItemName,
+                DeliveryAddress = destAddress,
+                LastUpdatedAt = DateTime.UtcNow
+            };
+
+            if ((order.Status == "DISPATCHED" || order.Status == "IN_TRANSIT" || order.Status == "COMPLETED") && order.MasterTripId.HasValue)
+            {
+                var latestTelemetry = await _db.TelemetryLogs
+                    .Where(t => t.TripId == order.MasterTripId.Value)
+                    .OrderByDescending(t => t.Timestamp)
+                    .FirstOrDefaultAsync();
+
+                if (latestTelemetry != null)
+                {
+                    response.CurrentLatitude = (double)latestTelemetry.Latitude;
+                    response.CurrentLongitude = (double)latestTelemetry.Longitude;
+                    response.CurrentTemperature = latestTelemetry.Temperature;
+                    response.LastUpdatedAt = latestTelemetry.Timestamp;
+
+                    if (destLat.HasValue && destLng.HasValue && order.Status != "COMPLETED")
+                    {
+                        var distance = CalculateDistance((double)latestTelemetry.Latitude, (double)latestTelemetry.Longitude, (double)destLat.Value, (double)destLng.Value);
+                        response.RemainingDistanceKm = Math.Round(distance, 2);
+                        
+                        var speedKmH = 40.0;
+                        response.EstimatedMinutesToArrival = (int)Math.Ceiling((distance / speedKmH) * 60);
+                    }
+                }
+            }
+
+            return ApiResponse<PublicTrackingResponseDto>.SuccessResponse(response);
+        }
+
+        private static double CalculateDistance(double lat1, double lon1, double lat2, double lon2)
+        {
+            var R = 6371; // Radius of the earth in km
+            var dLat = Deg2Rad(lat2 - lat1);
+            var dLon = Deg2Rad(lon2 - lon1);
+            var a =
+                Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                Math.Cos(Deg2Rad(lat1)) * Math.Cos(Deg2Rad(lat2)) *
+                Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+            var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+            var d = R * c; // Distance in km
+            return d;
+        }
+
+        private static double Deg2Rad(double deg)
+        {
+            return deg * (Math.PI / 180);
+        }
     }
 }
 
