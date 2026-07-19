@@ -344,7 +344,7 @@ public class DispatchController : ControllerBase
     [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> LookupSchedules()
     {
-        var items = await _db.RouteSchedules
+        var rawItems = await _db.RouteSchedules
             .AsNoTracking()
             .Where(s => s.Status == "ACTIVE" && s.Route.Status == "ACTIVE")
             .OrderBy(s => s.Route.RouteCode)
@@ -355,18 +355,30 @@ public class DispatchController : ControllerBase
                 s.ScheduleId,
                 s.RouteId,
                 s.Route.RouteCode,
-                RouteName = s.Route.OriginCity + " -> " + s.Route.DestCity,
+                s.Route.OriginCity,
+                s.Route.DestCity,
                 s.ScheduleName,
                 s.DepartureDate,
-                DayOfWeek = (int)s.DepartureDate.DayOfWeek,
                 s.DepartureTime,
                 s.CutOffTime,
-                s.Status,
-                Label = s.ScheduleName + " - " + s.Route.RouteCode
-                    + " | " + s.Route.OriginCity + " -> " + s.Route.DestCity
-                    + " | " + s.DepartureTime
+                s.Status
             })
             .ToListAsync();
+
+        var items = rawItems.Select(s => new
+        {
+            s.ScheduleId,
+            s.RouteId,
+            s.RouteCode,
+            RouteName = $"{s.OriginCity} -> {s.DestCity}",
+            s.ScheduleName,
+            s.DepartureDate,
+            DayOfWeek = (int)s.DepartureDate.DayOfWeek,
+            s.DepartureTime,
+            s.CutOffTime,
+            s.Status,
+            Label = $"{s.ScheduleName} - {s.RouteCode} | {s.OriginCity} -> {s.DestCity} | {s.DepartureTime}"
+        }).ToList();
 
         return Ok(new { Success = true, Count = items.Count, Data = items });
     }
