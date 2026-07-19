@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using ColdChainX.Application.DTOs.Dispatch;
 using ColdChainX.Application.Interfaces;
+using ColdChainX.Application.Services;
 using ColdChainX.Core.Entities;
 using ColdChainX.Core.Enums;
 using ColdChainX.Infrastructure.Integration;
@@ -30,6 +31,7 @@ public class DispatchService : IDispatchService
     private readonly IDriverAvailabilityService _driverAvailability;
     private readonly IMqttCommandPublisher _mqttPublisher;
     private readonly ILogger<DispatchService> _logger;
+    private readonly ICargoCompatibilityService _cargoCompatibilityService;
 
     // Tên role điều phối viên
     private const string CoordinatorRoleName = "Dispatcher";
@@ -49,7 +51,8 @@ public class DispatchService : IDispatchService
         IHubContext<NotificationHub> hubContext,
         IDriverAvailabilityService driverAvailability,
         IMqttCommandPublisher mqttPublisher,
-        ILogger<DispatchService> logger)
+        ILogger<DispatchService> logger,
+        ICargoCompatibilityService? cargoCompatibilityService = null)
     {
         _context = context;
         _geminiClient = geminiClient;
@@ -60,6 +63,7 @@ public class DispatchService : IDispatchService
         _driverAvailability = driverAvailability;
         _mqttPublisher = mqttPublisher;
         _logger = logger;
+        _cargoCompatibilityService = cargoCompatibilityService ?? new CargoCompatibilityService();
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -826,18 +830,18 @@ public class DispatchService : IDispatchService
 
     public async Task<ManualDispatchResult> ManualDispatchAsync(ManualDispatchRequest request)
     {
-        RouteSchedule? schedule = null;
-        if (request.ScheduleId.HasValue && request.ScheduleId.Value != Guid.Empty)
-        {
-            schedule = await _context.RouteSchedules
-                .AsNoTracking()
-                .FirstOrDefaultAsync(s => s.ScheduleId == request.ScheduleId)
-                ?? throw new InvalidOperationException($"ScheduleId '{request.ScheduleId}' does not exist.");
+        if (!request.ScheduleId.HasValue || request.ScheduleId.Value == Guid.Empty)
+            throw new InvalidOperationException("ScheduleId is required.");
 
-            if (!string.Equals(schedule.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException(
-                    $"Schedule '{schedule.ScheduleName}' is not ACTIVE (current status: '{schedule.Status}').");
-        }
+        var selectedScheduleId = request.ScheduleId.Value;
+        var schedule = await _context.RouteSchedules
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.ScheduleId == selectedScheduleId)
+            ?? throw new InvalidOperationException($"ScheduleId '{selectedScheduleId}' does not exist.");
+
+        if (!string.Equals(schedule.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                $"Schedule '{schedule.ScheduleName}' is not ACTIVE (current status: '{schedule.Status}').");
 
         // 1. Validate kho xuất phát
         var originLocation = await _context.Locations.FindAsync(request.OriginWarehouseLocationId)
@@ -857,6 +861,18 @@ public class DispatchService : IDispatchService
         var missingLpns = request.LpnIds.Except(lpns.Select(l => l.LpnId)).ToList();
         if (missingLpns.Any())
             throw new InvalidOperationException($"Không tìm thấy các LPN sau: {string.Join(", ", missingLpns)}");
+
+        var selectedSetValidation = _cargoCompatibilityService.ValidateSelectedSet(
+            lpns,
+            selectedScheduleId,
+            request.LpnIds);
+        if (!selectedSetValidation.IsValid)
+        {
+            var messages = selectedSetValidation.Conflicts
+                .Select(c => $"{c.ReasonCode}: {c.Message}")
+                .Distinct();
+            throw new InvalidOperationException($"Selected LPNs are not valid for dispatch. {string.Join("; ", messages)}");
+        }
 
         if (lpns.Any(l => l.State != LpnState.IN_STOCK))
             throw new InvalidOperationException("Chỉ được ghép chuyến các LPN có trạng thái IN_STOCK.");
@@ -888,6 +904,15 @@ public class DispatchService : IDispatchService
             throw new InvalidOperationException(
                 $"Xe {vehicle.TruckPlate} không thể ghép chuyến — trạng thái hiện tại: '{vehicle.Status}'. " +
                 $"Chỉ xe ACTIVE mới có thể được ghép chuyến.");
+
+        var vehicleTemperatureConflicts = _cargoCompatibilityService.ValidateVehicleTemperature(vehicle, lpns);
+        if (vehicleTemperatureConflicts.Any())
+        {
+            var messages = vehicleTemperatureConflicts
+                .Select(c => $"{c.ReasonCode}: {c.Message}")
+                .Distinct();
+            throw new InvalidOperationException($"Vehicle temperature is not compatible with selected LPNs. {string.Join("; ", messages)}");
+        }
 
         // 4b. Validate tài xế (1–2 người, gán theo chuyến qua TripDriver)
         var driverIds = request.DriverIds.Distinct().ToList();
@@ -986,7 +1011,10 @@ public class DispatchService : IDispatchService
                     Length = lpn.LengthCm ?? 120m,
                     Width = lpn.WidthCm ?? 100m,
                     Height = lpn.HeightCm ?? 150m,
-                    RouteStopSequence = seq
+                    RouteStopSequence = seq,
+                    WeightKg = lpn.ActualWeightKg,
+                    RequiredTemperature = _cargoCompatibilityService.ResolveRequiredTemperature(lpn) ?? requiredMinTemp,
+                    IsStackable = lpn.Order?.IsStackable ?? true
                 });
             }
         }

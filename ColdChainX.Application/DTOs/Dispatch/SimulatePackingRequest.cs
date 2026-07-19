@@ -5,6 +5,7 @@ namespace ColdChainX.Application.DTOs.Dispatch
 {
     public class SimulatePackingRequest
     {
+        public Guid ScheduleId { get; set; }
         public Guid VehicleId { get; set; }
         public List<Guid> LpnIds { get; set; } = new();
     }
@@ -27,6 +28,18 @@ namespace ColdChainX.Application.DTOs.Dispatch
 
     public class SimulatePackingResponse
     {
+        public bool SelectedSetValid { get; set; }
+        public bool CanCreateTrip { get; set; }
+        public List<string> BlockingReasons { get; set; } = new();
+        public SimulatePackingVehicleDto? Vehicle { get; set; }
+        public decimal TotalWeight { get; set; }
+        public decimal MaxWeight { get; set; }
+        public decimal WeightUtilization { get; set; }
+        public bool IsOverweight { get; set; }
+        public decimal TotalCbm { get; set; }
+        public decimal MaxCbm { get; set; }
+        public bool IsOverCbm { get; set; }
+
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public List<PreviewPlacedItem>? PlacedItems { get; set; }
 
