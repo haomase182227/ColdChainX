@@ -12,6 +12,13 @@ namespace ColdChainX.Infrastructure.Services
 {
     public class ChatService : IChatService
     {
+        private static readonly string[] TerminalOrderStatuses =
+        {
+            "REJECTED",
+            "DELIVERED",
+            "RETURNED"
+        };
+
         private readonly ApplicationDbContext _db;
         private readonly IHubContext<ChatHub> _hubContext;
 
@@ -35,6 +42,7 @@ namespace ColdChainX.Infrastructure.Services
 
             var query = _db.ChatMessages
                 .AsNoTracking()
+                .Include(m => m.Order)
                 .Include(m => m.Sender).ThenInclude(u => u.Role)
                 .Include(m => m.Receiver).ThenInclude(u => u.Role)
                 .Where(m => m.OrderId == orderId)
@@ -53,6 +61,121 @@ namespace ColdChainX.Infrastructure.Services
             return ApiResponse<PagedResult<ChatMessageResponse>>.SuccessResponse(
                 PagedResult<ChatMessageResponse>.Create(data, totalRecords, safePageNumber, safePageSize),
                 "Messages retrieved successfully");
+        }
+
+        public async Task<ApiResponse<PagedResult<ChatCustomerSummaryResponse>>> GetCustomerConversationsAsync(
+            Guid requesterId,
+            string? search,
+            int pageNumber,
+            int pageSize)
+        {
+            var safePageSize = Math.Clamp(pageSize <= 0 ? 30 : pageSize, 1, 100);
+            var safePageNumber = pageNumber <= 0 ? 1 : pageNumber;
+            var keyword = search?.Trim().ToLower();
+
+            var customersQuery = _db.Customers
+                .AsNoTracking()
+                .Where(customer => customer.TransportOrders.Any(order =>
+                    !TerminalOrderStatuses.Contains(order.Status)));
+
+            if (!string.IsNullOrWhiteSpace(keyword))
+            {
+                customersQuery = customersQuery.Where(customer =>
+                    customer.CompanyName.ToLower().Contains(keyword)
+                    || customer.TransportOrders.Any(order =>
+                        !TerminalOrderStatuses.Contains(order.Status)
+                        && (order.TrackingCode.ToLower().Contains(keyword)
+                            || order.ItemName.ToLower().Contains(keyword))));
+            }
+
+            var totalRecords = await customersQuery.CountAsync();
+            var customers = await customersQuery
+                .Select(customer => new ChatCustomerSummaryResponse
+                {
+                    CustomerId = customer.CustomerId,
+                    CustomerName = customer.CompanyName,
+                    ActiveOrderCount = customer.TransportOrders.Count(order =>
+                        !TerminalOrderStatuses.Contains(order.Status)),
+                    LatestOrderAt = customer.TransportOrders
+                        .Where(order => !TerminalOrderStatuses.Contains(order.Status))
+                        .Max(order => (DateTime?)order.CreatedAt),
+                    LastMessageAt = customer.TransportOrders
+                        .Where(order => !TerminalOrderStatuses.Contains(order.Status))
+                        .SelectMany(order => order.ChatMessages)
+                        .Max(message => (DateTime?)message.CreatedAt),
+                    LastMessageContent = customer.TransportOrders
+                        .Where(order => !TerminalOrderStatuses.Contains(order.Status))
+                        .SelectMany(order => order.ChatMessages)
+                        .OrderByDescending(message => message.CreatedAt)
+                        .Select(message => message.MessageContent)
+                        .FirstOrDefault(),
+                    LastMessageOrderId = customer.TransportOrders
+                        .Where(order => !TerminalOrderStatuses.Contains(order.Status))
+                        .SelectMany(order => order.ChatMessages)
+                        .OrderByDescending(message => message.CreatedAt)
+                        .Select(message => (Guid?)message.OrderId)
+                        .FirstOrDefault(),
+                    UnreadCount = customer.TransportOrders
+                        .Where(order => !TerminalOrderStatuses.Contains(order.Status))
+                        .SelectMany(order => order.ChatMessages)
+                        .Count(message => message.ReceiverId == requesterId && !message.IsRead)
+                })
+                .OrderByDescending(customer => customer.LastMessageAt ?? customer.LatestOrderAt)
+                .Skip((safePageNumber - 1) * safePageSize)
+                .Take(safePageSize)
+                .ToListAsync();
+
+            return ApiResponse<PagedResult<ChatCustomerSummaryResponse>>.SuccessResponse(
+                PagedResult<ChatCustomerSummaryResponse>.Create(
+                    customers,
+                    totalRecords,
+                    safePageNumber,
+                    safePageSize),
+                "Customer conversations retrieved successfully");
+        }
+
+        public async Task<ApiResponse<PagedResult<ChatMessageResponse>>> GetCustomerMessagesAsync(
+            Guid customerId,
+            Guid requesterId,
+            IEnumerable<string> requesterRoles,
+            int pageNumber,
+            int pageSize)
+        {
+            if (!requesterRoles.Any(IsStaffRole))
+                return ApiResponse<PagedResult<ChatMessageResponse>>.Failure(
+                    "Only Sales, Admin, or Manager can view customer conversations");
+
+            var customerExists = await _db.Customers
+                .AsNoTracking()
+                .AnyAsync(customer => customer.CustomerId == customerId);
+            if (!customerExists)
+                return ApiResponse<PagedResult<ChatMessageResponse>>.Failure("Customer not found");
+
+            var safePageSize = Math.Clamp(pageSize <= 0 ? 30 : pageSize, 1, 100);
+            var safePageNumber = pageNumber <= 0 ? 1 : pageNumber;
+            var query = _db.ChatMessages
+                .AsNoTracking()
+                .Include(message => message.Order)
+                .Include(message => message.Sender).ThenInclude(user => user.Role)
+                .Include(message => message.Receiver).ThenInclude(user => user.Role)
+                .Where(message => message.Order.CustomerId == customerId
+                    && !TerminalOrderStatuses.Contains(message.Order.Status))
+                .OrderByDescending(message => message.CreatedAt);
+
+            var totalRecords = await query.CountAsync();
+            var messages = await query
+                .Skip((safePageNumber - 1) * safePageSize)
+                .Take(safePageSize)
+                .ToListAsync();
+            var data = messages.Select(ToResponse).ToList();
+
+            return ApiResponse<PagedResult<ChatMessageResponse>>.SuccessResponse(
+                PagedResult<ChatMessageResponse>.Create(
+                    data,
+                    totalRecords,
+                    safePageNumber,
+                    safePageSize),
+                "Customer messages retrieved successfully");
         }
 
         public async Task<ApiResponse<ChatMessageResponse>> SendMessageAsync(
@@ -86,7 +209,9 @@ namespace ColdChainX.Infrastructure.Services
             await _db.SaveChangesAsync();
 
             var response = await GetMessageResponseAsync(message.Id);
-            await _hubContext.Clients.Group(ChatHub.BuildOrderGroup(orderId)).SendAsync("ReceiveMessage", response);
+            await _hubContext.Clients
+                .Groups(new[] { ChatHub.BuildOrderGroup(orderId), ChatHub.StaffGroup })
+                .SendAsync("ReceiveMessage", response);
 
             return ApiResponse<ChatMessageResponse>.SuccessResponse(response, "Message sent");
         }
@@ -188,6 +313,8 @@ namespace ColdChainX.Infrastructure.Services
             {
                 Id = message.Id,
                 OrderId = message.OrderId,
+                CustomerId = message.Order?.CustomerId,
+                TrackingCode = message.Order?.TrackingCode,
                 SenderId = message.SenderId,
                 SenderName = message.Sender.FullName,
                 SenderEmail = message.Sender.Email,
@@ -205,6 +332,7 @@ namespace ColdChainX.Infrastructure.Services
         {
             var message = await _db.ChatMessages
                 .AsNoTracking()
+                .Include(m => m.Order)
                 .Include(m => m.Sender).ThenInclude(u => u.Role)
                 .Include(m => m.Receiver).ThenInclude(u => u.Role)
                 .FirstAsync(m => m.Id == messageId);

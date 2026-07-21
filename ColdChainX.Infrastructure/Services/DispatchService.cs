@@ -839,10 +839,6 @@ public class DispatchService : IDispatchService
             .FirstOrDefaultAsync(s => s.ScheduleId == selectedScheduleId)
             ?? throw new InvalidOperationException($"ScheduleId '{selectedScheduleId}' does not exist.");
 
-        if (!string.Equals(schedule.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException(
-                $"Schedule '{schedule.ScheduleName}' is not ACTIVE (current status: '{schedule.Status}').");
-
         // 1. Validate kho xuất phát
         var originLocation = await _context.Locations.FindAsync(request.OriginWarehouseLocationId)
             ?? throw new InvalidOperationException("LocationId kho xuất phát không tồn tại.");

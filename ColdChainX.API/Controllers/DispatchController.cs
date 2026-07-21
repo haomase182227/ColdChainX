@@ -27,6 +27,18 @@ namespace ColdChainX.API.Controllers;
 [Authorize]
 public class DispatchController : ControllerBase
 {
+    private static readonly string[] ActiveTripStatuses =
+    {
+        "PLANNED",
+        "PICKING",
+        "LOADING",
+        "LOADING_COMPLETED",
+        "SEALED",
+        "DISPATCHED",
+        "IN_TRANSIT",
+        "DELAYED"
+    };
+
     private readonly IDispatchService _dispatchService;
     private readonly IVehicleService _vehicleService;
     private readonly IOrderService _orderService;
@@ -229,15 +241,22 @@ public class DispatchController : ControllerBase
     }
 
     /// <summary>
-    /// [Lookup] Danh sách xe tải đang ACTIVE – dùng để chọn xe cho plan-load.
+    /// [Lookup] Danh sách xe tải ACTIVE và chưa được gán chuyến đang hoạt động.
     /// </summary>
     [HttpGet("lookup/vehicles")]
     [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> LookupVehicles()
     {
+        var busyVehicleIds = await _db.MasterTrips
+            .AsNoTracking()
+            .Where(t => ActiveTripStatuses.Contains(t.Status))
+            .Select(t => t.VehicleId)
+            .Distinct()
+            .ToListAsync();
+
         var result = await _vehicleService.GetAllAsync();
         var items = result.Data?
-            .Where(v => v.Status == "ACTIVE")
+            .Where(v => v.Status == "ACTIVE" && !busyVehicleIds.Contains(v.VehicleId))
             .Select(v => new
             {
                 v.VehicleId,
@@ -346,10 +365,14 @@ public class DispatchController : ControllerBase
     {
         var rawItems = await _db.RouteSchedules
             .AsNoTracking()
-            .Where(s => s.Status == "ACTIVE" && s.Route.Status == "ACTIVE")
-            .OrderBy(s => s.Route.RouteCode)
-            .ThenBy(s => s.DepartureDate)
+            .Where(s => s.Route.Status == "ACTIVE"
+                && (s.Status == "ACTIVE"
+                    || _db.Lpns.Any(l => l.Order.ScheduleId == s.ScheduleId
+                        && l.State == LpnState.IN_STOCK
+                        && l.TripId == null)))
+            .OrderBy(s => s.DepartureDate)
             .ThenBy(s => s.DepartureTime)
+            .ThenBy(s => s.Route.RouteCode)
             .Select(s => new
             {
                 s.ScheduleId,
@@ -377,7 +400,7 @@ public class DispatchController : ControllerBase
             s.DepartureTime,
             s.CutOffTime,
             s.Status,
-            Label = $"{s.ScheduleName} - {s.RouteCode} | {s.OriginCity} -> {s.DestCity} | {s.DepartureTime}"
+            Label = $"{s.ScheduleName} - {s.RouteCode} | {s.OriginCity} -> {s.DestCity} | {s.DepartureDate:dd/MM/yyyy} {s.DepartureTime:hh\\:mm}"
         }).ToList();
 
         return Ok(new { Success = true, Count = items.Count, Data = items });
@@ -526,11 +549,11 @@ public class DispatchController : ControllerBase
 
         var scheduleExists = await _db.RouteSchedules
             .AsNoTracking()
-            .AnyAsync(s => s.ScheduleId == request.ScheduleId && s.Status == "ACTIVE");
+            .AnyAsync(s => s.ScheduleId == request.ScheduleId);
 
         if (!scheduleExists)
         {
-            return BadRequest(ApiResponse<object>.Failure("Schedule does not exist or is not ACTIVE."));
+            return BadRequest(ApiResponse<object>.Failure("Schedule does not exist."));
         }
 
         var safePageNumber = pageNumber < 1 ? 1 : pageNumber;
@@ -651,9 +674,9 @@ public class DispatchController : ControllerBase
             .Distinct()
             .ToList();
 
-        if (schedule == null || !string.Equals(schedule.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
+        if (schedule == null)
         {
-            blockingReasons.Add("DIFFERENT_SCHEDULE: Schedule does not exist or is not ACTIVE.");
+            blockingReasons.Add("DIFFERENT_SCHEDULE: Schedule does not exist.");
         }
 
         if (!string.Equals(vehicle.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
@@ -663,12 +686,7 @@ public class DispatchController : ControllerBase
 
         var vehicleBusy = await _db.MasterTrips
             .AnyAsync(t => t.VehicleId == request.VehicleId
-                && (t.Status == "PLANNED"
-                    || t.Status == "PICKING"
-                    || t.Status == "LOADING"
-                    || t.Status == "LOADING_COMPLETED"
-                    || t.Status == "SEALED"
-                    || t.Status == "DISPATCHED"));
+                && ActiveTripStatuses.Contains(t.Status));
 
         if (vehicleBusy)
         {

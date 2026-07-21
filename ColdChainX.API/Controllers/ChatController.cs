@@ -29,6 +29,42 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
+        [HttpGet("customers")]
+        [Authorize(Roles = "Sales,Admin,Manager")]
+        public async Task<IActionResult> GetCustomerConversations(
+            [FromQuery] string? search = null,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 30)
+        {
+            var requesterId = GetUserId();
+            if (requesterId == Guid.Empty)
+                return Unauthorized("UserId claim is missing from token");
+
+            var result = await _chatService.GetCustomerConversationsAsync(requesterId, search, pageNumber, pageSize);
+            return Ok(result);
+        }
+
+        [HttpGet("customers/{customerId:guid}/messages")]
+        [Authorize(Roles = "Sales,Admin,Manager")]
+        public async Task<IActionResult> GetCustomerMessages(
+            Guid customerId,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 30)
+        {
+            var requesterId = GetUserId();
+            if (requesterId == Guid.Empty)
+                return Unauthorized("UserId claim is missing from token");
+
+            var result = await _chatService.GetCustomerMessagesAsync(
+                customerId,
+                requesterId,
+                GetRoles(),
+                pageNumber,
+                pageSize);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
         [HttpGet("{orderId:guid}/participants")]
         public async Task<IActionResult> GetParticipants(Guid orderId)
         {

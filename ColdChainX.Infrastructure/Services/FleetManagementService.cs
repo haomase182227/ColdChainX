@@ -22,8 +22,7 @@ public class FleetManagementService : IFleetManagementService
     {
         "REGISTRATION",
         "INSURANCE",
-        "CITY_PERMIT",
-        "FOOD_SAFETY"
+        "CITY_PERMIT"
     };
 
     private const string DefaultDriverPassword = "@123@";
@@ -119,7 +118,6 @@ public class FleetManagementService : IFleetManagementService
         AddInlineVehicleDocument(vehicle, "REGISTRATION", request.Registration);
         AddInlineVehicleDocument(vehicle, "INSURANCE",     request.Insurance);
         AddInlineVehicleDocument(vehicle, "CITY_PERMIT",  request.CityPermit);
-        AddInlineVehicleDocument(vehicle, "FOOD_SAFETY",  request.FoodSafety);
 
         await RefreshVehicleStatusAsync(vehicle);
         await _db.SaveChangesAsync();
@@ -273,7 +271,6 @@ public class FleetManagementService : IFleetManagementService
                 UpsertVehicleDocumentFromImport(vehicle, row, "REGISTRATION", "Registration", "DangKiem");
                 UpsertVehicleDocumentFromImport(vehicle, row, "INSURANCE", "Insurance", "BaoHiem");
                 UpsertVehicleDocumentFromImport(vehicle, row, "CITY_PERMIT", "CityPermit", "GiayPhepVaoPho");
-                UpsertVehicleDocumentFromImport(vehicle, row, "FOOD_SAFETY", "FoodSafety", "AnToanThucPham");
                 await RefreshVehicleStatusAsync(vehicle);
             }
             catch (Exception ex)
@@ -595,7 +592,8 @@ public class FleetManagementService : IFleetManagementService
 
     public async Task<ApiResponse<IReadOnlyCollection<VehicleDocumentResponse>>> GetVehicleDocumentsAsync(Guid? vehicleId)
     {
-        var query = _db.VehicleDocuments.AsQueryable();
+        var query = _db.VehicleDocuments
+            .Where(d => d.DocumentType != "FOOD_SAFETY");
         if (vehicleId.HasValue)
             query = query.Where(d => d.VehicleId == vehicleId.Value);
 
@@ -1055,7 +1053,9 @@ public class FleetManagementService : IFleetManagementService
 
         var docs = await _db.VehicleDocuments
             .Include(d => d.Vehicle)
-            .Where(d => d.Status == "ACTIVE" && d.ExpireDate != null)
+            .Where(d => RequiredVehicleDocuments.Contains(d.DocumentType)
+                        && d.Status == "ACTIVE"
+                        && d.ExpireDate != null)
             .ToListAsync(cancellationToken);
 
         foreach (var doc in docs)
@@ -1096,6 +1096,14 @@ public class FleetManagementService : IFleetManagementService
                     await _hubContext.Clients.User(driverUserId.Value.ToString()).SendAsync("VehicleDocumentExpiring", new { doc.VehicleId, doc.Vehicle.TruckPlate, doc.DocumentType, Days = days, doc.ExpireDate }, cancellationToken);
             }
         }
+
+        var complianceVehicles = await _db.Vehicles
+            .Include(v => v.VehicleDocuments)
+            .Where(v => v.Status == "ACTIVE" || v.Status == "SUSPENDED_DOCS")
+            .ToListAsync(cancellationToken);
+
+        foreach (var vehicle in complianceVehicles)
+            await RefreshVehicleStatusAsync(vehicle);
 
         var licenses = await _db.DriverLicenses
             .Include(l => l.Driver)
@@ -1374,7 +1382,10 @@ public class FleetManagementService : IFleetManagementService
         WarningDaysBeforeDue = vehicle.WarningDaysBeforeDue,
         WarningKmBeforeDue = vehicle.WarningKmBeforeDue,
         Status = vehicle.Status,
-        Documents = vehicle.VehicleDocuments.Select(ToVehicleDocumentResponse).ToList()
+        Documents = vehicle.VehicleDocuments
+            .Where(d => d.DocumentType != "FOOD_SAFETY")
+            .Select(ToVehicleDocumentResponse)
+            .ToList()
     };
 
     private static DriverFleetResponse ToDriverResponse(Driver driver) => new()
@@ -1439,7 +1450,16 @@ public class FleetManagementService : IFleetManagementService
         return normalized;
     }
 
-    private static string NormalizeDocumentType(string? value) => NormalizeRequired(value).ToUpperInvariant();
+    private static string NormalizeDocumentType(string? value)
+    {
+        var normalized = NormalizeRequired(value).ToUpperInvariant();
+        if (!RequiredVehicleDocuments.Contains(normalized))
+            throw new InvalidOperationException(
+                $"Unsupported vehicle document type '{normalized}'. " +
+                $"Allowed values: {string.Join(", ", RequiredVehicleDocuments)}");
+
+        return normalized;
+    }
 
     private static string? TrimOrNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
