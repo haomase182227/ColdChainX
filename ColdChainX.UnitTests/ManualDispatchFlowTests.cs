@@ -35,17 +35,16 @@ public class ManualDispatchFlowTests
     }
 
     [Fact]
-    public async Task ManualDispatch_RejectsInactiveSchedule()
+    public async Task ManualDispatch_AllowsInactiveScheduleWithExistingLpn()
     {
         await using var fixture = await CreateFixtureAsync();
         fixture.Schedule.Status = "INACTIVE";
         await fixture.Db.SaveChangesAsync();
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => fixture.Service.ManualDispatchAsync(fixture.Request));
+        var result = await fixture.Service.ManualDispatchAsync(fixture.Request);
 
-        Assert.Contains("not ACTIVE", error.Message);
-        Assert.Empty(fixture.Db.MasterTrips);
+        var trip = await fixture.Db.MasterTrips.SingleAsync(t => t.TripId == result.TripId);
+        Assert.Equal(fixture.Schedule.ScheduleId, trip.ScheduleId);
     }
 
     [Fact]

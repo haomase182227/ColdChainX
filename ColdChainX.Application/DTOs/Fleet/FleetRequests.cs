@@ -48,7 +48,6 @@ public class CreateVehicleRequest
     public InlineVehicleDocumentRequest? Registration { get; set; }
     public InlineVehicleDocumentRequest? Insurance { get; set; }
     public InlineVehicleDocumentRequest? CityPermit { get; set; }
-    public InlineVehicleDocumentRequest? FoodSafety { get; set; }
 }
 
 // ── Tạo tài xế (kèm bằng lái tùy chọn) ──────────────────────

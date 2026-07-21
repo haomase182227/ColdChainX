@@ -4,8 +4,6 @@ namespace ColdChainX.API.Workers;
 
 public class FleetComplianceWorker : BackgroundService
 {
-    private static readonly TimeSpan Interval = TimeSpan.FromMinutes(5);
-
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<FleetComplianceWorker> _logger;
 
@@ -21,23 +19,20 @@ public class FleetComplianceWorker : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            var now = DateTime.Now;
-            var nextRun = now.Date.AddDays(1); // 00:00:00 của ngày mai
-            var delay = nextRun - now;
-
-            _logger.LogInformation("[FleetCompliance] Next scan scheduled at {Time} (in {Hours:0.##} hours).", 
-                nextRun.ToString("HH:mm:ss dd/MM/yyyy"), delay.TotalHours);
-
             try
             {
-                // Chờ đến 00:00 ngày mai
-                await Task.Delay(delay, stoppingToken);
-
                 _logger.LogInformation("[FleetCompliance] Scan started at {Time}.", DateTime.Now.ToString("HH:mm:ss dd/MM/yyyy"));
                 using var scope = _scopeFactory.CreateScope();
                 var service = scope.ServiceProvider.GetRequiredService<IFleetManagementService>();
                 await service.RunComplianceScanAsync(stoppingToken);
                 _logger.LogInformation("[FleetCompliance] Scan completed successfully.");
+
+                var now = DateTime.Now;
+                var nextRun = now.Date.AddDays(1);
+                var delay = nextRun - now;
+                _logger.LogInformation("[FleetCompliance] Next scan scheduled at {Time} (in {Hours:0.##} hours).",
+                    nextRun.ToString("HH:mm:ss dd/MM/yyyy"), delay.TotalHours);
+                await Task.Delay(delay, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
