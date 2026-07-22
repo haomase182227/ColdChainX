@@ -215,12 +215,15 @@ public sealed class TelemetryMqttWorker : BackgroundService
             }
             else
             {
-                // If it's a real message, check if the simulator is active (sent a message in the last 10 seconds)
+                // Debounce: Wait 2 seconds to allow Simulator (Hybrid Mode) to intercept and send simulated=True
+                await Task.Delay(2000);
+
+                // If it's a real message, check if the simulator is active (sent a message in the last 5 seconds)
                 if (_simulatedDevices.TryGetValue(telemetry.DeviceId, out var lastSimTime))
                 {
-                    if ((DateTime.UtcNow - lastSimTime).TotalSeconds < 10)
+                    if ((DateTime.UtcNow - lastSimTime).TotalSeconds < 5)
                     {
-                        // Drop the real message because the simulator is overriding it
+                        // Drop the real message because the simulator is overriding it right now
                         return;
                     }
                 }
