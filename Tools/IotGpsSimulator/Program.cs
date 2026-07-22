@@ -231,7 +231,7 @@ app.MapPost("/api/fleet/{deviceId}/temp-source", (string deviceId, AnomalyReques
     return Results.NotFound();
 });
 
-app.Run("http://localhost:5500");
+app.Run("http://*:5500");
 
 // ==========================================
 // BACKGROUND SIMULATION LOGIC
