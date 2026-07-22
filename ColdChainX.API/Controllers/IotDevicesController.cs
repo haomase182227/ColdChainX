@@ -75,20 +75,13 @@ public sealed class IotDevicesController : ControllerBase
         if (exists)
             return Conflict(new { Success = false, Error = $"Device with code '{request.DeviceCode}' already exists." });
 
-        if (request.VehicleId.HasValue)
-        {
-            var vehicleExists = await _db.Vehicles.AnyAsync(v => v.VehicleId == request.VehicleId, cancellationToken);
-            if (!vehicleExists)
-                return NotFound(new { Success = false, Error = "Assigned Vehicle not found." });
-        }
-
         var device = new IotDevice
         {
             DeviceId = Guid.NewGuid(),
             DeviceCode = request.DeviceCode.Trim(),
-            VehicleId = request.VehicleId,
+            VehicleId = null,
             BatteryLevel = 100,
-            Status = "Available",
+            Status = "AVAILABLE",
             CreatedAt = DateTime.UtcNow
         };
 
@@ -112,15 +105,6 @@ public sealed class IotDevicesController : ControllerBase
                 return Conflict(new { Success = false, Error = $"Device with code '{request.DeviceCode}' already exists." });
             
             device.DeviceCode = request.DeviceCode.Trim();
-        }
-
-        if (request.VehicleId.HasValue && request.VehicleId != device.VehicleId)
-        {
-            var vehicleExists = await _db.Vehicles.AnyAsync(v => v.VehicleId == request.VehicleId, cancellationToken);
-            if (!vehicleExists)
-                return NotFound(new { Success = false, Error = "Assigned Vehicle not found." });
-            
-            device.VehicleId = request.VehicleId;
         }
 
         if (request.RemoveVehicle)
@@ -153,13 +137,11 @@ public sealed class IotDevicesController : ControllerBase
 public sealed class CreateIotDeviceRequest
 {
     public string DeviceCode { get; set; } = string.Empty;
-    public Guid? VehicleId { get; set; }
 }
 
 public sealed class UpdateIotDeviceRequest
 {
     public string? DeviceCode { get; set; }
-    public Guid? VehicleId { get; set; }
     public bool RemoveVehicle { get; set; }
     public string? Status { get; set; }
 }

@@ -41,18 +41,19 @@ public sealed class ColdChainMonitoringController : ControllerBase
         _configuration = configuration;
     }
 
+
     [HttpPost("fleet/assign-device")]
     public async Task<IActionResult> AssignDevice([FromBody] AssignDeviceRequest request, CancellationToken cancellationToken)
     {
         if (request.VehicleId == Guid.Empty || string.IsNullOrWhiteSpace(request.DeviceCode))
         {
-            return BadRequest(new { Success = false, Error = "VehicleId and DeviceCode are required." });
+            return BadRequest(new { Success = false, Error = "Vui lÃ²ng cung cáº¥p VehicleId vÃ  DeviceCode." });
         }
 
         var vehicle = await _db.Vehicles.FirstOrDefaultAsync(v => v.VehicleId == request.VehicleId, cancellationToken);
         if (vehicle == null)
         {
-            return NotFound(new { Success = false, Error = "Vehicle not found." });
+            return NotFound(new { Success = false, Error = "KhÃ´ng tÃ¬m tháº¥y xe." });
         }
 
         var device = await _db.IotDevices
@@ -60,18 +61,11 @@ public sealed class ColdChainMonitoringController : ControllerBase
 
         if (device == null)
         {
-            device = new IotDevice
-            {
-                DeviceId = Guid.NewGuid(),
-                DeviceCode = request.DeviceCode.Trim(),
-                CreatedAt = DateTime.UtcNow
-            };
-            _db.IotDevices.Add(device);
+            return NotFound(new { Success = false, Error = "Thiáº¿t bá»‹ IoT khÃ´ng tá»“n táº¡i. Vui lÃ²ng khai bÃ¡o thiáº¿t bá»‹ trÆ°á»›c." });
         }
 
         device.VehicleId = request.VehicleId;
         device.Status = "ASSIGNED";
-        device.BatteryLevel = request.BatteryLevel ?? device.BatteryLevel;
 
         await _db.SaveChangesAsync(cancellationToken);
 
@@ -88,7 +82,6 @@ public sealed class ColdChainMonitoringController : ControllerBase
             }
         });
     }
-
 
     [HttpGet("tracking/trips")]
     public async Task<IActionResult> GetTrackingTrips(
@@ -720,8 +713,6 @@ public sealed class AssignDeviceRequest
     public Guid VehicleId { get; set; }
 
     public string DeviceCode { get; set; } = string.Empty;
-
-    public int? BatteryLevel { get; set; }
 }
 
 public sealed class StartTripMonitoringRequest

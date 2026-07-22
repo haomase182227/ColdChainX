@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
@@ -228,6 +228,94 @@ public class DispatchController : ControllerBase
     /// <summary>
     /// [Lookup] Danh sách xe tải đang ACTIVE – dùng để chọn xe cho plan-load.
     /// </summary>
+
+    [HttpGet("lookup/vehicles/by-warehouse/{warehouseId}")]
+    [ProducesResponseType(typeof(object), 200)]
+    public async Task<IActionResult> LookupVehiclesByWarehouse(Guid warehouseId)
+    {
+        var warehouseName = await _db.Warehouses
+            .Where(w => w.WarehouseId == warehouseId)
+            .Select(w => w.WarehouseName)
+            .FirstOrDefaultAsync() ?? "Kho hiá»‡n táº¡i";
+
+        var wIdStr = warehouseId.ToString();
+        var vehicles = await _db.Vehicles
+            .Where(v => v.Status == "ACTIVE" && (v.CurrentLocation == wIdStr || v.CurrentLocation == null))
+            .ToListAsync();
+
+        var items = vehicles.Select(v => new
+        {
+            v.VehicleId,
+            Label = $"{v.TruckPlate} - {v.VehicleType} | tải {v.MaxWeight}kg / {v.MaxCbm}m3",
+            v.TruckPlate,
+            v.VehicleType,
+            v.MaxWeight,
+            v.MaxCbm,
+            v.InnerLengthCm,
+            v.InnerWidthCm,
+            v.InnerHeightCm,
+            UsableCbm = v.InnerLengthCm.HasValue && v.InnerWidthCm.HasValue && v.InnerHeightCm.HasValue
+                && v.InnerLengthCm.Value > 0 && v.InnerWidthCm.Value > 0 && v.InnerHeightCm.Value > 0
+                    ? Math.Min(
+                        v.MaxCbm,
+                        v.InnerLengthCm.Value * v.InnerWidthCm.Value * v.InnerHeightCm.Value / 1_000_000m) * 0.8m
+                    : v.MaxCbm * 0.8m,
+            CurrentLocation = v.CurrentLocation == wIdStr ? warehouseName : "ChÆ°a xÃ¡c Ä‘á»‹nh"
+        }).ToList();
+
+        return Ok(items);
+    }
+
+    [HttpGet("lookup/drivers/by-warehouse/{warehouseId}")]
+    [ProducesResponseType(typeof(object), 200)]
+    public async Task<IActionResult> LookupDriversByWarehouse(Guid warehouseId)
+    {
+        var warehouseName = await _db.Warehouses
+            .Where(w => w.WarehouseId == warehouseId)
+            .Select(w => w.WarehouseName)
+            .FirstOrDefaultAsync() ?? "Kho hiá»‡n táº¡i";
+
+        var wIdStr = warehouseId.ToString();
+        var candidates = await _db.Drivers
+            .Include(d => d.DriverLicenses)
+            .Include(d => d.User)
+            .Where(d => (d.Status == "ACTIVE" || d.Status == "RELAX") && (d.CurrentLocation == wIdStr || d.CurrentLocation == null))
+            .ToListAsync();
+
+        foreach (var d in candidates)
+            await _driverAvailability.ReconcileStatusAsync(d);
+        await _db.SaveChangesAsync();
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var items = candidates
+            .Where(d => d.Status == "ACTIVE")
+            .Select(d =>
+            {
+                var lic = d.DriverLicenses
+                    .Where(l => l.ExpiryDate >= today && (l.Status == null || l.Status == "ACTIVE"))
+                    .OrderByDescending(l => l.ExpiryDate)
+                    .FirstOrDefault();
+
+                var isLicValid = lic != null;
+                var tag = !isLicValid ? "[HẾT HẠN BẰNG]" : d.Status == "ACTIVE" ? "" : $"[{d.Status}]";
+                return new
+                {
+                    d.DriverId,
+                    d.FullName,
+                    Phone = d.PhoneNumber,
+                    d.Status,
+                    LicenseClass = lic?.LicenseClass ?? "N/A",
+                    LicenseExpiryDate = lic?.ExpiryDate,
+                    IsLicenseValid = isLicValid,
+                    Label = $"{d.FullName} ({d.PhoneNumber}) {tag} - Háº¡ng {lic?.LicenseClass ?? "N/A"}",
+                    CurrentLocation = d.CurrentLocation == wIdStr ? warehouseName : "ChÆ°a xÃ¡c Ä‘á»‹nh"
+                };
+            })
+            .ToList();
+
+        return Ok(items);
+    }
+
     [HttpGet("lookup/vehicles")]
     [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> LookupVehicles()
@@ -647,12 +735,19 @@ public class DispatchController : ControllerBase
             originLocId = fallbackLocId;
         }
 
+        var parsedVehicleId = Guid.Parse(ExtractGuid(form.VehicleId));
+
+        // Kiá»ƒm tra xe Ä‘Ã£ Ä‘Æ°á»£c gÃ¡n thiáº¿t bá»‹ IoT chÆ°a
+        var hasIot = await _db.IotDevices.AnyAsync(d => d.VehicleId == parsedVehicleId);
+        if (!hasIot)
+            return BadRequest(ApiResponse<object>.Failure("Xe chÆ°a Ä‘Æ°á»£c gÃ¡n thiáº¿t bá»‹ IoT. Vui lÃ²ng gÃ¡n thiáº¿t bá»‹ IoT cho xe nÃ y trÆ°á»›c khi ghÃ©p chuyáº¿n."));
+
         var request = new ManualDispatchRequest
         {
             ScheduleId = selectedScheduleId,
             
             LpnIds = parsedLpnIds,
-            VehicleId = Guid.Parse(ExtractGuid(form.VehicleId)),
+            VehicleId = parsedVehicleId,
             DriverIds = driverIds,
             OriginWarehouseLocationId = originLocId,
             PlannedStartTime          = form.PlannedStartTime,
@@ -940,17 +1035,26 @@ public class DispatchController : ControllerBase
     /// <summary>
     /// Kiểm tra trạng thái kết nối, GPS, nhiệt độ, pin của các thiết bị IoT gắn trên xe.
     /// </summary>
-    [HttpPost("vehicle-iot-check/{tripId}/{vehicleId}")]
+    [HttpPost("vehicle-iot-check/{tripId}")]
     [ProducesResponseType(typeof(VehicleIoTStatus), 200)]
-    public async Task<IActionResult> CheckVehicleIoT(string tripId, string vehicleId)
+    public async Task<IActionResult> CheckVehicleIoT(string tripId)
     {
-        var rawVehicleId = ExtractGuid(vehicleId);
-        if (!Guid.TryParse(rawVehicleId, out var parsedVehicleId))
-            return BadRequest(new { Success = false, Error = "VehicleId khÃ´ng há»£p lá»‡." });
-
         var rawTripId = ExtractGuid(tripId);
         if (!Guid.TryParse(rawTripId, out var parsedTripId))
             return BadRequest(new { Success = false, Error = "TripId khÃ´ng há»£p lá»‡." });
+
+        var trip = await _db.MasterTrips.FirstOrDefaultAsync(t => t.TripId == parsedTripId);
+        if (trip == null)
+            return BadRequest(new { Success = false, Error = "KhÃ´ng tÃ¬m tháº¥y chuyáº¿n Ä‘i." });
+
+        if (trip.VehicleId == null)
+            return BadRequest(new { Success = false, Error = "Chuyáº¿n Ä‘i nÃ y chÆ°a Ä‘Æ°á»£c gÃ¡n xe." });
+            
+        var parsedVehicleId = trip.VehicleId.Value;
+
+        var hasIot = await _db.IotDevices.AnyAsync(d => d.VehicleId == parsedVehicleId);
+        if (!hasIot)
+            return BadRequest(new { Success = false, Error = "Xe cháº¡y chuyáº¿n nÃ y chÆ°a Ä‘Æ°á»£c gÃ¡n thiáº¿t bá»‹ IoT." });
 
         try
         {
