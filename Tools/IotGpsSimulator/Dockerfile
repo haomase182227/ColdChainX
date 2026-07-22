@@ -1,10 +1,11 @@
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 
-COPY ["IotGpsSimulator.csproj", "./"]
-RUN dotnet restore "./IotGpsSimulator.csproj"
+COPY ["Tools/IotGpsSimulator/IotGpsSimulator.csproj", "Tools/IotGpsSimulator/"]
+RUN dotnet restore "Tools/IotGpsSimulator/IotGpsSimulator.csproj"
 
 COPY . .
+WORKDIR /src/Tools/IotGpsSimulator
 RUN dotnet build "IotGpsSimulator.csproj" -c Release -o /app/build
 RUN dotnet publish "IotGpsSimulator.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
