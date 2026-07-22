@@ -109,21 +109,23 @@ public sealed class TelemetryMqttWorker : BackgroundService
         }
     }
 
-    private async Task HandleApplicationMessageReceivedAsync(MqttApplicationMessageReceivedEventArgs args)
+    private Task HandleApplicationMessageReceivedAsync(MqttApplicationMessageReceivedEventArgs args)
     {
         var topic = args.ApplicationMessage.Topic;
         var payload = Encoding.UTF8.GetString(args.ApplicationMessage.PayloadSegment.ToArray());
 
         if (topic.EndsWith("/status", StringComparison.OrdinalIgnoreCase))
         {
-            await HandleStatusMessageAsync(topic, payload);
-            return;
+            _ = Task.Run(() => HandleStatusMessageAsync(topic, payload));
+            return Task.CompletedTask;
         }
         else if (topic.EndsWith("/data", StringComparison.OrdinalIgnoreCase) || topic.Contains("/telemetry/"))
         {
-            await HandleDataMessageAsync(topic, payload);
-            return;
+            _ = Task.Run(() => HandleDataMessageAsync(topic, payload));
+            return Task.CompletedTask;
         }
+
+        return Task.CompletedTask;
     }
 
     private async Task HandleStatusMessageAsync(string topic, string payload)
