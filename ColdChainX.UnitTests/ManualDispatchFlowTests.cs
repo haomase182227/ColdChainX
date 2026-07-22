@@ -243,7 +243,6 @@ public class ManualDispatchFlowTests
         var request = new ManualDispatchRequest
         {
             ScheduleId = schedule.ScheduleId,
-            WarehouseId = warehouseId,
             LpnIds = new List<Guid> { lpn.LpnId },
             VehicleId = vehicle.VehicleId,
             DriverIds = new List<Guid> { driver.DriverId },
