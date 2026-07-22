@@ -51,7 +51,10 @@ public sealed class TelemetryMqttWorker : BackgroundService
     {
         var host = _configuration["Mqtt:Host"] ?? "localhost";
         var port = _configuration.GetValue("Mqtt:Port", 1883);
-        var clientId = _configuration["Mqtt:ClientId"] ?? $"coldchainx-api-{Guid.NewGuid():N}";
+        var baseClientId = _configuration["Mqtt:ClientId"];
+        var clientId = string.IsNullOrWhiteSpace(baseClientId) 
+            ? $"coldchainx-api-{Guid.NewGuid():N}" 
+            : $"{baseClientId}-{Guid.NewGuid():N}";
         var topic = _configuration["Mqtt:Topic"] ?? "telemetry/coldchain/#";
 
         var optionsBuilder = new MqttClientOptionsBuilder()
