@@ -27,6 +27,18 @@ namespace ColdChainX.API.Controllers;
 [Authorize]
 public class DispatchController : ControllerBase
 {
+    private static readonly string[] ActiveTripStatuses =
+    {
+        "PLANNED",
+        "PICKING",
+        "LOADING",
+        "LOADING_COMPLETED",
+        "SEALED",
+        "DISPATCHED",
+        "IN_TRANSIT",
+        "DELAYED"
+    };
+
     private readonly IDispatchService _dispatchService;
     private readonly IVehicleService _vehicleService;
     private readonly IOrderService _orderService;
@@ -38,6 +50,7 @@ public class DispatchController : ControllerBase
     private readonly IFileService _fileService;
     private readonly IMediator _mediator;
     private readonly IDriverAvailabilityService _driverAvailability;
+    private readonly ICargoCompatibilityService _cargoCompatibilityService;
 
     public DispatchController(
         IDispatchService dispatchService,
@@ -50,7 +63,8 @@ public class DispatchController : ControllerBase
         IWebHostEnvironment env,
         IFileService fileService,
         IMediator mediator,
-        IDriverAvailabilityService driverAvailability)
+        IDriverAvailabilityService driverAvailability,
+        ICargoCompatibilityService cargoCompatibilityService)
     {
         _dispatchService = dispatchService;
         _vehicleService = vehicleService;
@@ -63,6 +77,7 @@ public class DispatchController : ControllerBase
         _fileService = fileService;
         _mediator = mediator;
         _driverAvailability = driverAvailability;
+        _cargoCompatibilityService = cargoCompatibilityService;
     }
 
     private Guid GetCurrentUserId()
@@ -226,7 +241,7 @@ public class DispatchController : ControllerBase
     }
 
     /// <summary>
-    /// [Lookup] Danh sách xe tải đang ACTIVE – dùng để chọn xe cho plan-load.
+    /// [Lookup] Danh sách xe tải ACTIVE và chưa được gán chuyến đang hoạt động.
     /// </summary>
 
     [HttpGet("lookup/vehicles/by-warehouse/{warehouseId}")]
@@ -320,9 +335,16 @@ public class DispatchController : ControllerBase
     [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> LookupVehicles()
     {
+        var busyVehicleIds = await _db.MasterTrips
+            .AsNoTracking()
+            .Where(t => ActiveTripStatuses.Contains(t.Status))
+            .Select(t => t.VehicleId)
+            .Distinct()
+            .ToListAsync();
+
         var result = await _vehicleService.GetAllAsync();
         var items = result.Data?
-            .Where(v => v.Status == "ACTIVE")
+            .Where(v => v.Status == "ACTIVE" && !busyVehicleIds.Contains(v.VehicleId))
             .Select(v => new
             {
                 v.VehicleId,
@@ -429,28 +451,45 @@ public class DispatchController : ControllerBase
     [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> LookupSchedules()
     {
-        var items = await _db.RouteSchedules
+        var rawItems = await _db.RouteSchedules
             .AsNoTracking()
-            .Where(s => s.Status == "ACTIVE" && s.Route.Status == "ACTIVE")
-            .OrderBy(s => s.Route.RouteCode)
-            .ThenBy(s => s.DepartureDate)
+            .Where(s => s.Route.Status == "ACTIVE"
+                && (s.Status == "ACTIVE"
+                    || _db.Lpns.Any(l => l.Order.ScheduleId == s.ScheduleId
+                        && l.State == LpnState.IN_STOCK
+                        && l.TripId == null)))
+            .OrderBy(s => s.DepartureDate)
             .ThenBy(s => s.DepartureTime)
+            .ThenBy(s => s.Route.RouteCode)
             .Select(s => new
             {
                 s.ScheduleId,
                 s.RouteId,
                 s.Route.RouteCode,
-                RouteName = s.Route.OriginCity + " -> " + s.Route.DestCity,
+                s.Route.OriginCity,
+                s.Route.DestCity,
                 s.ScheduleName,
-                DayOfWeek = (int)s.DepartureDate.DayOfWeek,
+                s.DepartureDate,
                 s.DepartureTime,
                 s.CutOffTime,
-                s.Status,
-                Label = s.ScheduleName + " - " + s.Route.RouteCode
-                    + " | " + s.Route.OriginCity + " -> " + s.Route.DestCity
-                    + " | " + s.DepartureTime
+                s.Status
             })
             .ToListAsync();
+
+        var items = rawItems.Select(s => new
+        {
+            s.ScheduleId,
+            s.RouteId,
+            s.RouteCode,
+            RouteName = $"{s.OriginCity} -> {s.DestCity}",
+            s.ScheduleName,
+            s.DepartureDate,
+            DayOfWeek = (int)s.DepartureDate.DayOfWeek,
+            s.DepartureTime,
+            s.CutOffTime,
+            s.Status,
+            Label = $"{s.ScheduleName} - {s.RouteCode} | {s.OriginCity} -> {s.DestCity} | {s.DepartureDate:dd/MM/yyyy} {s.DepartureTime:hh\\:mm}"
+        }).ToList();
 
         return Ok(new { Success = true, Count = items.Count, Data = items });
     }
@@ -492,6 +531,7 @@ public class DispatchController : ControllerBase
     [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> LookupLpnsReady(
         [FromQuery] Guid? warehouseId,
+        [FromQuery] Guid? scheduleId,
         [FromQuery] int pageNumber = 1,
         [FromQuery] int pageSize = 10)
     {
@@ -510,7 +550,9 @@ public class DispatchController : ControllerBase
                     join r in _db.RouteMasters on schedule.RouteId equals r.RouteId into rg
                     from route in rg.DefaultIfEmpty()
                     where l.State == LpnState.IN_STOCK
+                       && l.TripId == null
                        && (warehouseId == null || l.WarehouseId == warehouseId)
+                       && (scheduleId == null || o.ScheduleId == scheduleId)
                     select new
                     {
                         l.LpnId,
@@ -518,12 +560,19 @@ public class DispatchController : ControllerBase
                         l.Quantity,
                         l.ActualWeightKg,
                         l.ActualCbm,
+                        l.RequiredTemperature,
                         l.SlaDeadline,
                         o.OrderId,
                         o.TrackingCode,
                         o.ItemName,
+                        o.Category,
                         o.TempCondition,
+                        o.HasStrongOdor,
+                        o.IsStackable,
                         CustomerName = cust != null ? cust.CompanyName : "N/A",
+                        ScheduleId = schedule != null ? schedule.ScheduleId : (Guid?)null,
+                        ScheduleName = schedule != null ? schedule.ScheduleName : null,
+                        DepartureDate = schedule != null ? schedule.DepartureDate : (DateTime?)null,
                         WarehouseId = w.WarehouseId,
                         WarehouseName = w.WarehouseName,
                         DestinationAddress = destLoc != null ? destLoc.Address : null,
@@ -541,36 +590,149 @@ public class DispatchController : ControllerBase
             .Take(safePageSize)
             .ToListAsync();
 
-        var items = rawLpns.Select(x => new
+        var items = rawLpns.Select(x => new DispatchLpnReadyDto
         {
-            x.LpnId,
+            LpnId = x.LpnId,
             Label = $"{x.LpnCode} ({x.TrackingCode}) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â {x.ItemName} | Qty: {x.Quantity} | {x.ActualWeightKg}kg / {x.ActualCbm}mÃƒâ€šÃ‚Â³ ({x.TempCondition}) | KhÃƒÆ’Ã‚Â¡ch: {x.CustomerName} | Kho: {x.WarehouseName}",
-            x.LpnCode,
-            x.OrderId,
-            x.TrackingCode,
-            x.ItemName,
-            x.CustomerName,
-            x.WarehouseId,
-            x.WarehouseName,
-            x.DestinationAddress,
+            LpnCode = x.LpnCode,
+            OrderId = x.OrderId,
+            TrackingCode = x.TrackingCode,
+            ItemName = x.ItemName,
+            CustomerName = x.CustomerName,
+            ScheduleId = x.ScheduleId,
+            ScheduleName = x.ScheduleName,
+            WarehouseId = x.WarehouseId,
+            WarehouseName = x.WarehouseName,
+            DestinationAddress = x.DestinationAddress,
             RouteName = x.RouteOriginCity != null ? $"{x.RouteOriginCity} â†’ {x.RouteDestCity}" : null,
-            PlannedDispatchDate = x.SlaDeadline,
-            x.Quantity,
-            x.ActualWeightKg,
-            x.ActualCbm,
-            x.TempCondition,
-            x.CreatedAt
+            PlannedDispatchDate = x.DepartureDate,
+            Quantity = x.Quantity,
+            ActualWeightKg = x.ActualWeightKg,
+            ActualCbm = x.ActualCbm,
+            TempCondition = x.TempCondition,
+            Category = x.Category,
+            RequiredTemperature = x.RequiredTemperature,
+            HasStrongOdor = x.HasStrongOdor,
+            IsStackable = x.IsStackable,
+            CreatedAt = x.CreatedAt
         }).ToList();
 
-        var pagedResult = PagedResult<object>.Create(items, totalRecords, safePageNumber, safePageSize);
+        var pagedResult = PagedResult<DispatchLpnReadyDto>.Create(items, totalRecords, safePageNumber, safePageSize);
 
-        return Ok(ApiResponse<PagedResult<object>>.SuccessResponse(pagedResult, "Láº¥y danh sÃ¡ch LPN thÃ nh cÃ´ng."));
+        return Ok(ApiResponse<PagedResult<DispatchLpnReadyDto>>.SuccessResponse(pagedResult, "Láº¥y danh sÃ¡ch LPN thÃ nh cÃ´ng."));
+    }
+
+    [HttpPost("compatible-lpns/search")]
+    [ProducesResponseType(typeof(ApiResponse<CompatibleLpnsSearchResponse>), 200)]
+    [ProducesResponseType(typeof(ApiResponse<object>), 400)]
+    public async Task<IActionResult> SearchCompatibleLpns(
+        [FromBody] CompatibleLpnsSearchRequest? request,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        if (request == null || request.ScheduleId == Guid.Empty)
+        {
+            return BadRequest(ApiResponse<object>.Failure("ScheduleId is required."));
+        }
+
+        var scheduleExists = await _db.RouteSchedules
+            .AsNoTracking()
+            .AnyAsync(s => s.ScheduleId == request.ScheduleId);
+
+        if (!scheduleExists)
+        {
+            return BadRequest(ApiResponse<object>.Failure("Schedule does not exist."));
+        }
+
+        var safePageNumber = pageNumber < 1 ? 1 : pageNumber;
+        var safePageSize = pageSize < 1 ? 20 : pageSize;
+        var selectedIds = (request.SelectedLpnIds ?? new List<Guid>())
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToList();
+
+        var selectedLpns = selectedIds.Count == 0
+            ? new List<Lpn>()
+            : await _db.Lpns
+                .Include(l => l.Order)
+                    .ThenInclude(o => o.Schedule)
+                .Where(l => selectedIds.Contains(l.LpnId))
+                .ToListAsync();
+
+        var selectedValidation = _cargoCompatibilityService.ValidateSelectedSet(
+            selectedLpns,
+            request.ScheduleId,
+            selectedIds);
+
+        var compatibleItems = new List<CompatibleLpnItemDto>();
+        if (selectedValidation.IsValid)
+        {
+            var selectedWarehouseId = selectedLpns.Count > 0 ? selectedLpns[0].WarehouseId : null;
+
+            var candidates = await _db.Lpns
+                .Include(l => l.Order)
+                    .ThenInclude(o => o.Customer)
+                .Include(l => l.Order)
+                    .ThenInclude(o => o.Schedule)
+                        .ThenInclude(s => s.Route)
+                .Include(l => l.Order)
+                    .ThenInclude(o => o.DestLocationNavigation)
+                .Include(l => l.Warehouse)
+                .Where(l => l.State == LpnState.IN_STOCK
+                    && l.TripId == null
+                    && l.Order.ScheduleId == request.ScheduleId
+                    && !selectedIds.Contains(l.LpnId)
+                    && (!selectedWarehouseId.HasValue || l.WarehouseId == selectedWarehouseId))
+                .OrderByDescending(l => l.CreatedAt)
+                .ToListAsync();
+
+            compatibleItems = candidates
+                .Where(l => !_cargoCompatibilityService
+                    .ValidateCandidate(l, selectedLpns, request.ScheduleId, selectedWarehouseId)
+                    .Any())
+                .Select(ToCompatibleLpnItemDto)
+                .ToList();
+        }
+
+        var totalRecords = compatibleItems.Count;
+        var totalPages = (int)Math.Ceiling(totalRecords / (double)safePageSize);
+        var pageItems = compatibleItems
+            .Skip((safePageNumber - 1) * safePageSize)
+            .Take(safePageSize)
+            .ToList();
+
+        var response = new CompatibleLpnsSearchResponse
+        {
+            SelectedSetValid = selectedValidation.IsValid,
+            Conflicts = selectedValidation.Conflicts,
+            TotalRecords = totalRecords,
+            TotalPages = totalPages,
+            CurrentPage = safePageNumber,
+            PageSize = safePageSize,
+            Items = pageItems
+        };
+
+        return Ok(ApiResponse<CompatibleLpnsSearchResponse>.SuccessResponse(response, "Compatible LPNs retrieved successfully."));
     }
 
     [AllowAnonymous]
     [HttpPost("simulate-packing")]
     public async Task<IActionResult> SimulatePacking([FromBody] SimulatePackingRequest request, [FromQuery] bool for3d = false)
     {
+        if (request.ScheduleId == Guid.Empty)
+        {
+            return BadRequest(ApiResponse<object>.Failure("ScheduleId is required."));
+        }
+
+        if (request.LpnIds == null || !request.LpnIds.Any())
+        {
+            return BadRequest(ApiResponse<object>.Failure("At least one LPN is required."));
+        }
+
+        var schedule = await _db.RouteSchedules
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.ScheduleId == request.ScheduleId);
+
         var vehicle = await _db.Vehicles.FindAsync(request.VehicleId);
         if (vehicle == null) return NotFound(ApiResponse<object>.Failure("Vehicle not found"));
 
@@ -578,10 +740,60 @@ public class DispatchController : ControllerBase
         decimal vWidth = vehicle.InnerWidthCm ?? (vehicle.VehicleType == "TRUCK_1T" ? 180m : 140m);
         decimal vHeight = vehicle.InnerHeightCm ?? (vehicle.VehicleType == "TRUCK_1T" ? 190m : 140m);
 
+        var selectedIds = request.LpnIds
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToList();
+
         var lpns = await _db.Lpns
             .Include(l => l.Order)
+                .ThenInclude(o => o.Schedule)
             .Where(l => request.LpnIds.Contains(l.LpnId))
             .ToListAsync();
+
+        var selectedValidation = _cargoCompatibilityService.ValidateSelectedSet(
+            lpns,
+            request.ScheduleId,
+            selectedIds);
+        var vehicleTempConflicts = _cargoCompatibilityService.ValidateVehicleTemperature(vehicle, lpns);
+        var blockingReasons = selectedValidation.Conflicts
+            .Concat(vehicleTempConflicts)
+            .Select(c => $"{c.ReasonCode}: {c.Message}")
+            .Distinct()
+            .ToList();
+
+        if (schedule == null)
+        {
+            blockingReasons.Add("DIFFERENT_SCHEDULE: Schedule does not exist.");
+        }
+
+        if (!string.Equals(vehicle.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
+        {
+            blockingReasons.Add($"INVALID_VEHICLE_STATE: Vehicle {vehicle.TruckPlate} is not ACTIVE.");
+        }
+
+        var vehicleBusy = await _db.MasterTrips
+            .AnyAsync(t => t.VehicleId == request.VehicleId
+                && ActiveTripStatuses.Contains(t.Status));
+
+        if (vehicleBusy)
+        {
+            blockingReasons.Add($"INVALID_VEHICLE_STATE: Vehicle {vehicle.TruckPlate} is already assigned to an active trip.");
+        }
+
+        var totalWeight = lpns.Sum(l => l.ActualWeightKg);
+        var totalCbm = lpns.Sum(l => l.ActualCbm);
+        var isOverweight = totalWeight > vehicle.MaxWeight;
+        var isOverCbm = totalCbm > vehicle.MaxCbm;
+        if (isOverweight)
+        {
+            blockingReasons.Add($"OVERWEIGHT: Total weight {totalWeight:0.##}kg exceeds vehicle max weight {vehicle.MaxWeight:0.##}kg.");
+        }
+
+        if (isOverCbm)
+        {
+            blockingReasons.Add($"OVERCAPACITY: Total CBM {totalCbm:0.##} exceeds vehicle max CBM {vehicle.MaxCbm:0.##}.");
+        }
 
         var engineItems = new List<ColdChainX.Application.Services.LpnDims>();
         
@@ -601,7 +813,8 @@ public class DispatchController : ControllerBase
                     Height = lpn.HeightCm ?? 150m,
                     RouteStopSequence = orderedLpns.Count - i,
                     WeightKg = lpn.ActualWeightKg,
-                    RequiredTemperature = lpn.RequiredTemperature ?? 5m
+                    RequiredTemperature = _cargoCompatibilityService.ResolveRequiredTemperature(lpn) ?? 5m,
+                    IsStackable = lpn.Order?.IsStackable ?? true
                 });
             }
         }
@@ -610,6 +823,11 @@ public class DispatchController : ControllerBase
         var packingResult = engine.Pack(
             new ColdChainX.Application.Services.ContainerDims { Length = vLength, Width = vWidth, Height = vHeight }, 
             engineItems);
+
+        if (packingResult.UnplacedLpnIds.Any())
+        {
+            blockingReasons.Add($"PACKING_FAILED: Unplaced LPNs: {string.Join(", ", packingResult.UnplacedLpnIds)}.");
+        }
 
         var colors = new[] { 
             "#ef4444", "#3b82f6", "#10b981", "#f59e0b", 
@@ -620,18 +838,39 @@ public class DispatchController : ControllerBase
         var distinctLpnIds = lpns.Select(l => l.LpnId).Distinct().ToList();
 
         var baseUrl = $"{Request.Scheme}://{Request.Host}";
-        var shareableLink = $"{baseUrl}/3d-viewer.html?vehicleId={request.VehicleId}&lpnIds={string.Join(",", request.LpnIds)}";
+        var shareableLink = $"{baseUrl}/3d-viewer.html?scheduleId={request.ScheduleId}&vehicleId={request.VehicleId}&lpnIds={string.Join(",", request.LpnIds)}";
 
         var response = new SimulatePackingResponse
         {
+            SelectedSetValid = selectedValidation.IsValid,
+            CanCreateTrip = !blockingReasons.Any(),
+            BlockingReasons = blockingReasons,
+            Vehicle = new SimulatePackingVehicleDto
+            {
+                VehicleId = vehicle.VehicleId,
+                TruckPlate = vehicle.TruckPlate,
+                VehicleType = vehicle.VehicleType,
+                Status = vehicle.Status,
+                MaxWeight = vehicle.MaxWeight,
+                MaxCbm = vehicle.MaxCbm,
+                MinTemp = vehicle.MinTemp,
+                MaxTemp = vehicle.MaxTemp
+            },
+            TotalWeight = totalWeight,
+            MaxWeight = vehicle.MaxWeight,
+            WeightUtilization = vehicle.MaxWeight > 0 ? Math.Round(totalWeight / vehicle.MaxWeight * 100, 1) : 0,
+            IsOverweight = isOverweight,
+            TotalCbm = totalCbm,
+            MaxCbm = vehicle.MaxCbm,
+            IsOverCbm = isOverCbm,
             VehicleType = vehicle.VehicleType,
             ContainerLength = vLength,
             ContainerWidth = vWidth,
             ContainerHeight = vHeight,
             Utilisation = packingResult.Utilisation,
             ShareableLink = shareableLink,
-            UnplacedLpnIds = for3d ? packingResult.UnplacedLpnIds : null,
-            PlacedItems = for3d ? packingResult.PlacedItems.Select(pi => {
+            UnplacedLpnIds = packingResult.UnplacedLpnIds,
+            PlacedItems = packingResult.PlacedItems.Select(pi => {
                 var lpn = lpns.First(l => l.LpnId == pi.LpnId);
                 int colorIdx = distinctLpnIds.IndexOf(pi.LpnId);
                 return new PreviewPlacedItem
@@ -649,7 +888,7 @@ public class DispatchController : ControllerBase
                     Quantity = lpn.Quantity,
                     Location = lpn.StorageLocation ?? "N/A"
                 };
-            }).ToList() : null
+            }).ToList()
         };
 
         return Ok(ApiResponse<SimulatePackingResponse>.SuccessResponse(response, "Preview load plan successful."));
@@ -690,14 +929,12 @@ public class DispatchController : ControllerBase
         if (form.PlannedStartTime >= form.PlannedEndTime)
             return BadRequest(ApiResponse<object>.Failure("PlannedStartTime phÃƒÂ¡Ã‚ÂºÃ‚Â£i nhÃƒÂ¡Ã‚Â»Ã‚Â hÃƒâ€ Ã‚Â¡n PlannedEndTime."));
 
-        // BÃƒÂ¡Ã‚ÂºÃ‚Â¯t buÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢c chÃƒÂ¡Ã‚Â»Ã‚Ân kho trÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºc ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â chÃƒÂ¡Ã‚Â»Ã¢â‚¬Â° cÃƒÆ’Ã‚Â¡c LPN thuÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢c kho nÃƒÆ’Ã‚Â y mÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi Ãƒâ€žÃ¢â‚¬ËœÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Â£c ghÃƒÆ’Ã‚Â©p chuyÃƒÂ¡Ã‚ÂºÃ‚Â¿n.
-        Guid? selectedScheduleId = null;
-        if (!string.IsNullOrWhiteSpace(form.ScheduleId) && Guid.TryParse(ExtractGuid(form.ScheduleId), out var parsedScheduleId))
+        if (string.IsNullOrWhiteSpace(form.ScheduleId)
+            || !Guid.TryParse(ExtractGuid(form.ScheduleId), out var selectedScheduleId)
+            || selectedScheduleId == Guid.Empty)
         {
-            selectedScheduleId = parsedScheduleId;
+            return BadRequest(ApiResponse<object>.Failure("ScheduleId is required."));
         }
-
-        // Warehouse check removed
 
         // TÃƒÆ’Ã‚Â i xÃƒÂ¡Ã‚ÂºÃ‚Â¿: 1ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“2 ngÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Âi, gÃƒÆ’Ã‚Â¡n theo chuyÃƒÂ¡Ã‚ÂºÃ‚Â¿n qua TripDriver
         var driverIds = (form.DriverIds ?? new List<string>())
@@ -711,7 +948,43 @@ public class DispatchController : ControllerBase
         if (driverIds.Count < 1 || driverIds.Count > 2)
             return BadRequest(ApiResponse<object>.Failure("Vui lÃƒÂ²ng chÃ¡Â»Â n 1 hoÃ¡ÂºÂ·c 2 tÃƒÂ i xÃ¡ÂºÂ¿ cho chuyÃ¡ÂºÂ¿n."));
 
-        var parsedLpnIds = lpnIds.Select(id => Guid.Parse(ExtractGuid(id))).ToList();
+        var parsedLpnIds = new List<Guid>();
+        foreach (var lpnId in lpnIds)
+        {
+            if (!Guid.TryParse(ExtractGuid(lpnId), out var parsedLpnId) || parsedLpnId == Guid.Empty)
+            {
+                return BadRequest(ApiResponse<object>.Failure($"LpnId '{lpnId}' khÃ´ng há»£p lá»‡."));
+            }
+
+            parsedLpnIds.Add(parsedLpnId);
+        }
+
+        parsedLpnIds = parsedLpnIds.Distinct().ToList();
+
+        var existingLpnIds = await _db.Lpns
+            .Where(l => parsedLpnIds.Contains(l.LpnId))
+            .Select(l => l.LpnId)
+            .ToListAsync();
+
+        var wrongScheduleLpnIds = await _db.Lpns
+            .Include(l => l.Order)
+            .Where(l => parsedLpnIds.Contains(l.LpnId)
+                && (l.Order == null || l.Order.ScheduleId != selectedScheduleId))
+            .Select(l => l.LpnId)
+            .ToListAsync();
+
+        var invalidLpnIds = parsedLpnIds
+            .Except(existingLpnIds)
+            .Concat(wrongScheduleLpnIds)
+            .Distinct()
+            .ToList();
+
+        if (invalidLpnIds.Any())
+        {
+            return BadRequest(ApiResponse<object>.Failure(
+                "Some LPNs do not belong to the selected schedule.",
+                errors: new { invalidLpnIds }));
+        }
 
         // Tá»± Ä‘á»™ng tÃ¬m kho xuáº¥t phÃ¡t tá»« LPN Ä‘áº§u tiÃªn
         var firstLpnId = parsedLpnIds.First();
@@ -1296,6 +1569,44 @@ public class DispatchController : ControllerBase
             WeightKg = (order.OrderDimension?.ActualWeightKg ?? 0m),
             Cbm = ((order.OrderDimension?.ActualCbm ?? 0m) > 0 ? (order.OrderDimension?.ActualCbm ?? 0m) : (order.OrderDimension?.ExpectedCbm ?? 0m)),
             TempCondition = order.TempCondition
+        };
+    }
+
+    private CompatibleLpnItemDto ToCompatibleLpnItemDto(Lpn lpn)
+    {
+        var order = lpn.Order;
+        var schedule = order?.Schedule;
+        var route = schedule?.Route;
+        var warehouse = lpn.Warehouse;
+        var customerName = order?.Customer?.CompanyName ?? "N/A";
+        var tempCondition = order?.TempCondition ?? string.Empty;
+
+        return new CompatibleLpnItemDto
+        {
+            LpnId = lpn.LpnId,
+            Label = $"{lpn.LpnCode} ({order?.TrackingCode}) - {order?.ItemName} | Qty: {lpn.Quantity} | {lpn.ActualWeightKg}kg / {lpn.ActualCbm}m3 ({tempCondition}) | Khach: {customerName} | Kho: {warehouse?.WarehouseName}",
+            LpnCode = lpn.LpnCode,
+            OrderId = lpn.OrderId,
+            TrackingCode = order?.TrackingCode ?? string.Empty,
+            ItemName = order?.ItemName ?? string.Empty,
+            CustomerName = customerName,
+            ScheduleId = schedule?.ScheduleId,
+            ScheduleName = schedule?.ScheduleName,
+            WarehouseId = lpn.WarehouseId,
+            WarehouseName = warehouse?.WarehouseName,
+            DestinationAddress = order?.DestLocationNavigation?.Address,
+            RouteName = route != null ? $"{route.OriginCity} -> {route.DestCity}" : null,
+            PlannedDispatchDate = schedule?.DepartureDate,
+            Quantity = lpn.Quantity,
+            ActualWeightKg = lpn.ActualWeightKg,
+            ActualCbm = lpn.ActualCbm,
+            TempCondition = tempCondition,
+            Category = order?.Category,
+            RequiredTemperature = _cargoCompatibilityService.ResolveRequiredTemperature(lpn),
+            HasStrongOdor = order?.HasStrongOdor ?? false,
+            IsStackable = order?.IsStackable ?? true,
+            CreatedAt = lpn.CreatedAt,
+            IsCompatible = true
         };
     }
 

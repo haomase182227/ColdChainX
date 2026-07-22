@@ -47,12 +47,20 @@ namespace ColdChainX.Infrastructure.Services
             _hubContext = hubContext;
         }
 
-        public async Task<ApiResponse<PagedResult<OrderResponse>>> GetOrdersAsync(int pageNumber, int pageSize, string? status = null)
+        public async Task<ApiResponse<PagedResult<OrderResponse>>> GetOrdersAsync(
+            int pageNumber,
+            int pageSize,
+            string? status = null,
+            Guid? routeId = null)
         {
             var query = BuildOrderQuery();
             if (!string.IsNullOrWhiteSpace(status))
             {
                 query = query.Where(o => o.Status == status);
+            }
+            if (routeId.HasValue)
+            {
+                query = query.Where(o => o.Schedule != null && o.Schedule.RouteId == routeId.Value);
             }
             query = query.OrderByDescending(o => o.CreatedAt);
             var totalRecords = await query.CountAsync();
@@ -106,6 +114,7 @@ namespace ColdChainX.Infrastructure.Services
                     ExpectedWeightKg = o.OrderDimension != null ? o.OrderDimension.ExpectedWeightKg : 0,
                     ExpectedCbm = o.OrderDimension != null ? o.OrderDimension.ExpectedCbm : 0,
                     Status = o.Status,
+                    MasterTripId = o.MasterTripId,
                     CreatedAt = o.CreatedAt
                 })
                 .ToListAsync();
@@ -133,6 +142,14 @@ namespace ColdChainX.Infrastructure.Services
                     
                 if (schedule == null || schedule.Route?.Status != "ACTIVE")
                     return ApiResponse<CreateOrderResponse>.Failure("Schedule_ID or Route is invalid or inactive");
+
+                var vietnamNow = DateTime.SpecifyKind(DateTime.UtcNow.AddHours(7), DateTimeKind.Unspecified);
+                var bookingCutOff = schedule.DepartureDate.Date.Add(schedule.CutOffTime);
+                if (!string.Equals(schedule.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase)
+                    || vietnamNow >= bookingCutOff)
+                {
+                    return ApiResponse<CreateOrderResponse>.Failure("Schedule is no longer accepting new orders");
+                }
                     
                 var route = schedule.Route!;
 
@@ -905,6 +922,7 @@ namespace ColdChainX.Infrastructure.Services
                 ExpectedCbm = (order.OrderDimension?.ExpectedCbm ?? 0m),
                 ActualCbm = (order.OrderDimension?.ActualCbm ?? 0m),
                 Status = order.Status,
+                MasterTripId = order.MasterTripId,
                 CreatedAt = order.CreatedAt,
                 Route = order.Schedule?.Route == null
                     ? null

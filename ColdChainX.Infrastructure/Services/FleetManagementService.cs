@@ -22,8 +22,7 @@ public class FleetManagementService : IFleetManagementService
     {
         "REGISTRATION",
         "INSURANCE",
-        "CITY_PERMIT",
-        "FOOD_SAFETY"
+        "CITY_PERMIT"
     };
 
     private const string DefaultDriverPassword = "@123@";
@@ -69,6 +68,20 @@ public class FleetManagementService : IFleetManagementService
         if (await _db.Vehicles.AnyAsync(v => v.TruckPlate.ToUpper() == plate.ToUpper() && v.Status != "DELETED"))
             return ApiResponse<VehicleFleetResponse>.Failure("Truck plate already exists");
 
+        var chassisNumber = TrimOrNull(request.ChassisNumber);
+        if (chassisNumber != null && await _db.Vehicles.AnyAsync(v =>
+                v.ChassisNumber != null
+                && v.ChassisNumber.ToUpper() == chassisNumber.ToUpper()
+                && v.Status != "DELETED"))
+            return ApiResponse<VehicleFleetResponse>.Failure("Chassis number already exists");
+
+        var engineNumber = TrimOrNull(request.EngineNumber);
+        if (engineNumber != null && await _db.Vehicles.AnyAsync(v =>
+                v.EngineNumber != null
+                && v.EngineNumber.ToUpper() == engineNumber.ToUpper()
+                && v.Status != "DELETED"))
+            return ApiResponse<VehicleFleetResponse>.Failure("Engine number already exists");
+
         // Tài xế không còn gắn trực tiếp với xe — tài xế được gán theo từng chuyến (TripDriver).
 
         var vehicle = new Vehicle
@@ -76,6 +89,9 @@ public class FleetManagementService : IFleetManagementService
             VehicleId = Guid.NewGuid(),
             TruckPlate = plate,
             Brand = TrimOrNull(request.Brand),
+            ManufactureYear = request.ManufactureYear,
+            ChassisNumber = chassisNumber,
+            EngineNumber = engineNumber,
             StandardFuelLiters = request.StandardFuelLiters,
             VehicleType = NormalizeRequired(request.VehicleType),
             MaxWeight = request.MaxWeight,
@@ -102,7 +118,6 @@ public class FleetManagementService : IFleetManagementService
         AddInlineVehicleDocument(vehicle, "REGISTRATION", request.Registration);
         AddInlineVehicleDocument(vehicle, "INSURANCE",     request.Insurance);
         AddInlineVehicleDocument(vehicle, "CITY_PERMIT",  request.CityPermit);
-        AddInlineVehicleDocument(vehicle, "FOOD_SAFETY",  request.FoodSafety);
 
         await RefreshVehicleStatusAsync(vehicle);
         await _db.SaveChangesAsync();
@@ -138,6 +153,83 @@ public class FleetManagementService : IFleetManagementService
                         .FirstOrDefaultAsync(v => v.TruckPlate.ToUpper() == plate.ToUpper());
                 }
 
+                int? manufactureYear = null;
+                var manufactureYearText = Get(row, "ManufactureYear", "Nam san xuat");
+                if (manufactureYearText != null)
+                {
+                    if (!int.TryParse(manufactureYearText, out var parsedYear)
+                        || parsedYear < 1900
+                        || parsedYear > 2100)
+                    {
+                        throw new InvalidOperationException(
+                            $"Invalid manufacture year for vehicle {plate}");
+                    }
+
+                    manufactureYear = parsedYear;
+                }
+
+                var chassisNumber = TrimOrNull(Get(row, "ChassisNumber", "So khung"));
+                if (chassisNumber != null)
+                {
+                    var currentVehicleId = vehicle?.VehicleId;
+                    var duplicatedInFile = importedVehicles.Values.Any(v =>
+                        (!currentVehicleId.HasValue || v.VehicleId != currentVehicleId.Value)
+                        && string.Equals(v.ChassisNumber, chassisNumber, StringComparison.OrdinalIgnoreCase));
+                    var duplicatedInDatabase = await _db.Vehicles.AnyAsync(v =>
+                        (!currentVehicleId.HasValue || v.VehicleId != currentVehicleId.Value)
+                        && v.ChassisNumber != null
+                        && v.ChassisNumber.ToUpper() == chassisNumber.ToUpper()
+                        && v.Status != "DELETED");
+
+                    if (duplicatedInFile || duplicatedInDatabase)
+                        throw new InvalidOperationException($"Chassis number already exists: {chassisNumber}");
+                }
+
+                var engineNumber = TrimOrNull(Get(row, "EngineNumber", "So may"));
+                if (engineNumber != null)
+                {
+                    var currentVehicleId = vehicle?.VehicleId;
+                    var duplicatedInFile = importedVehicles.Values.Any(v =>
+                        (!currentVehicleId.HasValue || v.VehicleId != currentVehicleId.Value)
+                        && string.Equals(v.EngineNumber, engineNumber, StringComparison.OrdinalIgnoreCase));
+                    var duplicatedInDatabase = await _db.Vehicles.AnyAsync(v =>
+                        (!currentVehicleId.HasValue || v.VehicleId != currentVehicleId.Value)
+                        && v.EngineNumber != null
+                        && v.EngineNumber.ToUpper() == engineNumber.ToUpper()
+                        && v.Status != "DELETED");
+
+                    if (duplicatedInFile || duplicatedInDatabase)
+                        throw new InvalidOperationException($"Engine number already exists: {engineNumber}");
+                }
+
+                var maxWeight = GetDecimal(row, vehicle?.MaxWeight, "MaxWeight", "Tai trong");
+                var maxCbm = GetDecimal(row, vehicle?.MaxCbm, "MaxCbm", "So khoi");
+                var innerLengthCm = GetDecimal(row, vehicle?.InnerLengthCm, "InnerLengthCm", "Chieu dai long thung");
+                var innerWidthCm = GetDecimal(row, vehicle?.InnerWidthCm, "InnerWidthCm", "Chieu rong long thung");
+                var innerHeightCm = GetDecimal(row, vehicle?.InnerHeightCm, "InnerHeightCm", "Chieu cao long thung");
+                var minTemp = GetDecimal(row, vehicle?.MinTemp, "MinTemp", "Nhiet do min");
+                var maxTemp = GetDecimal(row, vehicle?.MaxTemp, "MaxTemp", "Nhiet do max");
+
+                if (maxWeight <= 0 || maxCbm <= 0
+                    || innerLengthCm <= 0 || innerWidthCm <= 0 || innerHeightCm <= 0)
+                {
+                    throw new InvalidOperationException(
+                        $"Weight, CBM and all inner dimensions must be greater than zero for vehicle {plate}");
+                }
+
+                var physicalCbm = innerLengthCm * innerWidthCm * innerHeightCm / 1_000_000m;
+                if (maxCbm > physicalCbm)
+                {
+                    throw new InvalidOperationException(
+                        $"Max CBM cannot exceed the inner volume for vehicle {plate}");
+                }
+
+                if (minTemp < -100 || minTemp > 100 || maxTemp < minTemp || maxTemp > 100)
+                {
+                    throw new InvalidOperationException(
+                        $"Invalid temperature range for vehicle {plate}");
+                }
+
                 if (vehicle == null)
                 {
                     vehicle = new Vehicle
@@ -158,15 +250,18 @@ public class FleetManagementService : IFleetManagementService
                 importedVehicles[plate] = vehicle;
 
                 vehicle.Brand = TrimOrNull(Get(row, "Brand", "Hang xe")) ?? vehicle.Brand;
+                vehicle.ManufactureYear = manufactureYear ?? vehicle.ManufactureYear;
+                vehicle.ChassisNumber = chassisNumber ?? vehicle.ChassisNumber;
+                vehicle.EngineNumber = engineNumber ?? vehicle.EngineNumber;
                 vehicle.VehicleType = TrimOrNull(Get(row, "VehicleType", "Loai xe")) ?? vehicle.VehicleType ?? "TRUCK";
                 vehicle.StandardFuelLiters = GetDecimal(row, vehicle.StandardFuelLiters, "StandardFuelLiters", "DinhMucNhienLieu");
-                vehicle.MaxWeight = GetDecimal(row, vehicle.MaxWeight, "MaxWeight", "Tai trong");
-                vehicle.MaxCbm = GetDecimal(row, vehicle.MaxCbm, "MaxCbm", "So khoi");
-                vehicle.InnerLengthCm = GetDecimal(row, vehicle.InnerLengthCm, "InnerLengthCm", "Chieu dai long thung");
-                vehicle.InnerWidthCm = GetDecimal(row, vehicle.InnerWidthCm, "InnerWidthCm", "Chieu rong long thung");
-                vehicle.InnerHeightCm = GetDecimal(row, vehicle.InnerHeightCm, "InnerHeightCm", "Chieu cao long thung");
-                vehicle.MinTemp = GetDecimal(row, vehicle.MinTemp, "MinTemp", "Nhiet do min");
-                vehicle.MaxTemp = GetDecimal(row, vehicle.MaxTemp, "MaxTemp", "Nhiet do max");
+                vehicle.MaxWeight = maxWeight;
+                vehicle.MaxCbm = maxCbm;
+                vehicle.InnerLengthCm = innerLengthCm;
+                vehicle.InnerWidthCm = innerWidthCm;
+                vehicle.InnerHeightCm = innerHeightCm;
+                vehicle.MinTemp = minTemp;
+                vehicle.MaxTemp = maxTemp;
                 vehicle.CurrentLocation = TrimOrNull(Get(row, "CurrentLocation", "Vi tri")) ?? vehicle.CurrentLocation;
                 vehicle.CurrentOdometer = GetDouble(row, vehicle.CurrentOdometer, "CurrentOdometer", "Odometer");
                 vehicle.NextMaintenanceOdometer = GetDouble(row, vehicle.NextMaintenanceOdometer, "NextMaintenanceOdometer", "MocBaoDuongTiepTheo");
@@ -176,7 +271,6 @@ public class FleetManagementService : IFleetManagementService
                 UpsertVehicleDocumentFromImport(vehicle, row, "REGISTRATION", "Registration", "DangKiem");
                 UpsertVehicleDocumentFromImport(vehicle, row, "INSURANCE", "Insurance", "BaoHiem");
                 UpsertVehicleDocumentFromImport(vehicle, row, "CITY_PERMIT", "CityPermit", "GiayPhepVaoPho");
-                UpsertVehicleDocumentFromImport(vehicle, row, "FOOD_SAFETY", "FoodSafety", "AnToanThucPham");
                 await RefreshVehicleStatusAsync(vehicle);
             }
             catch (Exception ex)
@@ -542,7 +636,8 @@ public class FleetManagementService : IFleetManagementService
 
     public async Task<ApiResponse<IReadOnlyCollection<VehicleDocumentResponse>>> GetVehicleDocumentsAsync(Guid? vehicleId)
     {
-        var query = _db.VehicleDocuments.AsQueryable();
+        var query = _db.VehicleDocuments
+            .Where(d => d.DocumentType != "FOOD_SAFETY");
         if (vehicleId.HasValue)
             query = query.Where(d => d.VehicleId == vehicleId.Value);
 
@@ -1002,7 +1097,9 @@ public class FleetManagementService : IFleetManagementService
 
         var docs = await _db.VehicleDocuments
             .Include(d => d.Vehicle)
-            .Where(d => d.Status == "ACTIVE" && d.ExpireDate != null)
+            .Where(d => RequiredVehicleDocuments.Contains(d.DocumentType)
+                        && d.Status == "ACTIVE"
+                        && d.ExpireDate != null)
             .ToListAsync(cancellationToken);
 
         foreach (var doc in docs)
@@ -1043,6 +1140,14 @@ public class FleetManagementService : IFleetManagementService
                     await _hubContext.Clients.User(driverUserId.Value.ToString()).SendAsync("VehicleDocumentExpiring", new { doc.VehicleId, doc.Vehicle.TruckPlate, doc.DocumentType, Days = days, doc.ExpireDate }, cancellationToken);
             }
         }
+
+        var complianceVehicles = await _db.Vehicles
+            .Include(v => v.VehicleDocuments)
+            .Where(v => v.Status == "ACTIVE" || v.Status == "SUSPENDED_DOCS")
+            .ToListAsync(cancellationToken);
+
+        foreach (var vehicle in complianceVehicles)
+            await RefreshVehicleStatusAsync(vehicle);
 
         var licenses = await _db.DriverLicenses
             .Include(l => l.Driver)
@@ -1185,7 +1290,7 @@ public class FleetManagementService : IFleetManagementService
 
     private async Task RefreshVehicleStatusAsync(Vehicle vehicle)
     {
-        if (vehicle.Status is "DELETED" or "MAINTENANCE" or "INACTIVE") return;
+        if (vehicle.Status is "DELETED" or "MAINTENANCE" or "MAINTENANCE_PENDING" or "ON_TRIP" or "INACTIVE") return;
 
         var today = DateOnly.FromDateTime(DateTime.Today);
         var docs = vehicle.VehicleDocuments.Where(d => d.VehicleId == vehicle.VehicleId || d.VehicleId == null).ToList();
@@ -1301,6 +1406,9 @@ public class FleetManagementService : IFleetManagementService
         VehicleId = vehicle.VehicleId,
         TruckPlate = vehicle.TruckPlate,
         Brand = vehicle.Brand,
+        ManufactureYear = vehicle.ManufactureYear,
+        ChassisNumber = vehicle.ChassisNumber,
+        EngineNumber = vehicle.EngineNumber,
         StandardFuelLiters = vehicle.StandardFuelLiters,
         VehicleType = vehicle.VehicleType,
         MaxWeight = vehicle.MaxWeight,
@@ -1318,7 +1426,10 @@ public class FleetManagementService : IFleetManagementService
         WarningDaysBeforeDue = vehicle.WarningDaysBeforeDue,
         WarningKmBeforeDue = vehicle.WarningKmBeforeDue,
         Status = vehicle.Status,
-        Documents = vehicle.VehicleDocuments.Select(ToVehicleDocumentResponse).ToList()
+        Documents = vehicle.VehicleDocuments
+            .Where(d => d.DocumentType != "FOOD_SAFETY")
+            .Select(ToVehicleDocumentResponse)
+            .ToList()
     };
 
     private static DriverFleetResponse ToDriverResponse(Driver driver) => new()
@@ -1383,7 +1494,16 @@ public class FleetManagementService : IFleetManagementService
         return normalized;
     }
 
-    private static string NormalizeDocumentType(string? value) => NormalizeRequired(value).ToUpperInvariant();
+    private static string NormalizeDocumentType(string? value)
+    {
+        var normalized = NormalizeRequired(value).ToUpperInvariant();
+        if (!RequiredVehicleDocuments.Contains(normalized))
+            throw new InvalidOperationException(
+                $"Unsupported vehicle document type '{normalized}'. " +
+                $"Allowed values: {string.Join(", ", RequiredVehicleDocuments)}");
+
+        return normalized;
+    }
 
     private static string? TrimOrNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
@@ -1561,6 +1681,36 @@ public class FleetManagementService : IFleetManagementService
 
         if (vehicle == null)
             return ApiResponse<VehicleFleetResponse>.Failure("Vehicle not found");
+
+        var nextMaxCbm = request.MaxCbm ?? vehicle.MaxCbm;
+        var nextInnerLength = request.InnerLengthCm ?? vehicle.InnerLengthCm;
+        var nextInnerWidth = request.InnerWidthCm ?? vehicle.InnerWidthCm;
+        var nextInnerHeight = request.InnerHeightCm ?? vehicle.InnerHeightCm;
+        var updatesInnerDimensions = request.InnerLengthCm.HasValue
+            || request.InnerWidthCm.HasValue
+            || request.InnerHeightCm.HasValue;
+
+        if (updatesInnerDimensions
+            && (nextInnerLength is not > 0
+                || nextInnerWidth is not > 0
+                || nextInnerHeight is not > 0))
+        {
+            return ApiResponse<VehicleFleetResponse>.Failure(
+                "All inner dimensions must be greater than zero");
+        }
+
+        if (nextInnerLength is > 0 && nextInnerWidth is > 0 && nextInnerHeight is > 0)
+        {
+            var physicalCbm = nextInnerLength.Value
+                * nextInnerWidth.Value
+                * nextInnerHeight.Value
+                / 1_000_000m;
+            if (nextMaxCbm > physicalCbm)
+            {
+                return ApiResponse<VehicleFleetResponse>.Failure(
+                    "Max CBM cannot exceed the volume calculated from the inner dimensions");
+            }
+        }
 
         if (!string.IsNullOrWhiteSpace(request.TruckPlate))
         {

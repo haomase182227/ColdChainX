@@ -57,6 +57,11 @@ if (configuration.GetValue("HostedWorkers:InventoryAging", true))
     builder.Services.AddHostedService<InventoryAgingWorker>();
 }
 
+if (configuration.GetValue("HostedWorkers:ScheduleBookingStatus", true))
+{
+    builder.Services.AddHostedService<ScheduleBookingStatusWorker>();
+}
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {

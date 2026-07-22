@@ -15,6 +15,18 @@ public class CreateVehicleRequestValidator : AbstractValidator<CreateVehicleRequ
             .NotEmpty().WithMessage("Vehicle type is required")
             .MaximumLength(50).WithMessage("Vehicle type must not exceed 50 characters");
 
+        RuleFor(x => x.ManufactureYear)
+            .InclusiveBetween(1900, 2100).When(x => x.ManufactureYear.HasValue)
+            .WithMessage("Manufacture year must be between 1900 and 2100");
+
+        RuleFor(x => x.ChassisNumber)
+            .MaximumLength(50).When(x => !string.IsNullOrWhiteSpace(x.ChassisNumber))
+            .WithMessage("Chassis number must not exceed 50 characters");
+
+        RuleFor(x => x.EngineNumber)
+            .MaximumLength(50).When(x => !string.IsNullOrWhiteSpace(x.EngineNumber))
+            .WithMessage("Engine number must not exceed 50 characters");
+
         RuleFor(x => x.MaxWeight)
             .GreaterThan(0).WithMessage("Max weight must be greater than zero");
 
