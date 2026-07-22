@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ColdChainX Fleet Simulator</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; display: flex; height: 100vh; }
+        #sidebar { width: 400px; background: #f8f9fa; border-right: 1px solid #ddd; padding: 20px; overflow-y: auto; box-shadow: 2px 0 5px rgba(0,0,0,0.1); z-index: 1000; }
+        #map { flex-grow: 1; height: 100%; }
+        .card { background: white; border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        h2, h3 { margin-top: 0; color: #333; }
+        input[type="text"], input[type="number"] { width: 100%; padding: 8px; margin: 5px 0 15px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { background: #007bff; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; }
+        button:hover { background: #0056b3; }
+        button.btn-danger { background: #dc3545; }
+        button.btn-danger:hover { background: #bd2130; }
+        button.btn-warning { background: #ffc107; color: black; margin-top: 5px; }
+        .vehicle-item { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 10px; }
+        .vehicle-item:last-child { border-bottom: none; }
+        .badge { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+        .badge-success { background: #28a745; color: white; }
+        .badge-danger { background: #dc3545; color: white; }
+    </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h2>🚚 Lệnh Điều Phối Giả Lập</h2>
+    <div class="card">
+        <h3>Khởi tạo xe chạy</h3>
+        <label>Trip ID (Dán mã Trip ID vào đây)</label>
+        <div style="display:flex; gap: 5px;">
+            <input type="text" id="inputTripId" onchange="onTripSelected()" placeholder="VD: 550e8400-e29b-41d4-a716-446655440000" style="width: 100%; padding: 8px; margin: 5px 0 15px 0; border: 1px solid #ccc; border-radius: 4px;">
+            <button onclick="fetchTripPolyline()" style="width: auto; padding: 0 10px; margin-bottom: 10px;">Tải Tuyến</button>
+        </div>
+
+        <input type="hidden" id="inputDeviceId">
+
+        <div style="display:flex; justify-content: space-between; align-items: center;">
+            <label>Nhiệt độ mục tiêu ban đầu (°C)</label>
+            <label style="display:flex; align-items:center; gap: 5px; font-weight: bold; color: #ff9800;">
+                <input type="checkbox" id="inputInjectTemp" style="width: 16px; height: 16px; margin: 0;"> Bật chêm nhiệt
+            </label>
+        </div>
+        <input type="number" id="inputTemp" value="-18.0" step="0.1">
+        
+        <label>Encoded Polyline (Được tải tự động từ Trip ID, hoặc dán thủ công)</label>
+        <input type="text" id="inputPolyline" placeholder="Mã Polyline hiển thị tại đây...">
+        
+        <label>Tốc độ di chuyển thực tế (km/h)</label>
+        <input type="number" id="inputSpeed" value="60" min="1" max="200">
+        
+        <label style="display:flex; align-items:center; gap: 5px; margin-top: 10px; font-weight: bold; color: #ff9800;">
+            <input type="checkbox" id="inputHybrid" style="width: 20px; height: 20px; margin: 0;"> BẬT CHẾ ĐỘ HYBRID (Chêm GPS vào mạch thật)
+        </label>
+        
+        <button onclick="startSimulation()">BẮT ĐẦU CHẠY MÔ PHỎNG</button>
+    </div>
+
+    <div class="card">
+        <h3>🚗 Các Xe Đang Chạy</h3>
+        <div id="vehicleList">Đang tải...</div>
+    </div>
+</div>
+
+<div id="map"></div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    let map;
+    let markers = {};
+    let goongMapKey = "";
+
+    // Lấy Goong Map Key từ Backend
+    fetch('/api/config')
+        .then(res => res.json())
+        .then(data => {
+            goongMapKey = data.goongMapKey;
+            initMap();
+            loadTripsFromDb();
+            setInterval(fetchStatus, 1000);
+        });
+
+    let allTrips = [];
+    let currentPolylineLayer = null;
+
+    function decodePolyline(str, precision) {
+        var index = 0, lat = 0, lng = 0, coordinates = [], shift = 0, result = 0, byte = null, latitude_change, longitude_change, factor = Math.pow(10, precision || 5);
+        while (index < str.length) {
+            byte = null; shift = 0; result = 0;
+            do {
+                byte = str.charCodeAt(index++) - 63;
+                result |= (byte & 0x1f) << shift;
+                shift += 5;
+            } while (byte >= 0x20);
+            latitude_change = ((result & 1) ? ~(result >> 1) : (result >> 1));
+            shift = result = 0;
+            do {
+                byte = str.charCodeAt(index++) - 63;
+                result |= (byte & 0x1f) << shift;
+                shift += 5;
+            } while (byte >= 0x20);
+            longitude_change = ((result & 1) ? ~(result >> 1) : (result >> 1));
+            lat += latitude_change; lng += longitude_change;
+            coordinates.push([lat / factor, lng / factor]);
+        }
+        return coordinates;
+    }
+
+    function drawPolylineOnMap(encoded) {
+        if (!encoded) return;
+        try {
+            const latlngs = decodePolyline(encoded);
+            if (currentPolylineLayer) {
+                map.removeLayer(currentPolylineLayer);
+            }
+            currentPolylineLayer = L.polyline(latlngs, {color: 'blue', weight: 5, opacity: 0.7}).addTo(map);
+            map.fitBounds(currentPolylineLayer.getBounds());
+        } catch (e) {
+            console.error("Lỗi giải mã Polyline", e);
+        }
+    }
+
+    function loadTripsFromDb() {
+        fetch('/api/fleet/trips')
+            .then(res => res.json())
+            .then(data => {
+                allTrips = data;
+                const dataList = document.getElementById('tripList');
+                dataList.innerHTML = '';
+                if(Array.isArray(data)) {
+                    data.forEach(t => {
+                        let text = `${t.TripId || t.tripId} (${t.Status || t.status})`;
+                        if (t.DeviceCode || t.deviceCode) text += ` - [Xe: ${t.DeviceCode || t.deviceCode}]`;
+                        dataList.innerHTML += `<option value="${t.TripId || t.tripId}">${text}</option>`;
+                    });
+                }
+            })
+            .catch(e => {
+                console.error("Lỗi tải DB", e);
+            });
+    }
+
+    function onTripSelected() {
+        const tripId = document.getElementById('inputTripId').value;
+        const trip = allTrips.find(t => (t.TripId || t.tripId) === tripId);
+        if (trip) {
+            if (trip.DeviceCode || trip.deviceCode) {
+                document.getElementById('inputDeviceId').value = trip.DeviceCode || trip.deviceCode;
+            }
+            if (trip.TargetTemperature || trip.targetTemperature) {
+                document.getElementById('inputTemp').value = trip.TargetTemperature || trip.targetTemperature;
+            }
+        }
+    }
+
+    function initMap() {
+        map = L.map('map').setView([21.0285, 105.8542], 13);
+        
+        // Dùng OpenStreetMap cho UI Simulator để tránh lỗi Tile Key của Goong
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+    }
+
+    function fetchTripPolyline() {
+        const tripId = document.getElementById('inputTripId').value;
+        if(!tripId) {
+            alert('Vui lòng nhập Trip ID!');
+            return;
+        }
+        
+        fetch(`/api/fleet/trip/${tripId}/polyline`)
+            .then(res => res.json())
+            .then(data => {
+                if(data.polyline) {
+                    document.getElementById('inputPolyline').value = data.polyline;
+                    drawPolylineOnMap(data.polyline);
+                    if(data.deviceCode) {
+                        document.getElementById('inputDeviceId').value = data.deviceCode;
+                        alert('Đã tải thành công lộ trình và dò thấy IoT: ' + data.deviceCode);
+                    } else {
+                        alert('Đã tải thành công lộ trình! (Lưu ý: Không tìm thấy IoT gắn với chuyến này)');
+                    }
+                } else if(data.error) {
+                    alert('Lỗi: ' + data.error);
+                } else {
+                    alert('Lỗi khi tải Polyline: ' + JSON.stringify(data));
+                }
+            })
+            .catch(e => alert('Lỗi gọi API: ' + e));
+    }
+
+    function startSimulation() {
+        const payload = {
+            deviceId: document.getElementById('inputDeviceId').value,
+            polyline: document.getElementById('inputPolyline').value,
+            speedKmh: parseFloat(document.getElementById('inputSpeed').value),
+            targetTemperature: parseFloat(document.getElementById('inputTemp').value),
+            isHybridMode: document.getElementById('inputHybrid').checked,
+            injectTemp: document.getElementById('inputInjectTemp').checked
+        };
+
+        fetch('/api/fleet/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        }).then(res => res.json()).then(data => {
+            if(data.error) alert(data.error);
+            else drawPolylineOnMap(payload.polyline);
+            // DO NOT clear polyline, let user see it
+        }).catch(e => alert("Vui lòng nhập Polyline."));
+    }
+
+    function stopSimulation(deviceId) {
+        fetch(`/api/fleet/${deviceId}/stop`, { method: 'POST' });
+    }
+
+    function injectAnomaly(deviceId, type, value) {
+        fetch(`/api/fleet/${deviceId}/anomaly`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: type, value: value })
+        });
+    }
+
+    function changeSpeed(deviceId, newSpeed) {
+        fetch(`/api/fleet/${deviceId}/speed`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ value: parseFloat(newSpeed) })
+        });
+    }
+
+    function fetchStatus() {
+        fetch('/api/fleet/status')
+            .then(res => res.json())
+            .then(data => {
+                const listEl = document.getElementById('vehicleList');
+                
+                if(data.length === 0) {
+                    listEl.innerHTML = '<i>Không có xe nào đang chạy.</i>';
+                    return;
+                }
+
+                if (listEl.innerHTML.includes('Không có xe nào')) {
+                    listEl.innerHTML = '';
+                }
+
+                // Remove inactive vehicles from UI
+                const activeDeviceIds = data.map(v => v.deviceId);
+                Array.from(listEl.children).forEach(child => {
+                    if (child.id && child.id.startsWith('vehicle_') && !activeDeviceIds.includes(child.id.replace('vehicle_', ''))) {
+                        listEl.removeChild(child);
+                    }
+                });
+
+                data.forEach(v => {
+                    // Update Map Marker
+                    if (!markers[v.deviceId]) {
+                        // Truck icon
+                        var truckIcon = L.divIcon({
+                            html: '🚛',
+                            className: 'truck-icon',
+                            iconSize: [30, 30]
+                        });
+                        markers[v.deviceId] = L.marker([v.currentLat, v.currentLon], {icon: truckIcon}).addTo(map);
+                    } else {
+                        markers[v.deviceId].setLatLng([v.currentLat, v.currentLon]);
+                    }
+
+                    // Update UI List
+                    let tempClass = v.currentTemperature > -10 ? 'badge-danger' : 'badge-success';
+                    let doorClass = v.isDoorOpen ? 'badge-danger' : 'badge-success';
+                    let doorText = v.isDoorOpen ? 'MỞ' : 'ĐÓNG';
+
+                    let existingItem = document.getElementById('vehicle_' + v.deviceId);
+                    if (!existingItem) {
+                        let newItem = document.createElement('div');
+                        newItem.id = 'vehicle_' + v.deviceId;
+                        newItem.className = 'vehicle-item';
+                        newItem.innerHTML = `
+                            <b>${v.deviceId}</b><br/>
+                            Nhiệt độ: <span id="tempBadge_${v.deviceId}" class="badge ${tempClass}">${v.currentTemperature}°C</span> | 
+                            Cửa: <span id="doorBadge_${v.deviceId}" class="badge ${doorClass}">${doorText}</span><br/>
+                            <div style="display:flex; gap:5px; margin-top:5px; align-items:center;">
+                                <input type="number" id="temp_${v.deviceId}" style="width:60px; padding:3px; margin:0;" value="${v.targetTemperature}">
+                                <button class="btn-warning" style="margin:0; padding:4px 8px; font-size:12px;" onclick="injectAnomaly('${v.deviceId}', 'TemperatureSpike', document.getElementById('temp_${v.deviceId}').value)">Set Temp</button>
+                            </div>
+                            <div style="display:flex; gap:5px; margin-top:5px; align-items:center;">
+                                <input type="number" id="speed_${v.deviceId}" style="width:60px; padding:3px; margin:0;" value="${v.speedKmh}">
+                                <button class="btn-warning" style="margin:0; padding:4px 8px; font-size:12px; background:#17a2b8; color:white;" onclick="changeSpeed('${v.deviceId}', document.getElementById('speed_${v.deviceId}').value)">Set Speed</button>
+                            </div>
+                            <div style="display:flex; gap:5px; margin-top:5px;">
+                                <button class="btn-warning" onclick="injectAnomaly('${v.deviceId}', 'DoorOpen', null)">Mở Cửa</button>
+                                <button class="btn-warning" onclick="injectAnomaly('${v.deviceId}', 'DoorClose', null)">Đóng Cửa</button>
+                            </div>
+                            <button class="btn-danger" style="margin-top:5px;" onclick="stopSimulation('${v.deviceId}')">Dừng Xe</button>
+                        `;
+                        listEl.appendChild(newItem);
+                    } else {
+                        // Just update the dynamic text without touching the input fields
+                        let tempBadge = document.getElementById('tempBadge_' + v.deviceId);
+                        tempBadge.className = 'badge ' + tempClass;
+                        tempBadge.innerText = v.currentTemperature + '°C';
+
+                        let doorBadge = document.getElementById('doorBadge_' + v.deviceId);
+                        doorBadge.className = 'badge ' + doorClass;
+                        doorBadge.innerText = doorText;
+                    }
+                });
+            });
+    }
+</script>
+
+<style>
+    .truck-icon { font-size: 24px; line-height: 24px; text-align: center; }
+</style>
+</body>
+</html>

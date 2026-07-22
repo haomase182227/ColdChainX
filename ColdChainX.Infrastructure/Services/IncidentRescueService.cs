@@ -208,7 +208,7 @@ public class IncidentRescueService : IIncidentRescueService
 
             // ── BƯỚC 2b: gán xe thay thế vào chuyến (Sang xe — hàng giữ nguyên LPN/seal flow) ──
             trip.VehicleId = rescueVehicle.VehicleId;
-            rescueVehicle.Status = "OnTrip";
+            rescueVehicle.Status = "ONTRIP";
 
             // ── BƯỚC 3a: chuyến → DELAYED ──
             trip.Status = "DELAYED";

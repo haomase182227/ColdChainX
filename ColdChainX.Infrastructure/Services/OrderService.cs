@@ -1024,6 +1024,145 @@ namespace ColdChainX.Infrastructure.Services
         {
             return value.ToString("#,##0.##", CultureInfo.GetCultureInfo("vi-VN"));
         }
+
+        public async Task<ApiResponse<PublicTrackingResponseDto>> GetPublicTrackingAsync(string trackingCode)
+        {
+            var order = await _db.TransportOrders
+                .Include(o => o.DestLocationNavigation)
+                .Include(o => o.DropoffStop)
+                
+                .FirstOrDefaultAsync(o => o.TrackingCode == trackingCode);
+
+            if (order == null)
+            {
+                return ApiResponse<PublicTrackingResponseDto>.Failure("Không tìm thấy đơn hàng với mã này.", 404);
+            }
+
+            var destLat = order.DestLocationNavigation?.Latitude ?? order.DestLocationNavigation?.Latitude;
+            var destLng = order.DestLocationNavigation?.Longitude ?? order.DestLocationNavigation?.Longitude;
+            var destAddress = order.DestLocationNavigation?.Address ?? order.DestLocationNavigation?.Address ?? "N/A";
+
+            var response = new PublicTrackingResponseDto
+            {
+                TrackingCode = order.TrackingCode,
+                Status = order.Status,
+                ItemName = order.ItemName,
+                DeliveryAddress = destAddress,
+                LastUpdatedAt = DateTime.UtcNow
+            };
+
+            if ((order.Status == "DISPATCHED" || order.Status == "IN_TRANSIT" || order.Status == "COMPLETED") && order.MasterTripId.HasValue)
+            {
+                var latestTelemetry = await _db.TelemetryLogs
+                    .Where(t => t.TripId == order.MasterTripId.Value)
+                    .OrderByDescending(t => t.Timestamp)
+                    .FirstOrDefaultAsync();
+
+                if (latestTelemetry != null)
+                {
+                    response.CurrentLatitude = (double)latestTelemetry.Latitude;
+                    response.CurrentLongitude = (double)latestTelemetry.Longitude;
+                    response.CurrentTemperature = latestTelemetry.Temperature;
+                    response.LastUpdatedAt = latestTelemetry.Timestamp;
+
+                    if (destLat.HasValue && destLng.HasValue && order.Status != "COMPLETED")
+                    {
+                        var distance = CalculateDistance((double)latestTelemetry.Latitude, (double)latestTelemetry.Longitude, (double)destLat.Value, (double)destLng.Value);
+                        response.RemainingDistanceKm = Math.Round(distance, 2);
+                        
+                        var speedKmH = 40.0;
+                        response.EstimatedMinutesToArrival = (int)Math.Ceiling((distance / speedKmH) * 60);
+                    }
+                }
+            }
+
+            return ApiResponse<PublicTrackingResponseDto>.SuccessResponse(response);
+        }
+
+        private static double CalculateDistance(double lat1, double lon1, double lat2, double lon2)
+        {
+            var R = 6371; // Radius of the earth in km
+            var dLat = Deg2Rad(lat2 - lat1);
+            var dLon = Deg2Rad(lon2 - lon1);
+            var a =
+                Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                Math.Cos(Deg2Rad(lat1)) * Math.Cos(Deg2Rad(lat2)) *
+                Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+            var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+            var d = R * c; // Distance in km
+            return d;
+        }
+
+        private static double Deg2Rad(double deg)
+        {
+            return deg * (Math.PI / 180);
+        }
+
+        public async Task<ApiResponse<object>> GetPublicTemperatureChartAsync(string trackingCode, int maxPoints = 200)
+        {
+            var order = await _db.TransportOrders
+                .Include(o => o.MasterTrip)
+                .Include(o => o.DeliveryEpods)
+                .FirstOrDefaultAsync(o => o.TrackingCode == trackingCode);
+
+            if (order == null)
+            {
+                return ApiResponse<object>.Failure("Không tìm thấy đơn hàng với mã này.", 404);
+            }
+
+            if (order.MasterTripId == null)
+            {
+                return ApiResponse<object>.Failure("Đơn hàng chưa được điều phối hoặc chưa có dữ liệu hành trình.", 400);
+            }
+
+            var startTime = order.MasterTrip?.StartedAt ?? order.MasterTrip?.PlannedStartTime ?? DateTime.UtcNow;
+            var endTime = DateTime.UtcNow;
+
+            if (order.Status == "COMPLETED")
+            {
+                var epod = order.DeliveryEpods.FirstOrDefault();
+                if (epod != null && (epod.CreatedAt.HasValue || epod.SignedAt.HasValue))
+                {
+                    endTime = epod.CreatedAt ?? epod.SignedAt ?? DateTime.UtcNow;
+                }
+                else if (order.MasterTrip?.CompletedAt != null)
+                {
+                    endTime = order.MasterTrip.CompletedAt.Value;
+                }
+            }
+
+            var rawLogs = await _db.TelemetryLogs
+                .Where(t => t.TripId == order.MasterTripId.Value && t.Timestamp >= startTime && t.Timestamp <= endTime)
+                .OrderBy(t => t.Timestamp)
+                .Select(t => new
+                {
+                    t.Timestamp,
+                    t.Temperature,
+                    t.Latitude,
+                    t.Longitude
+                })
+                .ToListAsync();
+
+            var points = rawLogs
+                .Select(t => new ColdChainX.Application.Helpers.TrackingPoint(t.Timestamp, t.Temperature, t.Latitude, t.Longitude))
+                .ToList();
+                
+            var sampledPoints = ColdChainX.Application.Helpers.TrackingDownsampler.Downsample(points, Math.Clamp(maxPoints, 20, 1000));
+
+            return ApiResponse<object>.SuccessResponse(new
+            {
+                TrackingCode = trackingCode,
+                StartTime = startTime,
+                EndTime = endTime,
+                RawPointCount = points.Count,
+                SampledPointCount = sampledPoints.Count,
+                Points = sampledPoints.Select(t => new
+                {
+                    t.Timestamp,
+                    TempC = t.TempC
+                })
+            });
+        }
     }
 }
 

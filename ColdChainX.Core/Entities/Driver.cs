@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace ColdChainX.Core.Entities;
 
@@ -20,6 +21,9 @@ public partial class Driver
     public DateOnly JoinDate { get; set; }
 
     public string? Status { get; set; }
+
+    [Column("current_location")]
+    public string? CurrentLocation { get; set; }
 
     public DateTime? CreatedAt { get; set; }
 

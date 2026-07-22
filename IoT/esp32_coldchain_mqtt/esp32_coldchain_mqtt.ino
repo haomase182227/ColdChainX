@@ -205,8 +205,9 @@ void updateHybridLocation() {
       Serial.println("=> [LỖI] Chip Wi-Fi của ESP32 báo lỗi (Có thể chưa bật mode STA hoặc lỗi Anten)!");
   } else if (n >= 2) { 
     Serial.println("=> [Wi-Fi] Bắt đầu lấy tọa độ từ HERE API...");
+    // Gửi tối đa 10 mạng Wi-Fi (thay vì 2) để tăng tỷ lệ định vị thành công trên HERE API
     String payload = "{\"wlan\":[";
-    int limit = (n > 2) ? 2 : n;
+    int limit = (n > 10) ? 10 : n;
     for (int i = 0; i < limit; ++i) { 
       payload += "{\"mac\":\"" + WiFi.BSSIDstr(i) + "\"}";
       if (i < limit - 1) payload += ",";
@@ -304,7 +305,8 @@ void publishTelemetry(float currentTemp) {
   serializeJson(doc, payload, sizeof(payload));
 
   char dataTopic[96];
-  snprintf(dataTopic, sizeof(dataTopic), "telemetry/coldchain/%s/data", DEVICE_ID);
+  // snprintf(dataTopic, sizeof(dataTopic), "telemetry/coldchain/%s/data", DEVICE_ID);
+  snprintf(dataTopic, sizeof(dataTopic), "telemetry/coldchain/%s/raw", DEVICE_ID); // Hybrid Mode Proxy
   
   bool ok = mqttClient.publish(dataTopic, payload);
   Serial.printf("[DATA SENT] %s | Topic: %s | Payload: %s\n", ok ? "OK" : "FAILED", dataTopic, payload);
