@@ -905,6 +905,28 @@ public class DispatchService : IDispatchService
         // Giữ nguyên thứ tự người dùng chọn (tài xế đầu = PRIMARY)
         drivers = driverIds.Select(id => drivers.First(d => d.DriverId == id)).ToList();
 
+        // 4c. Validate Vehicle and Driver location against originLocation (must be same warehouse)
+        var lpnWarehouseIdStr = lpns.FirstOrDefault(l => l.WarehouseId.HasValue)?.WarehouseId?.ToString();
+
+        bool IsLocationOk(string? currentLocation) {
+            if (string.IsNullOrWhiteSpace(currentLocation)) return false;
+            if (lpnWarehouseIdStr != null && currentLocation.Equals(lpnWarehouseIdStr, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        if (!IsLocationOk(vehicle.CurrentLocation))
+        {
+            throw new InvalidOperationException($"Xe {vehicle.TruckPlate} không nằm tại kho xuất phát này (Vị trí hiện tại: {vehicle.CurrentLocation}).");
+        }
+
+        foreach (var d in drivers)
+        {
+            if (!IsLocationOk(d.CurrentLocation))
+            {
+                throw new InvalidOperationException($"Tài xế {d.FullName} không nằm tại kho xuất phát này.");
+            }
+        }
+
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var driverLicenses = new Dictionary<Guid, DriverLicense>();
         foreach (var driver in drivers)
@@ -1130,17 +1152,20 @@ public class DispatchService : IDispatchService
             });
 
             await _driverAvailability.RecordWorkAsync(driver.DriverId, masterTrip.TripId, perDriverHours, startDay);
-            driver.Status = "Planning";
+            driver.Status = "PLANNING";
             assignedDrivers.Add((driver, role));
         }
 
         // Cập nhật trạng thái xe → Planning (đã ghép chuyến, chờ xuất phát)
-        vehicle.Status = "Planning";
+        vehicle.Status = "PLANNING";
         await _context.SaveChangesAsync();
 
         var notifiedCount = 0;
+        var driverNotifiedCount = await SendDriverNotificationsAsync(masterTrip, vehicle, drivers);
 
-        // 10. Build response
+        await _context.SaveChangesAsync();
+
+        await _context.SaveChangesAsync();
         var routeStops = routeResult.StopSequence.Select(s => new StopDto
         {
             Sequence = s.Sequence, LocationId = s.LocationId, Address = s.Address,
@@ -1703,11 +1728,11 @@ public class DispatchService : IDispatchService
             trip.Status = "IN_TRANSIT";
             trip.StartedAt ??= DateTime.UtcNow;
             if (trip.Vehicle != null)
-                trip.Vehicle.Status = "OnTrip";
+                trip.Vehicle.Status = "ONTRIP";
             foreach (var td in trip.TripDrivers)
             {
                 if (td.Driver != null)
-                    td.Driver.Status = "OnTrip";
+                    td.Driver.Status = "ONTRIP";
             }
         }
         catch (Exception ex)
@@ -2313,6 +2338,70 @@ public class DispatchService : IDispatchService
         {
             // Fail-safe to avoid blocking API if SignalR fails
         }
+    }
+
+    private const string DriverTripAssignedTemplateId = "DISPATCH_DRIVER_ASSIGNED";
+
+    private async Task<int> SendDriverNotificationsAsync(MasterTrip trip, Vehicle vehicle, List<Driver> drivers)
+    {
+        var templateExists = await _context.NotificationTemplates
+            .AnyAsync(t => t.TemplateId == DriverTripAssignedTemplateId
+                        && (t.Status == null || t.Status == "ACTIVE"));
+
+        if (!templateExists)
+        {
+            var msgType = await _context.Messagetypes.FirstOrDefaultAsync();
+            if (msgType != null)
+            {
+                _context.NotificationTemplates.Add(new NotificationTemplate
+                {
+                    TemplateId = DriverTripAssignedTemplateId,
+                    TypeId = msgType.TypeId,
+                    TitleTemplate = "Bạn được gán chuyến mới {tripId}",
+                    BodyTemplate = "Bạn đã được gán vào chuyến xe {vehiclePlate} dự kiến khởi hành lúc {startTime}.",
+                    Channel = "IN_APP",
+                    Status = "ACTIVE"
+                });
+                await _context.SaveChangesAsync();
+            }
+        }
+
+        var actualTemplateId = await _context.NotificationTemplates
+            .AnyAsync(t => t.TemplateId == DriverTripAssignedTemplateId
+                        && (t.Status == null || t.Status == "ACTIVE"))
+            ? DriverTripAssignedTemplateId
+            : await GetFallbackTemplateIdAsync();
+
+        if (actualTemplateId == null) return 0;
+
+        int notifiedCount = 0;
+        var notifParams = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            tripId = trip.TripId,
+            vehiclePlate = vehicle.TruckPlate,
+            startTime = trip.PlannedStartTime.ToString("dd/MM/yyyy HH:mm")
+        });
+
+        foreach (var driver in drivers)
+        {
+            if (driver.UserId.HasValue)
+            {
+                _context.Notifications.Add(new Notification
+                {
+                    NotiId     = Guid.NewGuid(),
+                    UserId     = driver.UserId.Value,
+                    SenderId   = null,
+                    TemplateId = actualTemplateId,
+                    Params     = notifParams,
+                    OrderId    = null,
+                    IsRead     = false,
+                    CreatedAt  = DateTime.UtcNow
+                });
+                notifiedCount++;
+            }
+        }
+
+        return notifiedCount;
     }
 }
 
