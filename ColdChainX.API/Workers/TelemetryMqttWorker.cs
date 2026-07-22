@@ -23,6 +23,9 @@ public sealed class TelemetryMqttWorker : BackgroundService
 
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _activeConnections = new();
 
+    // Track when a device last sent a simulated message
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime> _simulatedDevices = new();
+
     private readonly Channel<TelemetryData> _telemetryChannel;
     private readonly IConfiguration _configuration;
     private readonly ILogger<TelemetryMqttWorker> _logger;
@@ -191,15 +194,50 @@ public sealed class TelemetryMqttWorker : BackgroundService
                 return;
             }
 
+            // DEDUPLICATION LOGIC FOR HYBRID MODE
+            // The Simulator forwards the message with IsSimulated = true.
+            // The real ESP32 sends without IsSimulated.
+            bool isSimulated = false;
+            try 
+            {
+                using var doc = JsonDocument.Parse(payload);
+                if (doc.RootElement.TryGetProperty("IsSimulated", out var simEl) && simEl.ValueKind == JsonValueKind.True)
+                {
+                    isSimulated = true;
+                }
+            }
+            catch { }
+
+            if (isSimulated)
+            {
+                // Mark this device as currently being simulated
+                _simulatedDevices[telemetry.DeviceId] = DateTime.UtcNow;
+            }
+            else
+            {
+                // If it's a real message, check if the simulator is active (sent a message in the last 10 seconds)
+                if (_simulatedDevices.TryGetValue(telemetry.DeviceId, out var lastSimTime))
+                {
+                    if ((DateTime.UtcNow - lastSimTime).TotalSeconds < 10)
+                    {
+                        // Drop the real message because the simulator is overriding it
+                        return;
+                    }
+                }
+            }
+
             await _telemetryChannel.Writer.WriteAsync(telemetry);
 
             _logger.LogInformation(
-                "Telemetry received topic={Topic} device={DeviceId} temp={TempC} doorOpen={DoorOpen} timestamp={Timestamp}",
+                "Telemetry received topic={Topic} device={DeviceId} temp={TempC} doorOpen={DoorOpen} lat={Lat} lon={Lon} timestamp={Timestamp} simulated={IsSimulated}",
                 topic,
                 telemetry.DeviceId,
                 telemetry.TempC,
                 telemetry.DoorOpen,
-                telemetry.Timestamp);
+                telemetry.Lat,
+                telemetry.Lon,
+                telemetry.Timestamp,
+                isSimulated);
         }
         catch (JsonException ex)
         {
