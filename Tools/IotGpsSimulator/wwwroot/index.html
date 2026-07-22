@@ -229,6 +229,22 @@
         });
     }
 
+    function toggleRealGps(deviceId, useReal) {
+        fetch(`/api/fleet/${deviceId}/gps-source`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'toggle', value: useReal ? 1 : 0 })
+        });
+    }
+
+    function toggleRealTemp(deviceId, useReal) {
+        fetch(`/api/fleet/${deviceId}/temp-source`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'toggle', value: useReal ? 1 : 0 })
+        });
+    }
+
     function changeSpeed(deviceId, newSpeed) {
         fetch(`/api/fleet/${deviceId}/speed`, {
             method: 'POST',
@@ -288,7 +304,17 @@
                             <b>${v.deviceId}</b><br/>
                             Nhiệt độ: <span id="tempBadge_${v.deviceId}" class="badge ${tempClass}">${v.currentTemperature}°C</span> | 
                             Cửa: <span id="doorBadge_${v.deviceId}" class="badge ${doorClass}">${doorText}</span><br/>
+                            
+                            <div style="display:flex; gap:5px; margin-top:8px; align-items:center;">
+                                <span style="font-size:12px; font-weight:bold; width: 65px;">Nguồn GPS:</span>
+                                <button id="btnGps_${v.deviceId}" class="btn-success" onclick="toggleRealGps('${v.deviceId}', !this.classList.contains('using-real'))" style="margin:0; padding:4px 8px; font-size:11px;">Mô phỏng</button>
+                            </div>
                             <div style="display:flex; gap:5px; margin-top:5px; align-items:center;">
+                                <span style="font-size:12px; font-weight:bold; width: 65px;">Nguồn Nhiệt:</span>
+                                <button id="btnTemp_${v.deviceId}" class="btn-success" onclick="toggleRealTemp('${v.deviceId}', !this.classList.contains('using-real'))" style="margin:0; padding:4px 8px; font-size:11px;">Mô phỏng</button>
+                            </div>
+
+                            <div style="display:flex; gap:5px; margin-top:10px; align-items:center;">
                                 <input type="number" id="temp_${v.deviceId}" style="width:60px; padding:3px; margin:0;" value="${v.targetTemperature}">
                                 <button class="btn-warning" style="margin:0; padding:4px 8px; font-size:12px;" onclick="injectAnomaly('${v.deviceId}', 'TemperatureSpike', document.getElementById('temp_${v.deviceId}').value)">Set Temp</button>
                             </div>
@@ -312,6 +338,29 @@
                         let doorBadge = document.getElementById('doorBadge_' + v.deviceId);
                         doorBadge.className = 'badge ' + doorClass;
                         doorBadge.innerText = doorText;
+                    }
+
+                    // Update toggles dynamically
+                    let btnGps = document.getElementById('btnGps_' + v.deviceId);
+                    if (btnGps) {
+                        if (v.useRealGps) {
+                            btnGps.className = 'btn-warning using-real';
+                            btnGps.innerText = 'Mạch IoT (Thật)';
+                        } else {
+                            btnGps.className = 'btn-success';
+                            btnGps.innerText = 'Mô phỏng';
+                        }
+                    }
+
+                    let btnTemp = document.getElementById('btnTemp_' + v.deviceId);
+                    if (btnTemp) {
+                        if (!v.injectTemp) { // useRealTemp
+                            btnTemp.className = 'btn-warning using-real';
+                            btnTemp.innerText = 'Mạch IoT (Thật)';
+                        } else {
+                            btnTemp.className = 'btn-success';
+                            btnTemp.innerText = 'Mô phỏng';
+                        }
                     }
                 });
             });

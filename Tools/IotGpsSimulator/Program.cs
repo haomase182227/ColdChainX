@@ -211,6 +211,26 @@ app.MapPost("/api/fleet/{deviceId}/anomaly", (string deviceId, AnomalyRequest re
     return Results.NotFound();
 });
 
+app.MapPost("/api/fleet/{deviceId}/gps-source", (string deviceId, AnomalyRequest req) =>
+{
+    if (FleetState.TryGetValue(deviceId, out var state))
+    {
+        state.UseRealGps = req.Value > 0;
+        return Results.Ok();
+    }
+    return Results.NotFound();
+});
+
+app.MapPost("/api/fleet/{deviceId}/temp-source", (string deviceId, AnomalyRequest req) =>
+{
+    if (FleetState.TryGetValue(deviceId, out var state))
+    {
+        state.InjectTemp = req.Value <= 0; // Value > 0 means UseRealTemp, so InjectTemp = false
+        return Results.Ok();
+    }
+    return Results.NotFound();
+});
+
 app.Run("http://localhost:5500");
 
 // ==========================================
@@ -307,7 +327,12 @@ async Task RunVehicleSimulation(VehicleSimulationState state, ILogger logger)
                         }
                         if (root.TryGetProperty("DoorOpen", out var doorEl)) state.IsDoorOpen = doorEl.GetBoolean();
                         
-                        InterpolatePosition(state, (DateTime.UtcNow - lastMessageTime).TotalSeconds * (state.SpeedKmh / 3600.0));
+                        if (state.UseRealGps) {
+                            if (root.TryGetProperty("Lat", out var latEl)) state.CurrentLat = latEl.GetDouble();
+                            if (root.TryGetProperty("Lon", out var lonEl)) state.CurrentLon = lonEl.GetDouble();
+                        } else {
+                            InterpolatePosition(state, (DateTime.UtcNow - lastMessageTime).TotalSeconds * (state.SpeedKmh / 3600.0));
+                        }
                         lastMessageTime = DateTime.UtcNow;
 
                         var outObj = new
@@ -479,6 +504,7 @@ public class VehicleSimulationState
     public bool IsRunning { get; set; }
     public bool IsHybridMode { get; set; }
     public bool InjectTemp { get; set; }
+    public bool UseRealGps { get; set; }
     public double SpeedKmh { get; set; }
     public double CurrentLat { get; set; }
     public double CurrentLon { get; set; }
