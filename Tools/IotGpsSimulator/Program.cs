@@ -231,6 +231,16 @@ app.MapPost("/api/fleet/{deviceId}/temp-source", (string deviceId, AnomalyReques
     return Results.NotFound();
 });
 
+app.MapPost("/api/fleet/{deviceId}/speed", (string deviceId, AnomalyRequest req) =>
+{
+    if (FleetState.TryGetValue(deviceId, out var state))
+    {
+        state.SpeedKmh = req.Value;
+        return Results.Ok();
+    }
+    return Results.NotFound();
+});
+
 app.Run("http://*:5500");
 
 // ==========================================
