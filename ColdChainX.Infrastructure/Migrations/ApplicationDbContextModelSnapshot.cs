@@ -1458,6 +1458,15 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("numeric(10,7)")
                         .HasColumnName("current_longitude");
 
+                    b.Property<decimal?>("ApprovedAmount")
+                        .HasPrecision(15, 2)
+                        .HasColumnType("numeric(15,2)")
+                        .HasColumnName("approved_amount");
+
+                    b.Property<Guid?>("BrokenVehicleId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("broken_vehicle_id");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasColumnType("text")
@@ -1470,16 +1479,69 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasDefaultValue(0m)
                         .HasColumnName("driver_paid_amount");
 
+                    b.Property<string>("ExpenseApprovalNote")
+                        .HasColumnType("text")
+                        .HasColumnName("expense_approval_note");
+
+                    b.Property<DateTime?>("ExpenseApprovedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("expense_approved_at");
+
+                    b.Property<Guid?>("ExpenseApprovedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("expense_approved_by");
+
+                    b.Property<string>("ExpenseStatus")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("expense_status")
+                        .HasDefaultValueSql("'NOT_REQUIRED'::character varying");
+
+                    b.Property<DateTime?>("HandledAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("handled_at");
+
+                    b.Property<Guid?>("HandledBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("handled_by");
+
+                    b.Property<string>("HandlingNote")
+                        .HasColumnType("text")
+                        .HasColumnName("handling_note");
+
                     b.Property<string>("IncidentType")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)")
                         .HasColumnName("incident_type");
 
+                    b.Property<Guid?>("MaintenanceTicketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("maintenance_ticket_id");
+
                     b.Property<decimal?>("ReimbursedAmount")
                         .HasPrecision(15, 2)
                         .HasColumnType("numeric(15,2)")
                         .HasColumnName("reimbursed_amount");
+
+                    b.Property<DateTime?>("ReimbursedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("reimbursed_at");
+
+                    b.Property<Guid?>("ReimbursedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reimbursed_by");
+
+                    b.Property<Guid?>("ReplacementVehicleId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("replacement_vehicle_id");
+
+                    b.Property<bool>("RequiresRescue")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasColumnName("requires_rescue")
+                        .HasDefaultValue(false);
 
                     b.Property<DateTime?>("ReportedAt")
                         .ValueGeneratedOnAdd()
@@ -1491,9 +1553,21 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("reported_by");
 
+                    b.Property<DateTime?>("RescueDispatchedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("rescue_dispatched_at");
+
                     b.Property<DateTime?>("ResolvedAt")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("resolved_at");
+
+                    b.Property<Guid?>("ResolvedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("resolved_by");
+
+                    b.Property<string>("ResolutionNote")
+                        .HasColumnType("text")
+                        .HasColumnName("resolution_note");
 
                     b.Property<string>("Severity")
                         .IsRequired()
@@ -1503,10 +1577,22 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.Property<string>("Status")
                         .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
                         .HasColumnName("status")
                         .HasDefaultValueSql("'REPORTED'::character varying");
+
+                    b.Property<DateTime?>("TransloadConfirmedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("transload_confirmed_at");
+
+                    b.Property<Guid?>("TransloadConfirmedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("transload_confirmed_by");
+
+                    b.Property<string>("TransloadNote")
+                        .HasColumnType("text")
+                        .HasColumnName("transload_note");
 
                     b.Property<Guid?>("TripId")
                         .HasColumnType("uuid")

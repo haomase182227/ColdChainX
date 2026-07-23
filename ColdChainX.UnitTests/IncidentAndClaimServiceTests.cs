@@ -123,6 +123,9 @@ namespace ColdChainX.UnitTests
                 Severity = "MEDIUM",
                 Description = "Minor scratch",
                 DriverPaidAmount = 800_000m,
+                ApprovedAmount = 750_000m,
+                ReimbursedAmount = 750_000m,
+                ExpenseStatus = "REIMBURSED",
                 Status = "REPORTED",
                 ReportedBy = userId,
                 ReportedAt = DateTime.UtcNow
@@ -135,8 +138,7 @@ namespace ColdChainX.UnitTests
                 incidentId,
                 new ResolveIncidentRequest
                 {
-                    ResolutionNote = "Vehicle inspected and cleared to proceed.",
-                    ReimbursedAmount = 750_000m
+                    ResolutionNote = "Vehicle inspected and cleared to proceed."
                 },
                 userId);
 
@@ -147,7 +149,7 @@ namespace ColdChainX.UnitTests
                 .Include(i => i.IncidentEvidences)
                 .FirstAsync(i => i.IncidentId == incidentId);
             Assert.Equal("RESOLVED", dbIncident!.Status);
-            Assert.Contains("Vehicle inspected and cleared to proceed.", dbIncident.Description);
+            Assert.Equal("Vehicle inspected and cleared to proceed.", dbIncident.ResolutionNote);
             Assert.NotNull(dbIncident.ResolvedAt);
             Assert.Equal(750_000m, dbIncident.ReimbursedAmount);
             var evidence = Assert.Single(dbIncident.IncidentEvidences);
@@ -231,6 +233,9 @@ namespace ColdChainX.UnitTests
                 Severity = "MEDIUM",
                 Description = "Minor accident",
                 DriverPaidAmount = 300_000m,
+                ApprovedAmount = 300_000m,
+                ReimbursedAmount = 300_000m,
+                ExpenseStatus = "REIMBURSED",
                 Status = "REPORTED",
                 ReportedBy = reporterId,
                 ReportedAt = DateTime.UtcNow
@@ -242,16 +247,15 @@ namespace ColdChainX.UnitTests
                 incidentId,
                 new ResolveIncidentRequest
                 {
-                    ResolutionNote = "Repair completed.",
-                    ReimbursedAmount = 300_000m
+                    ResolutionNote = "Repair completed."
                 },
-                Guid.NewGuid());
+                reporterId);
 
             Assert.False(response.Success);
             var incident = await _db.IncidentReports.FindAsync(incidentId);
             Assert.Equal("REPORTED", incident!.Status);
             Assert.Null(incident.ResolvedAt);
-            Assert.Null(incident.ReimbursedAmount);
+            Assert.Equal(300_000m, incident.ReimbursedAmount);
             Assert.Empty(await _db.IncidentEvidences.ToListAsync());
         }
 
@@ -298,14 +302,47 @@ namespace ColdChainX.UnitTests
             var incidentId = reportResult.Data!.IncidentId;
             Assert.Equal("REPORTED", reportResult.Data.Status);
             Assert.Equal(1_500_000m, reportResult.Data.DriverPaidAmount);
+            Assert.Equal("PENDING_APPROVAL", reportResult.Data.ExpenseStatus);
             Assert.Empty(reportResult.Data.Evidences);
+
+            var persistedIncident = await _db.IncidentReports.FindAsync(incidentId);
+            persistedIncident!.Status = "CONTINUED";
+            await _db.SaveChangesAsync();
+
+            var approveResult = await _incidentService.ApproveExpenseAsync(
+                incidentId,
+                new ApproveIncidentExpenseRequest
+                {
+                    ApprovedAmount = 1_500_000m,
+                    ApprovalNote = "Approved after receipt review."
+                },
+                userId);
+            Assert.True(approveResult.Success);
+            Assert.Equal("APPROVED", approveResult.Data!.ExpenseStatus);
+
+            var receiptBytes = new MemoryStream(new byte[] { 1, 2, 3 });
+            var receipt = new FormFile(receiptBytes, 0, receiptBytes.Length, "ReceiptFile", "receipt.jpg")
+            {
+                Headers = new HeaderDictionary(),
+                ContentType = "image/jpeg"
+            };
+            var reimburseResult = await _incidentService.ReimburseExpenseAsync(
+                incidentId,
+                new ReimburseIncidentExpenseRequest
+                {
+                    ReimbursedAmount = 1_500_000m,
+                    ReceiptFile = receipt,
+                    Note = "Transferred to driver."
+                },
+                userId);
+            Assert.True(reimburseResult.Success);
+            Assert.Equal("REIMBURSED", reimburseResult.Data!.ExpenseStatus);
 
             var resolveResult = await _incidentService.ResolveIncidentAsync(
                 incidentId,
                 new ResolveIncidentRequest
                 {
-                    ResolutionNote = "Cooling unit repaired and trip cleared to continue.",
-                    ReimbursedAmount = 1_500_000m
+                    ResolutionNote = "Cooling unit repaired and trip cleared to continue."
                 },
                 userId);
 
@@ -321,19 +358,18 @@ namespace ColdChainX.UnitTests
             Assert.Equal(1_500_000m, detail.DriverPaidAmount);
             Assert.Equal(1_500_000m, detail.ReimbursedAmount);
             Assert.Equal("Cooling unit repaired and trip cleared to continue.", detail.ResolutionNote);
-            var detailEvidence = Assert.Single(detail.Evidences);
-            Assert.Equal("RESOLUTION_PDF", detailEvidence.EvidenceType);
-            Assert.Equal(FakeFileService.UploadedUrl, detailEvidence.FileUrl);
+            Assert.Contains(detail.Evidences, e => e.EvidenceType == "REIMBURSEMENT_RECEIPT");
+            Assert.Contains(detail.Evidences, e => e.EvidenceType == "RESOLUTION_PDF");
 
             var listResult = await _incidentService.GetPagedIncidentsAsync(tripId, 1, 10);
             Assert.True(listResult.Success);
             var listItem = Assert.Single(listResult.Data!.Data);
             Assert.Equal(incidentId, listItem.IncidentId);
-            Assert.Equal(FakeFileService.UploadedUrl, Assert.Single(listItem.Evidences).FileUrl);
+            Assert.Equal(2, listItem.Evidences.Count);
 
-            var savedEvidence = Assert.Single(await _db.IncidentEvidences.ToListAsync());
-            Assert.Equal(incidentId, savedEvidence.IncidentId);
-            Assert.Equal(FakeFileService.UploadedUrl, savedEvidence.FileUrl);
+            var savedEvidences = await _db.IncidentEvidences.ToListAsync();
+            Assert.Equal(2, savedEvidences.Count);
+            Assert.All(savedEvidences, evidence => Assert.Equal(incidentId, evidence.IncidentId));
         }
 
         [Fact]
@@ -449,7 +485,13 @@ namespace ColdChainX.UnitTests
             public string LastFileName { get; private set; } = string.Empty;
 
             public Task<string> UploadFileAsync(IFormFile file)
-                => throw new NotSupportedException();
+            {
+                if (ThrowOnUpload)
+                    throw new InvalidOperationException("Cloudinary upload failed.");
+
+                LastFileName = file.FileName;
+                return Task.FromResult(UploadedUrl);
+            }
 
             public Task<string> UploadFileAsync(Stream stream, string fileName)
                 => throw new NotSupportedException();
@@ -467,6 +509,5 @@ namespace ColdChainX.UnitTests
         }
     }
 }
-
 
 
