@@ -30,9 +30,9 @@ const char* MQTT_PASSWORD = "123456";
 
 // ===== THÔNG SỐ THIẾT BỊ & CHU KỲ =====
 const char* DEVICE_ID = "ESP32-COLDCHAIN-001";
-const uint32_t TELEMETRY_INTERVAL_MS = 90000;   // 1 phút 30 giây gửi 1 lần (LUÔN GỬI BẤT KỂ DỮ LIỆU CÓ ĐỔI HAY KHÔNG)
-const uint32_t GPS_INTERVAL_MS = 120000;      // 2 phút quét tọa độ 1 lần (giãn ra cho đỡ tốn pin/data)
-const uint32_t HEARTBEAT_INTERVAL_MS = 240000; // 4 phút ép gửi điểm danh 1 lần dù không có gì thay đổi
+const uint32_t TELEMETRY_INTERVAL_MS = 10000;   // 10 giây gửi 1 lần (LUÔN GỬI BẤT KỂ DỮ LIỆU CÓ ĐỔI HAY KHÔNG)
+const uint32_t GPS_INTERVAL_MS = 15000;      // 15 giây quét tọa độ 1 lần (giãn ra cho đỡ tốn pin/data)
+const uint32_t HEARTBEAT_INTERVAL_MS = 30000; // 30 giây ép gửi điểm danh 1 lần dù không có gì thay đổi
 const uint32_t SIREN_DURATION_MS = 10000;
 const uint8_t MQTT_PUBLISH_QOS = 1;
 
