@@ -142,6 +142,13 @@ app.MapPost("/api/fleet/start", async (SimulationRequest req, ILoggerFactory log
         return Results.BadRequest(new { error = "Lỗi khi kiểm tra trạng thái thiết bị IoT: " + ex.Message });
     }
 
+    if (req.IsHybridMode) {
+        _ = SendMqttCommandAsync(deviceId, "ENABLE_GPS", logger);
+    } else {
+        _ = SendMqttCommandAsync(deviceId, "DISABLE_GPS", logger);
+    }
+
+
     
     if (FleetState.ContainsKey(deviceId))
     {
@@ -211,11 +218,12 @@ app.MapPost("/api/fleet/{deviceId}/anomaly", (string deviceId, AnomalyRequest re
     return Results.NotFound();
 });
 
-app.MapPost("/api/fleet/{deviceId}/gps-source", (string deviceId, AnomalyRequest req) =>
+app.MapPost("/api/fleet/{deviceId}/gps-source", (string deviceId, AnomalyRequest req, ILogger<Program> logger) =>
 {
     if (FleetState.TryGetValue(deviceId, out var state))
     {
         state.UseRealGps = req.Value > 0;
+        _ = SendMqttCommandAsync(deviceId, state.UseRealGps ? "ENABLE_GPS" : "DISABLE_GPS", logger);
         return Results.Ok();
     }
     return Results.NotFound();
@@ -521,6 +529,7 @@ public class VehicleSimulationState
     public double CurrentTemperature { get; set; }
     public double TargetTemperature { get; set; }
     public bool IsDoorOpen { get; set; }
+
     public int CurrentPointIndex { get; set; }
     
     [System.Text.Json.Serialization.JsonIgnore]
@@ -528,4 +537,29 @@ public class VehicleSimulationState
     
     [System.Text.Json.Serialization.JsonIgnore]
     public CancellationTokenSource? CancellationTokenSource { get; set; }
+}
+
+async Task SendMqttCommandAsync(string deviceId, string action, ILogger logger)
+{
+    var cmdClient = factory.CreateMqttClient();
+    var options = new MqttClientOptionsBuilder()
+        .WithTcpServer("8.231.129.222", 1883)
+        .WithCredentials("esp32user", "183732")
+        .Build();
+        
+    try
+    {
+        await cmdClient.ConnectAsync(options);
+        var msg = new MqttApplicationMessageBuilder()
+            .WithTopic($"command/coldchain/{deviceId}")
+            .WithPayload($"{{\"action\":\"{action}\"}}")
+            .Build();
+        await cmdClient.PublishAsync(msg);
+        await cmdClient.DisconnectAsync();
+        logger.LogInformation($"Sent MQTT command {action} to {deviceId}");
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, $"Failed to send MQTT command {action} to {deviceId}");
+    }
 }

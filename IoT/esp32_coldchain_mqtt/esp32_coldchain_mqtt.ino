@@ -56,7 +56,7 @@ bool doorOpen = false;
 bool sirenActive = false;
 uint32_t sirenUntilMs = 0;
 bool is_streaming = false;
-
+bool use_real_gps = true; // GPS toggle from simulator
 // Tọa độ hiện tại
 float currentLat = 0.0;
 float currentLon = 0.0;
@@ -163,6 +163,11 @@ void loop() {
 // HÀM ĐỊNH VỊ 3 LỚP ĐÃ TỐI ƯU
 // ==========================================
 void updateHybridLocation() {
+  if (!use_real_gps) {
+      Serial.println("\n--- ĐANG MÔ PHỎNG GPS. BỎ QUA ĐỊNH VỊ 3 LỚP ĐỂ TIẾT KIỆM PIN ---");
+      return;
+  }
+
   Serial.println("\n--- ĐANG ĐỊNH VỊ (GPS -> Wi-Fi -> LBS) ---");
   
   // =====================================
@@ -289,6 +294,7 @@ void updateHybridLocation() {
   }
 }
 
+
 // ==========================================
 // CÁC HÀM CÒN LẠI (GIỮ NGUYÊN)
 // ==========================================
@@ -387,6 +393,14 @@ void handleCommandPayload(const uint8_t* payload, size_t length) {
   else if (strcmp(action, "STOP_STREAMING") == 0) {
     is_streaming = false;
     Serial.println(">>> LỆNH: DỪNG GỬI DỮ LIỆU <<<");
+  } 
+  else if (strcmp(action, "ENABLE_GPS") == 0) {
+    use_real_gps = true;
+    Serial.println(">>> LỆNH: BẬT LẠI ĐỊNH VỊ 3 LỚP (MẠCH THẬT) <<<");
+  } 
+  else if (strcmp(action, "DISABLE_GPS") == 0) {
+    use_real_gps = false;
+    Serial.println(">>> LỆNH: TẮT ĐỊNH VỊ 3 LỚP (ĐANG DÙNG GIẢ LẬP) <<<");
   } 
   else if (strcmp(action, "ACTIVATE_SIREN") == 0) activateSiren(SIREN_DURATION_MS);
 }
