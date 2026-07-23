@@ -28,7 +28,32 @@ namespace ColdChainX.Application.DTOs.Incident
         public decimal MaxCbm { get; set; }
         public decimal MinTemp { get; set; }
         public decimal MaxTemp { get; set; }
+        public int IotDeviceCount { get; set; }
+        public int OnlineIotDeviceCount { get; set; }
+        public bool HasOnlineIot { get; set; }
         public string Label { get; set; } = null!;
+    }
+
+    public class ContinueTripAfterIncidentRequest
+    {
+        public string HandlingNote { get; set; } = null!;
+    }
+
+    public class ConfirmTransloadRequest
+    {
+        public string ConfirmationNote { get; set; } = null!;
+    }
+
+    public class IncidentWorkflowResult
+    {
+        public Guid IncidentId { get; set; }
+        public string IncidentStatus { get; set; } = null!;
+        public Guid TripId { get; set; }
+        public string TripStatus { get; set; } = null!;
+        public Guid VehicleId { get; set; }
+        public string VehiclePlate { get; set; } = null!;
+        public DateTime ConfirmedAt { get; set; }
+        public string Message { get; set; } = null!;
     }
 
     /// <summary>ETA mới của một điểm dừng phía trước sau khi hệ thống tính lại.</summary>

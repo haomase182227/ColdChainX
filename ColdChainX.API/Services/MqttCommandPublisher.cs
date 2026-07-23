@@ -76,11 +76,11 @@ public sealed class MqttCommandPublisher : IMqttCommandPublisher
         }
     }
 
-    public async Task StartStreamingAsync(string deviceCode, CancellationToken cancellationToken)
+    public async Task<bool> StartStreamingAsync(string deviceCode, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(deviceCode))
         {
-            return;
+            return false;
         }
 
         var host = _configuration["Mqtt:Host"] ?? "localhost";
@@ -121,10 +121,12 @@ public sealed class MqttCommandPublisher : IMqttCommandPublisher
             await client.ConnectAsync(optionsBuilder.Build(), cancellationToken);
             await client.PublishAsync(message, cancellationToken);
             _logger.LogInformation("Successfully published START_STREAMING command to {DeviceCode}", deviceCode);
+            return true;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogWarning(ex, "Failed to publish start streaming command to device {DeviceCode}.", deviceCode);
+            return false;
         }
         finally
         {
