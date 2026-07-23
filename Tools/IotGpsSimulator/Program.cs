@@ -235,7 +235,7 @@ app.MapPost("/api/fleet/{deviceId}/speed", (string deviceId, AnomalyRequest req)
 {
     if (FleetState.TryGetValue(deviceId, out var state))
     {
-        state.SpeedKmh = req.Value;
+        state.SpeedKmh = req.Value ?? 60.0;
         return Results.Ok();
     }
     return Results.NotFound();
