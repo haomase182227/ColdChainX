@@ -32,6 +32,7 @@ public class DispatchController : ControllerBase
         "PLANNED",
         "PICKING",
         "LOADING",
+        "LOADED",
         "LOADING_COMPLETED",
         "SEALED",
         "DISPATCHED",
@@ -254,8 +255,22 @@ public class DispatchController : ControllerBase
             .FirstOrDefaultAsync() ?? "Kho hiá»‡n táº¡i";
 
         var wIdStr = warehouseId.ToString();
+        var busyVehicleIds = _db.MasterTrips
+            .AsNoTracking()
+            .Where(t => ActiveTripStatuses.Contains(t.Status))
+            .Select(t => t.VehicleId);
+
+        var maintenanceVehicleIds = _db.MaintenanceTickets
+            .AsNoTracking()
+            .Where(t => t.Status == "OPEN" || t.Status == "IN_PROGRESS")
+            .Select(t => t.VehicleId);
+
         var vehicles = await _db.Vehicles
-            .Where(v => v.Status == "ACTIVE" && (v.CurrentLocation == wIdStr || v.CurrentLocation == null))
+            .AsNoTracking()
+            .Where(v => v.Status == "ACTIVE"
+                && (v.CurrentLocation == wIdStr || v.CurrentLocation == null)
+                && !busyVehicleIds.Contains(v.VehicleId)
+                && !maintenanceVehicleIds.Contains(v.VehicleId))
             .ToListAsync();
 
         var items = vehicles.Select(v => new
