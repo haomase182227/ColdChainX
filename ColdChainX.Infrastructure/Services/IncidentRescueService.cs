@@ -129,21 +129,28 @@ public class IncidentRescueService : IIncidentRescueService
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    //  [NHÁNH KHÔNG ĐỔI XE] Dispatcher xác nhận đã xử lý và cho chuyến tiếp tục
+    //  [NHÁNH KHÔNG ĐỔI XE] Tài xế xử lý tại chỗ và tự tiếp tục chuyến
     // ═══════════════════════════════════════════════════════════════════════
 
     public async Task<ApiResponse<IncidentWorkflowResult>> ContinueTripAsync(
         Guid incidentId,
         ContinueTripAfterIncidentRequest request,
-        Guid dispatcherId)
+        Guid driverUserId)
     {
         if (request == null || string.IsNullOrWhiteSpace(request.HandlingNote))
             return ApiResponse<IncidentWorkflowResult>.Failure("Handling note is required.");
 
         try
         {
-            if (!await _db.Users.AnyAsync(u => u.UserId == dispatcherId))
-                return ApiResponse<IncidentWorkflowResult>.Failure("Không tìm thấy tài khoản người xử lý.");
+            var driver = await _db.Drivers
+                .AsNoTracking()
+                .FirstOrDefaultAsync(d => d.UserId == driverUserId);
+            if (driver == null)
+            {
+                return ApiResponse<IncidentWorkflowResult>.Failure(
+                    "Tài khoản hiện tại không có hồ sơ tài xế.",
+                    403);
+            }
 
             var incident = await _db.IncidentReports
                 .Include(i => i.Trip)
@@ -160,12 +167,27 @@ public class IncidentRescueService : IIncidentRescueService
                 return ApiResponse<IncidentWorkflowResult>.Failure("Sự cố không gắn với chuyến/xe hợp lệ.");
 
             var trip = incident.Trip;
+            var isAssignedDriver = await _db.TripDrivers
+                .AnyAsync(td => td.TripId == trip.TripId && td.DriverId == driver.DriverId);
+            if (!isAssignedDriver)
+            {
+                return ApiResponse<IncidentWorkflowResult>.Failure(
+                    "Bạn không phải tài xế được phân công cho chuyến này.",
+                    403);
+            }
+
             if (incident.Status == "CONTINUED" && trip.Status == "IN_TRANSIT")
             {
                 return ApiResponse<IncidentWorkflowResult>.SuccessResponse(
                     BuildWorkflowResult(incident, trip, trip.Vehicle, incident.HandledAt ?? DbNow(),
                         "Chuyến đã được cho tiếp tục trước đó."),
                     "Trip already continued.");
+            }
+
+            if (incident.Status != "REPORTED")
+            {
+                return ApiResponse<IncidentWorkflowResult>.Failure(
+                    $"Sự cố đang ở trạng thái {incident.Status ?? "UNKNOWN"} và không thể tiếp tục theo nhánh tự xử lý.");
             }
 
             if (!OnRoadTripStatuses.Contains(trip.Status))
@@ -175,7 +197,7 @@ public class IncidentRescueService : IIncidentRescueService
             var now = DbNow();
             trip.Status = "IN_TRANSIT";
             incident.Status = "CONTINUED";
-            incident.HandledBy = dispatcherId;
+            incident.HandledBy = driverUserId;
             incident.HandledAt = now;
             incident.HandlingNote = request.HandlingNote.Trim();
 
@@ -209,8 +231,8 @@ public class IncidentRescueService : IIncidentRescueService
                     trip,
                     trip.Vehicle,
                     now,
-                    "Đã ghi nhận xử lý tại chỗ và cho chuyến tiếp tục."),
-                "Trip continued successfully.");
+                    "Tài xế đã ghi nhận xử lý tại chỗ và tiếp tục chuyến."),
+                "Driver continued trip successfully.");
         }
         catch (Exception ex)
         {
