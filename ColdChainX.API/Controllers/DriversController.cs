@@ -10,6 +10,8 @@ using Microsoft.AspNetCore.Mvc;
 using FleetCreateDriverRequest = ColdChainX.Application.DTOs.Fleet.CreateDriverRequest;
 using FleetUpdateDriverRequest = ColdChainX.Application.DTOs.Fleet.UpdateDriverRequest;
 using ColdChainX.Application.DTOs.Fleet;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 
 namespace ColdChainX.API.Controllers
 {
@@ -117,6 +119,23 @@ namespace ColdChainX.API.Controllers
                     TripId = activeTrip.TripId
                 }
             });
+        }
+
+        [Authorize(Roles = "Driver,DRIVER,Shipping,SHIPPING")]
+        [HttpGet("me/trips")]
+        public async Task<IActionResult> GetMyTrips([FromQuery] string status = "")
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier) ?? User.FindFirst("sub");
+
+            if (userIdClaim == null || !Guid.TryParse(userIdClaim.Value, out var userId))
+                return Unauthorized(new { success = false, message = "Không tìm thấy thông tin xác thực hoặc token không hợp lệ." });
+
+            var driver = await _dbContext.Drivers.FirstOrDefaultAsync(d => d.UserId == userId);
+            if (driver == null)
+                return NotFound(new { success = false, message = "Không tìm thấy hồ sơ tài xế liên kết với tài khoản này." });
+
+            // Tái sử dụng logic lấy chuyến của GetDriverTrips
+            return await GetDriverTrips(driver.DriverId, status);
         }
 
         [HttpGet("{driverId:guid}/trips")]
