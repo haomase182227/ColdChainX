@@ -153,8 +153,73 @@ namespace ColdChainX.API.Controllers
 
         [Authorize(Roles = "Driver,DRIVER,Shipping,SHIPPING")]
         [HttpGet("me/trips")]
-        [HttpGet("my/trips")]
         public async Task<IActionResult> GetMyTrips([FromQuery] string status = "")
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier) ?? User.FindFirst("sub");
+
+            if (userIdClaim == null || !Guid.TryParse(userIdClaim.Value, out var userId))
+                return Unauthorized(new { success = false, message = "Không tìm thấy thông tin xác thực hoặc token không hợp lệ." });
+
+            var driver = await _dbContext.Drivers.FirstOrDefaultAsync(d => d.UserId == userId);
+            if (driver == null)
+                return NotFound(new { success = false, message = "Không tìm thấy hồ sơ tài xế liên kết với tài khoản này." });
+
+            // Tái sử dụng logic lấy chuyến của GetDriverTrips
+            return await GetDriverTrips(driver.DriverId, status);
+        }
+
+        [HttpGet("{driverId:guid}/trips")]
+        public async Task<IActionResult> GetDriverTrips(Guid driverId, [FromQuery] string status = "")
+        {
+            var query = _dbContext.MasterTrips
+                .Include(t => t.Vehicle)
+                .Include(t => t.TripStops)
+                    .ThenInclude(ts => ts.Location)
+                .Where(t => t.TripDrivers.Any(td => td.DriverId == driverId));
+
+            if (!string.IsNullOrEmpty(status))
+            {
+                query = query.Where(t => t.Status == status);
+            }
+            else
+            {
+                // Default active
+                var activeStatuses = new[] { "PLANNED", "PICKING", "LOADING", "LOADING_COMPLETED", "SEALED", "DISPATCHED" };
+                query = query.Where(t => activeStatuses.Contains(t.Status));
+            }
+
+            var trips = await query
+                .OrderByDescending(t => t.PlannedStartTime)
+                .Select(t => new
+                {
+                    t.TripId,
+                    t.Status,
+                    t.PlannedStartTime,
+                    t.PlannedEndTime,
+                    t.TotalDistanceKm,
+                    t.TargetTemperature,
+                    Vehicle = t.Vehicle != null ? new 
+                    { 
+                        t.Vehicle.VehicleId, 
+                        t.Vehicle.TruckPlate, 
+                        t.Vehicle.VehicleType 
+                    } : null,
+                    StopCount = t.TripStops.Count,
+                    Stops = t.TripStops.OrderBy(s => s.StopSequence).Select(s => new
+                    {
+                        s.StopSequence,
+                        Address = s.Location != null ? s.Location.Address : "N/A",
+                        s.PlannedArrivalTime
+                    }).ToList()
+                })
+                .ToListAsync();
+
+            return Ok(new { success = true, data = trips });
+        }
+
+        [Authorize(Roles = "Driver")]
+        [HttpGet("my/trips")]
+        public async Task<IActionResult> GetDriverMyTrips([FromQuery] string status = "")
         {
             var driverId = GetDriverId();
             if (driverId == Guid.Empty) return Unauthorized(new { success = false, message = "Driver ID not found in token." });
