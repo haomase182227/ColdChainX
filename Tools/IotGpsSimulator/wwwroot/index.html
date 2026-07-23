@@ -218,7 +218,8 @@
     }
 
     function stopSimulation(deviceId) {
-        fetch(`/api/fleet/${deviceId}/stop`, { method: 'POST' });
+        fetch(`/api/fleet/${deviceId}/stop`, { method: 'POST' })
+            .then(() => alert('Đã gửi lệnh Dừng xe thành công!'));
     }
 
     function injectAnomaly(deviceId, type, value) {
@@ -226,7 +227,7 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ type: type, value: value })
-        });
+        }).then(() => alert('Đã gửi lệnh thay đổi thành công!'));
     }
 
     function toggleRealGps(deviceId, useReal) {
@@ -234,7 +235,7 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ type: 'toggle', value: useReal ? 1 : 0 })
-        });
+        }).then(() => alert('Đã chuyển nguồn GPS thành công!'));
     }
 
     function toggleRealTemp(deviceId, useReal) {
@@ -242,7 +243,7 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ type: 'toggle', value: useReal ? 1 : 0 })
-        });
+        }).then(() => alert('Đã chuyển nguồn Nhiệt độ thành công!'));
     }
 
     function changeSpeed(deviceId, newSpeed) {
@@ -250,7 +251,7 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ value: parseFloat(newSpeed) })
-        });
+        }).then(() => alert('Đã đổi Tốc độ thành công!'));
     }
 
     function fetchStatus() {
