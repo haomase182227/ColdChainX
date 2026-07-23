@@ -490,6 +490,31 @@ static List<Coordinate> DecodePolyline(string encodedPoints)
     return coordinates;
 }
 
+async Task SendMqttCommandAsync(string deviceId, string action, ILogger logger)
+{
+    var cmdClient = factory.CreateMqttClient();
+    var options = new MqttClientOptionsBuilder()
+        .WithTcpServer("8.231.129.222", 1883)
+        .WithCredentials("esp32user", "183732")
+        .Build();
+        
+    try
+    {
+        await cmdClient.ConnectAsync(options);
+        var msg = new MqttApplicationMessageBuilder()
+            .WithTopic($"command/coldchain/{deviceId}")
+            .WithPayload($"{{\"action\":\"{action}\"}}")
+            .Build();
+        await cmdClient.PublishAsync(msg);
+        await cmdClient.DisconnectAsync();
+        logger.LogInformation($"Sent MQTT command {action} to {deviceId}");
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, $"Failed to send MQTT command {action} to {deviceId}");
+    }
+}
+
 // ==========================================
 // MODELS
 // ==========================================
@@ -539,27 +564,4 @@ public class VehicleSimulationState
     public CancellationTokenSource? CancellationTokenSource { get; set; }
 }
 
-async Task SendMqttCommandAsync(string deviceId, string action, ILogger logger)
-{
-    var cmdClient = factory.CreateMqttClient();
-    var options = new MqttClientOptionsBuilder()
-        .WithTcpServer("8.231.129.222", 1883)
-        .WithCredentials("esp32user", "183732")
-        .Build();
-        
-    try
-    {
-        await cmdClient.ConnectAsync(options);
-        var msg = new MqttApplicationMessageBuilder()
-            .WithTopic($"command/coldchain/{deviceId}")
-            .WithPayload($"{{\"action\":\"{action}\"}}")
-            .Build();
-        await cmdClient.PublishAsync(msg);
-        await cmdClient.DisconnectAsync();
-        logger.LogInformation($"Sent MQTT command {action} to {deviceId}");
-    }
-    catch (Exception ex)
-    {
-        logger.LogWarning(ex, $"Failed to send MQTT command {action} to {deviceId}");
-    }
-}
+
