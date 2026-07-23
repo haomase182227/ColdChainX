@@ -1481,17 +1481,18 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.Property<string>("ExpenseApprovalNote")
                         .HasColumnType("text")
-                        .HasColumnName("expense_approval_note");
+                        .HasColumnName("approval_note");
 
                     b.Property<DateTime?>("ExpenseApprovedAt")
                         .HasColumnType("timestamp without time zone")
-                        .HasColumnName("expense_approved_at");
+                        .HasColumnName("approved_at");
 
                     b.Property<Guid?>("ExpenseApprovedBy")
                         .HasColumnType("uuid")
-                        .HasColumnName("expense_approved_by");
+                        .HasColumnName("approved_by");
 
                     b.Property<string>("ExpenseStatus")
+                        .IsRequired()
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)")

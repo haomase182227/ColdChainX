@@ -12,170 +12,48 @@ public partial class CompleteIncidentWorkflow : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
     {
-        migrationBuilder.AlterColumn<string>(
-            name: "status",
-            schema: "public",
-            table: "incident_reports",
-            type: "character varying(30)",
-            maxLength: 30,
-            nullable: true,
-            defaultValueSql: "'REPORTED'::character varying",
-            oldClrType: typeof(string),
-            oldType: "character varying(20)",
-            oldMaxLength: 20,
-            oldNullable: true,
-            oldDefaultValueSql: "'REPORTED'::character varying");
-
-        migrationBuilder.AddColumn<decimal>(
-            name: "approved_amount",
-            schema: "public",
-            table: "incident_reports",
-            type: "numeric(15,2)",
-            precision: 15,
-            scale: 2,
-            nullable: true);
-
-        migrationBuilder.AddColumn<Guid>(
-            name: "broken_vehicle_id",
-            schema: "public",
-            table: "incident_reports",
-            type: "uuid",
-            nullable: true);
-
-        migrationBuilder.AddColumn<string>(
-            name: "expense_approval_note",
-            schema: "public",
-            table: "incident_reports",
-            type: "text",
-            nullable: true);
-
-        migrationBuilder.AddColumn<DateTime>(
-            name: "expense_approved_at",
-            schema: "public",
-            table: "incident_reports",
-            type: "timestamp without time zone",
-            nullable: true);
-
-        migrationBuilder.AddColumn<Guid>(
-            name: "expense_approved_by",
-            schema: "public",
-            table: "incident_reports",
-            type: "uuid",
-            nullable: true);
-
-        migrationBuilder.AddColumn<string>(
-            name: "expense_status",
-            schema: "public",
-            table: "incident_reports",
-            type: "character varying(30)",
-            maxLength: 30,
-            nullable: true,
-            defaultValueSql: "'NOT_REQUIRED'::character varying");
-
-        migrationBuilder.AddColumn<DateTime>(
-            name: "handled_at",
-            schema: "public",
-            table: "incident_reports",
-            type: "timestamp without time zone",
-            nullable: true);
-
-        migrationBuilder.AddColumn<Guid>(
-            name: "handled_by",
-            schema: "public",
-            table: "incident_reports",
-            type: "uuid",
-            nullable: true);
-
-        migrationBuilder.AddColumn<string>(
-            name: "handling_note",
-            schema: "public",
-            table: "incident_reports",
-            type: "text",
-            nullable: true);
-
-        migrationBuilder.AddColumn<Guid>(
-            name: "maintenance_ticket_id",
-            schema: "public",
-            table: "incident_reports",
-            type: "uuid",
-            nullable: true);
-
-        migrationBuilder.AddColumn<DateTime>(
-            name: "reimbursed_at",
-            schema: "public",
-            table: "incident_reports",
-            type: "timestamp without time zone",
-            nullable: true);
-
-        migrationBuilder.AddColumn<Guid>(
-            name: "reimbursed_by",
-            schema: "public",
-            table: "incident_reports",
-            type: "uuid",
-            nullable: true);
-
-        migrationBuilder.AddColumn<Guid>(
-            name: "replacement_vehicle_id",
-            schema: "public",
-            table: "incident_reports",
-            type: "uuid",
-            nullable: true);
-
-        migrationBuilder.AddColumn<bool>(
-            name: "requires_rescue",
-            schema: "public",
-            table: "incident_reports",
-            type: "boolean",
-            nullable: false,
-            defaultValue: false);
-
-        migrationBuilder.AddColumn<DateTime>(
-            name: "rescue_dispatched_at",
-            schema: "public",
-            table: "incident_reports",
-            type: "timestamp without time zone",
-            nullable: true);
-
-        migrationBuilder.AddColumn<Guid>(
-            name: "resolved_by",
-            schema: "public",
-            table: "incident_reports",
-            type: "uuid",
-            nullable: true);
-
-        migrationBuilder.AddColumn<string>(
-            name: "resolution_note",
-            schema: "public",
-            table: "incident_reports",
-            type: "text",
-            nullable: true);
-
-        migrationBuilder.AddColumn<DateTime>(
-            name: "transload_confirmed_at",
-            schema: "public",
-            table: "incident_reports",
-            type: "timestamp without time zone",
-            nullable: true);
-
-        migrationBuilder.AddColumn<Guid>(
-            name: "transload_confirmed_by",
-            schema: "public",
-            table: "incident_reports",
-            type: "uuid",
-            nullable: true);
-
-        migrationBuilder.AddColumn<string>(
-            name: "transload_note",
-            schema: "public",
-            table: "incident_reports",
-            type: "text",
-            nullable: true);
-
         migrationBuilder.Sql(
             """
+            ALTER TABLE public.incident_reports
+                ALTER COLUMN status TYPE character varying(30),
+                ALTER COLUMN status SET DEFAULT 'REPORTED';
+
+            -- Some server environments already contain a subset of these columns
+            -- from an earlier manual rollout. Reconcile them without duplicating
+            -- columns or destroying existing values.
+            ALTER TABLE public.incident_reports
+                ADD COLUMN IF NOT EXISTS approved_amount numeric(15,2),
+                ADD COLUMN IF NOT EXISTS broken_vehicle_id uuid,
+                ADD COLUMN IF NOT EXISTS approval_note text,
+                ADD COLUMN IF NOT EXISTS approved_at timestamp without time zone,
+                ADD COLUMN IF NOT EXISTS approved_by uuid,
+                ADD COLUMN IF NOT EXISTS expense_status character varying(30) NOT NULL DEFAULT 'NOT_REQUIRED',
+                ADD COLUMN IF NOT EXISTS handled_at timestamp without time zone,
+                ADD COLUMN IF NOT EXISTS handled_by uuid,
+                ADD COLUMN IF NOT EXISTS handling_note text,
+                ADD COLUMN IF NOT EXISTS maintenance_ticket_id uuid,
+                ADD COLUMN IF NOT EXISTS reimbursed_at timestamp without time zone,
+                ADD COLUMN IF NOT EXISTS reimbursed_by uuid,
+                ADD COLUMN IF NOT EXISTS replacement_vehicle_id uuid,
+                ADD COLUMN IF NOT EXISTS requires_rescue boolean NOT NULL DEFAULT false,
+                ADD COLUMN IF NOT EXISTS rescue_dispatched_at timestamp without time zone,
+                ADD COLUMN IF NOT EXISTS resolved_by uuid,
+                ADD COLUMN IF NOT EXISTS resolution_note text,
+                ADD COLUMN IF NOT EXISTS transload_confirmed_at timestamp without time zone,
+                ADD COLUMN IF NOT EXISTS transload_confirmed_by uuid,
+                ADD COLUMN IF NOT EXISTS transload_note text;
+
+            ALTER TABLE public.incident_reports
+                ALTER COLUMN expense_status TYPE character varying(30),
+                ALTER COLUMN expense_status SET DEFAULT 'NOT_REQUIRED',
+                ALTER COLUMN expense_status SET NOT NULL,
+                ALTER COLUMN requires_rescue SET DEFAULT false,
+                ALTER COLUMN requires_rescue SET NOT NULL;
+
             UPDATE public.incident_reports
             SET expense_status = CASE
                 WHEN reimbursed_amount IS NOT NULL THEN 'REIMBURSED'
+                WHEN approved_amount IS NOT NULL THEN 'APPROVED'
                 WHEN driver_paid_amount > 0 THEN 'PENDING_APPROVAL'
                 ELSE 'NOT_REQUIRED'
             END;
@@ -184,39 +62,8 @@ public partial class CompleteIncidentWorkflow : Migration
 
     protected override void Down(MigrationBuilder migrationBuilder)
     {
-        migrationBuilder.DropColumn(name: "approved_amount", schema: "public", table: "incident_reports");
-        migrationBuilder.DropColumn(name: "broken_vehicle_id", schema: "public", table: "incident_reports");
-        migrationBuilder.DropColumn(name: "expense_approval_note", schema: "public", table: "incident_reports");
-        migrationBuilder.DropColumn(name: "expense_approved_at", schema: "public", table: "incident_reports");
-        migrationBuilder.DropColumn(name: "expense_approved_by", schema: "public", table: "incident_reports");
-        migrationBuilder.DropColumn(name: "expense_status", schema: "public", table: "incident_reports");
-        migrationBuilder.DropColumn(name: "handled_at", schema: "public", table: "incident_reports");
-        migrationBuilder.DropColumn(name: "handled_by", schema: "public", table: "incident_reports");
-        migrationBuilder.DropColumn(name: "handling_note", schema: "public", table: "incident_reports");
-        migrationBuilder.DropColumn(name: "maintenance_ticket_id", schema: "public", table: "incident_reports");
-        migrationBuilder.DropColumn(name: "reimbursed_at", schema: "public", table: "incident_reports");
-        migrationBuilder.DropColumn(name: "reimbursed_by", schema: "public", table: "incident_reports");
-        migrationBuilder.DropColumn(name: "replacement_vehicle_id", schema: "public", table: "incident_reports");
-        migrationBuilder.DropColumn(name: "requires_rescue", schema: "public", table: "incident_reports");
-        migrationBuilder.DropColumn(name: "rescue_dispatched_at", schema: "public", table: "incident_reports");
-        migrationBuilder.DropColumn(name: "resolved_by", schema: "public", table: "incident_reports");
-        migrationBuilder.DropColumn(name: "resolution_note", schema: "public", table: "incident_reports");
-        migrationBuilder.DropColumn(name: "transload_confirmed_at", schema: "public", table: "incident_reports");
-        migrationBuilder.DropColumn(name: "transload_confirmed_by", schema: "public", table: "incident_reports");
-        migrationBuilder.DropColumn(name: "transload_note", schema: "public", table: "incident_reports");
-
-        migrationBuilder.AlterColumn<string>(
-            name: "status",
-            schema: "public",
-            table: "incident_reports",
-            type: "character varying(20)",
-            maxLength: 20,
-            nullable: true,
-            defaultValueSql: "'REPORTED'::character varying",
-            oldClrType: typeof(string),
-            oldType: "character varying(30)",
-            oldMaxLength: 30,
-            oldNullable: true,
-            oldDefaultValueSql: "'REPORTED'::character varying");
+        throw new NotSupportedException(
+            "This reconciliation migration adopts columns that predated EF migration history on the server. " +
+            "Automatic rollback could delete pre-existing incident data and is intentionally disabled.");
     }
 }

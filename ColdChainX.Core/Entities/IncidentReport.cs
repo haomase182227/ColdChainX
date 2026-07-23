@@ -53,7 +53,7 @@ public partial class IncidentReport
 
     public decimal? ApprovedAmount { get; set; }
 
-    public string? ExpenseStatus { get; set; }
+    public string ExpenseStatus { get; set; } = "NOT_REQUIRED";
 
     public Guid? ExpenseApprovedBy { get; set; }
 

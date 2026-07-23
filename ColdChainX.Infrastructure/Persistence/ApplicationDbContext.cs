@@ -771,12 +771,14 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasPrecision(15, 2)
                 .HasDefaultValue(0m)
                 .HasColumnName("driver_paid_amount");
-            entity.Property(e => e.ExpenseApprovalNote).HasColumnName("expense_approval_note");
+            // Reuse the incident expense columns already present on the server.
+            entity.Property(e => e.ExpenseApprovalNote).HasColumnName("approval_note");
             entity.Property(e => e.ExpenseApprovedAt)
                 .HasColumnType("timestamp without time zone")
-                .HasColumnName("expense_approved_at");
-            entity.Property(e => e.ExpenseApprovedBy).HasColumnName("expense_approved_by");
+                .HasColumnName("approved_at");
+            entity.Property(e => e.ExpenseApprovedBy).HasColumnName("approved_by");
             entity.Property(e => e.ExpenseStatus)
+                .IsRequired()
                 .HasMaxLength(30)
                 .HasDefaultValueSql("'NOT_REQUIRED'::character varying")
                 .HasColumnName("expense_status");
