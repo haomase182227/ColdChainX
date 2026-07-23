@@ -3,6 +3,8 @@ using ColdChainX.Application.Interfaces;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 
 namespace ColdChainX.API.Controllers
 {
@@ -18,7 +20,8 @@ namespace ColdChainX.API.Controllers
     }
 
     [ApiController]
-    [Route("api/customers/{customerId:guid}/orders")]
+    [Route("api/customers/my/orders")]
+    [Authorize]
     public class CustomerOrderController : ControllerBase
     {
         private readonly IOrderService _orderService;
@@ -30,22 +33,29 @@ namespace ColdChainX.API.Controllers
             _dbContext = dbContext;
         }
 
+        private Guid GetCustomerId()
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier) ?? User.FindFirst("sub");
+            if (userIdClaim != null && Guid.TryParse(userIdClaim.Value, out var id)) return id;
+            throw new UnauthorizedAccessException("Invalid or missing token.");
+        }
+
         [HttpGet]
         public async Task<IActionResult> GetOrdersByCustomer(
-            Guid customerId,
             [FromQuery] int pageNumber = 1,
             [FromQuery] int pageSize = 10,
             [FromQuery] string? status = null)
         {
+            var customerId = GetCustomerId();
             var result = await _orderService.GetOrdersByCustomerAsync(customerId, pageNumber, pageSize, status);
             return Ok(result);
         }
 
         [HttpGet("by-category")]
         public async Task<IActionResult> GetOrdersByCategory(
-            Guid customerId, 
             [FromQuery] OrderTabCategory category = OrderTabCategory.WAITING)
         {
+            var customerId = GetCustomerId();
             var query = _dbContext.TransportOrders
                 .Include(o => o.DestLocationNavigation)
                 .Where(o => o.CustomerId == customerId);
@@ -93,8 +103,9 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet("{orderId:guid}/tracking-detail")]
-        public async Task<IActionResult> GetOrderTrackingDetail(Guid customerId, Guid orderId)
+        public async Task<IActionResult> GetOrderTrackingDetail(Guid orderId)
         {
+            var customerId = GetCustomerId();
             var order = await _dbContext.TransportOrders
                 .Include(o => o.DestLocationNavigation)
                 .Include(o => o.PickupLocationNavigation)
