@@ -119,6 +119,8 @@ public sealed class ColdChainMonitoringService : IColdChainMonitoringService
             data.DoorOpen,
             graceState.IsMuted);
 
+        await TriggerGeofenceEtaAsync(trip, data, cancellationToken);
+
         _db.TelemetryLogs.Add(new TelemetryLog
         {
             LogId = Guid.NewGuid(),
@@ -563,4 +565,95 @@ public sealed class ColdChainMonitoringService : IColdChainMonitoringService
         DateTimeOffset? MutedUntil);
 
     private sealed record DoorGraceState(bool IsMuted, DateTimeOffset? MutedUntil);
+
+    private async Task TriggerGeofenceEtaAsync(MasterTrip trip, TelemetryData data, CancellationToken cancellationToken)
+    {
+        if (data.Lat == 0 || data.Lon == 0) return;
+
+        var nextStop = trip.TripStops
+            .Where(ts => ts.ActualArrivalTime == null)
+            .OrderBy(ts => ts.StopSequence)
+            .FirstOrDefault();
+
+        if (nextStop != null && nextStop.Location != null)
+        {
+            double distance = HaversineMeters(
+                data.Lat,
+                data.Lon,
+                (double)nextStop.Location.Latitude,
+                (double)nextStop.Location.Longitude
+            );
+
+            if (distance <= 5000)
+            {
+                var alreadyNotified = await _db.TripStopEvents
+                    .AnyAsync(e => e.StopId == nextStop.StopId && e.EventType == "GEOFENCE_NOTIFIED", cancellationToken);
+
+                if (!alreadyNotified)
+                {
+                    _db.TripStopEvents.Add(new TripStopEvent
+                    {
+                        EventId = Guid.NewGuid(),
+                        StopId = nextStop.StopId,
+                        EventType = "GEOFENCE_NOTIFIED",
+                        EventTime = DateTime.UtcNow,
+                        MetaData = $"Auto-triggered by IoT at distance {distance:F0}m"
+                    });
+
+                    var customerId = await _db.TransportOrders
+                        .Where(o => o.MasterTripId == trip.TripId && o.DestLocation == nextStop.LocationId)
+                        .Select(o => o.CustomerId)
+                        .FirstOrDefaultAsync(cancellationToken);
+
+                    if (customerId != Guid.Empty && customerId != null)
+                    {
+                        var vehicle = await _db.Vehicles.FirstOrDefaultAsync(v => v.VehicleId == trip.VehicleId, cancellationToken);
+                        string truckPlate = vehicle?.TruckPlate ?? "Không xác định";
+
+                        var templateExists = await _db.NotificationTemplates.AnyAsync(t => t.TemplateId == "GEOFENCE_ETA", cancellationToken);
+                        if (!templateExists)
+                        {
+                            var typeId = await _db.Messagetypes.Select(m => m.TypeId).FirstOrDefaultAsync(cancellationToken);
+                            _db.NotificationTemplates.Add(new NotificationTemplate
+                            {
+                                TemplateId = "GEOFENCE_ETA",
+                                TitleTemplate = "Xe lạnh sắp đến",
+                                BodyTemplate = "Xe lạnh {{TruckPlate}} đang cách điểm giao {{DistanceKm}}km (dự kiến ~10 phút nữa tới). Vui lòng chuẩn bị nhân sự và cửa nhận hàng để đảm bảo chuỗi lạnh!",
+                                Channel = "ALL",
+                                Status = "ACTIVE",
+                                TypeId = typeId
+                            });
+                        }
+
+                        var customerEmail = await _db.Customers
+                            .Where(c => c.CustomerId == customerId.Value)
+                            .Select(c => c.Email)
+                            .FirstOrDefaultAsync(cancellationToken);
+
+                        Guid? actualUserId = null;
+                        if (!string.IsNullOrWhiteSpace(customerEmail))
+                        {
+                            actualUserId = await _db.Users
+                                .Where(u => u.Email == customerEmail && u.Role!.RoleName == "Customer")
+                                .Select(u => u.UserId)
+                                .FirstOrDefaultAsync(cancellationToken);
+                        }
+
+                        if (actualUserId != null && actualUserId != Guid.Empty)
+                        {
+                            _db.Notifications.Add(new Notification
+                            {
+                                NotiId = Guid.NewGuid(),
+                                UserId = actualUserId.Value,
+                                TemplateId = "GEOFENCE_ETA",
+                                Params = $"{{\"TruckPlate\":\"{truckPlate}\",\"DistanceKm\":\"{distance / 1000.0:F1}\"}}",
+                                IsRead = false,
+                                CreatedAt = DateTime.UtcNow
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

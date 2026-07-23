@@ -102,6 +102,32 @@ public class DepartStopCommandHandler : IRequestHandler<DepartStopCommand, ApiRe
                 stop.ActualDepartureTime = departTime;
                 stop.Status = "DEPARTED";
 
+                // 6.1. Detention Charge Logic
+                if (stop.ActualArrivalTime.HasValue)
+                {
+                    var waitMinutes = (int)(departTime - stop.ActualArrivalTime.Value).TotalMinutes;
+                    if (waitMinutes > 120)
+                    {
+                        // Identify a customer to bill, based on orders at this stop
+                        var customerId = await _context.TransportOrders
+                            .Where(o => o.MasterTripId == trip.TripId && o.DestLocation == stop.LocationId)
+                            .Select(o => o.CustomerId)
+                            .FirstOrDefaultAsync(cancellationToken);
+
+                        var detentionCharge = new DetentionCharge
+                        {
+                            ChargeId = Guid.NewGuid(),
+                            StopId = stop.StopId,
+                            CustomerId = customerId == Guid.Empty ? null : customerId,
+                            FreeMinutesAllocated = 120,
+                            ActualWaitMinutes = waitMinutes,
+                            AmountCharged = (waitMinutes - 120) * (100000m / 60m), // Ex: 100,000 VND per hour
+                            Status = "PENDING_BILLING"
+                        };
+                        _context.DetentionCharges.Add(detentionCharge);
+                    }
+                }
+
                 // 7. Handle New Seal kẹp chì mới
                 if (!string.IsNullOrWhiteSpace(request.NewSealCode))
                 {

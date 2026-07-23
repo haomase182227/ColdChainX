@@ -31,7 +31,7 @@ public class ManualDispatchFlowTests
         Assert.Equal(trip.TripId, lpn.TripId);
         Assert.Equal(trip.TripId, order.MasterTripId);
         Assert.Equal("LOADING", order.Status);
-        Assert.Equal("Planning", vehicle.Status);
+        Assert.Equal("PLANNING", vehicle.Status);
     }
 
     [Fact]
@@ -210,7 +210,7 @@ public class ManualDispatchFlowTests
             PhoneNumber = "0900000000",
             DateOfBirth = new DateOnly(1990, 1, 1),
             JoinDate = new DateOnly(2025, 1, 1),
-            Status = "Available"
+            Status = "ACTIVE"
         };
         driver.DriverLicenses.Add(new DriverLicense
         {

@@ -314,5 +314,6 @@ namespace ColdChainX.Application.Services
 
         private static DateTime DbNow()
             => DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+
     }
 }

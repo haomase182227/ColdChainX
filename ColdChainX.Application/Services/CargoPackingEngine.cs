@@ -202,10 +202,17 @@ namespace ColdChainX.Application.Services
             result.PlacedItems = placedItems;
             result.UnplacedLpnIds = unplacedIds;
 
-            // Calculate utilization
-            decimal totalContainerVolume = container.Length * container.Width * container.Height;
+            // Calculate utilization based on Cold Chain USABLE volume
+            // 1. Airflow: 20cm height, 20cm length reduced
+            // (usableLength and usableHeight are already defined above)
+            // 2. Evaporator (approx 50cm depth x Width x 30% height)
+            decimal evapH = Math.Min(container.Height * 0.3m, 60m);
+            decimal evaporatorVolume = 50m * container.Width * evapH;
+            
+            decimal usableContainerVolume = (usableLength * container.Width * usableHeight) - evaporatorVolume;
+            
             decimal usedVolume = placedItems.Sum(pi => pi.W * pi.H * pi.D);
-            result.Utilisation = totalContainerVolume > 0 ? (usedVolume / totalContainerVolume) * 100 : 0;
+            result.Utilisation = usableContainerVolume > 0 ? Math.Min((usedVolume / usableContainerVolume) * 100, 100m) : 0;
 
             return result;
         }

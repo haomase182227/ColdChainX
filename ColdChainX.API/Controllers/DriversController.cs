@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Linq;
+using Microsoft.EntityFrameworkCore;
 using ColdChainX.Application.DTOs;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Shared.Responses;
@@ -17,11 +19,16 @@ namespace ColdChainX.API.Controllers
     {
         private readonly IDriverService _driverService;
         private readonly IFleetManagementService _fleetService;
+        private readonly ColdChainX.Infrastructure.Persistence.ApplicationDbContext _dbContext;
 
-        public DriversController(IDriverService driverService, IFleetManagementService fleetService)
+        public DriversController(
+            IDriverService driverService, 
+            IFleetManagementService fleetService,
+            ColdChainX.Infrastructure.Persistence.ApplicationDbContext dbContext)
         {
             _driverService = driverService;
             _fleetService = fleetService;
+            _dbContext = dbContext;
         }
 
         [HttpGet]
@@ -70,6 +77,95 @@ namespace ColdChainX.API.Controllers
                 return BadRequest(result);
             if (!result.Success) return Conflict(result);
             return Ok(result);
+        }
+
+        [HttpGet("{id:guid}/trip-history")]
+        public async Task<IActionResult> GetTripHistory(Guid id, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+        {
+            var result = await _fleetService.GetDriverTripHistoryAsync(id, pageNumber, pageSize);
+            return Ok(result);
+        }
+
+        [HttpGet("{driverId:guid}/vehicle-status")]
+        public async Task<IActionResult> GetVehicleStatus(Guid driverId)
+        {
+            var activeTrip = await _dbContext.MasterTrips
+                .Include(t => t.Vehicle)
+                .Where(t => t.TripDrivers.Any(td => td.DriverId == driverId)
+                            && (t.Status == "DISPATCHED" || t.Status == "LOADING" || t.Status == "PLANNED"))
+                .OrderByDescending(t => t.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            if (activeTrip == null || activeTrip.Vehicle == null)
+            {
+                return Ok(new { success = true, hasActiveVehicle = false, data = (object)null });
+            }
+
+            var vehicle = activeTrip.Vehicle;
+            return Ok(new
+            {
+                success = true,
+                hasActiveVehicle = true,
+                data = new
+                {
+                    vehicle.VehicleId,
+                    vehicle.TruckPlate,
+                    vehicle.VehicleType,
+                    vehicle.Status,
+                    vehicle.CurrentLocation,
+                    TripStatus = activeTrip.Status,
+                    TripId = activeTrip.TripId
+                }
+            });
+        }
+
+        [HttpGet("{driverId:guid}/trips")]
+        public async Task<IActionResult> GetDriverTrips(Guid driverId, [FromQuery] string status = "")
+        {
+            var query = _dbContext.MasterTrips
+                .Include(t => t.Vehicle)
+                .Include(t => t.TripStops)
+                    .ThenInclude(ts => ts.Location)
+                .Where(t => t.TripDrivers.Any(td => td.DriverId == driverId));
+
+            if (!string.IsNullOrEmpty(status))
+            {
+                query = query.Where(t => t.Status == status);
+            }
+            else
+            {
+                // Default active
+                var activeStatuses = new[] { "PLANNED", "PICKING", "LOADING", "LOADING_COMPLETED", "SEALED", "DISPATCHED" };
+                query = query.Where(t => activeStatuses.Contains(t.Status));
+            }
+
+            var trips = await query
+                .OrderByDescending(t => t.PlannedStartTime)
+                .Select(t => new
+                {
+                    t.TripId,
+                    t.Status,
+                    t.PlannedStartTime,
+                    t.PlannedEndTime,
+                    t.TotalDistanceKm,
+                    t.TargetTemperature,
+                    Vehicle = t.Vehicle != null ? new 
+                    { 
+                        t.Vehicle.VehicleId, 
+                        t.Vehicle.TruckPlate, 
+                        t.Vehicle.VehicleType 
+                    } : null,
+                    StopCount = t.TripStops.Count,
+                    Stops = t.TripStops.OrderBy(s => s.StopSequence).Select(s => new
+                    {
+                        s.StopSequence,
+                        Address = s.Location != null ? s.Location.Address : "N/A",
+                        s.PlannedArrivalTime
+                    }).ToList()
+                })
+                .ToListAsync();
+
+            return Ok(new { success = true, data = trips });
         }
 
         [HttpDelete("{id:guid}")]

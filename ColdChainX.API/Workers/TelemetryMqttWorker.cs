@@ -23,6 +23,9 @@ public sealed class TelemetryMqttWorker : BackgroundService
 
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _activeConnections = new();
 
+    // Track when a device last sent a simulated message
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime> _simulatedDevices = new();
+
     private readonly Channel<TelemetryData> _telemetryChannel;
     private readonly IConfiguration _configuration;
     private readonly ILogger<TelemetryMqttWorker> _logger;
@@ -48,7 +51,10 @@ public sealed class TelemetryMqttWorker : BackgroundService
     {
         var host = _configuration["Mqtt:Host"] ?? "localhost";
         var port = _configuration.GetValue("Mqtt:Port", 1883);
-        var clientId = _configuration["Mqtt:ClientId"] ?? $"coldchainx-api-{Guid.NewGuid():N}";
+        var baseClientId = _configuration["Mqtt:ClientId"];
+        var clientId = string.IsNullOrWhiteSpace(baseClientId) 
+            ? $"coldchainx-api-{Guid.NewGuid():N}" 
+            : $"{baseClientId}-{Guid.NewGuid():N}";
         var topic = _configuration["Mqtt:Topic"] ?? "telemetry/coldchain/#";
 
         var optionsBuilder = new MqttClientOptionsBuilder()
@@ -106,21 +112,23 @@ public sealed class TelemetryMqttWorker : BackgroundService
         }
     }
 
-    private async Task HandleApplicationMessageReceivedAsync(MqttApplicationMessageReceivedEventArgs args)
+    private Task HandleApplicationMessageReceivedAsync(MqttApplicationMessageReceivedEventArgs args)
     {
         var topic = args.ApplicationMessage.Topic;
         var payload = Encoding.UTF8.GetString(args.ApplicationMessage.PayloadSegment.ToArray());
 
         if (topic.EndsWith("/status", StringComparison.OrdinalIgnoreCase))
         {
-            await HandleStatusMessageAsync(topic, payload);
-            return;
+            _ = Task.Run(() => HandleStatusMessageAsync(topic, payload));
+            return Task.CompletedTask;
         }
         else if (topic.EndsWith("/data", StringComparison.OrdinalIgnoreCase) || topic.Contains("/telemetry/"))
         {
-            await HandleDataMessageAsync(topic, payload);
-            return;
+            _ = Task.Run(() => HandleDataMessageAsync(topic, payload));
+            return Task.CompletedTask;
         }
+
+        return Task.CompletedTask;
     }
 
     private async Task HandleStatusMessageAsync(string topic, string payload)
@@ -191,15 +199,53 @@ public sealed class TelemetryMqttWorker : BackgroundService
                 return;
             }
 
+            // DEDUPLICATION LOGIC FOR HYBRID MODE
+            // The Simulator forwards the message with IsSimulated = true.
+            // The real ESP32 sends without IsSimulated.
+            bool isSimulated = false;
+            try 
+            {
+                using var doc = JsonDocument.Parse(payload);
+                if (doc.RootElement.TryGetProperty("IsSimulated", out var simEl) && simEl.ValueKind == JsonValueKind.True)
+                {
+                    isSimulated = true;
+                }
+            }
+            catch { }
+
+            if (isSimulated)
+            {
+                // Mark this device as currently being simulated
+                _simulatedDevices[telemetry.DeviceId] = DateTime.UtcNow;
+            }
+            else
+            {
+                // Debounce: Wait 2 seconds to allow Simulator (Hybrid Mode) to intercept and send simulated=True
+                await Task.Delay(2000);
+
+                // If it's a real message, check if the simulator is active (sent a message in the last 5 seconds)
+                if (_simulatedDevices.TryGetValue(telemetry.DeviceId, out var lastSimTime))
+                {
+                    if ((DateTime.UtcNow - lastSimTime).TotalSeconds < 5)
+                    {
+                        // Drop the real message because the simulator is overriding it right now
+                        return;
+                    }
+                }
+            }
+
             await _telemetryChannel.Writer.WriteAsync(telemetry);
 
             _logger.LogInformation(
-                "Telemetry received topic={Topic} device={DeviceId} temp={TempC} doorOpen={DoorOpen} timestamp={Timestamp}",
+                "Telemetry received topic={Topic} device={DeviceId} temp={TempC} doorOpen={DoorOpen} lat={Lat} lon={Lon} timestamp={Timestamp} simulated={IsSimulated}",
                 topic,
                 telemetry.DeviceId,
                 telemetry.TempC,
                 telemetry.DoorOpen,
-                telemetry.Timestamp);
+                telemetry.Lat,
+                telemetry.Lon,
+                telemetry.Timestamp,
+                isSimulated);
         }
         catch (JsonException ex)
         {

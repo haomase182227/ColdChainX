@@ -22,7 +22,7 @@ public class DriverAvailabilityService : IDriverAvailabilityService
     public const decimal MaxWeeklyHours = 48m;
 
     private const string StatusRelax = "RELAX";
-    private const string StatusAvailable = "Available";
+    private const string StatusAvailable = "ACTIVE";
 
     public DriverAvailabilityService(ApplicationDbContext context)
     {

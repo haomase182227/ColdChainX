@@ -284,6 +284,50 @@ public class FleetManagementService : IFleetManagementService
         return ApiResponse<ImportResultResponse>.SuccessResponse(result, "Vehicles imported");
     }
 
+    public async Task<ApiResponse<PagedList<DriverTripHistoryResponseDto>>> GetDriverTripHistoryAsync(Guid driverId, int pageNumber = 1, int pageSize = 10)
+    {
+        var query = _db.TripDrivers
+            .Include(td => td.Trip)
+            .ThenInclude(t => t.Vehicle)
+            .Include(td => td.Trip)
+            .ThenInclude(t => t.Route)
+            .Include(td => td.Trip)
+            .ThenInclude(t => t.OriginLocation)
+            .Include(td => td.Trip)
+            .ThenInclude(t => t.DestinationLocation)
+            .Include(td => td.Trip)
+            .ThenInclude(t => t.TransportOrders)
+            .Where(td => td.DriverId == driverId)
+            .OrderByDescending(td => td.Trip.PlannedStartTime)
+            .AsQueryable();
+
+        var totalCount = await query.CountAsync();
+        var items = await query
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .Select(td => new DriverTripHistoryResponseDto
+            {
+                TripId = td.TripId,
+                TripCode = "TRIP-" + td.TripId.ToString().Substring(0, 8).ToUpper(),
+                Status = td.Trip.Status,
+                VehiclePlate = td.Trip.Vehicle != null ? td.Trip.Vehicle.TruckPlate : null,
+                RouteName = td.Trip.Route != null ? td.Trip.Route.RouteCode : null,
+                Origin = td.Trip.OriginLocation != null ? td.Trip.OriginLocation.Address : "N/A",
+                Destination = td.Trip.DestinationLocation != null ? td.Trip.DestinationLocation.Address : "N/A",
+                PlannedStartTime = td.Trip.PlannedStartTime,
+                StartedAt = td.Trip.StartedAt,
+                CompletedAt = td.Trip.CompletedAt,
+                DriverRole = td.DriverRole,
+                TotalOrders = td.Trip.TransportOrders.Count,
+                WorkHours = td.AssignedDurationHours,
+                DistanceKm = td.Trip.TotalDistanceKm
+            })
+            .ToListAsync();
+
+        var pagedList = new PagedList<DriverTripHistoryResponseDto>(items, totalCount, pageNumber, pageSize);
+        return ApiResponse<PagedList<DriverTripHistoryResponseDto>>.SuccessResponse(pagedList);
+    }
+
     public async Task<ApiResponse<IReadOnlyCollection<DriverFleetResponse>>> GetDriversAsync()
     {
         var drivers = await _db.Drivers

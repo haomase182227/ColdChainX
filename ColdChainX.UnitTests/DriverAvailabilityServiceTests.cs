@@ -33,7 +33,7 @@ namespace ColdChainX.UnitTests
                 PhoneNumber = "0900",
                 DateOfBirth = new DateOnly(1990, 1, 1),
                 JoinDate = new DateOnly(2024, 1, 1),
-                Status = "Available"
+                Status = "ACTIVE"
             });
             _db.SaveChanges();
         }
@@ -115,7 +115,7 @@ namespace ColdChainX.UnitTests
             driver!.Status = "RELAX";
             await _service.ReconcileStatusAsync(driver);
 
-            Assert.Equal("Available", driver.Status);
+            Assert.Equal("ACTIVE", driver.Status);
         }
     }
 }

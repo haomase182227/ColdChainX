@@ -118,6 +118,15 @@ namespace ColdChainX.UnitTests
             public Task<string> SaveQuotationPdfAsync(string htmlContent, string quoteNumber) => Task.FromResult("http://test.com/quote.pdf");
             public Task<string> SaveWarehouseReceiptPdfAsync(string htmlContent, string receiptCode) => Task.FromResult("http://test.com/receipt.pdf");
             public Task<string> SaveWaybillPdfAsync(string htmlContent, string tripId) => Task.FromResult("http://test.com/waybill.pdf");
+            public Task<byte[]> GeneratePdfFromHtmlAsync(string htmlContent)
+            {
+                return Task.FromResult(new byte[] { 1, 2, 3 });
+            }
+
+            public Task<string> SavePdfFromUrlAsync(string url, string fileName, string folderPath = "pdf")
+            {
+                return Task.FromResult("http://example.com/" + fileName);
+            }
             public Task<string> SaveLifoMapPdfAsync(string htmlContent, string tripId) => Task.FromResult("http://test.com/lifo.pdf");
             public Task<string> SavePdfFromUrlAsync(string url, string fileId, string prefix) => Task.FromResult("http://test.com/url.pdf");
             public Task<string> SaveLoadPlanPdfAsync(string htmlContent, string tripId) => Task.FromResult("http://test.com/loadplan.pdf");

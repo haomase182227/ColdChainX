@@ -110,5 +110,21 @@ namespace ColdChainX.API.Controllers
             if (!result.Success) return BadRequest(result);
             return Ok(result);
         }
+
+        [AllowAnonymous]
+        [HttpGet("public-tracking/{trackingCode}")]
+        public async Task<IActionResult> GetPublicTracking(string trackingCode)
+        {
+            var result = await _orderService.GetPublicTrackingAsync(trackingCode);
+            return result.Success ? Ok(result) : NotFound(result);
+        }
+
+        [AllowAnonymous]
+        [HttpGet("public-tracking/{trackingCode}/temperature-chart")]
+        public async Task<IActionResult> GetPublicTemperatureChart(string trackingCode, [FromQuery] int maxPoints = 200)
+        {
+            var result = await _orderService.GetPublicTemperatureChartAsync(trackingCode, maxPoints);
+            return result.Success ? Ok(result) : NotFound(result);
+        }
     }
 }
