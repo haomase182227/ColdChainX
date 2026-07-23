@@ -379,7 +379,7 @@ async Task RunVehicleSimulation(VehicleSimulationState state, ILogger logger)
         else
         {
             var rnd = new Random();
-            int tickDelayMs = 90000; 
+            int tickDelayMs = 10000; 
 
             while (state.CurrentPointIndex < state.Path.Count && !state.CancellationTokenSource.Token.IsCancellationRequested)
             {
