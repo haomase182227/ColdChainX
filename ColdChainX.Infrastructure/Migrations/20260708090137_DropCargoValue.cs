@@ -10,10 +10,10 @@ namespace ColdChainX.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropColumn(
-                name: "cargo_value",
-                schema: "public",
-                table: "transport_orders");
+            // migrationBuilder.DropColumn(
+            //     name: "cargo_value",
+            //     schema: "public",
+            //     table: "transport_orders");
         }
 
         /// <inheritdoc />

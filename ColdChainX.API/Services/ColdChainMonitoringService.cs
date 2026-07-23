@@ -55,6 +55,12 @@ public sealed class ColdChainMonitoringService : IColdChainMonitoringService
         foreach (var data in batch)
         {
             await ProcessOneTelemetryAsync(data, cancellationToken);
+            
+            // Tối ưu: Thêm độ trễ 200ms giữa mỗi lần xử lý để tránh dội bom API bên thứ 3 (Goong) gây lỗi 429
+            if (batch.Count > 1)
+            {
+                await Task.Delay(200, cancellationToken);
+            }
         }
 
         await _db.SaveChangesAsync(cancellationToken);
