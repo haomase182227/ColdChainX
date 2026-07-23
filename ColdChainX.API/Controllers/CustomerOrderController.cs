@@ -62,7 +62,7 @@ namespace ColdChainX.API.Controllers
 
             if (category == OrderTabCategory.IN_STOCK)
             {
-                query = query.Where(o => o.Status == "IN_WAREHOUSE");
+                query = query.Where(o => o.Status == "IN_WAREHOUSE" || o.Status == "IN_STOCK");
             }
             else if (category == OrderTabCategory.WAITING)
             {
@@ -70,15 +70,15 @@ namespace ColdChainX.API.Controllers
             }
             else if (category == OrderTabCategory.TRANSIT)
             {
-                query = query.Where(o => o.Status == "IN-TRANSIT");
+                query = query.Where(o => o.Status == "IN_TRANSIT" || o.Status == "SEALED" || o.Status == "DISPATCHED");
             }
             else if (category == OrderTabCategory.DELIVERED)
             {
-                query = query.Where(o => o.Status == "DELIVERED");
+                query = query.Where(o => o.Status == "DELIVERED" || o.Status == "PARTIALLY_DELIVERED");
             }
             else if (category == OrderTabCategory.RETURNED)
             {
-                query = query.Where(o => o.Status == "RETURNED" || o.Status == "REJECTED" || o.Status == "RETURN_PENDING");
+                query = query.Where(o => o.Status == "RETURNED" || o.Status == "REJECTED" || o.Status == "RETURN_PENDING" || o.Status == "PENDING_REDELIVERY");
             }
             else if (category == OrderTabCategory.CANCELLED)
             {
