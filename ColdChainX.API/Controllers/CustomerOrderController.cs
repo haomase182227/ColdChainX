@@ -2,9 +2,21 @@ using Microsoft.AspNetCore.Mvc;
 using ColdChainX.Application.Interfaces;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json.Serialization;
 
 namespace ColdChainX.API.Controllers
 {
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public enum OrderTabCategory
+    {
+        IN_STOCK,
+        WAITING,
+        TRANSIT,
+        DELIVERED,
+        RETURNED,
+        CANCELLED
+    }
+
     [ApiController]
     [Route("api/customers/{customerId:guid}/orders")]
     public class CustomerOrderController : ControllerBase
@@ -32,34 +44,33 @@ namespace ColdChainX.API.Controllers
         [HttpGet("by-category")]
         public async Task<IActionResult> GetOrdersByCategory(
             Guid customerId, 
-            [FromQuery] string category = "WAITING")
+            [FromQuery] OrderTabCategory category = OrderTabCategory.WAITING)
         {
             var query = _dbContext.TransportOrders
                 .Include(o => o.DestLocationNavigation)
                 .Where(o => o.CustomerId == customerId);
 
-            category = category.ToUpper();
-            if (category == "IN_STOCK" || category == "IN-STOCK")
+            if (category == OrderTabCategory.IN_STOCK)
             {
                 query = query.Where(o => o.Status == "IN-STOCK");
             }
-            else if (category == "WAITING")
+            else if (category == OrderTabCategory.WAITING)
             {
                 query = query.Where(o => o.Status == "LOADING");
             }
-            else if (category == "TRANSIT")
+            else if (category == OrderTabCategory.TRANSIT)
             {
                 query = query.Where(o => o.Status == "IN-TRANSIT");
             }
-            else if (category == "DELIVERED")
+            else if (category == OrderTabCategory.DELIVERED)
             {
                 query = query.Where(o => o.Status == "DELIVERED");
             }
-            else if (category == "RETURNED")
+            else if (category == OrderTabCategory.RETURNED)
             {
                 query = query.Where(o => o.Status == "RETURNED" || o.Status == "REJECTED" || o.Status == "RETURN_PENDING");
             }
-            else if (category == "CANCELLED")
+            else if (category == OrderTabCategory.CANCELLED)
             {
                 query = query.Where(o => o.Status == "CANCELLED");
             }
