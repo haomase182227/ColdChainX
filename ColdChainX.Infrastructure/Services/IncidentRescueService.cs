@@ -368,10 +368,10 @@ public class IncidentRescueService : IIncidentRescueService
 
             var templateId = await GetOrCreateTemplateAsync(
                 DelayedTemplateId,
-                "Chuyến hàng {tracking_code} dự kiến trễ {delay_minutes} phút do sự cố vận chuyển",
-                "Xe {old_plate} gặp sự cố ({incident_type}) trên đường giao hàng. " +
-                "Chúng tôi đã lập tức điều xe lạnh {new_plate} đến thay thế để đảm bảo chất lượng hàng hóa. " +
-                "Thời gian giao dự kiến mới: {new_eta} (kế hoạch cũ: {old_eta}). " +
+                "Chuyến hàng {{tracking_code}} dự kiến trễ {{delay_minutes}} phút do sự cố vận chuyển",
+                "Xe {{old_plate}} gặp sự cố ({{incident_type}}) trên đường giao hàng. " +
+                "Chúng tôi đã lập tức điều xe lạnh {{new_plate}} đến thay thế để đảm bảo chất lượng hàng hóa. " +
+                "Thời gian giao dự kiến mới: {{new_eta}} (kế hoạch cũ: {{old_eta}}). " +
                 "Thành thật xin lỗi quý khách vì sự bất tiện này.");
 
             var notifiedUserIds = new List<Guid>();
@@ -793,8 +793,15 @@ public class IncidentRescueService : IIncidentRescueService
 
     private async Task<string?> GetOrCreateTemplateAsync(string templateId, string titleTemplate, string bodyTemplate)
     {
-        var exists = await _db.NotificationTemplates.AnyAsync(t => t.TemplateId == templateId);
-        if (exists) return templateId;
+        var existing = await _db.NotificationTemplates.FirstOrDefaultAsync(t => t.TemplateId == templateId);
+        if (existing != null)
+        {
+            existing.TitleTemplate = titleTemplate;
+            existing.BodyTemplate = bodyTemplate;
+            existing.Channel = "IN_APP";
+            existing.Status = "ACTIVE";
+            return templateId;
+        }
 
         var msgType = await _db.Messagetypes.FirstOrDefaultAsync();
         if (msgType != null)

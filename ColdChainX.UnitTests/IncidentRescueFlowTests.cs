@@ -134,6 +134,16 @@ public sealed class IncidentRescueFlowTests : IDisposable
         device.IsOnline = true;
         await _db.SaveChangesAsync();
 
+        _mqtt.PublishSucceeds = false;
+        var mqttFailure = await _service.ConfirmTransloadAsync(
+            _incidentId,
+            new ConfirmTransloadRequest { ConfirmationNote = "Đã sang đủ toàn bộ LPN." },
+            _dispatcherId);
+        Assert.False(mqttFailure.Success);
+        Assert.Contains("Không thể bật MQTT streaming", mqttFailure.Message);
+        Assert.Equal("DELAYED", (await _db.MasterTrips.FindAsync(_tripId))!.Status);
+
+        _mqtt.PublishSucceeds = true;
         var confirmation = await _service.ConfirmTransloadAsync(
             _incidentId,
             new ConfirmTransloadRequest { ConfirmationNote = "Đã sang đủ toàn bộ LPN." },

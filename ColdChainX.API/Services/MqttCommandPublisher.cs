@@ -106,8 +106,7 @@ public sealed class MqttCommandPublisher : IMqttCommandPublisher
             timestamp = DateTimeOffset.UtcNow
         });
 
-        // The master prompt specified the topic `command/coldchain/{deviceCode}`
-        var topic = $"command/coldchain/{deviceCode}";
+        var topic = $"{topicPrefix.TrimEnd('/')}/{deviceCode}";
 
         var message = new MqttApplicationMessageBuilder()
             .WithTopic(topic)

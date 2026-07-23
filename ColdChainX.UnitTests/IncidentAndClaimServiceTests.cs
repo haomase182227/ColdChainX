@@ -24,6 +24,7 @@ namespace ColdChainX.UnitTests
         private readonly ClaimService _claimService;
         private readonly FakePdfGeneratorService _pdfGeneratorService;
         private readonly FakeFileService _fileService;
+        private readonly FakeIncidentRealtimeNotifier _realtimeNotifier;
 
         public IncidentAndClaimServiceTests()
         {
@@ -35,11 +36,13 @@ namespace ColdChainX.UnitTests
             _db = new ApplicationDbContext(options);
             _pdfGeneratorService = new FakePdfGeneratorService();
             _fileService = new FakeFileService();
+            _realtimeNotifier = new FakeIncidentRealtimeNotifier();
             _incidentService = new IncidentReportService(
                 _db,
                 _pdfGeneratorService,
                 _fileService,
-                NullLogger<IncidentReportService>.Instance);
+                NullLogger<IncidentReportService>.Instance,
+                _realtimeNotifier);
             _claimService = new ClaimService(_db, NullLogger<ClaimService>.Instance);
         }
 
@@ -82,7 +85,17 @@ namespace ColdChainX.UnitTests
             };
 
             // Act
-            var response = await _incidentService.ReportIncidentAsync(request, userId);
+            var photoBytes = new MemoryStream(new byte[] { 1, 2, 3 });
+            var photo = new FormFile(photoBytes, 0, photoBytes.Length, "EvidenceFiles", "breakdown.jpg")
+            {
+                Headers = new HeaderDictionary(),
+                ContentType = "image/jpeg"
+            };
+
+            var response = await _incidentService.ReportIncidentAsync(
+                request,
+                userId,
+                new[] { photo });
 
             // Assert
             Assert.True(response.Success);
@@ -94,6 +107,8 @@ namespace ColdChainX.UnitTests
             Assert.Null(response.Data.ReimbursedAmount);
             Assert.Equal(tripId.ToString(), response.Data.TripCode);
             Assert.Equal("driver_john", response.Data.ReportedByUsername);
+            Assert.Equal("INCIDENT_PHOTO", Assert.Single(response.Data.Evidences).EvidenceType);
+            Assert.Contains(_realtimeNotifier.GroupEvents, e => e.EventName == "IncidentReported");
 
             var dbIncident = await _db.IncidentReports.FirstOrDefaultAsync(i => i.IncidentId == response.Data.IncidentId);
             Assert.NotNull(dbIncident);
@@ -507,7 +522,32 @@ namespace ColdChainX.UnitTests
 
             public string GetSignedUrl(string publicId) => UploadedUrl;
         }
+
+        private sealed class FakeIncidentRealtimeNotifier : IIncidentRealtimeNotifier
+        {
+            public List<(string EventName, object Payload)> GroupEvents { get; } = new();
+            public List<(Guid UserId, string EventName, object Payload)> UserEvents { get; } = new();
+
+            public Task NotifyGroupsAsync(
+                IReadOnlyCollection<string> groups,
+                string eventName,
+                object payload,
+                CancellationToken cancellationToken = default)
+            {
+                GroupEvents.Add((eventName, payload));
+                return Task.CompletedTask;
+            }
+
+            public Task NotifyUserAsync(
+                Guid userId,
+                string eventName,
+                object payload,
+                CancellationToken cancellationToken = default)
+            {
+                UserEvents.Add((userId, eventName, payload));
+                return Task.CompletedTask;
+            }
+        }
     }
 }
-
 

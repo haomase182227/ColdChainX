@@ -90,7 +90,12 @@ public class IncidentReportService : IIncidentReportService
                     return ApiResponse<IncidentResponse>.Failure("Trip not found.");
             }
 
-            if (string.Equals(reporter.Role?.RoleName, "Driver", StringComparison.OrdinalIgnoreCase))
+            var isDriver = string.Equals(
+                               reporter.Role?.RoleName,
+                               "Driver",
+                               StringComparison.OrdinalIgnoreCase) ||
+                           await _db.Drivers.AnyAsync(d => d.UserId == userId);
+            if (isDriver)
             {
                 if (!request.TripId.HasValue)
                     return ApiResponse<IncidentResponse>.Failure("Driver incident reports must be linked to a trip.");
@@ -627,8 +632,15 @@ public class IncidentReportService : IIncidentReportService
         string titleTemplate,
         string bodyTemplate)
     {
-        if (await _db.NotificationTemplates.AnyAsync(t => t.TemplateId == templateId))
+        var existing = await _db.NotificationTemplates.FirstOrDefaultAsync(t => t.TemplateId == templateId);
+        if (existing != null)
+        {
+            existing.TitleTemplate = titleTemplate;
+            existing.BodyTemplate = bodyTemplate;
+            existing.Channel = "IN_APP";
+            existing.Status = "ACTIVE";
             return templateId;
+        }
 
         var typeId = await _db.Messagetypes
             .Select(m => (Guid?)m.TypeId)

@@ -1,407 +1,365 @@
-# Hướng dẫn full flow IncidentReports
+# Incident Report — Full operational flow
 
-Tài liệu này mô tả luồng kiểm thử từ lúc tài xế báo cáo sự cố, Admin/Manager ghi nhận khoản kế toán đã chuyển lại và resolve sự cố, hệ thống sinh PDF trên Cloudinary, đến lúc truy xuất lại `FileUrl` bằng API GET. Hiện không có endpoint hoặc role `Accountant` riêng cho bước resolve.
+Tài liệu này mô tả contract backend cho mobile Driver, Dispatcher, Admin/Manager,
+rescue vehicle, MQTT và telemetry.
 
-## 1. Phạm vi thay đổi
+## 1. State machine
 
-### Trường dữ liệu mới
-
-| Trường JSON | Kiểu | Thời điểm nhập | Ý nghĩa |
-|---|---:|---|---|
-| `driverPaidAmount` | decimal | Khi tạo incident | Số tiền ban đầu tài xế tự chi trả |
-| `reimbursedAmount` | decimal | Khi resolve incident | Số tiền kế toán đã chuyển lại |
-
-Trong database:
-
-- `incident_reports.driver_paid_amount`: `numeric(15,2)`, không null, mặc định `0`.
-- `incident_reports.reimbursed_amount`: `numeric(15,2)`, nullable cho đến khi incident được resolve.
-
-### Dropdown trên Swagger
-
-`incidentType` nhận một trong các giá trị:
-
-- `ACCIDENT`
-- `VEHICLE_BREAKDOWN`
-- `TEMP_EXCURSION`
-- `DAMAGE_CARGO`
-- `DELAY`
-
-`severity` nhận một trong các giá trị:
-
-- `LOW`
-- `MEDIUM`
-- `HIGH`
-- `CRITICAL`
-
-Hai trường này là enum string nên Swagger hiển thị dropdown. Contract API và các ví dụ bên dưới dùng đúng tên enum string; client nên luôn gửi tên enum thay vì số.
-
-## 2. Điều kiện trước khi test
-
-### Database
-
-Migration cần áp dụng:
+### Không cần đổi xe
 
 ```text
-20260716081148_AddIncidentFinancialsAndResolutionEvidence
+REPORTED
+  -> Dispatcher xử lý tại chỗ
+CONTINUED
+  -> duyệt/hoàn chi phí nếu có
+RESOLVED
 ```
 
-Migration mới chỉ thêm hai cột tiền. Bảng `public."IncidentEvidences"` đã được tạo từ migration `20260706074457_RemoveWarehouseLocationAndZone3`, vì vậy database mới phải chạy đầy đủ chuỗi migration, không chỉ chạy riêng hai câu SQL thêm cột.
-
-Trong môi trường Development, nếu tự động migrate đang tắt, có thể cập nhật database bằng PowerShell:
-
-```powershell
-$env:ConnectionStrings__LocalConnection = "<POSTGRES_CONNECTION_STRING>"
-dotnet ef database update `
-  --project ColdChainX.Infrastructure `
-  --startup-project ColdChainX.Infrastructure `
-  --context ApplicationDbContext
-```
-
-Không ghi connection string thật vào source code hoặc commit lên Git.
-
-### Cloudinary và trình tạo PDF
-
-Cấu hình một trong hai cách:
+### Cần đổi xe
 
 ```text
-CLOUDINARY_URL=cloudinary://<API_KEY>:<API_SECRET>@<CLOUD_NAME>
+REPORTED
+  -> rescue-candidates
+  -> dispatch-rescue
+RESCUE_DISPATCHED + Trip DELAYED
+  -> người phụ trách xác nhận sang hàng
+  -> kiểm tra toàn bộ IoT xe mới online
+  -> publish MQTT START_STREAMING thành công
+TRANSLOAD_COMPLETED + Trip IN_TRANSIT
+  -> duyệt/hoàn chi phí nếu có
+RESOLVED
 ```
 
-hoặc:
+Expense state độc lập:
 
 ```text
-Cloudinary__CloudName=<CLOUD_NAME>
-Cloudinary__ApiKey=<API_KEY>
-Cloudinary__ApiSecret=<API_SECRET>
+NOT_REQUIRED
+
+hoặc
+
+PENDING_APPROVAL -> APPROVED -> REIMBURSED
 ```
 
-`IFileService` được khởi tạo cùng `IncidentReportService`; vì vậy thiếu cấu hình Cloudinary có thể làm cả controller IncidentReports không khởi tạo được, kể cả khi chỉ gọi GET.
+Incident có `driverPaidAmount > 0` chỉ được đóng sau khi expense đạt
+`REIMBURSED`.
 
-Nếu môi trường không tự tìm được Chrome/Chromium cho Puppeteer:
+## 2. Driver báo sự cố
 
-```text
-PDF_CHROME_EXECUTABLE_PATH=<đường_dẫn_chrome_hoặc_chromium>
-```
-
-Dockerfile của dự án đã cấu hình Chromium tại `/usr/bin/chromium`.
-
-### Chạy API và đăng nhập
-
-Chạy API:
-
-```powershell
-dotnet run --project ColdChainX.API
-```
-
-Swagger mặc định:
-
-```text
-http://localhost:5244/swagger
-```
-
-Đăng nhập:
-
-```http
-POST /api/auth/login
-Content-Type: application/json
-
-{
-  "email": "<EMAIL>",
-  "password": "<PASSWORD>"
-}
-```
-
-Copy `data.accessToken`, bấm **Authorize** trong Swagger và dán token (không thêm chữ `Bearer`, vì Swagger tự thêm scheme):
-
-```text
-<ACCESS_TOKEN>
-```
-
-Quyền sử dụng:
-
-- Tạo incident: `Admin`, `Manager`, `Driver`, hoặc `WarehouseOperator`.
-- Resolve incident: `Admin` hoặc `Manager`.
-- GET incident: người dùng đã đăng nhập.
-
-Để test trọn luồng qua Swagger, có thể dùng token Driver để tạo incident, sau đó đăng nhập lại bằng tài khoản Admin/Manager để resolve.
-
-## 3. Bước 1 — Báo cáo incident
-
-API:
+### JSON, không gửi file trong cùng request
 
 ```http
 POST /api/v1/incidents
+Content-Type: application/json
+Authorization: Bearer <DRIVER_TOKEN>
 ```
-
-Request mẫu:
 
 ```json
 {
   "tripId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
   "incidentType": "VEHICLE_BREAKDOWN",
   "severity": "HIGH",
-  "description": "Hệ thống làm lạnh dừng hoạt động giữa chuyến.",
+  "requiresRescue": true,
+  "description": "Xe mất khả năng vận hành.",
   "currentLatitude": 10.762622,
   "currentLongitude": 106.660172,
   "driverPaidAmount": 1500000
 }
 ```
 
-Lưu ý:
-
-- `tripId` có thể bỏ qua nếu incident không thuộc một chuyến cụ thể.
-- Nếu có `tripId`, ID phải tồn tại trong `master_trips`.
-- `driverPaidAmount` phải lớn hơn hoặc bằng `0`.
-- Client nên luôn gửi rõ `driverPaidAmount`; nếu bỏ field, model binding hiện gán mặc định `0`.
-- Latitude hợp lệ từ `-90` đến `90`; longitude từ `-180` đến `180`.
-
-Response thành công cần có các dữ liệu chính:
-
-```json
-{
-  "success": true,
-  "statusCode": 200,
-  "message": "Incident reported successfully.",
-  "data": {
-    "incidentId": "<INCIDENT_ID>",
-    "tripId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-    "incidentType": "VEHICLE_BREAKDOWN",
-    "severity": "HIGH",
-    "description": "Hệ thống làm lạnh dừng hoạt động giữa chuyến.",
-    "driverPaidAmount": 1500000,
-    "reimbursedAmount": null,
-    "status": "REPORTED",
-    "resolutionNote": null,
-    "evidences": []
-  }
-}
-```
-
-Lưu lại `data.incidentId` cho các bước tiếp theo.
-
-## 4. Bước 2 — Resolve và ghi nhận hoàn tiền
-
-API:
+### Multipart cho mobile, có ảnh/hóa đơn
 
 ```http
-POST /api/v1/incidents/{id}/resolve
+POST /api/v1/incidents/with-evidence
+Content-Type: multipart/form-data
+Authorization: Bearer <DRIVER_TOKEN>
 ```
 
-Request mẫu:
+Form fields:
 
-```json
-{
-  "resolutionNote": "Đã sửa hệ thống làm lạnh, kiểm tra nhiệt độ an toàn và cho xe tiếp tục hành trình.",
-  "reimbursedAmount": 1500000
-}
+```text
+tripId
+incidentType
+severity
+requiresRescue
+description
+currentLatitude
+currentLongitude
+driverPaidAmount
+evidenceFiles (0..5 files, image hoặc PDF, tối đa 10 MB/file)
 ```
 
-`reimbursedAmount` phải lớn hơn hoặc bằng `0` và client nên luôn gửi rõ field này. Rule hiện tại không chặn `reimbursedAmount` lớn hơn `driverPaidAmount`; nếu nghiệp vụ cần giới hạn đó thì phải bổ sung rule riêng.
+Backend kiểm tra Driver được gán vào Trip và bắt buộc Driver gửi vị trí.
+Sau khi lưu thành công, Dispatcher và Admin nhận SignalR event:
 
-Response thành công:
-
-```json
-{
-  "success": true,
-  "statusCode": 200,
-  "message": "Incident resolved successfully.",
-  "data": true
-}
+```text
+IncidentReported
 ```
 
-Khi API này thành công, hệ thống đã thực hiện đầy đủ:
+Đồng thời hệ thống tạo notification lưu trong database để người nhận vẫn thấy
+khi đang offline.
 
-1. Sinh PDF từ template `IncidentResolution.html`.
-2. Upload PDF với tên gốc dạng `incident_resolution_{incidentId:N}.pdf`, trong đó GUID có 32 ký tự hex và không có dấu `-`. `FileService` còn thêm một suffix GUID vào Cloudinary public ID, nên URL cuối không nhất thiết giữ nguyên chính xác tên gốc.
-3. Cập nhật incident thành `RESOLVED`.
-4. Lưu `reimbursedAmount` và `resolvedAt`.
-5. Tạo một `IncidentEvidence` có `evidenceType = "RESOLUTION_PDF"` và `fileUrl` là URL Cloudinary.
-6. Lưu incident và evidence trong cùng một lần `SaveChanges`.
-
-Nếu sinh PDF hoặc upload Cloudinary lỗi, API trả thất bại và incident không bị lưu thành `RESOLVED`.
-
-Một incident đã `RESOLVED` không thể resolve lần hai; nhờ vậy hệ thống không sinh evidence trùng trong luồng thông thường.
-
-## 5. Bước 3 — GET chi tiết và kiểm tra FileUrl
-
-API:
+### Upload evidence bổ sung
 
 ```http
-GET /api/v1/incidents/{id}
+POST /api/v1/incidents/{incidentId}/evidences
+Content-Type: multipart/form-data
 ```
 
-Các trường cần kiểm tra:
-
-```json
-{
-  "success": true,
-  "data": {
-    "incidentId": "<INCIDENT_ID>",
-    "incidentType": "VEHICLE_BREAKDOWN",
-    "severity": "HIGH",
-    "driverPaidAmount": 1500000,
-    "reimbursedAmount": 1500000,
-    "status": "RESOLVED",
-    "resolutionNote": "Đã sửa hệ thống làm lạnh, kiểm tra nhiệt độ an toàn và cho xe tiếp tục hành trình.",
-    "evidences": [
-      {
-        "evidenceId": "<EVIDENCE_ID>",
-        "evidenceType": "RESOLUTION_PDF",
-        "fileUrl": "https://res.cloudinary.com/.../incident_resolution_....pdf"
-      }
-    ]
-  }
-}
+```text
+evidenceType = INCIDENT_ATTACHMENT | INCIDENT_PHOTO | DRIVER_RECEIPT
+files = 1..5 image/PDF
 ```
 
-Mở trực tiếp `data.evidences[0].fileUrl` để kiểm tra PDF. PDF phải hiển thị:
-
-- Mã incident và trip.
-- Loại và mức độ sự cố.
-- Nội dung báo cáo và ghi chú giải quyết.
-- Người báo cáo, người xác nhận resolve, thời gian báo cáo/resolve.
-- Số tiền tài xế đã tự chi.
-- Số tiền kế toán đã hoàn lại.
-
-## 6. Bước 4 — GET danh sách và kiểm tra FileUrl
-
-API:
+## 3. Nhánh không cần đổi xe
 
 ```http
-GET /api/v1/incidents?tripId=<TRIP_ID>&pageNumber=1&pageSize=10
+POST /api/v1/incidents/{incidentId}/continue-trip
+Authorization: Dispatcher | Admin | Manager
+Content-Type: application/json
 ```
-
-`tripId` là tùy chọn. Response phân trang đặt danh sách incident tại `data.data`:
 
 ```json
 {
-  "success": true,
-  "data": {
-    "totalRecords": 1,
-    "totalPages": 1,
-    "currentPage": 1,
-    "pageSize": 10,
-    "data": [
-      {
-        "incidentId": "<INCIDENT_ID>",
-        "driverPaidAmount": 1500000,
-        "reimbursedAmount": 1500000,
-        "status": "RESOLVED",
-        "evidences": [
-          {
-            "evidenceId": "<EVIDENCE_ID>",
-            "evidenceType": "RESOLUTION_PDF",
-            "fileUrl": "https://res.cloudinary.com/.../incident_resolution_....pdf"
-          }
-        ]
-      }
-    ]
-  }
+  "handlingNote": "Đã xử lý lỗi điện, kiểm tra nhiệt độ và cho xe tiếp tục."
 }
 ```
 
-## 7. Kiểm tra trực tiếp database
+Điều kiện:
 
-Kiểm tra hai trường tiền:
+- `requiresRescue = false`.
+- Incident chưa `RESOLVED`.
+- Trip còn trong trạng thái vận hành.
 
-```sql
-SELECT
-    incident_id,
-    status,
-    driver_paid_amount,
-    reimbursed_amount,
-    resolved_at
-FROM public.incident_reports
-WHERE incident_id = '<INCIDENT_ID>';
+Kết quả:
+
+- Incident -> `CONTINUED`.
+- Trip -> `IN_TRANSIT`.
+- `Trip.VehicleId` giữ nguyên.
+- Lưu người xử lý, thời gian và ghi chú.
+- SignalR event `IncidentTripContinued`.
+
+## 4. Nhánh cần đổi xe
+
+### 4.1 Danh sách xe cứu hộ
+
+```http
+GET /api/v1/incidents/{incidentId}/rescue-candidates
+Authorization: Dispatcher | Admin | Manager
 ```
 
-Kiểm tra evidence. Bảng hiện được EF migration tạo với tên có phân biệt hoa/thường:
+Backend chỉ trả xe:
 
-```sql
-SELECT
-    "EvidenceId",
-    "IncidentId",
-    "EvidenceType",
-    "FileUrl"
-FROM public."IncidentEvidences"
-WHERE "IncidentId" = '<INCIDENT_ID>';
-```
+- `Vehicle.Status = ACTIVE`.
+- Khác xe hiện tại của Trip.
+- Chứa được tổng `ActualWeightKg` của toàn bộ LPN `SHIPPING`.
+- Chứa được tổng `ActualCbm` của toàn bộ LPN `SHIPPING`.
+- Dải nhiệt bao phủ `Trip.TargetTemperature`.
+- Có ít nhất một `IotDevice` với `DeviceCode`.
 
-Kết quả mong đợi:
-
-- `status = 'RESOLVED'`.
-- Hai trường tiền đúng với request.
-- Có đúng một evidence loại `RESOLUTION_PDF`.
-- `FileUrl` không rỗng và trỏ đến Cloudinary.
-
-## 8. Test tự động đã chạy
-
-Test full flow nằm trong:
+Response còn trả:
 
 ```text
-ColdChainX.UnitTests/IncidentAndClaimServiceTests.cs
+iotDeviceCount
+onlineIotDeviceCount
+hasOnlineIot
 ```
 
-Case `IncidentFullFlow_ReportResolveAndRetrieveEvidence` kiểm tra liên tục:
+Nếu không có xe đáp ứng toàn bộ tải:
 
 ```text
-Report → Resolve → tạo PDF → upload fake Cloudinary → lưu IncidentEvidence
-       → GET by id → GET list → kiểm tra FileUrl
+Không có xe thay thế phù hợp
 ```
 
-Lệnh test đã dùng trong trạng thái repository hiện tại:
+Phiên bản hiện tại không chia tải, không tạo nhiều xe và không tạo Trip mới.
 
-```powershell
-dotnet test ColdChainX.UnitTests/ColdChainX.UnitTests.csproj `
-  --no-restore `
-  --filter "FullyQualifiedName~IncidentAndClaimServiceTests" `
-  -p:DefaultItemExcludesInProjectFolder="**/ManualDispatchFlowTests.cs"
+### 4.2 Phát lệnh cứu hộ
+
+```http
+POST /api/v1/incidents/{incidentId}/dispatch-rescue
+Authorization: Dispatcher | Admin | Manager
+Content-Type: application/json
 ```
 
-Kết quả ngày 16/07/2026:
+```json
+{
+  "replacementVehicleId": "9578709d-088b-4958-9719-725d25e61fd3",
+  "transloadMinutes": 45,
+  "note": "Sang toàn bộ LPN tại hiện trường."
+}
+```
+
+Backend kiểm tra lại toàn bộ điều kiện của candidate trong transaction, sau đó:
+
+- Xe hỏng -> `MAINTENANCE`.
+- Tạo `MaintenanceTicket` -> `OPEN`.
+- Lưu `BrokenVehicleId`, `ReplacementVehicleId`, `MaintenanceTicketId`.
+- `Trip.VehicleId` -> xe mới.
+- Xe mới -> `ONTRIP`.
+- Trip -> `DELAYED`.
+- Incident -> `RESCUE_DISPATCHED`.
+- Giữ nguyên `Lpn.TripId`.
+- Giữ nguyên `TransportOrder.MasterTripId`.
+- Không tạo Trip mới.
+- Tính lại ETA và báo khách hàng phía trước.
+- SignalR event `IncidentRescueDispatched`.
+
+### 4.3 Xác nhận đã sang hàng
+
+```http
+POST /api/v1/incidents/{incidentId}/confirm-transload
+Authorization: Dispatcher | Admin | Manager | WarehouseOperator | Loader
+Content-Type: application/json
+```
+
+```json
+{
+  "confirmationNote": "Đã sang đủ toàn bộ LPN và kiểm tra cửa thùng."
+}
+```
+
+Backend chỉ cho tiếp tục nếu:
+
+- Incident đang `RESCUE_DISPATCHED`.
+- Trip đang `DELAYED`.
+- `Trip.VehicleId` đúng bằng xe cứu hộ đã lưu.
+- Xe mới có thiết bị IoT riêng.
+- Tất cả thiết bị có `DeviceCode` đều `IsOnline = true`.
+- MQTT `START_STREAMING` publish thành công cho từng thiết bị.
+
+Kết quả:
+
+- Incident -> `TRANSLOAD_COMPLETED`.
+- Trip -> `IN_TRANSIT`.
+- Lưu người xác nhận, thời gian và ghi chú.
+- SignalR `IncidentTransloadCompleted` cho nhân sự.
+- SignalR `TripResumed` cho khách hàng.
+
+Nếu IoT offline hoặc MQTT publish lỗi, Trip vẫn giữ `DELAYED`.
+
+## 5. Duyệt và hoàn chi phí
+
+### 5.1 Admin duyệt
+
+```http
+POST /api/v1/incidents/{incidentId}/expenses/approve
+Authorization: Admin
+```
+
+```json
+{
+  "approvedAmount": 1500000,
+  "approvalNote": "Hóa đơn hợp lệ."
+}
+```
+
+`approvedAmount` phải lớn hơn `0` và không vượt `driverPaidAmount`.
+
+### 5.2 Admin hoàn tiền và gửi biên lai
+
+```http
+POST /api/v1/incidents/{incidentId}/expenses/reimburse
+Authorization: Admin
+Content-Type: multipart/form-data
+```
 
 ```text
-Passed: 7
-Failed: 0
-Skipped: 0
+reimbursedAmount = 1500000
+note = Đã chuyển khoản cho tài xế
+receiptFile = image hoặc PDF
 ```
 
-Trong unit test, PDF generator và Cloudinary được fake để test ổn định, không tải Chromium và không tạo file rác trên tài khoản Cloudinary thật. Bước kiểm tra Cloudinary thật cần thực hiện bằng Swagger theo mục 2–6.
+Điều kiện:
 
-Ngoài unit test, template `IncidentResolution.html` đã được render bằng `PdfGeneratorService` với Chrome cục bộ. Kết quả là payload PDF hợp lệ (`%PDF`) có kích thước `73.850` byte.
+- Expense đã `APPROVED`.
+- `reimbursedAmount` bằng đúng `approvedAmount`.
+- Có `receiptFile`.
 
-Migration SQL đã được kiểm tra và chỉ tạo hai cột:
+Kết quả:
 
-```sql
-ALTER TABLE public.incident_reports
-ADD driver_paid_amount numeric(15,2) NOT NULL DEFAULT 0.0;
+- Expense -> `REIMBURSED`.
+- Lưu `ReimbursedBy`, `ReimbursedAt`.
+- Tạo evidence `REIMBURSEMENT_RECEIPT`.
+- Tạo notification bền vững cho Driver.
+- SignalR `IncidentExpenseReimbursed` chứa URL biên lai.
 
-ALTER TABLE public.incident_reports
-ADD reimbursed_amount numeric(15,2);
+## 6. Đóng incident
+
+```http
+POST /api/v1/incidents/{incidentId}/resolve
+Authorization: Admin | Manager
 ```
 
-Template PDF cũng đã được xác nhận có mặt trong output build tại `Templates/IncidentResolution.html`.
+```json
+{
+  "resolutionNote": "Đã hoàn tất xử lý sự cố và đối soát chi phí."
+}
+```
 
-## 9. Lỗi thường gặp
+Điều kiện:
 
-| Hiện tượng | Nguyên nhân thường gặp | Cách xử lý |
-|---|---|---|
-| Swagger không có dropdown | API đang chạy bản build cũ | Stop API, rebuild và refresh cứng trang Swagger |
-| `400 Incident type is invalid` | Gửi giá trị ngoài enum | Chọn đúng giá trị trong dropdown |
-| `400 Trip not found` | `tripId` không tồn tại | Dùng trip thật hoặc bỏ `tripId` |
-| `403` khi resolve | Token không có role Admin/Manager | Đăng nhập bằng tài khoản đúng role |
-| `Incident is already resolved` | Resolve cùng incident lần hai | Dùng incident mới hoặc chỉ gọi GET |
-| Controller IncidentReports lỗi khởi tạo hoặc báo thiếu Cloudinary | Thiếu biến môi trường `Cloudinary:CloudName/ApiKey/ApiSecret` | Cấu hình `CLOUDINARY_URL` hoặc ba khóa Cloudinary trước khi gọi cả POST/GET |
-| Lỗi tải/chạy Chromium | Puppeteer không tìm thấy browser | Cấu hình `PDF_CHROME_EXECUTABLE_PATH` |
-| Resolve trả lỗi upload | Sai Cloudinary credential hoặc mất mạng | Sửa cấu hình rồi gọi resolve lại; incident vẫn là `REPORTED` |
-| GET không có evidence | Resolve chưa thành công hoặc DB chưa cập nhật đúng | Kiểm tra status, migration và bảng `IncidentEvidences` |
-| Số tiền âm bị từ chối | Validation yêu cầu amount ≥ 0 | Gửi `0` nếu không phát sinh tiền |
+- Không đổi xe: incident đã `CONTINUED`.
+- Có đổi xe: incident đã `TRANSLOAD_COMPLETED`.
+- Nếu Driver có ứng tiền: expense đã `REIMBURSED`.
 
-## 10. Lưu ý về full solution build hiện tại
+Kết quả:
 
-Các project Incident/Application/Infrastructure và API khi cô lập `DispatchController` đã build thành công. Tuy nhiên, lệnh `dotnet build ColdChainX.sln` hiện vẫn bị chặn bởi hai tham chiếu cũ ngoài phạm vi Incident:
+- Sinh và upload `RESOLUTION_PDF`.
+- Incident -> `RESOLVED`.
+- Lưu `ResolvedBy`, `ResolvedAt`, `ResolutionNote`.
+- Gửi notification và SignalR `IncidentResolved` cho Driver.
 
-- `ColdChainX.API/Controllers/DispatchController.cs`: còn dùng `RouteSchedule.DayOfWeek`.
-- `ColdChainX.UnitTests/ManualDispatchFlowTests.cs`: còn gán `RouteSchedule.DayOfWeek`.
+## 7. Telemetry không đổi lõi
 
-Entity `RouteSchedule` hiện đã đổi sang `DepartureDate`. Cần cập nhật riêng luồng dispatch/manual-dispatch trước khi full solution có thể build và chạy toàn bộ test mà không dùng bộ lọc ở trên.
+Trước sự cố:
+
+```text
+Device xe cũ -> Vehicle cũ -> Trip hiện tại
+```
+
+Sau sự cố:
+
+```text
+Device xe mới -> Vehicle mới -> cùng Trip hiện tại
+```
+
+Rescue flow không cập nhật `IotDevice.VehicleId`. Nó chỉ cập nhật
+`MasterTrip.VehicleId`. `ColdChainMonitoringService` tìm Trip hiện tại qua
+Vehicle của thiết bị và ghi `TelemetryLog.TripId` bằng Trip cũ.
+
+Các API chart tiếp tục lấy dữ liệu theo `TripId`:
+
+```http
+GET /api/trip/{tripId}/chart
+GET /api/trip/{tripId}/chart/temperature
+GET /api/trip/{tripId}/chart/route
+GET /api/trip/{tripId}/chart/route-goong
+```
+
+Vì vậy lịch sử trước sự cố đến từ device xe cũ, lịch sử sau sự cố đến từ
+device xe mới, nhưng bản đồ vẫn là một hành trình.
+
+## 8. Migration và test
+
+Migration:
+
+```text
+20260723120000_CompleteIncidentWorkflow
+```
+
+Test chính:
+
+```text
+IncidentAndClaimServiceTests
+IncidentRescueFlowTests
+```
+
+Các test rescue xác nhận:
+
+- Candidate bắt buộc ACTIVE, đủ kg/CBM, đúng nhiệt độ, có IoT.
+- Không có xe trả đúng thông báo.
+- Xe hỏng/ticket/Trip được cập nhật đúng.
+- LPN và Order giữ nguyên TripId.
+- Không tạo Trip mới.
+- Không chuyển device giữa xe.
+- IoT offline không cho Trip chạy.
+- MQTT thành công rồi mới chuyển `IN_TRANSIT`.
