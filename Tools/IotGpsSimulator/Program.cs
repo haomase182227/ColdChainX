@@ -142,11 +142,8 @@ app.MapPost("/api/fleet/start", async (SimulationRequest req, ILoggerFactory log
         return Results.BadRequest(new { error = "Lỗi khi kiểm tra trạng thái thiết bị IoT: " + ex.Message });
     }
 
-    if (req.IsHybridMode) {
-        _ = SendMqttCommandAsync(deviceId, "ENABLE_GPS", logger);
-    } else {
-        _ = SendMqttCommandAsync(deviceId, "DISABLE_GPS", logger);
-    }
+    // Luôn luôn gửi lệnh tắt GPS 3 lớp khi bắt đầu mô phỏng (vì Simulator sẽ phát tọa độ)
+    _ = SendMqttCommandAsync(deviceId, "DISABLE_GPS", logger);
 
 
     

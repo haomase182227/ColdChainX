@@ -26,7 +26,7 @@ const char gprsPass[]    = "";
 const char* MQTT_HOST = "8.231.129.222";
 const uint16_t MQTT_PORT = 1883;
 const char* MQTT_USERNAME = "esp32user";
-const char* MQTT_PASSWORD = "123456";
+const char* MQTT_PASSWORD = "183732";
 
 // ===== THÔNG SỐ THIẾT BỊ & CHU KỲ =====
 const char* DEVICE_ID = "ESP32-COLDCHAIN-001";
