@@ -11,6 +11,8 @@ using Microsoft.AspNetCore.Authorization;
 using FleetCreateDriverRequest = ColdChainX.Application.DTOs.Fleet.CreateDriverRequest;
 using FleetUpdateDriverRequest = ColdChainX.Application.DTOs.Fleet.UpdateDriverRequest;
 using ColdChainX.Application.DTOs.Fleet;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 
 namespace ColdChainX.API.Controllers
 {
@@ -149,15 +151,24 @@ namespace ColdChainX.API.Controllers
             });
         }
 
-        [Authorize(Roles = "Driver")]
+        [Authorize(Roles = "Driver,DRIVER,Shipping,SHIPPING")]
+        [HttpGet("me/trips")]
         [HttpGet("my/trips")]
-        public async Task<IActionResult> GetDriverTrips()
+        public async Task<IActionResult> GetMyTrips([FromQuery] string status = "")
         {
             var driverId = GetDriverId();
             if (driverId == Guid.Empty) return Unauthorized(new { success = false, message = "Driver ID not found in token." });
-            
+
             var query = _dbContext.TripDrivers
                 .Where(td => td.DriverId == driverId && td.Trip!.Status != "CANCELLED");
+
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                var statuses = status.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                     .Select(s => s.Trim().ToUpper())
+                                     .ToList();
+                query = query.Where(td => statuses.Contains(td.Trip!.Status));
+            }
 
             var trips = await query
                 .OrderByDescending(td => td.Trip!.PlannedStartTime)

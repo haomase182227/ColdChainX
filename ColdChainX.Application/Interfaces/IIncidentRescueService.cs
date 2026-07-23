@@ -20,6 +20,11 @@ namespace ColdChainX.Application.Interfaces
         /// </summary>
         Task<ApiResponse<List<RescueCandidateResponse>>> GetRescueCandidatesAsync(Guid incidentId);
 
+        Task<ApiResponse<IncidentWorkflowResult>> ContinueTripAsync(
+            Guid incidentId,
+            ContinueTripAfterIncidentRequest request,
+            Guid driverUserId);
+
         /// <summary>
         /// [Bước 2 + 3] Xuất lệnh điều xe thay thế đến hiện trường (Sang xe):
         /// xe hỏng → MAINTENANCE (kèm phiếu sửa chữa), xe mới gán vào chuyến → OnTrip,
@@ -27,5 +32,10 @@ namespace ColdChainX.Application.Interfaces
         /// xin lỗi/cập nhật cho tất cả khách hàng đang chờ.
         /// </summary>
         Task<ApiResponse<IncidentRescueResult>> DispatchRescueAsync(Guid incidentId, DispatchRescueRequest request, Guid dispatcherId);
+
+        Task<ApiResponse<IncidentWorkflowResult>> ConfirmTransloadAsync(
+            Guid incidentId,
+            ConfirmTransloadRequest request,
+            Guid confirmedBy);
     }
 }

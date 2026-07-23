@@ -1575,23 +1575,27 @@ public class DispatchService : IDispatchService
         }
         else
         {
-            // Tất cả đều online -> Cập nhật trip status và bật streaming
+            // Tất cả đều online -> bật streaming thành công rồi mới cho chuyến chạy.
             var trip = await _context.MasterTrips.FindAsync(tripId)
                 ?? throw new KeyNotFoundException("Không tìm thấy chuyến đi.");
+
+            foreach (var device in devices)
+            {
+                if (!string.IsNullOrWhiteSpace(device.DeviceCode))
+                {
+                    var published = await _mqttPublisher.StartStreamingAsync(device.DeviceCode, CancellationToken.None);
+                    if (!published)
+                    {
+                        throw new InvalidOperationException(
+                            $"Không thể bật MQTT streaming cho thiết bị {device.DeviceCode}. Chuyến vẫn chưa được tiếp tục.");
+                    }
+                }
+            }
 
             if (trip.Status != "IN_TRANSIT" && trip.Status != "COMPLETED")
             {
                 trip.Status = "IN_TRANSIT";
                 await _context.SaveChangesAsync();
-            }
-
-            // Gửi lệnh START_STREAMING qua MQTT bất chấp xe chưa chạy hay đã chạy (dùng làm Force Wake-up)
-            foreach (var device in devices)
-            {
-                if (!string.IsNullOrWhiteSpace(device.DeviceCode))
-                {
-                    await _mqttPublisher.StartStreamingAsync(device.DeviceCode, CancellationToken.None);
-                }
             }
         }
 
@@ -2428,5 +2432,4 @@ public class DispatchService : IDispatchService
         return notifiedCount;
     }
 }
-
 
