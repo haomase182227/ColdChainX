@@ -69,7 +69,7 @@ public class IncidentReportService : IIncidentReportService
             return ApiResponse<IncidentResponse>.Failure("Current longitude must be between -180 and 180.");
 
         var files = evidenceFiles?.Where(f => f != null).ToList() ?? new List<IFormFile>();
-        var fileValidation = ValidateEvidenceFiles(files);
+        var fileValidation = ValidateEvidenceFiles(files, allowEmpty: true);
         if (fileValidation != null)
             return ApiResponse<IncidentResponse>.Failure(fileValidation);
 
@@ -718,10 +718,12 @@ public class IncidentReportService : IIncidentReportService
         }
     }
 
-    private static string? ValidateEvidenceFiles(IReadOnlyCollection<IFormFile> files)
+    private static string? ValidateEvidenceFiles(
+        IReadOnlyCollection<IFormFile> files,
+        bool allowEmpty = false)
     {
         if (files.Count == 0)
-            return "At least one evidence file is required.";
+            return allowEmpty ? null : "At least one evidence file is required.";
         if (files.Count > MaxEvidenceFiles)
             return $"A maximum of {MaxEvidenceFiles} evidence files is allowed per request.";
 
