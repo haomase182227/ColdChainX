@@ -62,7 +62,7 @@ namespace ColdChainX.API.Controllers
 
             if (category == OrderTabCategory.IN_STOCK)
             {
-                query = query.Where(o => o.Status == "IN-STOCK");
+                query = query.Where(o => o.Status == "IN_WAREHOUSE");
             }
             else if (category == OrderTabCategory.WAITING)
             {
