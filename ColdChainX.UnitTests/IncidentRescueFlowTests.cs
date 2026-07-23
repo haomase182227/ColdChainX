@@ -20,6 +20,8 @@ public sealed class IncidentRescueFlowTests : IDisposable
     private readonly IncidentRescueService _service;
 
     private readonly Guid _dispatcherId = Guid.NewGuid();
+    private readonly Guid _driverUserId = Guid.NewGuid();
+    private readonly Guid _driverId = Guid.NewGuid();
     private readonly Guid _tripId = Guid.NewGuid();
     private readonly Guid _incidentId = Guid.NewGuid();
     private readonly Guid _brokenVehicleId = Guid.NewGuid();
@@ -165,7 +167,7 @@ public sealed class IncidentRescueFlowTests : IDisposable
         var result = await _service.ContinueTripAsync(
             _incidentId,
             new ContinueTripAfterIncidentRequest { HandlingNote = "Đã siết lại dây điện và kiểm tra nhiệt độ." },
-            _dispatcherId);
+            _driverUserId);
 
         Assert.True(result.Success, result.Message);
         var trip = await _db.MasterTrips.FindAsync(_tripId);
@@ -173,7 +175,44 @@ public sealed class IncidentRescueFlowTests : IDisposable
         Assert.Equal("IN_TRANSIT", trip!.Status);
         Assert.Equal(_brokenVehicleId, trip.VehicleId);
         Assert.Equal("CONTINUED", incident!.Status);
-        Assert.Equal(_dispatcherId, incident.HandledBy);
+        Assert.Equal(_driverUserId, incident.HandledBy);
+    }
+
+    [Fact]
+    public async Task ContinueTrip_RejectsDriverNotAssignedToTrip()
+    {
+        await SeedNoRescueTripAsync();
+        var otherUserId = Guid.NewGuid();
+        _db.Users.Add(new User
+        {
+            UserId = otherUserId,
+            Username = "other-driver",
+            PasswordHash = "hash",
+            FullName = "Other Driver"
+        });
+        _db.Drivers.Add(new Driver
+        {
+            DriverId = Guid.NewGuid(),
+            UserId = otherUserId,
+            FullName = "Other Driver",
+            IdentityNumber = "109876543210",
+            PhoneNumber = "0911111111",
+            DateOfBirth = new DateOnly(1991, 1, 1),
+            JoinDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            Status = "ACTIVE"
+        });
+        await _db.SaveChangesAsync();
+
+        var result = await _service.ContinueTripAsync(
+            _incidentId,
+            new ContinueTripAfterIncidentRequest { HandlingNote = "Đã xử lý xong." },
+            otherUserId);
+
+        Assert.False(result.Success);
+        Assert.Equal(403, result.StatusCode);
+        Assert.Contains("không phải tài xế được phân công", result.Message);
+        Assert.Equal("DELAYED", (await _db.MasterTrips.FindAsync(_tripId))!.Status);
+        Assert.Equal("REPORTED", (await _db.IncidentReports.FindAsync(_incidentId))!.Status);
     }
 
     private async Task SeedRescueTripAsync(bool replacementOnline)
@@ -274,10 +313,21 @@ public sealed class IncidentRescueFlowTests : IDisposable
     {
         _db.Users.Add(new User
         {
-            UserId = _dispatcherId,
-            Username = "dispatcher",
+            UserId = _driverUserId,
+            Username = "driver",
             PasswordHash = "hash",
-            FullName = "Dispatcher"
+            FullName = "Driver"
+        });
+        _db.Drivers.Add(new Driver
+        {
+            DriverId = _driverId,
+            UserId = _driverUserId,
+            FullName = "Driver",
+            IdentityNumber = "012345678901",
+            PhoneNumber = "0900000000",
+            DateOfBirth = new DateOnly(1990, 1, 1),
+            JoinDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            Status = "ACTIVE"
         });
         _db.Vehicles.Add(BuildVehicle(
             _brokenVehicleId,
@@ -298,6 +348,15 @@ public sealed class IncidentRescueFlowTests : IDisposable
             PlannedEndTime = DateTime.UtcNow.AddHours(2),
             Status = "DELAYED"
         });
+        _db.TripDrivers.Add(new TripDriver
+        {
+            TripDriverId = Guid.NewGuid(),
+            TripId = _tripId,
+            DriverId = _driverId,
+            DriverRole = "PRIMARY",
+            AssignedDurationHours = 3m,
+            CreatedAt = DateTime.UtcNow
+        });
         _db.IncidentReports.Add(new IncidentReport
         {
             IncidentId = _incidentId,
@@ -309,7 +368,7 @@ public sealed class IncidentRescueFlowTests : IDisposable
             DriverPaidAmount = 0m,
             ExpenseStatus = "NOT_REQUIRED",
             Status = "REPORTED",
-            ReportedBy = _dispatcherId,
+            ReportedBy = _driverUserId,
             ReportedAt = DateTime.UtcNow
         });
         await _db.SaveChangesAsync();
