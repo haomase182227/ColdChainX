@@ -116,7 +116,8 @@ var rawOrders = (from r in db.WarehouseReceipts
                 var freeTextTripId =
                     path.Contains("start-picking", StringComparison.OrdinalIgnoreCase) ||
                     path.Contains("seal-and-dispatch", StringComparison.OrdinalIgnoreCase) ||
-                    path.Contains("vehicle-iot-check", StringComparison.OrdinalIgnoreCase);
+                    path.Contains("vehicle-iot-check", StringComparison.OrdinalIgnoreCase) ||
+                    path.Contains("route", StringComparison.OrdinalIgnoreCase);
 
                 // Path parameter dropdowns
                 var tripIdParam = operation.Parameters?.FirstOrDefault(p => string.Equals(p.Name, "tripId", StringComparison.OrdinalIgnoreCase));

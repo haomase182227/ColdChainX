@@ -26,13 +26,13 @@ const char gprsPass[]    = "";
 const char* MQTT_HOST = "8.231.129.222";
 const uint16_t MQTT_PORT = 1883;
 const char* MQTT_USERNAME = "esp32user";
-const char* MQTT_PASSWORD = "123456";
+const char* MQTT_PASSWORD = "183732";
 
 // ===== THÔNG SỐ THIẾT BỊ & CHU KỲ =====
 const char* DEVICE_ID = "ESP32-COLDCHAIN-001";
-const uint32_t TELEMETRY_INTERVAL_MS = 90000;   // 1 phút 30 giây gửi 1 lần (LUÔN GỬI BẤT KỂ DỮ LIỆU CÓ ĐỔI HAY KHÔNG)
-const uint32_t GPS_INTERVAL_MS = 120000;      // 2 phút quét tọa độ 1 lần (giãn ra cho đỡ tốn pin/data)
-const uint32_t HEARTBEAT_INTERVAL_MS = 240000; // 4 phút ép gửi điểm danh 1 lần dù không có gì thay đổi
+const uint32_t TELEMETRY_INTERVAL_MS = 10000;   // 10 giây gửi 1 lần (LUÔN GỬI BẤT KỂ DỮ LIỆU CÓ ĐỔI HAY KHÔNG)
+const uint32_t GPS_INTERVAL_MS = 15000;      // 15 giây quét tọa độ 1 lần (giãn ra cho đỡ tốn pin/data)
+const uint32_t HEARTBEAT_INTERVAL_MS = 30000; // 30 giây ép gửi điểm danh 1 lần dù không có gì thay đổi
 const uint32_t SIREN_DURATION_MS = 10000;
 const uint8_t MQTT_PUBLISH_QOS = 1;
 
@@ -56,7 +56,7 @@ bool doorOpen = false;
 bool sirenActive = false;
 uint32_t sirenUntilMs = 0;
 bool is_streaming = false;
-
+bool use_real_gps = true; // GPS toggle from simulator
 // Tọa độ hiện tại
 float currentLat = 0.0;
 float currentLon = 0.0;
@@ -163,6 +163,11 @@ void loop() {
 // HÀM ĐỊNH VỊ 3 LỚP ĐÃ TỐI ƯU
 // ==========================================
 void updateHybridLocation() {
+  if (!use_real_gps) {
+      Serial.println("\n--- ĐANG MÔ PHỎNG GPS. BỎ QUA ĐỊNH VỊ 3 LỚP ĐỂ TIẾT KIỆM PIN ---");
+      return;
+  }
+
   Serial.println("\n--- ĐANG ĐỊNH VỊ (GPS -> Wi-Fi -> LBS) ---");
   
   // =====================================
@@ -289,6 +294,7 @@ void updateHybridLocation() {
   }
 }
 
+
 // ==========================================
 // CÁC HÀM CÒN LẠI (GIỮ NGUYÊN)
 // ==========================================
@@ -387,6 +393,14 @@ void handleCommandPayload(const uint8_t* payload, size_t length) {
   else if (strcmp(action, "STOP_STREAMING") == 0) {
     is_streaming = false;
     Serial.println(">>> LỆNH: DỪNG GỬI DỮ LIỆU <<<");
+  } 
+  else if (strcmp(action, "ENABLE_GPS") == 0) {
+    use_real_gps = true;
+    Serial.println(">>> LỆNH: BẬT LẠI ĐỊNH VỊ 3 LỚP (MẠCH THẬT) <<<");
+  } 
+  else if (strcmp(action, "DISABLE_GPS") == 0) {
+    use_real_gps = false;
+    Serial.println(">>> LỆNH: TẮT ĐỊNH VỊ 3 LỚP (ĐANG DÙNG GIẢ LẬP) <<<");
   } 
   else if (strcmp(action, "ACTIVATE_SIREN") == 0) activateSiren(SIREN_DURATION_MS);
 }

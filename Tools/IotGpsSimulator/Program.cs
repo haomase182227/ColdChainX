@@ -142,6 +142,10 @@ app.MapPost("/api/fleet/start", async (SimulationRequest req, ILoggerFactory log
         return Results.BadRequest(new { error = "Lỗi khi kiểm tra trạng thái thiết bị IoT: " + ex.Message });
     }
 
+    // Luôn luôn gửi lệnh tắt GPS 3 lớp khi bắt đầu mô phỏng (vì Simulator sẽ phát tọa độ)
+    _ = SendMqttCommandAsync(deviceId, "DISABLE_GPS", logger);
+
+
     
     if (FleetState.ContainsKey(deviceId))
     {
@@ -211,11 +215,21 @@ app.MapPost("/api/fleet/{deviceId}/anomaly", (string deviceId, AnomalyRequest re
     return Results.NotFound();
 });
 
-app.MapPost("/api/fleet/{deviceId}/gps-source", (string deviceId, AnomalyRequest req) =>
+app.MapPost("/api/fleet/{deviceId}/gps-source", (string deviceId, AnomalyRequest req, ILogger<Program> logger) =>
 {
     if (FleetState.TryGetValue(deviceId, out var state))
     {
+        bool wasReal = state.UseRealGps;
         state.UseRealGps = req.Value > 0;
+        
+        // Khi chuyển từ mạch thật về lại mô phỏng, ép nó nhảy về vị trí ảo trên lộ trình
+        if (wasReal && !state.UseRealGps && state.Path != null && state.CurrentPointIndex < state.Path.Count)
+        {
+            state.CurrentLat = state.Path[state.CurrentPointIndex].Lat;
+            state.CurrentLon = state.Path[state.CurrentPointIndex].Lon;
+        }
+
+        _ = SendMqttCommandAsync(deviceId, state.UseRealGps ? "ENABLE_GPS" : "DISABLE_GPS", logger);
         return Results.Ok();
     }
     return Results.NotFound();
@@ -226,6 +240,16 @@ app.MapPost("/api/fleet/{deviceId}/temp-source", (string deviceId, AnomalyReques
     if (FleetState.TryGetValue(deviceId, out var state))
     {
         state.InjectTemp = req.Value <= 0; // Value > 0 means UseRealTemp, so InjectTemp = false
+        return Results.Ok();
+    }
+    return Results.NotFound();
+});
+
+app.MapPost("/api/fleet/{deviceId}/speed", (string deviceId, AnomalyRequest req) =>
+{
+    if (FleetState.TryGetValue(deviceId, out var state))
+    {
+        state.SpeedKmh = req.Value ?? 60.0;
         return Results.Ok();
     }
     return Results.NotFound();
@@ -325,7 +349,9 @@ async Task RunVehicleSimulation(VehicleSimulationState state, ILogger logger)
                         } else {
                             if (root.TryGetProperty("TempC", out var tempEl)) state.CurrentTemperature = tempEl.GetDouble();
                         }
-                        if (root.TryGetProperty("DoorOpen", out var doorEl)) state.IsDoorOpen = doorEl.GetBoolean();
+                        
+                        // XÓA: Bỏ ghi đè DoorOpen từ mạch IoT thật, để Simulator toàn quyền điều khiển cửa!
+                        // if (root.TryGetProperty("DoorOpen", out var doorEl)) state.IsDoorOpen = doorEl.GetBoolean();
                         
                         if (state.UseRealGps) {
                             if (root.TryGetProperty("Lat", out var latEl)) state.CurrentLat = latEl.GetDouble();
@@ -379,7 +405,7 @@ async Task RunVehicleSimulation(VehicleSimulationState state, ILogger logger)
         else
         {
             var rnd = new Random();
-            int tickDelayMs = 90000; 
+            int tickDelayMs = 10000; 
 
             while (state.CurrentPointIndex < state.Path.Count && !state.CancellationTokenSource.Token.IsCancellationRequested)
             {
@@ -472,6 +498,31 @@ static List<Coordinate> DecodePolyline(string encodedPoints)
     return coordinates;
 }
 
+async Task SendMqttCommandAsync(string deviceId, string action, ILogger logger)
+{
+    var cmdClient = factory.CreateMqttClient();
+    var options = new MqttClientOptionsBuilder()
+        .WithTcpServer("8.231.129.222", 1883)
+        .WithCredentials("esp32user", "183732")
+        .Build();
+        
+    try
+    {
+        await cmdClient.ConnectAsync(options);
+        var msg = new MqttApplicationMessageBuilder()
+            .WithTopic($"command/coldchain/{deviceId}")
+            .WithPayload($"{{\"action\":\"{action}\"}}")
+            .Build();
+        await cmdClient.PublishAsync(msg);
+        await cmdClient.DisconnectAsync();
+        logger.LogInformation($"Sent MQTT command {action} to {deviceId}");
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, $"Failed to send MQTT command {action} to {deviceId}");
+    }
+}
+
 // ==========================================
 // MODELS
 // ==========================================
@@ -511,6 +562,7 @@ public class VehicleSimulationState
     public double CurrentTemperature { get; set; }
     public double TargetTemperature { get; set; }
     public bool IsDoorOpen { get; set; }
+
     public int CurrentPointIndex { get; set; }
     
     [System.Text.Json.Serialization.JsonIgnore]
@@ -519,3 +571,5 @@ public class VehicleSimulationState
     [System.Text.Json.Serialization.JsonIgnore]
     public CancellationTokenSource? CancellationTokenSource { get; set; }
 }
+
+
