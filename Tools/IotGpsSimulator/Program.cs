@@ -219,7 +219,16 @@ app.MapPost("/api/fleet/{deviceId}/gps-source", (string deviceId, AnomalyRequest
 {
     if (FleetState.TryGetValue(deviceId, out var state))
     {
+        bool wasReal = state.UseRealGps;
         state.UseRealGps = req.Value > 0;
+        
+        // Khi chuyển từ mạch thật về lại mô phỏng, ép nó nhảy về vị trí ảo trên lộ trình
+        if (wasReal && !state.UseRealGps && state.Path != null && state.CurrentPointIndex < state.Path.Count)
+        {
+            state.CurrentLat = state.Path[state.CurrentPointIndex].Lat;
+            state.CurrentLon = state.Path[state.CurrentPointIndex].Lon;
+        }
+
         _ = SendMqttCommandAsync(deviceId, state.UseRealGps ? "ENABLE_GPS" : "DISABLE_GPS", logger);
         return Results.Ok();
     }
@@ -340,7 +349,9 @@ async Task RunVehicleSimulation(VehicleSimulationState state, ILogger logger)
                         } else {
                             if (root.TryGetProperty("TempC", out var tempEl)) state.CurrentTemperature = tempEl.GetDouble();
                         }
-                        if (root.TryGetProperty("DoorOpen", out var doorEl)) state.IsDoorOpen = doorEl.GetBoolean();
+                        
+                        // XÓA: Bỏ ghi đè DoorOpen từ mạch IoT thật, để Simulator toàn quyền điều khiển cửa!
+                        // if (root.TryGetProperty("DoorOpen", out var doorEl)) state.IsDoorOpen = doorEl.GetBoolean();
                         
                         if (state.UseRealGps) {
                             if (root.TryGetProperty("Lat", out var latEl)) state.CurrentLat = latEl.GetDouble();
