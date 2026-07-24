@@ -25,7 +25,7 @@ public interface IDriverAvailabilityService
     /// adjust <see cref="Driver.Status"/> in place (RELAX ⇄ Available) so the
     /// restriction auto-clears once the window expires. Does not call SaveChanges.
     /// </summary>
-    Task ReconcileStatusAsync(Driver driver);
+    Task ReconcileStatusAsync(Driver driver, Guid? excludedTripId = null);
 }
 
 /// <summary>Outcome of a driving-hour availability check.</summary>
