@@ -275,6 +275,7 @@ public class IncidentRescueService : IIncidentRescueService
 
             var trip = await _db.MasterTrips
                 .Include(t => t.Vehicle)
+                    .ThenInclude(v => v!.IotDevices)
                 .Include(t => t.TripStops)
                     .ThenInclude(s => s.Location)
                 .FirstOrDefaultAsync(t => t.TripId == incident.TripId.Value);
@@ -444,6 +445,12 @@ public class IncidentRescueService : IIncidentRescueService
             // ── Realtime (best-effort, không block API nếu SignalR lỗi) ──
             try
             {
+                // Ngắt streaming thiết bị IoT của xe hỏng
+                foreach (var device in brokenVehicle.IotDevices.Where(d => !string.IsNullOrWhiteSpace(d.DeviceCode)))
+                {
+                    await _mqttPublisher.StopStreamingAsync(device.DeviceCode!, CancellationToken.None);
+                }
+
                 // Lệnh sang xe cho đội bốc xếp + điều phối + admin
                 await _hubContext.Clients.Groups("Group_Dispatcher", "Group_Loader", "Group_Admin")
                     .SendAsync("IncidentRescueDispatched", new

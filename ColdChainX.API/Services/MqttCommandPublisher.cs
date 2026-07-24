@@ -135,4 +135,64 @@ public sealed class MqttCommandPublisher : IMqttCommandPublisher
             }
         }
     }
+
+    public async Task<bool> StopStreamingAsync(string deviceCode, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(deviceCode))
+        {
+            return false;
+        }
+
+        var host = _configuration["Mqtt:Host"] ?? "localhost";
+        var port = _configuration.GetValue("Mqtt:Port", 1883);
+        var username = _configuration["Mqtt:Username"];
+        var topicPrefix = _configuration["Mqtt:CommandTopicPrefix"] ?? "command/coldchain";
+
+        var optionsBuilder = new MqttClientOptionsBuilder()
+            .WithClientId($"coldchainx-command-stop-{Guid.NewGuid():N}")
+            .WithTcpServer(host, port)
+            .WithProtocolVersion(MqttProtocolVersion.V311)
+            .WithCleanSession();
+
+        if (!string.IsNullOrWhiteSpace(username))
+        {
+            optionsBuilder.WithCredentials(username, _configuration["Mqtt:Password"]);
+        }
+
+        var payload = JsonSerializer.Serialize(new
+        {
+            command = "STOP_STREAMING",
+            deviceCode = deviceCode,
+            timestamp = DateTimeOffset.UtcNow
+        });
+
+        var topic = $"{topicPrefix.TrimEnd('/')}/{deviceCode}";
+
+        var message = new MqttApplicationMessageBuilder()
+            .WithTopic(topic)
+            .WithPayload(Encoding.UTF8.GetBytes(payload))
+            .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
+            .Build();
+
+        var client = new MqttFactory().CreateMqttClient();
+        try
+        {
+            await client.ConnectAsync(optionsBuilder.Build(), cancellationToken);
+            await client.PublishAsync(message, cancellationToken);
+            _logger.LogInformation("Successfully published STOP_STREAMING command to {DeviceCode}", deviceCode);
+            return true;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Failed to publish stop streaming command to device {DeviceCode}.", deviceCode);
+            return false;
+        }
+        finally
+        {
+            if (client.IsConnected)
+            {
+                await client.DisconnectAsync(cancellationToken: cancellationToken);
+            }
+        }
+    }
 }

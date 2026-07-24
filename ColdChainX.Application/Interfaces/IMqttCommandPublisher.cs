@@ -7,4 +7,5 @@ public interface IMqttCommandPublisher
 {
     Task ActivateSirenAsync(string deviceCode, object reason, CancellationToken cancellationToken);
     Task<bool> StartStreamingAsync(string deviceCode, CancellationToken cancellationToken);
+    Task<bool> StopStreamingAsync(string deviceCode, CancellationToken cancellationToken);
 }

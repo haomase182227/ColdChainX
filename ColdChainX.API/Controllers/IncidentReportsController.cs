@@ -207,7 +207,7 @@ namespace ColdChainX.API.Controllers
         /// published successfully before the trip returns to IN_TRANSIT.
         /// </summary>
         [HttpPost("{id:guid}/confirm-transload")]
-        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Dispatcher,DISPATCHER,WarehouseOperator,Loader,LOADER")]
+        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Dispatcher,DISPATCHER,WarehouseOperator,Loader,LOADER,Driver,DRIVER")]
         [ProducesResponseType(typeof(ApiResponse<IncidentWorkflowResult>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ConfirmTransload(
             [FromRoute] Guid id,
