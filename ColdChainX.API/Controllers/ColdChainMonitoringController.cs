@@ -226,6 +226,9 @@ public sealed class ColdChainMonitoringController : ControllerBase
             .Include(t => t.DestinationLocation)
             .Include(t => t.Vehicle)
                 .ThenInclude(v => v!.IotDevices)
+            .Include(t => t.TripDrivers)
+                .ThenInclude(td => td.Driver)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(t => t.TripId == tripId, cancellationToken);
 
         if (trip == null)
@@ -245,16 +248,24 @@ public sealed class ColdChainMonitoringController : ControllerBase
             })
             .ToListAsync(cancellationToken);
 
-        var device = trip.Vehicle?.IotDevices.FirstOrDefault();
-        var redisKey = string.IsNullOrWhiteSpace(device?.DeviceCode)
-            ? device?.DeviceId.ToString()
-            : device.DeviceCode;
+        var device = SelectTrackingDevice(trip.Vehicle?.IotDevices);
+        var redisKey = BuildRedisKey(device);
         var latest = redisKey == null ? null : await _redisService.GetLatestAsync(redisKey);
-
 
         var eta = latest == null
             ? null
             : BuildEta(latest.Lat, latest.Lon, (double)trip.DestinationLocation.Latitude, (double)trip.DestinationLocation.Longitude);
+
+        var drivers = trip.TripDrivers
+            .OrderBy(td => td.DriverRole == "PRIMARY" ? 0 : 1)
+            .ThenBy(td => td.CreatedAt)
+            .Select(td => new TrackingTripDriverResponse
+            {
+                DriverId = td.DriverId,
+                FullName = td.Driver.FullName,
+                DriverRole = td.DriverRole
+            })
+            .ToList();
 
         return Ok(new
         {
@@ -263,19 +274,28 @@ public sealed class ColdChainMonitoringController : ControllerBase
             {
                 trip.TripId,
                 trip.Status,
+                trip.PlannedStartTime,
+                trip.PlannedEndTime,
+                trip.StartedAt,
+                trip.CompletedAt,
+                trip.SealNumber,
                 Vehicle = trip.Vehicle == null ? null : new
                 {
                     trip.Vehicle.VehicleId,
                     trip.Vehicle.TruckPlate
                 },
+                Driver = drivers.Count == 0 ? null : string.Join(", ", drivers.Select(d => d.FullName)),
+                Drivers = drivers,
                 Device = device == null ? null : new
                 {
                     device.DeviceId,
                     device.DeviceCode,
                     device.Status,
+                    device.IsOnline,
                     device.LastPingTime
                 },
                 Orders = orders,
+                OrderCount = orders.Count,
                 LatestTelemetry = latest,
                 Eta = eta
             }
