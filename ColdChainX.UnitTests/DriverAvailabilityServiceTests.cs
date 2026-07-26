@@ -40,12 +40,13 @@ namespace ColdChainX.UnitTests
 
         public void Dispose() => _db.Dispose();
 
-        private async Task LogHoursAsync(decimal hours, DateOnly day)
+        private async Task LogHoursAsync(decimal hours, DateOnly day, Guid? tripId = null)
         {
             _db.DriverWorkLogs.Add(new DriverWorkLog
             {
                 WorkLogId = Guid.NewGuid(),
                 DriverId = _driverId,
+                TripId = tripId,
                 WorkDate = day,
                 DrivingHours = hours
             });
@@ -116,6 +117,33 @@ namespace ColdChainX.UnitTests
             await _service.ReconcileStatusAsync(driver);
 
             Assert.Equal("ACTIVE", driver.Status);
+        }
+
+        [Fact]
+        public async Task ReconcileStatusAsync_PreservesPlanningWhileTripIsActive()
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            await LogHoursAsync(10m, today);
+
+            var driver = await _db.Drivers.FindAsync(_driverId);
+            driver!.Status = "PLANNING";
+
+            await _service.ReconcileStatusAsync(driver);
+
+            Assert.Equal("PLANNING", driver.Status);
+        }
+
+        [Fact]
+        public async Task ReconcileStatusAsync_ExcludesCancelledTripHours()
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var cancelledTripId = Guid.NewGuid();
+            await LogHoursAsync(10m, today, cancelledTripId);
+
+            var driver = await _db.Drivers.FindAsync(_driverId);
+            await _service.ReconcileStatusAsync(driver!, cancelledTripId);
+
+            Assert.Equal("ACTIVE", driver!.Status);
         }
     }
 }

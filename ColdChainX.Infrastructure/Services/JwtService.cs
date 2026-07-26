@@ -21,7 +21,7 @@ namespace ColdChainX.Infrastructure.Services
             _settings = options.Value;
         }
 
-        public string GenerateAccessToken(User user, DateTime expiresAt, Guid? customerId = null)
+        public string GenerateAccessToken(User user, DateTime expiresAt, Guid? customerId = null, Guid? driverId = null)
         {
             var keyBytes = Encoding.UTF8.GetBytes(_settings.Key);
             var securityKey = new SymmetricSecurityKey(keyBytes);
@@ -50,6 +50,11 @@ namespace ColdChainX.Infrastructure.Services
             if (customerId.HasValue)
             {
                 claims.Add(new SecurityClaim("CustomerId", customerId.Value.ToString()));
+            }
+
+            if (driverId.HasValue)
+            {
+                claims.Add(new SecurityClaim("DriverId", driverId.Value.ToString()));
             }
 
             if (user.WarehouseId.HasValue)

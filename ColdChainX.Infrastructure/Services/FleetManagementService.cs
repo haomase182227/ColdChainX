@@ -25,6 +25,37 @@ public class FleetManagementService : IFleetManagementService
         "CITY_PERMIT"
     };
 
+    private static readonly string[] BusyTripStatuses =
+    {
+        "PLANNED",
+        "PICKING",
+        "LOADING",
+        "LOADED",
+        "LOADING_COMPLETED",
+        "SEALED",
+        "DISPATCHED",
+        "IN_TRANSIT",
+        "DELAYED"
+    };
+
+    private static readonly HashSet<string> ManuallyEditableDriverStatuses =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            "ACTIVE",
+            "INACTIVE"
+        };
+
+    private static readonly HashSet<string> SystemManagedDriverStatuses =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            "PLANNING",
+            "ONTRIP",
+            "ON_TRIP",
+            "RELAX",
+            "SUSPENDED_DOCS",
+            "DELETED"
+        };
+
     private const string DefaultDriverPassword = "@123@";
 
     private readonly ApplicationDbContext _db;
@@ -433,13 +464,16 @@ public class FleetManagementService : IFleetManagementService
         if (!string.IsNullOrWhiteSpace(request.IdentityNumber))
         {
             var identityNumber = NormalizeRequired(request.IdentityNumber);
-            var identityExists = await _db.Drivers.AnyAsync(d =>
-                d.DriverId != driverId
-                && d.IdentityNumber == identityNumber
-                && d.Status != "DELETED");
+            if (!string.Equals(driver.IdentityNumber, identityNumber, StringComparison.Ordinal))
+            {
+                var identityExists = await _db.Drivers.AnyAsync(d =>
+                    d.DriverId != driverId
+                    && d.IdentityNumber == identityNumber
+                    && d.Status != "DELETED");
 
-            if (identityExists)
-                return ApiResponse<DriverFleetResponse>.Failure("Identity number already exists");
+                if (identityExists)
+                    return ApiResponse<DriverFleetResponse>.Failure("Identity number already exists");
+            }
 
             driver.IdentityNumber = identityNumber;
         }
@@ -463,46 +497,92 @@ public class FleetManagementService : IFleetManagementService
         if (!string.IsNullOrWhiteSpace(request.Email))
         {
             var email = NormalizeRequired(request.Email).ToLowerInvariant();
-            var emailExists = await _db.Users.AnyAsync(u =>
-                u.UserId != driver.UserId
-                && u.Email != null
-                && u.Email.ToLower() == email);
+            var emailChanged = driver.User == null
+                || !string.Equals(driver.User.Email, email, StringComparison.OrdinalIgnoreCase);
 
-            if (emailExists)
-                return ApiResponse<DriverFleetResponse>.Failure("Email already in use");
-
-            if (driver.User == null)
+            if (emailChanged)
             {
-                var driverRole = await _db.Roles.FirstOrDefaultAsync(r => r.RoleName == "Driver");
-                if (driverRole == null)
-                    return ApiResponse<DriverFleetResponse>.Failure("Driver role not found in the system");
+                var emailExists = await _db.Users.AnyAsync(u =>
+                    u.UserId != driver.UserId
+                    && u.Email != null
+                    && u.Email.ToLower() == email);
 
-                driver.User = new User
+                if (emailExists)
+                    return ApiResponse<DriverFleetResponse>.Failure("Email already in use");
+
+                if (driver.User == null)
                 {
-                    UserId = Guid.NewGuid(),
-                    Username = email,
-                    FullName = driver.FullName,
-                    Email = email,
-                    RoleId = driverRole.RoleId,
-                    Status = "ACTIVE",
-                    CreatedAt = DateTime.Now
-                };
-                driver.User.PasswordHash = _passwordHasher.HashPassword(driver.User, DefaultDriverPassword);
-                driver.UserId = driver.User.UserId;
-                _db.Users.Add(driver.User);
-            }
-            else
-            {
-                driver.User.Email = email;
-                driver.User.Username = email;
-                driver.User.UpdatedAt = DateTime.Now;
+                    var driverRole = await _db.Roles.FirstOrDefaultAsync(r => r.RoleName == "Driver");
+                    if (driverRole == null)
+                        return ApiResponse<DriverFleetResponse>.Failure("Driver role not found in the system");
+
+                    driver.User = new User
+                    {
+                        UserId = Guid.NewGuid(),
+                        Username = email,
+                        FullName = driver.FullName,
+                        Email = email,
+                        RoleId = driverRole.RoleId,
+                        Status = "ACTIVE",
+                        CreatedAt = DateTime.Now
+                    };
+                    driver.User.PasswordHash = _passwordHasher.HashPassword(driver.User, DefaultDriverPassword);
+                    driver.UserId = driver.User.UserId;
+                    _db.Users.Add(driver.User);
+                }
+                else
+                {
+                    driver.User.Email = email;
+                    driver.User.Username = email;
+                    driver.User.UpdatedAt = DateTime.Now;
+                }
             }
         }
 
-        await RefreshDriverStatusAsync(driver);
-
         if (!string.IsNullOrWhiteSpace(request.Status))
-            driver.Status = NormalizeRequired(request.Status).ToUpperInvariant();
+        {
+            var requestedStatus = NormalizeRequired(request.Status).ToUpperInvariant();
+            if (requestedStatus == "AVAILABLE")
+                requestedStatus = "ACTIVE";
+
+            if (!ManuallyEditableDriverStatuses.Contains(requestedStatus))
+            {
+                return ApiResponse<DriverFleetResponse>.Failure(
+                    "Admin chỉ có thể chuyển trạng thái tài xế giữa ACTIVE và INACTIVE.");
+            }
+
+            var busyTrip = await _db.TripDrivers
+                .Where(td => td.DriverId == driverId
+                    && td.Trip.Status != null
+                    && BusyTripStatuses.Contains(td.Trip.Status))
+                .Select(td => new { td.TripId, td.Trip.Status })
+                .FirstOrDefaultAsync();
+
+            if (busyTrip != null)
+            {
+                return ApiResponse<DriverFleetResponse>.Failure(
+                    $"Không thể thay đổi trạng thái vì tài xế đang được phân công cho chuyến " +
+                    $"{busyTrip.TripId} ({busyTrip.Status}).");
+            }
+
+            if (SystemManagedDriverStatuses.Contains(driver.Status ?? string.Empty))
+            {
+                return ApiResponse<DriverFleetResponse>.Failure(
+                    $"Không thể chỉnh thủ công trạng thái {driver.Status}. Trạng thái này do hệ thống quản lý.");
+            }
+
+            if (requestedStatus == "ACTIVE" && !HasValidDriverLicense(driver))
+            {
+                return ApiResponse<DriverFleetResponse>.Failure(
+                    "Không thể kích hoạt tài xế vì GPLX đang thiếu hoặc đã hết hạn.");
+            }
+
+            driver.Status = requestedStatus;
+        }
+        else
+        {
+            await RefreshDriverStatusAsync(driver);
+        }
 
         await _db.SaveChangesAsync();
         return ApiResponse<DriverFleetResponse>.SuccessResponse(ToDriverResponse(driver), "Driver updated successfully");
@@ -1305,12 +1385,21 @@ public class FleetManagementService : IFleetManagementService
 
     private async Task RefreshDriverStatusAsync(Driver driver)
     {
-        if (driver.Status == "DELETED") return;
+        var currentStatus = driver.Status?.Trim().ToUpperInvariant();
+        if (currentStatus is "DELETED" or "INACTIVE" or "PLANNING" or "ONTRIP" or "ON_TRIP" or "RELAX")
+            return;
 
-        var today = DateOnly.FromDateTime(DateTime.Today);
-        var hasValidLicense = driver.DriverLicenses.Any(l => l.Status == "ACTIVE" && l.ExpiryDate > today);
-        driver.Status = hasValidLicense ? "ACTIVE" : "SUSPENDED_DOCS";
+        driver.Status = HasValidDriverLicense(driver) ? "ACTIVE" : "SUSPENDED_DOCS";
         await Task.CompletedTask;
+    }
+
+    private static bool HasValidDriverLicense(Driver driver)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        return driver.DriverLicenses.Any(l =>
+            l.ExpiryDate >= today
+            && (string.IsNullOrWhiteSpace(l.Status)
+                || l.Status.Equals("ACTIVE", StringComparison.OrdinalIgnoreCase)));
     }
 
     private async Task AddNotificationsAsync(IEnumerable<string> roleNames, Guid? specificUserId, string templateId, object parameters, string fallbackMessage, CancellationToken cancellationToken = default)

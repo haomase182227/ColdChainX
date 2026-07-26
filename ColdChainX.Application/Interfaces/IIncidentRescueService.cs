@@ -23,7 +23,7 @@ namespace ColdChainX.Application.Interfaces
         Task<ApiResponse<IncidentWorkflowResult>> ContinueTripAsync(
             Guid incidentId,
             ContinueTripAfterIncidentRequest request,
-            Guid dispatcherId);
+            Guid driverUserId);
 
         /// <summary>
         /// [Bước 2 + 3] Xuất lệnh điều xe thay thế đến hiện trường (Sang xe):

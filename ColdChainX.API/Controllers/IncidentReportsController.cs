@@ -124,12 +124,14 @@ namespace ColdChainX.API.Controllers
         }
 
         /// <summary>
-        /// Dispatcher confirms an incident that does not require rescue was handled
-        /// on site and allows the original trip/vehicle to continue.
+        /// The assigned driver confirms an incident that does not require rescue
+        /// was handled on site and continues the original trip/vehicle.
         /// </summary>
         [HttpPost("{id:guid}/continue-trip")]
-        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Dispatcher,DISPATCHER")]
+        [Authorize(Roles = "Driver,DRIVER")]
         [ProducesResponseType(typeof(ApiResponse<IncidentWorkflowResult>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
         public async Task<IActionResult> ContinueTrip(
             [FromRoute] Guid id,
             [FromBody] ContinueTripAfterIncidentRequest request)

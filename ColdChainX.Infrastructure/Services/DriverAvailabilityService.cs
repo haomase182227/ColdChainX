@@ -72,10 +72,17 @@ public class DriverAvailabilityService : IDriverAvailabilityService
         await Task.CompletedTask;
     }
 
-    public async Task ReconcileStatusAsync(Driver driver)
+    public async Task ReconcileStatusAsync(Driver driver, Guid? excludedTripId = null)
     {
+        var currentStatus = driver.Status?.Trim().ToUpperInvariant();
+        if (currentStatus is "DELETED" or "INACTIVE" or "SUSPENDED_DOCS"
+            or "PLANNING" or "ONTRIP" or "ON_TRIP")
+        {
+            return;
+        }
+
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var (dayHours, weekHours) = await SumHoursAsync(driver.DriverId, today);
+        var (dayHours, weekHours) = await SumHoursAsync(driver.DriverId, today, excludedTripId);
 
         var overLimit = dayHours >= MaxDailyHours || weekHours >= MaxWeeklyHours;
 
@@ -91,12 +98,18 @@ public class DriverAvailabilityService : IDriverAvailabilityService
     }
 
     /// <summary>Sum a driver's logged hours for the calendar day and the Mon–Sun week containing <paramref name="day"/>.</summary>
-    private async Task<(decimal dayHours, decimal weekHours)> SumHoursAsync(Guid driverId, DateOnly day)
+    private async Task<(decimal dayHours, decimal weekHours)> SumHoursAsync(
+        Guid driverId,
+        DateOnly day,
+        Guid? excludedTripId = null)
     {
         var (weekStart, weekEnd) = CalendarWeek(day);
 
         var logs = await _context.DriverWorkLogs
-            .Where(w => w.DriverId == driverId && w.WorkDate >= weekStart && w.WorkDate <= weekEnd)
+            .Where(w => w.DriverId == driverId
+                && w.WorkDate >= weekStart
+                && w.WorkDate <= weekEnd
+                && (!excludedTripId.HasValue || w.TripId != excludedTripId.Value))
             .Select(w => new { w.WorkDate, w.DrivingHours })
             .ToListAsync();
 

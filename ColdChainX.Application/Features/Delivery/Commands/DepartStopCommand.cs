@@ -23,11 +23,16 @@ public class DepartStopCommandHandler : IRequestHandler<DepartStopCommand, ApiRe
 {
     private readonly IApplicationDbContext _context;
     private readonly IDeliveryEventService _deliveryEvents;
+    private readonly IDriverAvailabilityService _driverAvailability;
 
-    public DepartStopCommandHandler(IApplicationDbContext context, IDeliveryEventService deliveryEvents)
+    public DepartStopCommandHandler(
+        IApplicationDbContext context,
+        IDeliveryEventService deliveryEvents,
+        IDriverAvailabilityService driverAvailability)
     {
         _context = context;
         _deliveryEvents = deliveryEvents;
+        _driverAvailability = driverAvailability;
     }
 
     public async Task<ApiResponse<DepartResponse>> Handle(DepartStopCommand request, CancellationToken cancellationToken)
@@ -178,9 +183,26 @@ public class DepartStopCommandHandler : IRequestHandler<DepartStopCommand, ApiRe
                     foreach (var td in tripDrivers)
                     {
                         var d = await _context.Drivers
+                            .Include(dr => dr.DriverLicenses)
                             .FirstOrDefaultAsync(dr => dr.DriverId == td.DriverId, cancellationToken);
                         if (d != null)
-                            d.Status = "ACTIVE";
+                        {
+                            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+                            var hasValidLicense = d.DriverLicenses.Any(l =>
+                                l.ExpiryDate >= today
+                                && (string.IsNullOrWhiteSpace(l.Status)
+                                    || l.Status.Equals("ACTIVE", StringComparison.OrdinalIgnoreCase)));
+
+                            if (!hasValidLicense)
+                            {
+                                d.Status = "SUSPENDED_DOCS";
+                            }
+                            else
+                            {
+                                d.Status = "ACTIVE";
+                                await _driverAvailability.ReconcileStatusAsync(d);
+                            }
+                        }
                     }
                 }
 
