@@ -306,10 +306,18 @@ public class DispatchController : ControllerBase
             .FirstOrDefaultAsync() ?? "Kho hiá»‡n táº¡i";
 
         var wIdStr = warehouseId.ToString();
+        var busyDriverIds = _db.TripDrivers
+            .AsNoTracking()
+            .Where(td => td.Trip.Status != null
+                && ActiveTripStatuses.Contains(td.Trip.Status))
+            .Select(td => td.DriverId);
+
         var candidates = await _db.Drivers
             .Include(d => d.DriverLicenses)
             .Include(d => d.User)
-            .Where(d => (d.Status == "ACTIVE" || d.Status == "RELAX") && (d.CurrentLocation == wIdStr || d.CurrentLocation == null))
+            .Where(d => (d.Status == "ACTIVE" || d.Status == "RELAX")
+                && d.CurrentLocation == wIdStr
+                && !busyDriverIds.Contains(d.DriverId))
             .ToListAsync();
 
         foreach (var d in candidates)
