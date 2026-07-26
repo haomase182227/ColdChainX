@@ -49,6 +49,8 @@ public partial class User
 
     public virtual ICollection<ClaimEvidence> ClaimEvidences { get; set; } = new List<ClaimEvidence>();
 
+    public virtual ICollection<DeviceToken> DeviceTokens { get; set; } = new List<DeviceToken>();
+
     public virtual ICollection<ExpenseAdvance> ExpenseAdvances { get; set; } = new List<ExpenseAdvance>();
 
     public virtual ICollection<ExpenseReceipt> ExpenseReceipts { get; set; } = new List<ExpenseReceipt>();

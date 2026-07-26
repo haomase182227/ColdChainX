@@ -47,26 +47,27 @@ namespace ColdChainX.API.Controllers
         [HttpGet("users/{userId:guid}")]
         public async Task<IActionResult> GetUserNotifications(
             Guid userId,
-            [FromQuery] bool unreadOnly = false,
+            [FromQuery] bool? unreadOnly = null,
+            [FromQuery] string? type = null,
             [FromQuery] int pageNumber = 1,
             [FromQuery] int pageSize = 10)
         {
-            var result = await _notificationService.GetUserNotificationsAsync(userId, unreadOnly, pageNumber, pageSize);
+            var result = await _notificationService.GetUserNotificationsAsync(userId, unreadOnly, type, pageNumber, pageSize);
             return Ok(result);
         }
 
-        [HttpGet("{notificationId:guid}")]
-        public async Task<IActionResult> GetNotificationById(Guid notificationId)
+        [HttpGet("users/{userId:guid}/{notificationId:guid}")]
+        public async Task<IActionResult> GetNotificationById(Guid userId, Guid notificationId)
         {
-            var result = await _notificationService.GetNotificationByIdAsync(notificationId);
+            var result = await _notificationService.GetNotificationByIdAsync(userId, notificationId);
             if (!result.Success) return NotFound(result);
             return Ok(result);
         }
 
-        [HttpPut("{notificationId:guid}/read")]
-        public async Task<IActionResult> MarkAsRead(Guid notificationId)
+        [HttpPut("users/{userId:guid}/{notificationId:guid}/read")]
+        public async Task<IActionResult> MarkAsRead(Guid userId, Guid notificationId)
         {
-            var result = await _notificationService.MarkAsReadAsync(notificationId);
+            var result = await _notificationService.MarkAsReadAsync(userId, notificationId);
             if (!result.Success) return NotFound(result);
             return Ok(result);
         }

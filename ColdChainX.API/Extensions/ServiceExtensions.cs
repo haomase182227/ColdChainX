@@ -20,6 +20,7 @@ using ColdChainX.Core.Interfaces;
 using ColdChainX.Infrastructure.Persistence;
 using ColdChainX.Infrastructure.Repositories;
 using ColdChainX.Infrastructure.Services;
+using ColdChainX.Infrastructure.Services.Firebase;
 using ColdChainX.Shared.Constants;
 using Npgsql;
 
@@ -123,6 +124,7 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IContractService, ContractService>();
             services.AddScoped<IContractAppendixService, ContractAppendixService>();
             services.AddScoped<IChatService, ChatService>();
+            services.AddFirebaseCloudMessaging(configuration);
             services.AddScoped<INotificationService, NotificationService>();
             services.AddScoped<IWarehouseReceiptService, WarehouseReceiptService>();
             services.AddScoped<IInvoiceService, InvoiceService>();
