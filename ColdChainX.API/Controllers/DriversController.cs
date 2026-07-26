@@ -292,6 +292,7 @@ namespace ColdChainX.API.Controllers
                     StopCount = t.TripStops.Count,
                     Stops = t.TripStops.OrderBy(s => s.StopSequence).Select(s => new
                     {
+                        s.StopId,
                         s.StopSequence,
                         Address = s.Location != null ? s.Location.Address : "N/A",
                         s.PlannedArrivalTime,
@@ -349,6 +350,7 @@ namespace ColdChainX.API.Controllers
                     trip.StopCount,
                     Stops = trip.Stops.Select(s => new 
                     { 
+                        s.StopId,
                         s.StopSequence, 
                         s.Address, 
                         s.PlannedArrivalTime, 
