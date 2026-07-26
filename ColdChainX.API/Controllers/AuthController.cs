@@ -104,6 +104,27 @@ namespace ColdChainX.API.Controllers
         }
 
         /// <summary>
+        /// Change the current user's password.
+        /// </summary>
+        [Authorize]
+        [HttpPut("change-password")]
+        [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+        {
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)
+                              ?? User.FindFirst("sub");
+
+            if (userIdClaim == null || !Guid.TryParse(userIdClaim.Value, out var userId))
+                return Unauthorized(ApiResponse<bool>.Failure("Invalid token", StatusCodes.Status401Unauthorized));
+
+            var result = await _authService.ChangePasswordAsync(userId, request);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        /// <summary>
         /// Update profile for the current user.
         /// </summary>
         [Authorize]

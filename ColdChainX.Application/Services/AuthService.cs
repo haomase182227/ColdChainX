@@ -173,6 +173,43 @@ namespace ColdChainX.Application.Services
             return ApiResponse<bool>.SuccessResponse(true, "Logout successful");
         }
 
+        public async Task<ApiResponse<bool>> ChangePasswordAsync(Guid userId, ChangePasswordRequest request)
+        {
+            var user = await _userRepository.GetByIdAsync(userId);
+            if (user == null)
+                return ApiResponse<bool>.Failure("User not found");
+
+            if (IsInactive(user))
+                return ApiResponse<bool>.Failure("Account has been deactivated");
+
+            var currentPasswordVerification = _passwordHasher.VerifyHashedPassword(
+                user,
+                user.PasswordHash,
+                request.CurrentPassword);
+
+            if (currentPasswordVerification == PasswordVerificationResult.Failed)
+                return ApiResponse<bool>.Failure("Current password is incorrect");
+
+            var newPasswordVerification = _passwordHasher.VerifyHashedPassword(
+                user,
+                user.PasswordHash,
+                request.NewPassword);
+
+            if (newPasswordVerification != PasswordVerificationResult.Failed)
+                return ApiResponse<bool>.Failure("New password must be different from current password");
+
+            user.PasswordHash = _passwordHasher.HashPassword(user, request.NewPassword);
+            user.RefreshToken = null;
+            user.RefreshTokenExpiryTime = null;
+            user.UpdatedAt = DbNow();
+            user.UpdatedBy = userId;
+
+            await _userRepository.UpdateAsync(user);
+            await _userRepository.SaveChangesAsync();
+
+            return ApiResponse<bool>.SuccessResponse(true, "Password changed successfully");
+        }
+
         public async Task<ApiResponse<UserProfileDto>> UpdateUserAsync(Guid userId, UpdateUserRequest request)
         {
             var user = await _userRepository.GetByIdAsync(userId);
