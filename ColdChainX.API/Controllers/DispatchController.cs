@@ -751,9 +751,17 @@ public class DispatchController : ControllerBase
         var vehicle = await _db.Vehicles.FindAsync(request.VehicleId);
         if (vehicle == null) return NotFound(ApiResponse<object>.Failure("Vehicle not found"));
 
-        decimal vLength = vehicle.InnerLengthCm ?? (vehicle.VehicleType == "TRUCK_1T" ? 300m : 200m);
-        decimal vWidth = vehicle.InnerWidthCm ?? (vehicle.VehicleType == "TRUCK_1T" ? 180m : 140m);
-        decimal vHeight = vehicle.InnerHeightCm ?? (vehicle.VehicleType == "TRUCK_1T" ? 190m : 140m);
+        if (!vehicle.InnerLengthCm.HasValue || vehicle.InnerLengthCm.Value <= 0
+            || !vehicle.InnerWidthCm.HasValue || vehicle.InnerWidthCm.Value <= 0
+            || !vehicle.InnerHeightCm.HasValue || vehicle.InnerHeightCm.Value <= 0)
+        {
+            return BadRequest(ApiResponse<object>.Failure(
+                $"Xe {vehicle.TruckPlate} chưa có đủ kích thước lòng thùng (dài, rộng, cao) để mô phỏng xếp hàng."));
+        }
+
+        decimal vLength = vehicle.InnerLengthCm.Value;
+        decimal vWidth = vehicle.InnerWidthCm.Value;
+        decimal vHeight = vehicle.InnerHeightCm.Value;
 
         var selectedIds = request.LpnIds
             .Where(id => id != Guid.Empty)
@@ -765,6 +773,18 @@ public class DispatchController : ControllerBase
                 .ThenInclude(o => o.Schedule)
             .Where(l => request.LpnIds.Contains(l.LpnId))
             .ToListAsync();
+
+        var lpnsWithoutDimensions = lpns
+            .Where(l => !l.LengthCm.HasValue || l.LengthCm.Value <= 0
+                || !l.WidthCm.HasValue || l.WidthCm.Value <= 0
+                || !l.HeightCm.HasValue || l.HeightCm.Value <= 0)
+            .Select(l => l.LpnCode)
+            .ToList();
+        if (lpnsWithoutDimensions.Count > 0)
+        {
+            return BadRequest(ApiResponse<object>.Failure(
+                $"Các LPN sau chưa có đủ kích thước dài, rộng, cao để mô phỏng xếp hàng: {string.Join(", ", lpnsWithoutDimensions)}."));
+        }
 
         var selectedValidation = _cargoCompatibilityService.ValidateSelectedSet(
             lpns,
@@ -823,9 +843,9 @@ public class DispatchController : ControllerBase
                 engineItems.Add(new ColdChainX.Application.Services.LpnDims
                 {
                     LpnId = lpn.LpnId,
-                    Length = lpn.LengthCm ?? 120m,
-                    Width = lpn.WidthCm ?? 100m,
-                    Height = lpn.HeightCm ?? 150m,
+                    Length = lpn.LengthCm!.Value,
+                    Width = lpn.WidthCm!.Value,
+                    Height = lpn.HeightCm!.Value,
                     RouteStopSequence = orderedLpns.Count - i,
                     WeightKg = lpn.ActualWeightKg,
                     RequiredTemperature = _cargoCompatibilityService.ResolveRequiredTemperature(lpn) ?? 5m,
