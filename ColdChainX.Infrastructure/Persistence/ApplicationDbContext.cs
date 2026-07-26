@@ -1771,8 +1771,18 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
 
             entity.ToTable("users");
 
+            entity.HasIndex(e => e.GoogleId, "users_google_id_key")
+                .IsUnique()
+                .HasFilter("google_id IS NOT NULL");
+
             entity.HasIndex(e => e.Username, "users_username_key").IsUnique();
 
+            entity.Property(e => e.AuthProvider)
+                .HasMaxLength(20)
+                .HasColumnName("auth_provider");
+            entity.Property(e => e.AvatarUrl)
+                .HasMaxLength(1024)
+                .HasColumnName("avatar_url");
             entity.Property(e => e.UserId)
                 .HasMaxLength(36)
                 .HasColumnName("user_id");
@@ -1787,6 +1797,9 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.FullName)
                 .HasMaxLength(100)
                 .HasColumnName("full_name");
+            entity.Property(e => e.GoogleId)
+                .HasMaxLength(255)
+                .HasColumnName("google_id");
             entity.Property(e => e.PasswordHash)
                 .HasMaxLength(255)
                 .HasColumnName("password_hash");

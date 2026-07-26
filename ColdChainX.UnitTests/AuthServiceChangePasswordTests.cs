@@ -47,10 +47,10 @@ namespace ColdChainX.UnitTests
             Assert.True(result.Data);
             Assert.Equal(
                 PasswordVerificationResult.Success,
-                _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, NewPassword));
+                _passwordHasher.VerifyHashedPassword(user, user.PasswordHash!, NewPassword));
             Assert.Equal(
                 PasswordVerificationResult.Failed,
-                _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, CurrentPassword));
+                _passwordHasher.VerifyHashedPassword(user, user.PasswordHash!, CurrentPassword));
             Assert.Null(user.RefreshToken);
             Assert.Null(user.RefreshTokenExpiryTime);
             Assert.NotNull(user.UpdatedAt);

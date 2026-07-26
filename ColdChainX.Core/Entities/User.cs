@@ -9,7 +9,7 @@ public partial class User
 
     public string Username { get; set; } = null!;
 
-    public string PasswordHash { get; set; } = null!;
+    public string? PasswordHash { get; set; }
 
     public string? Email { get; set; }
 
@@ -18,6 +18,12 @@ public partial class User
     public string FullName { get; set; } = null!;
 
     public string? Phone { get; set; }
+
+    public string? GoogleId { get; set; }
+
+    public string? AvatarUrl { get; set; }
+
+    public string? AuthProvider { get; set; }
 
     public Guid? WarehouseId { get; set; }
 

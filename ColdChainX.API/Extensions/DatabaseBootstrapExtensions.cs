@@ -92,6 +92,19 @@ BEGIN
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND lower(column_name)='password_hash') THEN
             EXECUTE 'ALTER TABLE public.users ADD COLUMN password_hash character varying(255)';
         END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND lower(column_name)='password_hash') THEN
+            EXECUTE 'ALTER TABLE public.users ALTER COLUMN password_hash DROP NOT NULL';
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND lower(column_name)='google_id') THEN
+            EXECUTE 'ALTER TABLE public.users ADD COLUMN google_id character varying(255)';
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND lower(column_name)='avatar_url') THEN
+            EXECUTE 'ALTER TABLE public.users ADD COLUMN avatar_url character varying(1024)';
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND lower(column_name)='auth_provider') THEN
+            EXECUTE 'ALTER TABLE public.users ADD COLUMN auth_provider character varying(20)';
+        END IF;
+        EXECUTE 'CREATE UNIQUE INDEX IF NOT EXISTS users_google_id_key ON public.users (google_id) WHERE google_id IS NOT NULL';
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND lower(column_name)='full_name') THEN
             EXECUTE 'ALTER TABLE public.users ADD COLUMN full_name character varying(100)';
         END IF;

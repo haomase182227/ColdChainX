@@ -1,19 +1,25 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
 namespace ColdChainX.API.Swagger
 {
     /// <summary>
-    /// Removes authorization requirement from public register endpoint
+    /// Removes Swagger's global bearer requirement from anonymous endpoints.
     /// </summary>
     public class RemoveAuthFromCreateAccountsFilter : IOperationFilter
     {
         public void Apply(OpenApiOperation operation, OperationFilterContext context)
         {
             var path = context.ApiDescription.RelativePath?.TrimEnd('/');
+            var allowsAnonymous =
+                context.MethodInfo.GetCustomAttributes(true).OfType<AllowAnonymousAttribute>().Any() ||
+                context.MethodInfo.DeclaringType?.GetCustomAttributes(true)
+                    .OfType<AllowAnonymousAttribute>()
+                    .Any() == true;
 
-            // Remove auth requirement only for public register endpoint
-            if (string.Equals(path, "api/auth/register", StringComparison.OrdinalIgnoreCase))
+            if (allowsAnonymous ||
+                string.Equals(path, "api/auth/register", StringComparison.OrdinalIgnoreCase))
             {
                 operation.Security?.Clear();
             }

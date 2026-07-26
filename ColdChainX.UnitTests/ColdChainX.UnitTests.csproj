@@ -20,6 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\ColdChainX.API\ColdChainX.API.csproj" />
     <ProjectReference Include="..\ColdChainX.Application\ColdChainX.Application.csproj" />
     <ProjectReference Include="..\ColdChainX.Core\ColdChainX.Core.csproj" />
     <ProjectReference Include="..\ColdChainX.Infrastructure\ColdChainX.Infrastructure.csproj" />

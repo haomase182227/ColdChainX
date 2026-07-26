@@ -103,6 +103,9 @@ namespace ColdChainX.Application.Services
             if (IsInactive(user))
                 return ApiResponse<AuthResponseDto>.Failure("Account has been deactivated");
 
+            if (string.IsNullOrWhiteSpace(user.PasswordHash))
+                return ApiResponse<AuthResponseDto>.Failure("Invalid credentials");
+
             var verify = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.Password);
             if (verify == PasswordVerificationResult.Failed)
                 return ApiResponse<AuthResponseDto>.Failure("Invalid credentials");
@@ -181,6 +184,9 @@ namespace ColdChainX.Application.Services
 
             if (IsInactive(user))
                 return ApiResponse<bool>.Failure("Account has been deactivated");
+
+            if (string.IsNullOrWhiteSpace(user.PasswordHash))
+                return ApiResponse<bool>.Failure("Password login is not configured for this account");
 
             var currentPasswordVerification = _passwordHasher.VerifyHashedPassword(
                 user,
