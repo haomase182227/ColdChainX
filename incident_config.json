@@ -1,0 +1,227 @@
+[
+  {
+    "title": "Create Incident Report Sequence Diagram",
+    "participants": [
+      {"id": "a", "name": "Driver", "type": "actor"},
+      {"id": "ui", "name": "Driver Incident Screen", "type": "screen"},
+      {"id": "c", "name": "IncidentReportsController", "type": "system"},
+      {"id": "s", "name": "IncidentReportService", "type": "system"},
+      {"id": "tp1", "name": "Cloudinary", "type": "thirdparty"},
+      {"id": "tp2", "name": "NotificationService", "type": "thirdparty"},
+      {"id": "d", "name": "PostgreSQL", "type": "db"}
+    ],
+    "steps": [
+      {"type": "msg", "from": "a", "to": "ui", "label": "1. Submit incident with photos"},
+      {"type": "msg", "from": "ui", "to": "c", "label": "2. POST /api/v1/incidents/with-evidence"},
+      {"type": "msg", "from": "c", "to": "s", "label": "3. CreateIncidentWithEvidenceAsync()"},
+      {"type": "msg", "from": "s", "to": "s", "label": "4. Validate Trip & Driver"},
+      {"type": "msg", "from": "s", "to": "tp1", "label": "5. Upload evidences"},
+      {"type": "msg", "from": "tp1", "to": "s", "label": "6. File URLs", "return": true},
+      {"type": "msg", "from": "s", "to": "d", "label": "7. Insert Incident & Evidences"},
+      {"type": "msg", "from": "d", "to": "s", "label": "8. DB Saved", "return": true},
+      {"type": "msg", "from": "s", "to": "tp2", "label": "9. Notify Managers"},
+      {"type": "msg", "from": "s", "to": "c", "label": "10. Return IncidentId", "return": true},
+      {"type": "msg", "from": "c", "to": "ui", "label": "11. 200 OK", "return": true},
+      {"type": "msg", "from": "ui", "to": "a", "label": "12. Show Success", "return": true}
+    ]
+  },
+  {
+    "title": "Get Incident Report Details Sequence Diagram",
+    "participants": [
+      {"id": "a", "name": "Manager", "type": "actor"},
+      {"id": "ui", "name": "Incident Management Screen", "type": "screen"},
+      {"id": "c", "name": "IncidentReportsController", "type": "system"},
+      {"id": "s", "name": "IncidentReportService", "type": "system"},
+      {"id": "d", "name": "PostgreSQL", "type": "db"}
+    ],
+    "steps": [
+      {"type": "msg", "from": "a", "to": "ui", "label": "1. View incident detail"},
+      {"type": "msg", "from": "ui", "to": "c", "label": "2. GET /api/v1/incidents/{id}"},
+      {"type": "msg", "from": "c", "to": "s", "label": "3. GetIncidentByIdAsync(id)"},
+      {"type": "msg", "from": "s", "to": "d", "label": "4. Query Incident + Evidences"},
+      {"type": "msg", "from": "d", "to": "s", "label": "5. Incident Entity", "return": true},
+      {"type": "msg", "from": "s", "to": "c", "label": "6. IncidentDto", "return": true},
+      {"type": "msg", "from": "c", "to": "ui", "label": "7. 200 OK", "return": true},
+      {"type": "msg", "from": "ui", "to": "a", "label": "8. Render Data", "return": true}
+    ]
+  },
+  {
+    "title": "Update Incident Status Sequence Diagram",
+    "participants": [
+      {"id": "a", "name": "Manager", "type": "actor"},
+      {"id": "ui", "name": "Incident Management Screen", "type": "screen"},
+      {"id": "c", "name": "IncidentReportsController", "type": "system"},
+      {"id": "s", "name": "IncidentReportService", "type": "system"},
+      {"id": "d", "name": "PostgreSQL", "type": "db"}
+    ],
+    "steps": [
+      {"type": "msg", "from": "a", "to": "ui", "label": "1. Update status"},
+      {"type": "msg", "from": "ui", "to": "c", "label": "2. POST /api/v1/incidents/{id}/resolve"},
+      {"type": "msg", "from": "c", "to": "s", "label": "3. UpdateIncidentStatusAsync()"},
+      {"type": "msg", "from": "s", "to": "d", "label": "4. Load Incident"},
+      {"type": "msg", "from": "d", "to": "s", "label": "5. Entity", "return": true},
+      {"type": "msg", "from": "s", "to": "d", "label": "6. Update Status in DB"},
+      {"type": "msg", "from": "d", "to": "s", "label": "7. Saved", "return": true},
+      {"type": "msg", "from": "s", "to": "c", "label": "8. Success Result", "return": true},
+      {"type": "msg", "from": "c", "to": "ui", "label": "9. 200 OK", "return": true},
+      {"type": "msg", "from": "ui", "to": "a", "label": "10. Update UI", "return": true}
+    ]
+  },
+  {
+    "title": "Request Rescue Vehicle Sequence Diagram",
+    "participants": [
+      {"id": "a", "name": "Dispatcher", "type": "actor"},
+      {"id": "ui", "name": "Rescue Management Screen", "type": "screen"},
+      {"id": "c", "name": "IncidentReportsController", "type": "system"},
+      {"id": "s", "name": "IncidentRescueService", "type": "system"},
+      {"id": "tp", "name": "Goong", "type": "thirdparty"},
+      {"id": "d", "name": "PostgreSQL", "type": "db"}
+    ],
+    "steps": [
+      {"type": "msg", "from": "a", "to": "ui", "label": "1. Find rescue vehicles"},
+      {"type": "msg", "from": "ui", "to": "c", "label": "2. GET /api/v1/incidents/{id}/rescue-candidates"},
+      {"type": "msg", "from": "c", "to": "s", "label": "3. GetRescueCandidatesAsync()"},
+      {"type": "msg", "from": "s", "to": "d", "label": "4. Query idle vehicles"},
+      {"type": "msg", "from": "d", "to": "s", "label": "5. List of vehicles", "return": true},
+      {"type": "msg", "from": "s", "to": "tp", "label": "6. Calculate ETA/Distance to Incident"},
+      {"type": "msg", "from": "tp", "to": "s", "label": "7. Distance Matrix", "return": true},
+      {"type": "msg", "from": "s", "to": "c", "label": "8. List<RescueCandidateDto>", "return": true},
+      {"type": "msg", "from": "c", "to": "ui", "label": "9. 200 OK", "return": true},
+      {"type": "msg", "from": "ui", "to": "a", "label": "10. Display Candidates List", "return": true}
+    ]
+  },
+  {
+    "title": "Assign Replacement Vehicle Sequence Diagram",
+    "participants": [
+      {"id": "a", "name": "Dispatcher", "type": "actor"},
+      {"id": "ui", "name": "Rescue Management Screen", "type": "screen"},
+      {"id": "c", "name": "IncidentReportsController", "type": "system"},
+      {"id": "s", "name": "IncidentRescueService", "type": "system"},
+      {"id": "tp", "name": "NotificationService", "type": "thirdparty"},
+      {"id": "d", "name": "PostgreSQL", "type": "db"}
+    ],
+    "steps": [
+      {"type": "msg", "from": "a", "to": "ui", "label": "1. Confirm vehicle assignment"},
+      {"type": "msg", "from": "ui", "to": "c", "label": "2. POST /api/v1/incidents/{id}/dispatch-rescue"},
+      {"type": "msg", "from": "c", "to": "s", "label": "3. DispatchRescueAsync()"},
+      {"type": "msg", "from": "s", "to": "d", "label": "4. Assign new Vehicle/Driver"},
+      {"type": "msg", "from": "d", "to": "s", "label": "5. DB Updated", "return": true},
+      {"type": "msg", "from": "s", "to": "tp", "label": "6. Notify new Driver"},
+      {"type": "msg", "from": "s", "to": "c", "label": "7. Result", "return": true},
+      {"type": "msg", "from": "c", "to": "ui", "label": "8. 200 OK", "return": true},
+      {"type": "msg", "from": "ui", "to": "a", "label": "9. Show Rescue Dispatched", "return": true}
+    ]
+  },
+  {
+    "title": "Transfer Cargo Sequence Diagram",
+    "participants": [
+      {"id": "a", "name": "Driver", "type": "actor"},
+      {"id": "ui", "name": "Driver Mobile App", "type": "screen"},
+      {"id": "c", "name": "IncidentReportsController", "type": "system"},
+      {"id": "s", "name": "IncidentRescueService", "type": "system"},
+      {"id": "d", "name": "PostgreSQL", "type": "db"}
+    ],
+    "steps": [
+      {"type": "msg", "from": "a", "to": "ui", "label": "1. Confirm transload complete"},
+      {"type": "msg", "from": "ui", "to": "c", "label": "2. POST /api/v1/incidents/{id}/confirm-transload"},
+      {"type": "msg", "from": "c", "to": "s", "label": "3. ConfirmTransloadAsync()"},
+      {"type": "msg", "from": "s", "to": "d", "label": "4. Load Trip and Rescue Vehicle"},
+      {"type": "msg", "from": "d", "to": "s", "label": "5. Entities", "return": true},
+      {"type": "msg", "from": "s", "to": "s", "label": "6. Transfer LPNs to New Vehicle"},
+      {"type": "msg", "from": "s", "to": "d", "label": "7. SaveChanges"},
+      {"type": "msg", "from": "d", "to": "s", "label": "8. Saved", "return": true},
+      {"type": "msg", "from": "s", "to": "c", "label": "9. Result", "return": true},
+      {"type": "msg", "from": "c", "to": "ui", "label": "10. 200 OK", "return": true},
+      {"type": "msg", "from": "ui", "to": "a", "label": "11. Transload Confirmed", "return": true}
+    ]
+  },
+  {
+    "title": "Update Trip Status Sequence Diagram",
+    "participants": [
+      {"id": "a", "name": "Driver", "type": "actor"},
+      {"id": "ui", "name": "Driver Mobile App", "type": "screen"},
+      {"id": "c", "name": "IncidentReportsController", "type": "system"},
+      {"id": "s", "name": "IncidentRescueService", "type": "system"},
+      {"id": "tp", "name": "MQTT", "type": "thirdparty"},
+      {"id": "d", "name": "PostgreSQL", "type": "db"}
+    ],
+    "steps": [
+      {"type": "msg", "from": "a", "to": "ui", "label": "1. Continue Trip"},
+      {"type": "msg", "from": "ui", "to": "c", "label": "2. POST /api/v1/incidents/{id}/continue-trip"},
+      {"type": "msg", "from": "c", "to": "s", "label": "3. ContinueTripAsync()"},
+      {"type": "msg", "from": "s", "to": "d", "label": "4. Set Status = IN_TRANSIT"},
+      {"type": "msg", "from": "d", "to": "s", "label": "5. Success", "return": true},
+      {"type": "msg", "from": "s", "to": "tp", "label": "6. Stream Trip Status to MQTT"},
+      {"type": "msg", "from": "s", "to": "c", "label": "7. Result", "return": true},
+      {"type": "msg", "from": "c", "to": "ui", "label": "8. 200 OK", "return": true},
+      {"type": "msg", "from": "ui", "to": "a", "label": "9. Resume Navigation", "return": true}
+    ]
+  },
+  {
+    "title": "Submit Expense Sequence Diagram",
+    "participants": [
+      {"id": "a", "name": "Driver", "type": "actor"},
+      {"id": "ui", "name": "Expense Submission Screen", "type": "screen"},
+      {"id": "c", "name": "IncidentReportsController", "type": "system"},
+      {"id": "s", "name": "IncidentReportService", "type": "system"},
+      {"id": "tp", "name": "Cloudinary", "type": "thirdparty"},
+      {"id": "d", "name": "PostgreSQL", "type": "db"}
+    ],
+    "steps": [
+      {"type": "msg", "from": "a", "to": "ui", "label": "1. Submit receipt image"},
+      {"type": "msg", "from": "ui", "to": "c", "label": "2. POST /api/v1/incidents/{id}/expenses/reimburse"},
+      {"type": "msg", "from": "c", "to": "s", "label": "3. SubmitExpenseAsync()"},
+      {"type": "msg", "from": "s", "to": "tp", "label": "4. Upload receipt image"},
+      {"type": "msg", "from": "tp", "to": "s", "label": "5. Image URL", "return": true},
+      {"type": "msg", "from": "s", "to": "d", "label": "6. Insert Expense Record"},
+      {"type": "msg", "from": "d", "to": "s", "label": "7. DB Saved", "return": true},
+      {"type": "msg", "from": "s", "to": "c", "label": "8. Result", "return": true},
+      {"type": "msg", "from": "c", "to": "ui", "label": "9. 200 OK", "return": true},
+      {"type": "msg", "from": "ui", "to": "a", "label": "10. Expense Submitted", "return": true}
+    ]
+  },
+  {
+    "title": "Approve Expense Sequence Diagram",
+    "participants": [
+      {"id": "a", "name": "Manager", "type": "actor"},
+      {"id": "ui", "name": "Incident Management Screen", "type": "screen"},
+      {"id": "c", "name": "IncidentReportsController", "type": "system"},
+      {"id": "s", "name": "IncidentReportService", "type": "system"},
+      {"id": "tp", "name": "NotificationService", "type": "thirdparty"},
+      {"id": "d", "name": "PostgreSQL", "type": "db"}
+    ],
+    "steps": [
+      {"type": "msg", "from": "a", "to": "ui", "label": "1. Approve expense claim"},
+      {"type": "msg", "from": "ui", "to": "c", "label": "2. POST /api/v1/incidents/{id}/expenses/approve"},
+      {"type": "msg", "from": "c", "to": "s", "label": "3. ApproveExpenseAsync()"},
+      {"type": "msg", "from": "s", "to": "d", "label": "4. Update Expense Status = APPROVED"},
+      {"type": "msg", "from": "d", "to": "s", "label": "5. DB Updated", "return": true},
+      {"type": "msg", "from": "s", "to": "tp", "label": "6. Notify Driver"},
+      {"type": "msg", "from": "s", "to": "c", "label": "7. Result", "return": true},
+      {"type": "msg", "from": "c", "to": "ui", "label": "8. 200 OK", "return": true},
+      {"type": "msg", "from": "ui", "to": "a", "label": "9. Show Approval Status", "return": true}
+    ]
+  },
+  {
+    "title": "Close Incident Sequence Diagram",
+    "participants": [
+      {"id": "a", "name": "Manager", "type": "actor"},
+      {"id": "ui", "name": "Incident Management Screen", "type": "screen"},
+      {"id": "c", "name": "IncidentReportsController", "type": "system"},
+      {"id": "s", "name": "IncidentReportService", "type": "system"},
+      {"id": "tp", "name": "NotificationService", "type": "thirdparty"},
+      {"id": "d", "name": "PostgreSQL", "type": "db"}
+    ],
+    "steps": [
+      {"type": "msg", "from": "a", "to": "ui", "label": "1. Close Incident"},
+      {"type": "msg", "from": "ui", "to": "c", "label": "2. POST /api/v1/incidents/{id}/resolve"},
+      {"type": "msg", "from": "c", "to": "s", "label": "3. ResolveIncidentAsync()"},
+      {"type": "msg", "from": "s", "to": "d", "label": "4. Set Status = RESOLVED"},
+      {"type": "msg", "from": "d", "to": "s", "label": "5. Saved", "return": true},
+      {"type": "msg", "from": "s", "to": "tp", "label": "6. Notify Stakeholders"},
+      {"type": "msg", "from": "s", "to": "c", "label": "7. Result", "return": true},
+      {"type": "msg", "from": "c", "to": "ui", "label": "8. 200 OK", "return": true},
+      {"type": "msg", "from": "ui", "to": "a", "label": "9. Incident Closed", "return": true}
+    ]
+  }
+]

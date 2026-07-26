@@ -1174,6 +1174,97 @@ public class DispatchController : ControllerBase
     // ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â
 
     /// <summary>
+    /// Lấy danh sách chuyến đi cùng đầy đủ xe, tài xế, tuyến, điểm dừng, LPN,
+    /// đơn hàng, khách hàng, kho, chứng từ, ePOD, seal và sự cố.
+    /// Orders và LPNs được sắp theo thứ tự xếp hàng LIFO.
+    /// </summary>
+    /// <remarks>
+    /// Có thể lọc theo status và tìm theo trip ID, biển số xe, mã tuyến,
+    /// mã đơn hàng hoặc mã LPN. pageSize tối đa là 100 vì mỗi chuyến chứa
+    /// toàn bộ dữ liệu vận hành liên quan.
+    /// </remarks>
+    [HttpGet("trips")]
+    [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Dispatcher,DISPATCHER")]
+    [ProducesResponseType(typeof(ApiResponse<PagedResult<TripDetailsDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAllTrips(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? status = null,
+        [FromQuery] string? search = null,
+        CancellationToken cancellationToken = default)
+    {
+        var safePageNumber = Math.Max(pageNumber, 1);
+        var safePageSize = Math.Clamp(pageSize, 1, 100);
+        var query = _db.MasterTrips.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            var normalizedStatus = status.Trim().ToUpperInvariant();
+            query = query.Where(trip => trip.Status == normalizedStatus);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var keyword = search.Trim();
+            var hasTripId = Guid.TryParse(keyword, out var searchedTripId);
+
+            query = query.Where(trip =>
+                (hasTripId && trip.TripId == searchedTripId)
+                || (trip.Vehicle != null && trip.Vehicle.TruckPlate.Contains(keyword))
+                || (trip.Route != null && trip.Route.RouteCode.Contains(keyword))
+                || trip.TransportOrders.Any(order => order.TrackingCode.Contains(keyword))
+                || _db.Lpns.Any(lpn => lpn.TripId == trip.TripId && lpn.LpnCode.Contains(keyword)));
+        }
+
+        var totalRecords = await query.CountAsync(cancellationToken);
+        var tripIds = await query
+            .OrderByDescending(trip => trip.CreatedAt)
+            .ThenByDescending(trip => trip.PlannedStartTime)
+            .Skip((safePageNumber - 1) * safePageSize)
+            .Take(safePageSize)
+            .Select(trip => trip.TripId)
+            .ToListAsync(cancellationToken);
+
+        var trips = await BuildTripDetailsAsync(tripIds, cancellationToken);
+        var pagedResult = PagedResult<TripDetailsDto>.Create(
+            trips,
+            totalRecords,
+            safePageNumber,
+            safePageSize);
+
+        return Ok(ApiResponse<PagedResult<TripDetailsDto>>.SuccessResponse(
+            pagedResult,
+            "Lấy danh sách chuyến đi thành công."));
+    }
+
+    /// <summary>
+    /// Lấy đầy đủ thông tin một chuyến đi theo ID, bao gồm toàn bộ LPN và đơn hàng
+    /// đã được sắp theo thứ tự xếp hàng LIFO.
+    /// </summary>
+    [HttpGet("trips/{id:guid}")]
+    [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Dispatcher,DISPATCHER")]
+    [ProducesResponseType(typeof(ApiResponse<TripDetailsDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<TripDetailsDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetTripById(
+        [FromRoute] Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        var trips = await BuildTripDetailsAsync(new[] { id }, cancellationToken);
+        var trip = trips.SingleOrDefault();
+
+        if (trip == null)
+        {
+            return NotFound(ApiResponse<TripDetailsDto>.Failure(
+                $"Không tìm thấy chuyến đi với ID '{id}'.",
+                StatusCodes.Status404NotFound));
+        }
+
+        return Ok(ApiResponse<TripDetailsDto>.SuccessResponse(
+            trip,
+            "Lấy chi tiết chuyến đi thành công."));
+    }
+
+    /// <summary>
     /// [STEP 2/5 - LOOKUP] Danh sách chuyến ĐÃ ĐƯỢC GHÉP và sẵn sàng bốc hàng (Status = PLANNED).
     /// </summary>
     /// <remarks>
@@ -1439,6 +1530,793 @@ public class DispatchController : ControllerBase
         }
     }
 
+    private async Task<List<TripDetailsDto>> BuildTripDetailsAsync(
+        IReadOnlyCollection<Guid> requestedTripIds,
+        CancellationToken cancellationToken)
+    {
+        if (requestedTripIds.Count == 0)
+        {
+            return new List<TripDetailsDto>();
+        }
+
+        var tripIds = requestedTripIds.Distinct().ToList();
+        var trips = await _db.MasterTrips
+            .AsNoTracking()
+            .Where(trip => tripIds.Contains(trip.TripId))
+            .Include(trip => trip.Route)
+            .Include(trip => trip.Schedule)
+            .Include(trip => trip.OriginLocation)
+            .Include(trip => trip.DestinationLocation)
+            .Include(trip => trip.Vehicle)
+                .ThenInclude(vehicle => vehicle!.IotDevices)
+            .Include(trip => trip.Vehicle)
+                .ThenInclude(vehicle => vehicle!.VehicleDocuments)
+            .Include(trip => trip.TripDrivers)
+                .ThenInclude(tripDriver => tripDriver.Driver)
+                    .ThenInclude(driver => driver.DriverLicenses)
+            .Include(trip => trip.TripStops)
+                .ThenInclude(stop => stop.Location)
+            .Include(trip => trip.Seals)
+            .Include(trip => trip.IncidentReports)
+                .ThenInclude(incident => incident.IncidentEvidences)
+            .AsSplitQuery()
+            .ToListAsync(cancellationToken);
+
+        if (trips.Count == 0)
+        {
+            return new List<TripDetailsDto>();
+        }
+
+        var lpns = await _db.Lpns
+            .AsNoTracking()
+            .Where(lpn => lpn.TripId.HasValue && tripIds.Contains(lpn.TripId.Value))
+            .Include(lpn => lpn.Order)
+                .ThenInclude(order => order.Customer)
+            .Include(lpn => lpn.Customer)
+            .Include(lpn => lpn.Warehouse)
+            .Include(lpn => lpn.Receipt)
+            .AsSplitQuery()
+            .ToListAsync(cancellationToken);
+
+        var orders = await _db.TransportOrders
+            .AsNoTracking()
+            .Where(order =>
+                (order.MasterTripId.HasValue && tripIds.Contains(order.MasterTripId.Value))
+                || _db.Lpns.Any(lpn =>
+                    lpn.OrderId == order.OrderId
+                    && lpn.TripId.HasValue
+                    && tripIds.Contains(lpn.TripId.Value)))
+            .Include(order => order.Customer)
+            .Include(order => order.PickupLocationNavigation)
+            .Include(order => order.DestLocationNavigation)
+            .Include(order => order.Schedule)
+                .ThenInclude(schedule => schedule!.Route)
+            .Include(order => order.OrderDimension)
+            .Include(order => order.TransportDocuments)
+            .Include(order => order.DeliveryEpods)
+            .AsSplitQuery()
+            .ToListAsync(cancellationToken);
+
+        var confirmations = await _db.LpnDeliveryConfirmations
+            .AsNoTracking()
+            .Where(confirmation => tripIds.Contains(confirmation.TripId))
+            .ToListAsync(cancellationToken);
+
+        var confirmationsByLpn = confirmations
+            .GroupBy(confirmation => confirmation.LpnId)
+            .ToDictionary(
+                group => group.Key,
+                group => group.OrderByDescending(item => item.ConfirmedAt).First());
+        var lpnsByTrip = lpns
+            .Where(lpn => lpn.TripId.HasValue)
+            .ToLookup(lpn => lpn.TripId!.Value);
+        var tripById = trips.ToDictionary(trip => trip.TripId);
+        var result = new List<TripDetailsDto>(trips.Count);
+
+        foreach (var requestedTripId in requestedTripIds)
+        {
+            if (!tripById.TryGetValue(requestedTripId, out var trip))
+            {
+                continue;
+            }
+
+            var tripLpns = lpnsByTrip[trip.TripId].ToList();
+            var tripStops = trip.TripStops.ToList();
+            var lpnOrderIds = tripLpns
+                .Select(lpn => lpn.OrderId)
+                .ToHashSet();
+            var tripOrders = orders
+                .Where(order => order.MasterTripId == trip.TripId || lpnOrderIds.Contains(order.OrderId))
+                .GroupBy(order => order.OrderId)
+                .Select(group => group.First())
+                .ToList();
+            var orderIds = tripOrders
+                .Select(order => order.OrderId)
+                .ToHashSet();
+
+            var loadPlan = BuildTripLifoLoadPlan(tripLpns, tripStops, tripOrders);
+            var loadPlanByLpn = loadPlan.ToDictionary(item => item.LpnId);
+            var orderedTripLpns = tripLpns
+                .OrderBy(lpn => loadPlanByLpn.TryGetValue(lpn.LpnId, out var item)
+                    ? item.LoadOrder
+                    : int.MaxValue)
+                .ThenBy(lpn => lpn.LpnCode)
+                .ToList();
+
+            var orderDtos = tripOrders
+                .Select(order => ToTripOrderDetailsDto(
+                    order,
+                    orderedTripLpns.Where(lpn => lpn.OrderId == order.OrderId).ToList(),
+                    loadPlan.Where(item => item.OrderId == order.OrderId).ToList(),
+                    tripStops))
+                .OrderBy(order => order.FirstLifoLoadOrder ?? int.MaxValue)
+                .ThenBy(order => order.TrackingCode)
+                .ToList();
+            var lpnDtos = orderedTripLpns
+                .Select(lpn => ToTripLpnDetailsDto(
+                    lpn,
+                    confirmationsByLpn.GetValueOrDefault(lpn.LpnId),
+                    loadPlanByLpn.GetValueOrDefault(lpn.LpnId)))
+                .ToList();
+
+            var stopDtos = tripStops
+                .OrderBy(stop => stop.StopSequence)
+                .Select(stop =>
+                {
+                    var stopOrders = tripOrders
+                        .Where(order =>
+                            order.DropoffStopId == stop.StopId
+                            || (!order.DropoffStopId.HasValue
+                                && stop.LocationId.HasValue
+                                && order.DestLocation == stop.LocationId))
+                        .OrderBy(order => loadPlan
+                            .Where(item => item.OrderId == order.OrderId)
+                            .Select(item => (int?)item.LoadOrder)
+                            .Min() ?? int.MaxValue)
+                        .ThenBy(order => order.TrackingCode)
+                        .ToList();
+                    var stopOrderIds = stopOrders
+                        .Select(order => order.OrderId)
+                        .ToHashSet();
+                    var stopLpns = orderedTripLpns
+                        .Where(lpn => stopOrderIds.Contains(lpn.OrderId))
+                        .ToList();
+
+                    return new TripStopDetailsDto
+                    {
+                        StopId = stop.StopId,
+                        LocationId = stop.LocationId,
+                        StopSequence = stop.StopSequence,
+                        StopType = stop.StopType,
+                        PlannedArrivalTime = stop.PlannedArrivalTime,
+                        PlannedDepartureTime = stop.PlannedDepartureTime,
+                        ActualArrivalTime = stop.ActualArrivalTime,
+                        ActualDepartureTime = stop.ActualDepartureTime,
+                        Status = stop.Status,
+                        Note = stop.Note,
+                        Location = stop.Location == null ? null : ToTripLocationDetailsDto(stop.Location),
+                        OrderIds = stopOrders.Select(order => order.OrderId).ToList(),
+                        OrderTrackingCodes = stopOrders.Select(order => order.TrackingCode).ToList(),
+                        LpnIds = stopLpns.Select(lpn => lpn.LpnId).ToList(),
+                        LpnCodes = stopLpns.Select(lpn => lpn.LpnCode).ToList()
+                    };
+                })
+                .ToList();
+
+            result.Add(new TripDetailsDto
+            {
+                TripId = trip.TripId,
+                RouteId = trip.RouteId,
+                ScheduleId = trip.ScheduleId,
+                DepartureDate = trip.DepartureDate,
+                VehicleId = trip.VehicleId,
+                OriginLocationId = trip.OriginLocationId,
+                DestinationLocationId = trip.DestinationLocationId,
+                SealNumber = trip.SealNumber,
+                TotalDistanceKm = trip.TotalDistanceKm,
+                EstimatedDurationHours = trip.EstimatedDurationHours,
+                TargetTemperature = trip.TargetTemperature,
+                RequiresInspection = trip.RequiresInspection,
+                PlannedStartTime = trip.PlannedStartTime,
+                PlannedEndTime = trip.PlannedEndTime,
+                StartedAt = trip.StartedAt,
+                CompletedAt = trip.CompletedAt,
+                Status = trip.Status,
+                CreatedAt = trip.CreatedAt,
+                Summary = new TripCargoSummaryDto
+                {
+                    TotalOrders = orderIds.Count,
+                    TotalLpns = tripLpns.Count,
+                    TotalQuantity = tripLpns.Sum(lpn => lpn.Quantity),
+                    TotalWeightKg = tripLpns.Sum(lpn => lpn.ActualWeightKg),
+                    TotalCbm = tripLpns.Sum(lpn => lpn.ActualCbm),
+                    DeliveredLpns = tripLpns.Count(lpn => lpn.State == LpnState.DELIVERED),
+                    ReturnedLpns = tripLpns.Count(lpn => lpn.State == LpnState.DELIVERY_RETURNED),
+                    LpnStateCounts = tripLpns
+                        .GroupBy(lpn => lpn.State.ToString())
+                        .ToDictionary(group => group.Key, group => group.Count())
+                },
+                Route = trip.Route == null ? null : ToTripRouteDetailsDto(trip.Route),
+                Schedule = trip.Schedule == null ? null : ToTripScheduleDetailsDto(trip.Schedule),
+                Origin = ToTripLocationDetailsDto(trip.OriginLocation),
+                Destination = ToTripLocationDetailsDto(trip.DestinationLocation),
+                Vehicle = trip.Vehicle == null ? null : ToTripVehicleDetailsDto(trip.Vehicle),
+                Drivers = trip.TripDrivers
+                    .OrderBy(tripDriver => tripDriver.DriverRole == "PRIMARY" ? 0 : 1)
+                    .ThenBy(tripDriver => tripDriver.CreatedAt)
+                    .Select(ToTripDriverDetailsDto)
+                    .ToList(),
+                Stops = stopDtos,
+                LoadPlan = loadPlan,
+                Orders = orderDtos,
+                Lpns = lpnDtos,
+                Seals = trip.Seals
+                    .OrderBy(seal => seal.AppliedAt ?? seal.CreatedAt)
+                    .Select(ToTripSealDetailsDto)
+                    .ToList(),
+                Incidents = trip.IncidentReports
+                    .OrderByDescending(incident => incident.ReportedAt)
+                    .Select(ToTripIncidentDetailsDto)
+                    .ToList()
+            });
+        }
+
+        return result;
+    }
+
+    private static List<TripLifoLoadItemDto> BuildTripLifoLoadPlan(
+        IReadOnlyCollection<Lpn> lpns,
+        IReadOnlyCollection<TripStop> stops,
+        IReadOnlyCollection<TransportOrder> orders)
+    {
+        var stopSequenceByLocation = stops
+            .Where(stop => stop.LocationId.HasValue)
+            .GroupBy(stop => stop.LocationId!.Value)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Min(stop => stop.StopSequence));
+        var stopAddressByLocation = stops
+            .Where(stop => stop.LocationId.HasValue && stop.Location != null)
+            .GroupBy(stop => stop.LocationId!.Value)
+            .ToDictionary(
+                group => group.Key,
+                group => group.First().Location!.Address);
+        var orderById = orders.ToDictionary(order => order.OrderId);
+
+        var sortedLpns = lpns
+            .Where(lpn => lpn.Order?.DestLocation.HasValue == true)
+            .Select(lpn =>
+            {
+                var deliveryLocationId = lpn.Order.DestLocation!.Value;
+                var stopSequence = stopSequenceByLocation.GetValueOrDefault(deliveryLocationId, 999);
+                var zone = ClassifyLifoZone(lpn.Order.TempCondition);
+
+                return new
+                {
+                    Lpn = lpn,
+                    DeliveryLocationId = deliveryLocationId,
+                    StopSequence = stopSequence,
+                    Zone = zone,
+                    ZoneOrder = GetLifoZoneOrder(zone)
+                };
+            })
+            .OrderByDescending(item => item.StopSequence)
+            .ThenByDescending(item => item.Lpn.ActualWeightKg)
+            .ThenBy(item => item.ZoneOrder)
+            .ThenBy(item => item.Lpn.LpnCode)
+            .ToList();
+
+        var result = new List<TripLifoLoadItemDto>(sortedLpns.Count);
+        for (var index = 0; index < sortedLpns.Count; index++)
+        {
+            var item = sortedLpns[index];
+            var lpn = item.Lpn;
+            var order = lpn.Order;
+            orderById.TryGetValue(order.OrderId, out var fullOrder);
+
+            var deliveryAddress = stopAddressByLocation.GetValueOrDefault(item.DeliveryLocationId)
+                ?? fullOrder?.DestLocationNavigation?.Address
+                ?? string.Empty;
+
+            result.Add(new TripLifoLoadItemDto
+            {
+                LoadOrder = index + 1,
+                LpnId = lpn.LpnId,
+                LpnCode = lpn.LpnCode,
+                OrderId = order.OrderId,
+                TrackingCode = order.TrackingCode,
+                ItemName = order.ItemName,
+                WeightKg = lpn.ActualWeightKg,
+                Cbm = lpn.ActualCbm,
+                TempCondition = order.TempCondition,
+                Zone = item.Zone,
+                DeliveryLocationId = item.DeliveryLocationId,
+                DeliveryAddress = deliveryAddress,
+                DeliveryStopSequence = item.StopSequence,
+                Reason = BuildLifoReason(
+                    item.StopSequence,
+                    stops.Count,
+                    item.Zone,
+                    lpn.ActualWeightKg)
+            });
+        }
+
+        return result;
+    }
+
+    private static string ClassifyLifoZone(string? temperatureCondition)
+    {
+        var condition = (temperatureCondition ?? string.Empty).ToUpperInvariant().Trim();
+        if (condition.Contains("FROZEN") || condition.StartsWith("-") || condition.Contains("-18"))
+        {
+            return "REAR";
+        }
+
+        if (condition.Contains("CHILLED") || condition.Contains("2-8") || condition.Contains("0-4"))
+        {
+            return "MID";
+        }
+
+        return "FRONT";
+    }
+
+    private static int GetLifoZoneOrder(string zone)
+    {
+        return zone switch
+        {
+            "REAR" => 0,
+            "MID" => 1,
+            "FRONT" => 2,
+            _ => 3
+        };
+    }
+
+    private static string BuildLifoReason(
+        int stopSequence,
+        int totalStops,
+        string zone,
+        decimal weightKg)
+    {
+        var parts = new List<string>();
+
+        if (stopSequence == totalStops)
+        {
+            parts.Add("Điểm giao cuối lộ trình → xếp sâu vào đuôi xe (LIFO)");
+        }
+        else if (stopSequence == 1)
+        {
+            parts.Add("Điểm giao đầu tiên → xếp gần cửa xe");
+        }
+        else
+        {
+            parts.Add($"Giao tại điểm #{stopSequence}/{totalStops}");
+        }
+
+        parts.Add(zone switch
+        {
+            "REAR" => "Hàng đông lạnh → ngăn REAR",
+            "MID" => "Hàng mát → ngăn MID",
+            _ => "Hàng nhiệt độ thường → ngăn FRONT"
+        });
+        parts.Add($"Khối lượng {weightKg:F1}kg → hàng nặng xếp dưới");
+
+        return string.Join("; ", parts);
+    }
+
+    private static TripLocationDetailsDto ToTripLocationDetailsDto(Location location)
+    {
+        return new TripLocationDetailsDto
+        {
+            LocationId = location.LocationId,
+            CustomerId = location.CustomerId,
+            Address = location.Address,
+            Latitude = location.Latitude,
+            Longitude = location.Longitude,
+            Status = location.Status
+        };
+    }
+
+    private static TripRouteDetailsDto ToTripRouteDetailsDto(RouteMaster route)
+    {
+        return new TripRouteDetailsDto
+        {
+            RouteId = route.RouteId,
+            RouteCode = route.RouteCode,
+            OriginCity = route.OriginCity,
+            DestinationCity = route.DestCity,
+            TransitTime = route.TransitTime,
+            Status = route.Status
+        };
+    }
+
+    private static TripScheduleDetailsDto ToTripScheduleDetailsDto(RouteSchedule schedule)
+    {
+        return new TripScheduleDetailsDto
+        {
+            ScheduleId = schedule.ScheduleId,
+            RouteId = schedule.RouteId,
+            ScheduleName = schedule.ScheduleName,
+            DepartureDate = schedule.DepartureDate,
+            DepartureTime = schedule.DepartureTime,
+            CutOffTime = schedule.CutOffTime,
+            Status = schedule.Status
+        };
+    }
+
+    private static TripVehicleDetailsDto ToTripVehicleDetailsDto(Vehicle vehicle)
+    {
+        return new TripVehicleDetailsDto
+        {
+            VehicleId = vehicle.VehicleId,
+            TruckPlate = vehicle.TruckPlate,
+            Brand = vehicle.Brand,
+            ManufactureYear = vehicle.ManufactureYear,
+            ChassisNumber = vehicle.ChassisNumber,
+            EngineNumber = vehicle.EngineNumber,
+            StandardFuelLiters = vehicle.StandardFuelLiters,
+            VehicleType = vehicle.VehicleType,
+            MaxWeight = vehicle.MaxWeight,
+            MaxCbm = vehicle.MaxCbm,
+            InnerLengthCm = vehicle.InnerLengthCm,
+            InnerWidthCm = vehicle.InnerWidthCm,
+            InnerHeightCm = vehicle.InnerHeightCm,
+            MinTemp = vehicle.MinTemp,
+            MaxTemp = vehicle.MaxTemp,
+            CurrentLocation = vehicle.CurrentLocation,
+            CurrentOdometer = vehicle.CurrentOdometer,
+            NextMaintenanceOdometer = vehicle.NextMaintenanceOdometer,
+            NextMaintenanceDate = vehicle.NextMaintenanceDate,
+            Status = vehicle.Status,
+            IotDevices = vehicle.IotDevices
+                .OrderBy(device => device.DeviceCode)
+                .Select(device => new TripIotDeviceDto
+                {
+                    DeviceId = device.DeviceId,
+                    DeviceCode = device.DeviceCode,
+                    BatteryLevel = device.BatteryLevel,
+                    LastPingTime = device.LastPingTime,
+                    IsOnline = device.IsOnline,
+                    Status = device.Status
+                })
+                .ToList(),
+            Documents = vehicle.VehicleDocuments
+                .OrderBy(document => document.DocumentType)
+                .Select(document => new TripVehicleDocumentDto
+                {
+                    DocumentId = document.DocId,
+                    DocumentType = document.DocumentType,
+                    DocumentNumber = document.DocumentNumber,
+                    Issuer = document.Issuer,
+                    IssueDate = document.IssueDate,
+                    ExpireDate = document.ExpireDate,
+                    Status = document.Status
+                })
+                .ToList()
+        };
+    }
+
+    private static TripDriverDetailsDto ToTripDriverDetailsDto(TripDriver tripDriver)
+    {
+        var driver = tripDriver.Driver;
+        return new TripDriverDetailsDto
+        {
+            TripDriverId = tripDriver.TripDriverId,
+            DriverId = tripDriver.DriverId,
+            UserId = driver.UserId,
+            DriverRole = tripDriver.DriverRole,
+            AssignedDurationHours = tripDriver.AssignedDurationHours,
+            FullName = driver.FullName,
+            IdentityNumber = driver.IdentityNumber,
+            PhoneNumber = driver.PhoneNumber,
+            DateOfBirth = driver.DateOfBirth,
+            JoinDate = driver.JoinDate,
+            CurrentLocation = driver.CurrentLocation,
+            Status = driver.Status,
+            Licenses = driver.DriverLicenses
+                .OrderByDescending(license => license.ExpiryDate)
+                .Select(license => new TripDriverLicenseDto
+                {
+                    LicenseId = license.LicenseId,
+                    LicenseNumber = license.LicenseNumber,
+                    LicenseClass = license.LicenseClass,
+                    IssueDate = license.IssueDate,
+                    ExpiryDate = license.ExpiryDate,
+                    Status = license.Status
+                })
+                .ToList()
+        };
+    }
+
+    private static TripOrderDetailsDto ToTripOrderDetailsDto(
+        TransportOrder order,
+        IReadOnlyCollection<Lpn> orderLpns,
+        IReadOnlyCollection<TripLifoLoadItemDto> orderLoadItems,
+        IReadOnlyCollection<TripStop> tripStops)
+    {
+        var orderedLoadItems = orderLoadItems
+            .OrderBy(item => item.LoadOrder)
+            .ToList();
+        var deliveryStopSequence = orderedLoadItems
+            .Select(item => (int?)item.DeliveryStopSequence)
+            .FirstOrDefault();
+
+        if (!deliveryStopSequence.HasValue && order.DestLocation.HasValue)
+        {
+            deliveryStopSequence = tripStops
+                .Where(stop => stop.LocationId == order.DestLocation)
+                .Select(stop => (int?)stop.StopSequence)
+                .Min();
+        }
+
+        return new TripOrderDetailsDto
+        {
+            OrderId = order.OrderId,
+            TrackingCode = order.TrackingCode,
+            CustomerId = order.CustomerId,
+            ItemName = order.ItemName,
+            Category = order.Category,
+            Quantity = order.Quantity,
+            PackingType = order.PackingType,
+            TempCondition = order.TempCondition,
+            HasStrongOdor = order.HasStrongOdor,
+            IsStackable = order.IsStackable,
+            PickupLocationId = order.PickupLocation,
+            DestinationLocationId = order.DestLocation,
+            MasterTripId = order.MasterTripId,
+            ScheduleId = order.ScheduleId,
+            DropoffStopId = order.DropoffStopId,
+            PickupAddress = order.PickupLocationNavigation?.Address,
+            DestinationAddress = order.DestLocationNavigation?.Address
+                ?? tripStops
+                    .FirstOrDefault(stop => stop.LocationId == order.DestLocation)
+                    ?.Location
+                    ?.Address,
+            DeliveryStopSequence = deliveryStopSequence,
+            FirstLifoLoadOrder = orderedLoadItems
+                .Select(item => (int?)item.LoadOrder)
+                .FirstOrDefault(),
+            LifoLoadOrders = orderedLoadItems
+                .Select(item => item.LoadOrder)
+                .ToList(),
+            LifoZone = orderedLoadItems
+                .Select(item => item.Zone)
+                .FirstOrDefault(),
+            Status = order.Status,
+            CreatedAt = order.CreatedAt,
+            Customer = order.Customer == null ? null : ToTripCustomerDetailsDto(order.Customer),
+            PickupLocation = order.PickupLocationNavigation == null
+                ? null
+                : ToTripLocationDetailsDto(order.PickupLocationNavigation),
+            DestinationLocation = order.DestLocationNavigation == null
+                ? null
+                : ToTripLocationDetailsDto(order.DestLocationNavigation),
+            Schedule = order.Schedule == null ? null : ToTripScheduleDetailsDto(order.Schedule),
+            Dimension = order.OrderDimension == null
+                ? null
+                : new TripOrderDimensionDto
+                {
+                    ExpectedWeightKg = order.OrderDimension.ExpectedWeightKg,
+                    ActualWeightKg = order.OrderDimension.ActualWeightKg,
+                    ExpectedCbm = order.OrderDimension.ExpectedCbm,
+                    ActualCbm = order.OrderDimension.ActualCbm,
+                    LengthCm = order.OrderDimension.LengthCm,
+                    WidthCm = order.OrderDimension.WidthCm,
+                    HeightCm = order.OrderDimension.HeightCm
+                },
+            LpnIds = orderLpns.Select(lpn => lpn.LpnId).ToList(),
+            LpnCodes = orderLpns.Select(lpn => lpn.LpnCode).ToList(),
+            Documents = order.TransportDocuments
+                .OrderByDescending(document => document.CreatedAt)
+                .Select(document => new TripTransportDocumentDto
+                {
+                    DocumentId = document.DocId,
+                    DocumentType = document.DocType,
+                    ImageUrl = document.ImageUrl,
+                    VerifiedBy = document.VerifiedBy,
+                    RejectReason = document.RejectReason,
+                    UploadedBy = document.UploadedBy,
+                    CreatedAt = document.CreatedAt
+                })
+                .ToList(),
+            DeliveryEpods = order.DeliveryEpods
+                .OrderByDescending(epod => epod.CreatedAt)
+                .Select(epod => new TripDeliveryEpodDto
+                {
+                    EpodId = epod.EpodId,
+                    CheckinTime = epod.CheckinTime,
+                    SignedAt = epod.SignedAt,
+                    ReceiverName = epod.ReceiverName,
+                    ReceiverPhone = epod.ReceiverPhone,
+                    SignImageUrl = epod.SignImageUrl,
+                    SignLatitude = epod.SignLatitude,
+                    SignLongitude = epod.SignLongitude,
+                    DeliveryRating = epod.DeliveryRating,
+                    Note = epod.Note,
+                    PdfUrl = epod.PdfUrl,
+                    Status = epod.Status,
+                    CodAmount = epod.CodAmount,
+                    CodAmountPaid = epod.CodAmountPaid,
+                    PaymentMethod = epod.PaymentMethod,
+                    PaymentStatus = epod.PaymentStatus,
+                    PaymentEvidenceImageUrl = epod.PaymentEvidenceImageUrl,
+                    HandoverConfirmedAt = epod.HandoverConfirmedAt,
+                    HandoverPdfUrl = epod.HandoverPdfUrl,
+                    PaymentConfirmedAt = epod.PaymentConfirmedAt
+                })
+                .ToList()
+        };
+    }
+
+    private static TripLpnDetailsDto ToTripLpnDetailsDto(
+        Lpn lpn,
+        LpnDeliveryConfirmation? confirmation,
+        TripLifoLoadItemDto? loadItem)
+    {
+        var customer = lpn.Customer ?? lpn.Order?.Customer;
+        return new TripLpnDetailsDto
+        {
+            LpnId = lpn.LpnId,
+            LpnCode = lpn.LpnCode,
+            OrderId = lpn.OrderId,
+            CustomerId = lpn.CustomerId,
+            ReceiptId = lpn.ReceiptId,
+            WarehouseId = lpn.WarehouseId,
+            RouteId = lpn.RouteId,
+            TripId = lpn.TripId,
+            Quantity = lpn.Quantity,
+            ActualWeightKg = lpn.ActualWeightKg,
+            ActualCbm = lpn.ActualCbm,
+            LengthCm = lpn.LengthCm,
+            WidthCm = lpn.WidthCm,
+            HeightCm = lpn.HeightCm,
+            RequiredTemperature = lpn.RequiredTemperature,
+            RecordedTemperature = lpn.RecordedTemperature,
+            StorageLocation = lpn.StorageLocation,
+            State = lpn.State.ToString(),
+            DiscrepancyReason = lpn.DiscrepancyReason,
+            EvidenceImageUrl = lpn.EvidenceImageUrl,
+            IsFastTrack = lpn.IsFastTrack,
+            InboundTime = lpn.InboundTime,
+            SlaDeadline = lpn.SlaDeadline,
+            CreatedAt = lpn.CreatedAt,
+            UpdatedAt = lpn.UpdatedAt,
+            OrderTrackingCode = lpn.Order?.TrackingCode ?? string.Empty,
+            OrderItemName = lpn.Order?.ItemName ?? string.Empty,
+            OrderCategory = lpn.Order?.Category ?? string.Empty,
+            OrderStatus = lpn.Order?.Status ?? string.Empty,
+            LifoLoadOrder = loadItem?.LoadOrder,
+            DeliveryStopSequence = loadItem?.DeliveryStopSequence,
+            LifoZone = loadItem?.Zone,
+            LifoReason = loadItem?.Reason,
+            Customer = customer == null ? null : ToTripCustomerDetailsDto(customer),
+            Warehouse = lpn.Warehouse == null
+                ? null
+                : new TripWarehouseDetailsDto
+                {
+                    WarehouseId = lpn.Warehouse.WarehouseId,
+                    WarehouseName = lpn.Warehouse.WarehouseName,
+                    WarehouseCode = lpn.Warehouse.WarehouseCode,
+                    Address = lpn.Warehouse.Address,
+                    WarehouseType = lpn.Warehouse.WarehouseType,
+                    DefaultMinTemp = lpn.Warehouse.DefaultMinTemp,
+                    DefaultMaxTemp = lpn.Warehouse.DefaultMaxTemp,
+                    Status = lpn.Warehouse.Status
+                },
+            Receipt = lpn.Receipt == null
+                ? null
+                : new TripWarehouseReceiptDto
+                {
+                    ReceiptId = lpn.Receipt.ReceiptId,
+                    ReceiptCode = lpn.Receipt.ReceiptCode,
+                    ReferenceDocNo = lpn.Receipt.ReferenceDocNo,
+                    ReceiptType = lpn.Receipt.ReceiptType,
+                    Reason = lpn.Receipt.Reason,
+                    TotalExpectedQuantity = lpn.Receipt.TotalExpectedQty,
+                    TotalActualQuantity = lpn.Receipt.TotalActualQty,
+                    RecordedTemperature = lpn.Receipt.RecordedTemperature,
+                    DelivererName = lpn.Receipt.DelivererName,
+                    Note = lpn.Receipt.Note,
+                    PdfUrl = lpn.Receipt.PdfUrl,
+                    CreatedAt = lpn.Receipt.CreatedAt
+                },
+            DeliveryConfirmation = confirmation == null
+                ? null
+                : new TripLpnDeliveryConfirmationDto
+                {
+                    ConfirmationId = confirmation.ConfirmationId,
+                    OutcomeType = confirmation.OutcomeType,
+                    ReceiverName = confirmation.ReceiverName,
+                    ReceiverPhone = confirmation.ReceiverPhone,
+                    RejectReason = confirmation.RejectReason,
+                    RejectNote = confirmation.RejectNote,
+                    EvidenceImageUrl = confirmation.EvidenceImageUrl,
+                    ConfirmedByDriverId = confirmation.ConfirmedByDriverId,
+                    ConfirmedAt = confirmation.ConfirmedAt,
+                    CheckinAt = confirmation.CheckinAt,
+                    SignatureImageUrl = confirmation.SignatureImageUrl,
+                    CodAmount = confirmation.CodAmount,
+                    CodPaymentMethod = confirmation.CodPaymentMethod,
+                    CodReceiptImageUrl = confirmation.CodReceiptImageUrl,
+                    NewSealNumber = confirmation.NewSealNumber,
+                    RecordedTemperature = confirmation.RecordedTemperature,
+                    IsCodVerified = confirmation.IsCodVerified,
+                    CodVerifiedAt = confirmation.CodVerifiedAt,
+                    CodVerifiedByUserId = confirmation.CodVerifiedByUserId
+                }
+        };
+    }
+
+    private static TripCustomerDetailsDto ToTripCustomerDetailsDto(Customer customer)
+    {
+        return new TripCustomerDetailsDto
+        {
+            CustomerId = customer.CustomerId,
+            CompanyName = customer.CompanyName,
+            TaxCode = customer.TaxCode,
+            Address = customer.Address,
+            Email = customer.Email,
+            PaymentTerm = customer.PaymentTerm,
+            Status = customer.Status
+        };
+    }
+
+    private static TripSealDetailsDto ToTripSealDetailsDto(Seal seal)
+    {
+        return new TripSealDetailsDto
+        {
+            SealId = seal.SealId,
+            StopId = seal.StopId,
+            SealCode = seal.SealCode,
+            AppliedAt = seal.AppliedAt,
+            AppliedImageUrl = seal.AppliedImageUrl,
+            RemovedAt = seal.RemovedAt,
+            RemovedImageUrl = seal.RemovedImageUrl,
+            Status = seal.Status,
+            Note = seal.Note,
+            CreatedAt = seal.CreatedAt
+        };
+    }
+
+    private static TripIncidentDetailsDto ToTripIncidentDetailsDto(IncidentReport incident)
+    {
+        return new TripIncidentDetailsDto
+        {
+            IncidentId = incident.IncidentId,
+            IncidentType = incident.IncidentType,
+            Severity = incident.Severity,
+            Description = incident.Description,
+            CurrentLatitude = incident.CurrentLatitude,
+            CurrentLongitude = incident.CurrentLongitude,
+            DriverPaidAmount = incident.DriverPaidAmount,
+            ReimbursedAmount = incident.ReimbursedAmount,
+            RequiresRescue = incident.RequiresRescue,
+            Status = incident.Status,
+            ReportedBy = incident.ReportedBy,
+            ReportedAt = incident.ReportedAt,
+            HandledBy = incident.HandledBy,
+            HandledAt = incident.HandledAt,
+            HandlingNote = incident.HandlingNote,
+            BrokenVehicleId = incident.BrokenVehicleId,
+            ReplacementVehicleId = incident.ReplacementVehicleId,
+            MaintenanceTicketId = incident.MaintenanceTicketId,
+            RescueDispatchedAt = incident.RescueDispatchedAt,
+            TransloadConfirmedAt = incident.TransloadConfirmedAt,
+            TransloadNote = incident.TransloadNote,
+            ApprovedAmount = incident.ApprovedAmount,
+            ExpenseStatus = incident.ExpenseStatus,
+            ResolvedAt = incident.ResolvedAt,
+            ResolutionNote = incident.ResolutionNote,
+            Evidence = incident.IncidentEvidences
+                .Select(evidence => new TripIncidentEvidenceDto
+                {
+                    EvidenceId = evidence.EvidenceId,
+                    EvidenceType = evidence.EvidenceType,
+                    FileUrl = evidence.FileUrl
+                })
+                .ToList()
+        };
+    }
+
     private static string ExtractGuid(string input)
     {
         if (string.IsNullOrWhiteSpace(input)) return input;
@@ -1640,5 +2518,3 @@ public class DispatchController : ControllerBase
         }
     }
 }
-
-
