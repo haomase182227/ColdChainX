@@ -68,7 +68,7 @@ namespace ColdChainX.UnitTests
             });
 
             var today = DateOnly.FromDateTime(DateTime.Today);
-            var documentTypes = new[] { "REGISTRATION", "INSURANCE", "CITY_PERMIT", "FOOD_SAFETY" };
+            var documentTypes = new[] { "REGISTRATION", "INSURANCE", "CITY_PERMIT" };
             foreach (var docType in documentTypes)
             {
                 _db.VehicleDocuments.Add(new VehicleDocument

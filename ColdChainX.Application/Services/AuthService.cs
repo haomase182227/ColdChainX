@@ -109,7 +109,8 @@ namespace ColdChainX.Application.Services
 
             var accessExpiresAt = DateTime.UtcNow.AddMinutes(60);
             var customerId = await ResolveCustomerIdForTokenAsync(user);
-            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt, customerId);
+            var driverId = await ResolveDriverIdAsync(user);
+            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt, customerId, driverId);
             var refreshToken = _jwtService.GenerateRefreshToken();
 
             user.RefreshToken = refreshToken;
@@ -120,6 +121,7 @@ namespace ColdChainX.Application.Services
 
             var dto = _mapper.Map<AuthResponseDto>(user);
             dto.CustomerId = customerId;
+            dto.DriverId = driverId;
             dto.AccessToken = accessToken;
             dto.RefreshToken = refreshToken;
             dto.AccessTokenExpiresAt = accessExpiresAt;
@@ -137,7 +139,8 @@ namespace ColdChainX.Application.Services
 
             var accessExpiresAt = DateTime.UtcNow.AddMinutes(60);
             var customerId = await ResolveCustomerIdForTokenAsync(user);
-            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt, customerId);
+            var driverId = await ResolveDriverIdAsync(user);
+            var accessToken = _jwtService.GenerateAccessToken(user, accessExpiresAt, customerId, driverId);
             var newRefreshToken = _jwtService.GenerateRefreshToken();
 
             user.RefreshToken = newRefreshToken;
@@ -148,6 +151,7 @@ namespace ColdChainX.Application.Services
 
             var dto = _mapper.Map<AuthResponseDto>(user);
             dto.CustomerId = customerId;
+            dto.DriverId = driverId;
             dto.AccessToken = accessToken;
             dto.RefreshToken = newRefreshToken;
             dto.AccessTokenExpiresAt = accessExpiresAt;
@@ -565,6 +569,17 @@ namespace ColdChainX.Application.Services
             }
 
             return await _userRepository.GetCustomerIdByEmailAsync(user.Email);
+        }
+
+        private async Task<Guid?> ResolveDriverIdAsync(User user)
+        {
+            if (!string.Equals(user.Role?.RoleName, "Driver", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            var driver = await _driverRepository.GetByUserIdAsync(user.UserId);
+            return driver?.DriverId;
         }
 
         public async Task<ApiResponse<List<RoleDto>>> GetAllRolesAsync()

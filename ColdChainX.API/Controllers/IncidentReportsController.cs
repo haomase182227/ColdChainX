@@ -53,6 +53,55 @@ namespace ColdChainX.API.Controllers
         }
 
         /// <summary>
+        /// Mobile-friendly incident report endpoint with optional photos/receipts.
+        /// </summary>
+        [HttpPost("with-evidence")]
+        [Consumes("multipart/form-data")]
+        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Driver,DRIVER,WarehouseOperator")]
+        [ProducesResponseType(typeof(ApiResponse<IncidentResponse>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> ReportIncidentWithEvidence(
+            [FromForm] CreateIncidentWithEvidenceRequest request)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var userId))
+                return Unauthorized(ApiResponse<object>.Failure("User ID claim is missing or invalid in the token."));
+
+            var result = await _incidentService.ReportIncidentAsync(
+                request,
+                userId,
+                request.EvidenceFiles);
+            if (!result.Success)
+                return StatusCode(result.StatusCode, result);
+
+            return Ok(result);
+        }
+
+        /// <summary>Add optional incident photos or driver receipts after reporting.</summary>
+        [HttpPost("{id:guid}/evidences")]
+        [Consumes("multipart/form-data")]
+        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Driver,DRIVER")]
+        [ProducesResponseType(typeof(ApiResponse<IncidentResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> AddEvidence(
+            [FromRoute] Guid id,
+            [FromForm] UploadIncidentEvidenceRequest request)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var userId))
+                return Unauthorized(ApiResponse<object>.Failure("User ID claim is missing or invalid in the token."));
+
+            var result = await _incidentService.AddEvidenceAsync(
+                id,
+                request.Files,
+                request.EvidenceType,
+                userId);
+            if (!result.Success)
+                return StatusCode(result.StatusCode, result);
+
+            return Ok(result);
+        }
+
+        /// <summary>
         /// Resolve a reported incident (mark as RESOLVED).
         /// </summary>
         [HttpPost("{id:guid}/resolve")]
@@ -70,6 +119,30 @@ namespace ColdChainX.API.Controllers
             var result = await _incidentService.ResolveIncidentAsync(id, request, userId);
             if (!result.Success)
                 return BadRequest(result);
+
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// The assigned driver confirms an incident that does not require rescue
+        /// was handled on site and continues the original trip/vehicle.
+        /// </summary>
+        [HttpPost("{id:guid}/continue-trip")]
+        [Authorize(Roles = "Driver,DRIVER")]
+        [ProducesResponseType(typeof(ApiResponse<IncidentWorkflowResult>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
+        public async Task<IActionResult> ContinueTrip(
+            [FromRoute] Guid id,
+            [FromBody] ContinueTripAfterIncidentRequest request)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var userId))
+                return Unauthorized(ApiResponse<object>.Failure("User ID claim is missing or invalid in the token."));
+
+            var result = await _rescueService.ContinueTripAsync(id, request, userId);
+            if (!result.Success)
+                return StatusCode(result.StatusCode, result);
 
             return Ok(result);
         }
@@ -124,6 +197,71 @@ namespace ColdChainX.API.Controllers
             var result = await _rescueService.DispatchRescueAsync(id, request, userId);
             if (!result.Success)
                 return BadRequest(result);
+
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Confirms all cargo has been transferred to the replacement vehicle.
+        /// Every IoT device on that vehicle must be online; MQTT streaming must be
+        /// published successfully before the trip returns to IN_TRANSIT.
+        /// </summary>
+        [HttpPost("{id:guid}/confirm-transload")]
+        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Dispatcher,DISPATCHER,WarehouseOperator,Loader,LOADER")]
+        [ProducesResponseType(typeof(ApiResponse<IncidentWorkflowResult>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> ConfirmTransload(
+            [FromRoute] Guid id,
+            [FromBody] ConfirmTransloadRequest request)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var userId))
+                return Unauthorized(ApiResponse<object>.Failure("User ID claim is missing or invalid in the token."));
+
+            var result = await _rescueService.ConfirmTransloadAsync(id, request, userId);
+            if (!result.Success)
+                return StatusCode(result.StatusCode, result);
+
+            return Ok(result);
+        }
+
+        /// <summary>Admin approves the amount paid in advance by the driver.</summary>
+        [HttpPost("{id:guid}/expenses/approve")]
+        [Authorize(Roles = "Admin,ADMIN")]
+        [ProducesResponseType(typeof(ApiResponse<IncidentResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> ApproveExpense(
+            [FromRoute] Guid id,
+            [FromBody] ApproveIncidentExpenseRequest request)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var userId))
+                return Unauthorized(ApiResponse<object>.Failure("User ID claim is missing or invalid in the token."));
+
+            var result = await _incidentService.ApproveExpenseAsync(id, request, userId);
+            if (!result.Success)
+                return StatusCode(result.StatusCode, result);
+
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Admin records the reimbursement, uploads its receipt and sends it to
+        /// the reporting driver through persistent and realtime notifications.
+        /// </summary>
+        [HttpPost("{id:guid}/expenses/reimburse")]
+        [Consumes("multipart/form-data")]
+        [Authorize(Roles = "Admin,ADMIN")]
+        [ProducesResponseType(typeof(ApiResponse<IncidentResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> ReimburseExpense(
+            [FromRoute] Guid id,
+            [FromForm] ReimburseIncidentExpenseRequest request)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var userId))
+                return Unauthorized(ApiResponse<object>.Failure("User ID claim is missing or invalid in the token."));
+
+            var result = await _incidentService.ReimburseExpenseAsync(id, request, userId);
+            if (!result.Success)
+                return StatusCode(result.StatusCode, result);
 
             return Ok(result);
         }

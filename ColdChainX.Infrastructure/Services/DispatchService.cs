@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using ColdChainX.Application.DTOs.Dispatch;
 using ColdChainX.Application.Interfaces;
+using ColdChainX.Application.Services;
 using ColdChainX.Core.Entities;
 using ColdChainX.Core.Enums;
 using ColdChainX.Infrastructure.Integration;
@@ -30,6 +31,7 @@ public class DispatchService : IDispatchService
     private readonly IDriverAvailabilityService _driverAvailability;
     private readonly IMqttCommandPublisher _mqttPublisher;
     private readonly ILogger<DispatchService> _logger;
+    private readonly ICargoCompatibilityService _cargoCompatibilityService;
 
     // Tên role điều phối viên
     private const string CoordinatorRoleName = "Dispatcher";
@@ -40,6 +42,19 @@ public class DispatchService : IDispatchService
     // Chỉ sử dụng tối đa 80% thể tích thùng xe để bảo đảm lưu thông khí lạnh.
     private const decimal MaxColdAirflowVolumeUtilization = 0.80m;
 
+    private static readonly string[] BusyTripStatuses =
+    {
+        "PLANNED",
+        "PICKING",
+        "LOADING",
+        "LOADED",
+        "LOADING_COMPLETED",
+        "SEALED",
+        "DISPATCHED",
+        "IN_TRANSIT",
+        "DELAYED"
+    };
+
     public DispatchService(
         ApplicationDbContext context,
         GeminiLoadOptimizerClient geminiClient,
@@ -49,7 +64,8 @@ public class DispatchService : IDispatchService
         IHubContext<NotificationHub> hubContext,
         IDriverAvailabilityService driverAvailability,
         IMqttCommandPublisher mqttPublisher,
-        ILogger<DispatchService> logger)
+        ILogger<DispatchService> logger,
+        ICargoCompatibilityService? cargoCompatibilityService = null)
     {
         _context = context;
         _geminiClient = geminiClient;
@@ -60,6 +76,7 @@ public class DispatchService : IDispatchService
         _driverAvailability = driverAvailability;
         _mqttPublisher = mqttPublisher;
         _logger = logger;
+        _cargoCompatibilityService = cargoCompatibilityService ?? new CargoCompatibilityService();
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -826,18 +843,14 @@ public class DispatchService : IDispatchService
 
     public async Task<ManualDispatchResult> ManualDispatchAsync(ManualDispatchRequest request)
     {
-        RouteSchedule? schedule = null;
-        if (request.ScheduleId.HasValue && request.ScheduleId.Value != Guid.Empty)
-        {
-            schedule = await _context.RouteSchedules
-                .AsNoTracking()
-                .FirstOrDefaultAsync(s => s.ScheduleId == request.ScheduleId)
-                ?? throw new InvalidOperationException($"ScheduleId '{request.ScheduleId}' does not exist.");
+        if (!request.ScheduleId.HasValue || request.ScheduleId.Value == Guid.Empty)
+            throw new InvalidOperationException("ScheduleId is required.");
 
-            if (!string.Equals(schedule.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException(
-                    $"Schedule '{schedule.ScheduleName}' is not ACTIVE (current status: '{schedule.Status}').");
-        }
+        var selectedScheduleId = request.ScheduleId.Value;
+        var schedule = await _context.RouteSchedules
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.ScheduleId == selectedScheduleId)
+            ?? throw new InvalidOperationException($"ScheduleId '{selectedScheduleId}' does not exist.");
 
         // 1. Validate kho xuất phát
         var originLocation = await _context.Locations.FindAsync(request.OriginWarehouseLocationId)
@@ -857,6 +870,18 @@ public class DispatchService : IDispatchService
         var missingLpns = request.LpnIds.Except(lpns.Select(l => l.LpnId)).ToList();
         if (missingLpns.Any())
             throw new InvalidOperationException($"Không tìm thấy các LPN sau: {string.Join(", ", missingLpns)}");
+
+        var selectedSetValidation = _cargoCompatibilityService.ValidateSelectedSet(
+            lpns,
+            selectedScheduleId,
+            request.LpnIds);
+        if (!selectedSetValidation.IsValid)
+        {
+            var messages = selectedSetValidation.Conflicts
+                .Select(c => $"{c.ReasonCode}: {c.Message}")
+                .Distinct();
+            throw new InvalidOperationException($"Selected LPNs are not valid for dispatch. {string.Join("; ", messages)}");
+        }
 
         if (lpns.Any(l => l.State != LpnState.IN_STOCK))
             throw new InvalidOperationException("Chỉ được ghép chuyến các LPN có trạng thái IN_STOCK.");
@@ -889,6 +914,15 @@ public class DispatchService : IDispatchService
                 $"Xe {vehicle.TruckPlate} không thể ghép chuyến — trạng thái hiện tại: '{vehicle.Status}'. " +
                 $"Chỉ xe ACTIVE mới có thể được ghép chuyến.");
 
+        var vehicleTemperatureConflicts = _cargoCompatibilityService.ValidateVehicleTemperature(vehicle, lpns);
+        if (vehicleTemperatureConflicts.Any())
+        {
+            var messages = vehicleTemperatureConflicts
+                .Select(c => $"{c.ReasonCode}: {c.Message}")
+                .Distinct();
+            throw new InvalidOperationException($"Vehicle temperature is not compatible with selected LPNs. {string.Join("; ", messages)}");
+        }
+
         // 4b. Validate tài xế (1–2 người, gán theo chuyến qua TripDriver)
         var driverIds = request.DriverIds.Distinct().ToList();
         if (driverIds.Count < 1 || driverIds.Count > 2)
@@ -904,6 +938,28 @@ public class DispatchService : IDispatchService
             throw new InvalidOperationException($"Không tìm thấy tài xế: {string.Join(", ", missingDrivers)}");
         // Giữ nguyên thứ tự người dùng chọn (tài xế đầu = PRIMARY)
         drivers = driverIds.Select(id => drivers.First(d => d.DriverId == id)).ToList();
+
+        // 4c. Validate Vehicle and Driver location against originLocation (must be same warehouse)
+        var lpnWarehouseIdStr = lpns.FirstOrDefault(l => l.WarehouseId.HasValue)?.WarehouseId?.ToString();
+
+        bool IsLocationOk(string? currentLocation) {
+            if (string.IsNullOrWhiteSpace(currentLocation)) return false;
+            if (lpnWarehouseIdStr != null && currentLocation.Equals(lpnWarehouseIdStr, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        if (!IsLocationOk(vehicle.CurrentLocation))
+        {
+            throw new InvalidOperationException($"Xe {vehicle.TruckPlate} không nằm tại kho xuất phát này (Vị trí hiện tại: {vehicle.CurrentLocation}).");
+        }
+
+        foreach (var d in drivers)
+        {
+            if (!IsLocationOk(d.CurrentLocation))
+            {
+                throw new InvalidOperationException($"Tài xế {d.FullName} không nằm tại kho xuất phát này.");
+            }
+        }
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var driverLicenses = new Dictionary<Guid, DriverLicense>();
@@ -929,9 +985,8 @@ public class DispatchService : IDispatchService
             // Chặn double-book: tài xế đang gắn với một chuyến khác còn hoạt động
             var driverBusy = await _context.TripDrivers
                 .AnyAsync(td => td.DriverId == driver.DriverId
-                    && (td.Trip.Status == "PLANNED" || td.Trip.Status == "PICKING"
-                     || td.Trip.Status == "LOADING" || td.Trip.Status == "LOADING_COMPLETED"
-                     || td.Trip.Status == "SEALED" || td.Trip.Status == "DISPATCHED"));
+                    && td.Trip.Status != null
+                    && BusyTripStatuses.Contains(td.Trip.Status));
             if (driverBusy)
                 throw new InvalidOperationException($"Tài xế {driver.FullName} hiện đang bận một chuyến khác.");
         }
@@ -942,12 +997,8 @@ public class DispatchService : IDispatchService
         // Kiểm tra xe bận — bao gồm PLANNED để tránh double-book
         var isBusy = await _context.MasterTrips
             .AnyAsync(t => t.VehicleId == request.VehicleId
-                        && (t.Status == "PLANNED"
-                         || t.Status == "PICKING"
-                         || t.Status == "LOADING"
-                         || t.Status == "LOADING_COMPLETED"
-                         || t.Status == "SEALED"
-                         || t.Status == "DISPATCHED"));
+                        && t.Status != null
+                        && BusyTripStatuses.Contains(t.Status));
 
         if (isBusy)
             throw new InvalidOperationException($"Xe {vehicle.TruckPlate} hiện đang bận một chuyến khác.");
@@ -986,7 +1037,10 @@ public class DispatchService : IDispatchService
                     Length = lpn.LengthCm ?? 120m,
                     Width = lpn.WidthCm ?? 100m,
                     Height = lpn.HeightCm ?? 150m,
-                    RouteStopSequence = seq
+                    RouteStopSequence = seq,
+                    WeightKg = lpn.ActualWeightKg,
+                    RequiredTemperature = _cargoCompatibilityService.ResolveRequiredTemperature(lpn) ?? requiredMinTemp,
+                    IsStackable = lpn.Order?.IsStackable ?? true
                 });
             }
         }
@@ -1130,17 +1184,20 @@ public class DispatchService : IDispatchService
             });
 
             await _driverAvailability.RecordWorkAsync(driver.DriverId, masterTrip.TripId, perDriverHours, startDay);
-            driver.Status = "Planning";
+            driver.Status = "PLANNING";
             assignedDrivers.Add((driver, role));
         }
 
         // Cập nhật trạng thái xe → Planning (đã ghép chuyến, chờ xuất phát)
-        vehicle.Status = "Planning";
+        vehicle.Status = "PLANNING";
         await _context.SaveChangesAsync();
 
         var notifiedCount = 0;
+        var driverNotifiedCount = await SendDriverNotificationsAsync(masterTrip, vehicle, drivers);
 
-        // 10. Build response
+        await _context.SaveChangesAsync();
+
+        await _context.SaveChangesAsync();
         var routeStops = routeResult.StopSequence.Select(s => new StopDto
         {
             Sequence = s.Sequence, LocationId = s.LocationId, Address = s.Address,
@@ -1309,6 +1366,7 @@ public class DispatchService : IDispatchService
             .Include(t => t.Vehicle)
             .Include(t => t.TripDrivers)
                 .ThenInclude(td => td.Driver)
+                    .ThenInclude(d => d.DriverLicenses)
             .Include(t => t.TransportOrders)
             .Include(t => t.Seals)
             .Include(t => t.TripStops)
@@ -1399,20 +1457,22 @@ public class DispatchService : IDispatchService
         foreach (var stop in trip.TripStops.Where(s => s.Status != "CANCELLED"))
             stop.Status = "CANCELLED";
 
-        // 7. Reset xe → ACTIVE và tài xế → ACTIVE (free); giải phóng giờ lái đã ghi nhận cho chuyến
+        // 7. Giải phóng xe, tài xế và giờ lái đã ghi nhận cho chuyến
         if (trip.Vehicle != null)
             trip.Vehicle.Status = "ACTIVE";
-        foreach (var td in trip.TripDrivers)
-        {
-            if (td.Driver != null)
-                td.Driver.Status = "ACTIVE";
-        }
+
         // Xóa các bản ghi giờ lái của chuyến này để trả lại quota cho tài xế
         var workLogs = await _context.DriverWorkLogs
             .Where(w => w.TripId == tripId)
             .ToListAsync();
         if (workLogs.Count > 0)
             _context.DriverWorkLogs.RemoveRange(workLogs);
+
+        foreach (var td in trip.TripDrivers)
+        {
+            if (td.Driver != null)
+                await ReleaseDriverAsync(td.Driver, tripId);
+        }
 
         // 8. Đánh dấu chuyến CANCELLED
         trip.Status = "CANCELLED";
@@ -1526,23 +1586,43 @@ public class DispatchService : IDispatchService
         }
         else
         {
-            // Tất cả đều online -> Cập nhật trip status và bật streaming
-            var trip = await _context.MasterTrips.FindAsync(tripId)
+            // Tất cả đều online -> bật streaming thành công rồi mới cho chuyến chạy.
+            var trip = await _context.MasterTrips
+                .Include(t => t.TripDrivers)
+                    .ThenInclude(td => td.Driver)
+                        .ThenInclude(d => d.DriverLicenses)
+                .FirstOrDefaultAsync(t => t.TripId == tripId)
                 ?? throw new KeyNotFoundException("Không tìm thấy chuyến đi.");
 
-            if (trip.Status != "IN_TRANSIT" && trip.Status != "COMPLETED")
-            {
-                trip.Status = "IN_TRANSIT";
-                await _context.SaveChangesAsync();
-            }
+            if (trip.VehicleId != vehicleId)
+                throw new InvalidOperationException("Xe được kiểm tra không thuộc chuyến đi này.");
 
-            // Gửi lệnh START_STREAMING qua MQTT bất chấp xe chưa chạy hay đã chạy (dùng làm Force Wake-up)
+            EnsureDriversCanDepart(trip);
+
             foreach (var device in devices)
             {
                 if (!string.IsNullOrWhiteSpace(device.DeviceCode))
                 {
-                    await _mqttPublisher.StartStreamingAsync(device.DeviceCode, CancellationToken.None);
+                    var published = await _mqttPublisher.StartStreamingAsync(device.DeviceCode, CancellationToken.None);
+                    if (!published)
+                    {
+                        throw new InvalidOperationException(
+                            $"Không thể bật MQTT streaming cho thiết bị {device.DeviceCode}. Chuyến vẫn chưa được tiếp tục.");
+                    }
                 }
+            }
+
+            if (trip.Status != "IN_TRANSIT" && trip.Status != "COMPLETED")
+            {
+                trip.Status = "IN_TRANSIT";
+                trip.StartedAt ??= DateTime.UtcNow;
+                vehicle.Status = "ONTRIP";
+                foreach (var td in trip.TripDrivers)
+                {
+                    if (td.Driver != null)
+                        td.Driver.Status = "ONTRIP";
+                }
+                await _context.SaveChangesAsync();
             }
         }
 
@@ -1568,6 +1648,9 @@ public class DispatchService : IDispatchService
             .Include(t => t.TripDrivers)
                 .ThenInclude(td => td.Driver)
                     .ThenInclude(d => d.User)
+            .Include(t => t.TripDrivers)
+                .ThenInclude(td => td.Driver)
+                    .ThenInclude(d => d.DriverLicenses)
             .Include(t => t.TransportOrders)
             .Include(t => t.Seals)
             .Include(t => t.OriginLocation)
@@ -1584,6 +1667,8 @@ public class DispatchService : IDispatchService
         // Kiểm tra đã kẹp chì chưa
         if (trip.Seals.Any(s => s.Status == "APPLIED") || !string.IsNullOrEmpty(trip.SealNumber))
             throw new InvalidOperationException("Chuyến hàng đã được kẹp chì trước đó.");
+
+        EnsureDriversCanDepart(trip);
 
         // Lấy tất cả LPN của chuyến này kèm thông tin để tạo OutboundOrder
         var lpns = await _context.Lpns
@@ -1703,11 +1788,11 @@ public class DispatchService : IDispatchService
             trip.Status = "IN_TRANSIT";
             trip.StartedAt ??= DateTime.UtcNow;
             if (trip.Vehicle != null)
-                trip.Vehicle.Status = "OnTrip";
+                trip.Vehicle.Status = "ONTRIP";
             foreach (var td in trip.TripDrivers)
             {
                 if (td.Driver != null)
-                    td.Driver.Status = "OnTrip";
+                    td.Driver.Status = "ONTRIP";
             }
         }
         catch (Exception ex)
@@ -2314,6 +2399,118 @@ public class DispatchService : IDispatchService
             // Fail-safe to avoid blocking API if SignalR fails
         }
     }
-}
 
+    private static bool HasValidDriverLicense(Driver driver)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        return driver.DriverLicenses.Any(l =>
+            l.ExpiryDate >= today
+            && (string.IsNullOrWhiteSpace(l.Status)
+                || l.Status.Equals("ACTIVE", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static void EnsureDriversCanDepart(MasterTrip trip)
+    {
+        var assignedDrivers = trip.TripDrivers
+            .Select(td => td.Driver)
+            .Where(driver => driver != null)
+            .Cast<Driver>()
+            .ToList();
+
+        if (assignedDrivers.Count == 0)
+            throw new InvalidOperationException("Chuyến đi chưa được gán tài xế.");
+
+        foreach (var driver in assignedDrivers)
+        {
+            var status = driver.Status?.Trim().ToUpperInvariant();
+            if (status is "INACTIVE" or "RELAX" or "SUSPENDED_DOCS" or "DELETED")
+            {
+                throw new InvalidOperationException(
+                    $"Tài xế {driver.FullName} không thể xuất phát — trạng thái hiện tại: '{driver.Status}'.");
+            }
+
+            if (!HasValidDriverLicense(driver))
+            {
+                throw new InvalidOperationException(
+                    $"Tài xế {driver.FullName} không thể xuất phát vì GPLX đang thiếu hoặc đã hết hạn.");
+            }
+        }
+    }
+
+    private async Task ReleaseDriverAsync(Driver driver, Guid? excludedTripId = null)
+    {
+        if (!HasValidDriverLicense(driver))
+        {
+            driver.Status = "SUSPENDED_DOCS";
+            return;
+        }
+
+        driver.Status = "ACTIVE";
+        await _driverAvailability.ReconcileStatusAsync(driver, excludedTripId);
+    }
+
+    private const string DriverTripAssignedTemplateId = "DISPATCH_DRIVER_ASSIGNED";
+
+    private async Task<int> SendDriverNotificationsAsync(MasterTrip trip, Vehicle vehicle, List<Driver> drivers)
+    {
+        var templateExists = await _context.NotificationTemplates
+            .AnyAsync(t => t.TemplateId == DriverTripAssignedTemplateId
+                        && (t.Status == null || t.Status == "ACTIVE"));
+
+        if (!templateExists)
+        {
+            var msgType = await _context.Messagetypes.FirstOrDefaultAsync();
+            if (msgType != null)
+            {
+                _context.NotificationTemplates.Add(new NotificationTemplate
+                {
+                    TemplateId = DriverTripAssignedTemplateId,
+                    TypeId = msgType.TypeId,
+                    TitleTemplate = "Bạn được gán chuyến mới {tripId}",
+                    BodyTemplate = "Bạn đã được gán vào chuyến xe {vehiclePlate} dự kiến khởi hành lúc {startTime}.",
+                    Channel = "IN_APP",
+                    Status = "ACTIVE"
+                });
+                await _context.SaveChangesAsync();
+            }
+        }
+
+        var actualTemplateId = await _context.NotificationTemplates
+            .AnyAsync(t => t.TemplateId == DriverTripAssignedTemplateId
+                        && (t.Status == null || t.Status == "ACTIVE"))
+            ? DriverTripAssignedTemplateId
+            : await GetFallbackTemplateIdAsync();
+
+        if (actualTemplateId == null) return 0;
+
+        int notifiedCount = 0;
+        var notifParams = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            tripId = trip.TripId,
+            vehiclePlate = vehicle.TruckPlate,
+            startTime = trip.PlannedStartTime.ToString("dd/MM/yyyy HH:mm")
+        });
+
+        foreach (var driver in drivers)
+        {
+            if (driver.UserId.HasValue)
+            {
+                _context.Notifications.Add(new Notification
+                {
+                    NotiId     = Guid.NewGuid(),
+                    UserId     = driver.UserId.Value,
+                    SenderId   = null,
+                    TemplateId = actualTemplateId,
+                    Params     = notifParams,
+                    OrderId    = null,
+                    IsRead     = false,
+                    CreatedAt  = DateTime.UtcNow
+                });
+                notifiedCount++;
+            }
+        }
+
+        return notifiedCount;
+    }
+}
 

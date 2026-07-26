@@ -31,21 +31,20 @@ public class ManualDispatchFlowTests
         Assert.Equal(trip.TripId, lpn.TripId);
         Assert.Equal(trip.TripId, order.MasterTripId);
         Assert.Equal("LOADING", order.Status);
-        Assert.Equal("Planning", vehicle.Status);
+        Assert.Equal("PLANNING", vehicle.Status);
     }
 
     [Fact]
-    public async Task ManualDispatch_RejectsInactiveSchedule()
+    public async Task ManualDispatch_AllowsInactiveScheduleWithExistingLpn()
     {
         await using var fixture = await CreateFixtureAsync();
         fixture.Schedule.Status = "INACTIVE";
         await fixture.Db.SaveChangesAsync();
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => fixture.Service.ManualDispatchAsync(fixture.Request));
+        var result = await fixture.Service.ManualDispatchAsync(fixture.Request);
 
-        Assert.Contains("not ACTIVE", error.Message);
-        Assert.Empty(fixture.Db.MasterTrips);
+        var trip = await fixture.Db.MasterTrips.SingleAsync(t => t.TripId == result.TripId);
+        Assert.Equal(fixture.Schedule.ScheduleId, trip.ScheduleId);
     }
 
     // LPN schedule constraint was removed in main to support flexible dispatching.
@@ -199,7 +198,7 @@ public class ManualDispatchFlowTests
             PhoneNumber = "0900000000",
             DateOfBirth = new DateOnly(1990, 1, 1),
             JoinDate = new DateOnly(2025, 1, 1),
-            Status = "Available"
+            Status = "ACTIVE"
         };
         driver.DriverLicenses.Add(new DriverLicense
         {

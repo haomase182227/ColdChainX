@@ -71,6 +71,9 @@ namespace ColdChainX.Application.Validators
 
             RuleFor(x => x.Status)
                 .MaximumLength(20).WithMessage("Status must not exceed 20 characters")
+                .Must(status => string.IsNullOrWhiteSpace(status)
+                    || status.Trim().ToUpperInvariant() is "ACTIVE" or "INACTIVE")
+                .WithMessage("Status must be ACTIVE or INACTIVE")
                 .When(x => !string.IsNullOrWhiteSpace(x.Status));
         }
     }

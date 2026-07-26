@@ -385,7 +385,7 @@ END $$;";
                         PhoneNumber = s.Phone,
                         DateOfBirth = new DateOnly(1990, 1, 1),
                         JoinDate = today,
-                        Status = "Available",
+                        Status = "ACTIVE",
                         CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
                     });
 

@@ -763,21 +763,55 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasPrecision(10, 7)
                 .HasColumnName("current_longitude");
             entity.Property(e => e.Description).HasColumnName("description");
+            entity.Property(e => e.ApprovedAmount)
+                .HasPrecision(15, 2)
+                .HasColumnName("approved_amount");
+            entity.Property(e => e.BrokenVehicleId).HasColumnName("broken_vehicle_id");
             entity.Property(e => e.DriverPaidAmount)
                 .HasPrecision(15, 2)
                 .HasDefaultValue(0m)
                 .HasColumnName("driver_paid_amount");
+            // Reuse the incident expense columns already present on the server.
+            entity.Property(e => e.ExpenseApprovalNote).HasColumnName("approval_note");
+            entity.Property(e => e.ExpenseApprovedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("approved_at");
+            entity.Property(e => e.ExpenseApprovedBy).HasColumnName("approved_by");
+            entity.Property(e => e.ExpenseStatus)
+                .IsRequired()
+                .HasMaxLength(30)
+                .HasDefaultValueSql("'NOT_REQUIRED'::character varying")
+                .HasColumnName("expense_status");
+            entity.Property(e => e.HandledAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("handled_at");
+            entity.Property(e => e.HandledBy).HasColumnName("handled_by");
+            entity.Property(e => e.HandlingNote).HasColumnName("handling_note");
             entity.Property(e => e.IncidentType)
                 .HasMaxLength(50)
                 .HasColumnName("incident_type");
+            entity.Property(e => e.MaintenanceTicketId).HasColumnName("maintenance_ticket_id");
             entity.Property(e => e.ReportedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("reported_at");
             entity.Property(e => e.ReportedBy).HasColumnName("reported_by");
+            entity.Property(e => e.ReimbursedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("reimbursed_at");
+            entity.Property(e => e.ReimbursedBy).HasColumnName("reimbursed_by");
+            entity.Property(e => e.ReplacementVehicleId).HasColumnName("replacement_vehicle_id");
+            entity.Property(e => e.RequiresRescue)
+                .HasDefaultValue(false)
+                .HasColumnName("requires_rescue");
+            entity.Property(e => e.RescueDispatchedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("rescue_dispatched_at");
             entity.Property(e => e.ResolvedAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("resolved_at");
+            entity.Property(e => e.ResolvedBy).HasColumnName("resolved_by");
+            entity.Property(e => e.ResolutionNote).HasColumnName("resolution_note");
             entity.Property(e => e.ReimbursedAmount)
                 .HasPrecision(15, 2)
                 .HasColumnName("reimbursed_amount");
@@ -785,9 +819,14 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasMaxLength(20)
                 .HasColumnName("severity");
             entity.Property(e => e.Status)
-                .HasMaxLength(20)
+                .HasMaxLength(30)
                 .HasDefaultValueSql("'REPORTED'::character varying")
                 .HasColumnName("status");
+            entity.Property(e => e.TransloadConfirmedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("transload_confirmed_at");
+            entity.Property(e => e.TransloadConfirmedBy).HasColumnName("transload_confirmed_by");
+            entity.Property(e => e.TransloadNote).HasColumnName("transload_note");
             entity.Property(e => e.TripId).HasColumnName("trip_id");
 
             entity.HasOne(d => d.ReportedByNavigation).WithMany(p => p.IncidentReports)

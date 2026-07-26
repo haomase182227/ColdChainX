@@ -23,11 +23,16 @@ public class DepartStopCommandHandler : IRequestHandler<DepartStopCommand, ApiRe
 {
     private readonly IApplicationDbContext _context;
     private readonly IDeliveryEventService _deliveryEvents;
+    private readonly IDriverAvailabilityService _driverAvailability;
 
-    public DepartStopCommandHandler(IApplicationDbContext context, IDeliveryEventService deliveryEvents)
+    public DepartStopCommandHandler(
+        IApplicationDbContext context,
+        IDeliveryEventService deliveryEvents,
+        IDriverAvailabilityService driverAvailability)
     {
         _context = context;
         _deliveryEvents = deliveryEvents;
+        _driverAvailability = driverAvailability;
     }
 
     public async Task<ApiResponse<DepartResponse>> Handle(DepartStopCommand request, CancellationToken cancellationToken)
@@ -102,6 +107,32 @@ public class DepartStopCommandHandler : IRequestHandler<DepartStopCommand, ApiRe
                 stop.ActualDepartureTime = departTime;
                 stop.Status = "DEPARTED";
 
+                // 6.1. Detention Charge Logic
+                if (stop.ActualArrivalTime.HasValue)
+                {
+                    var waitMinutes = (int)(departTime - stop.ActualArrivalTime.Value).TotalMinutes;
+                    if (waitMinutes > 120)
+                    {
+                        // Identify a customer to bill, based on orders at this stop
+                        var customerId = await _context.TransportOrders
+                            .Where(o => o.MasterTripId == trip.TripId && o.DestLocation == stop.LocationId)
+                            .Select(o => o.CustomerId)
+                            .FirstOrDefaultAsync(cancellationToken);
+
+                        var detentionCharge = new DetentionCharge
+                        {
+                            ChargeId = Guid.NewGuid(),
+                            StopId = stop.StopId,
+                            CustomerId = customerId == Guid.Empty ? null : customerId,
+                            FreeMinutesAllocated = 120,
+                            ActualWaitMinutes = waitMinutes,
+                            AmountCharged = (waitMinutes - 120) * (100000m / 60m), // Ex: 100,000 VND per hour
+                            Status = "PENDING_BILLING"
+                        };
+                        _context.DetentionCharges.Add(detentionCharge);
+                    }
+                }
+
                 // 7. Handle New Seal kẹp chì mới
                 if (!string.IsNullOrWhiteSpace(request.NewSealCode))
                 {
@@ -152,9 +183,26 @@ public class DepartStopCommandHandler : IRequestHandler<DepartStopCommand, ApiRe
                     foreach (var td in tripDrivers)
                     {
                         var d = await _context.Drivers
+                            .Include(dr => dr.DriverLicenses)
                             .FirstOrDefaultAsync(dr => dr.DriverId == td.DriverId, cancellationToken);
                         if (d != null)
-                            d.Status = "ACTIVE";
+                        {
+                            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+                            var hasValidLicense = d.DriverLicenses.Any(l =>
+                                l.ExpiryDate >= today
+                                && (string.IsNullOrWhiteSpace(l.Status)
+                                    || l.Status.Equals("ACTIVE", StringComparison.OrdinalIgnoreCase)));
+
+                            if (!hasValidLicense)
+                            {
+                                d.Status = "SUSPENDED_DOCS";
+                            }
+                            else
+                            {
+                                d.Status = "ACTIVE";
+                                await _driverAvailability.ReconcileStatusAsync(d);
+                            }
+                        }
                     }
                 }
 

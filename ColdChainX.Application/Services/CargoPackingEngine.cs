@@ -13,6 +13,7 @@ namespace ColdChainX.Application.Services
         public int RouteStopSequence { get; set; }
         public decimal WeightKg { get; set; }
         public decimal RequiredTemperature { get; set; }
+        public bool IsStackable { get; set; } = true;
     }
 
     public class ContainerDims
@@ -72,6 +73,9 @@ namespace ColdChainX.Application.Services
 
             var placedItems = new List<PlacedItem>();
             var unplacedIds = new List<Guid>();
+            var stackableByLpnId = itemsToPack
+                .GroupBy(i => i.LpnId)
+                .ToDictionary(g => g.Key, g => g.All(i => i.IsStackable));
 
             // 3. Keep-out Zone: Evaporator (Lốc lạnh) Obstacle
             // Calculate physical dimensions
@@ -143,6 +147,14 @@ namespace ColdChainX.Application.Services
                             }
                         }
 
+                        if (!collision && ViolatesStackingPolicy(
+                                point.x, point.y, point.z, w, d,
+                                placedItems,
+                                stackableByLpnId))
+                        {
+                            collision = true;
+                        }
+
                         if (!collision)
                         {
                             placedItems.Add(new PlacedItem
@@ -190,10 +202,17 @@ namespace ColdChainX.Application.Services
             result.PlacedItems = placedItems;
             result.UnplacedLpnIds = unplacedIds;
 
-            // Calculate utilization
-            decimal totalContainerVolume = container.Length * container.Width * container.Height;
+            // Calculate utilization based on Cold Chain USABLE volume
+            // 1. Airflow: 20cm height, 20cm length reduced
+            // (usableLength and usableHeight are already defined above)
+            // 2. Evaporator (approx 50cm depth x Width x 30% height)
+            decimal evapH = Math.Min(container.Height * 0.3m, 60m);
+            decimal evaporatorVolume = 50m * container.Width * evapH;
+            
+            decimal usableContainerVolume = (usableLength * container.Width * usableHeight) - evaporatorVolume;
+            
             decimal usedVolume = placedItems.Sum(pi => pi.W * pi.H * pi.D);
-            result.Utilisation = totalContainerVolume > 0 ? (usedVolume / totalContainerVolume) * 100 : 0;
+            result.Utilisation = usableContainerVolume > 0 ? Math.Min((usedVolume / usableContainerVolume) * 100, 100m) : 0;
 
             return result;
         }
@@ -226,6 +245,46 @@ namespace ColdChainX.Application.Services
             return x1 < x2 + w2 && x1 + w1 > x2 &&
                    y1 < y2 + h2 && y1 + h1 > y2 &&
                    z1 < z2 + d2 && z1 + d1 > z2;
+        }
+
+        private bool ViolatesStackingPolicy(
+            decimal x,
+            decimal y,
+            decimal z,
+            decimal w,
+            decimal d,
+            List<PlacedItem> placedItems,
+            IReadOnlyDictionary<Guid, bool> stackableByLpnId)
+        {
+            if (y <= 0)
+            {
+                return false;
+            }
+
+            foreach (var placed in placedItems)
+            {
+                if (placed.LpnId == Guid.Empty)
+                {
+                    continue;
+                }
+
+                if (!stackableByLpnId.TryGetValue(placed.LpnId, out var isStackable) || isStackable)
+                {
+                    continue;
+                }
+
+                var hasFootprintOverlap = x < placed.X + placed.W
+                    && x + w > placed.X
+                    && z < placed.Z + placed.D
+                    && z + d > placed.Z;
+
+                if (hasFootprintOverlap && y >= placed.Y + placed.H)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

@@ -41,6 +41,8 @@ namespace ColdChainX.Application.Interfaces
 
         Task<ApiResponse<bool>> SoftDeleteAsync(Guid id);
 
+        
+
         Task<ApiResponse<bool>> RestoreAsync(Guid id);
     }
 }

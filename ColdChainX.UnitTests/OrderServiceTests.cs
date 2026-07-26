@@ -182,6 +182,15 @@ namespace ColdChainX.UnitTests
             public Task<string> SaveInboundReturnSlipPdfAsync(string htmlContent, string slipCode) => Task.FromResult("http://test.com/returnslip.pdf");
             public Task<string> GenerateManifestPdfAsync(Guid tripId) => Task.FromResult("http://test.com/manifest.pdf");
             public Task<string> GenerateOutboundTicketPdfAsync(Guid tripId) => Task.FromResult("http://test.com/outbound-ticket.pdf");
+            public Task<byte[]> GeneratePdfFromHtmlAsync(string htmlContent)
+            {
+                return Task.FromResult(new byte[] { 1, 2, 3 });
+            }
+
+            public Task<string> SavePdfFromUrlAsync(string url, string fileName, string folderPath = "pdf")
+            {
+                return Task.FromResult("http://example.com/" + fileName);
+            }
         }
 
         private class MockWebHostEnvironment : IWebHostEnvironment

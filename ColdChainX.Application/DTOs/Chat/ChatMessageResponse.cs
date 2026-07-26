@@ -4,6 +4,8 @@ namespace ColdChainX.Application.DTOs.Chat
     {
         public Guid Id { get; set; }
         public Guid OrderId { get; set; }
+        public Guid? CustomerId { get; set; }
+        public string? TrackingCode { get; set; }
         public Guid SenderId { get; set; }
         public string? SenderName { get; set; }
         public string? SenderEmail { get; set; }

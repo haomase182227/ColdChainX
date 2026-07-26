@@ -57,9 +57,16 @@ namespace ColdChainX.Infrastructure.Services
                 return ApiResponse<RouteBookingOptionsDto>.Failure("Route not found", 404);
             }
 
+            var vietnamNow = DateTime.SpecifyKind(DateTime.UtcNow.AddHours(7), DateTimeKind.Unspecified);
+            var today = vietnamNow.Date;
+            var currentTime = vietnamNow.TimeOfDay;
+
             var schedules = await _db.RouteSchedules
                 .AsNoTracking()
-                .Where(s => s.RouteId == routeId && s.Status == "ACTIVE")
+                .Where(s => s.RouteId == routeId
+                    && s.Status == "ACTIVE"
+                    && (s.DepartureDate > today
+                        || (s.DepartureDate == today && s.CutOffTime > currentTime)))
                 .OrderBy(s => s.DepartureDate).ThenBy(s => s.DepartureTime)
                 .Select(s => new ScheduleOptionDto
                 {
@@ -242,11 +249,15 @@ namespace ColdChainX.Infrastructure.Services
             var entity = await _db.RouteSchedules.FirstOrDefaultAsync(s => s.RouteId == routeId && s.ScheduleId == scheduleId);
             if (entity == null) return ApiResponse<RouteScheduleDto>.Failure("Route schedule not found");
 
+            var normalizedStatus = request.Status?.Trim().ToUpperInvariant();
+            if (normalizedStatus is not ("ACTIVE" or "INACTIVE"))
+                return ApiResponse<RouteScheduleDto>.Failure("Schedule status must be ACTIVE or INACTIVE");
+
             entity.ScheduleName = $"{route.RouteCode} ({GetVietnameseDayOfWeek(request.DepartureDate.ToDateTime(TimeOnly.MinValue))})";
             entity.DepartureDate = request.DepartureDate.ToDateTime(TimeOnly.MinValue);
             entity.DepartureTime = request.DepartureTime.ToTimeSpan();
             entity.CutOffTime = request.CutOffTime.ToTimeSpan();
-            entity.Status = request.Status;
+            entity.Status = normalizedStatus;
 
             await _db.SaveChangesAsync();
 

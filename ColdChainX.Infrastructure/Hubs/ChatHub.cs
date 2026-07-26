@@ -8,11 +8,23 @@ namespace ColdChainX.Infrastructure.Hubs
     [Authorize]
     public class ChatHub : Hub
     {
+        public const string StaffGroup = "chat:staff";
+
         private readonly IChatService _chatService;
 
         public ChatHub(IChatService chatService)
         {
             _chatService = chatService;
+        }
+
+        public override async Task OnConnectedAsync()
+        {
+            if (GetRoles().Any(IsStaffRole))
+            {
+                await Groups.AddToGroupAsync(Context.ConnectionId, StaffGroup);
+            }
+
+            await base.OnConnectedAsync();
         }
 
         public async Task JoinOrder(Guid orderId)
@@ -37,6 +49,13 @@ namespace ColdChainX.Infrastructure.Hubs
         }
 
         public static string BuildOrderGroup(Guid orderId) => $"order:{orderId}";
+
+        private static bool IsStaffRole(string role)
+        {
+            return string.Equals(role, "Sales", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(role, "Manager", StringComparison.OrdinalIgnoreCase);
+        }
 
         private Guid GetUserId()
         {

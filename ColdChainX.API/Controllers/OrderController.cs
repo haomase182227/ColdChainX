@@ -18,9 +18,13 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetOrders([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10, [FromQuery] string? status = null)
+        public async Task<IActionResult> GetOrders(
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string? status = null,
+            [FromQuery] Guid? routeId = null)
         {
-            var result = await _orderService.GetOrdersAsync(pageNumber, pageSize, status);
+            var result = await _orderService.GetOrdersAsync(pageNumber, pageSize, status, routeId);
             return Ok(result);
         }
 
@@ -105,6 +109,22 @@ namespace ColdChainX.API.Controllers
             var result = await _orderService.ReviewOrderAsync(orderId, request, salesUserId);
             if (!result.Success) return BadRequest(result);
             return Ok(result);
+        }
+
+        [AllowAnonymous]
+        [HttpGet("public-tracking/{trackingCode}")]
+        public async Task<IActionResult> GetPublicTracking(string trackingCode)
+        {
+            var result = await _orderService.GetPublicTrackingAsync(trackingCode);
+            return result.Success ? Ok(result) : NotFound(result);
+        }
+
+        [AllowAnonymous]
+        [HttpGet("public-tracking/{trackingCode}/temperature-chart")]
+        public async Task<IActionResult> GetPublicTemperatureChart(string trackingCode, [FromQuery] int maxPoints = 200)
+        {
+            var result = await _orderService.GetPublicTemperatureChartAsync(trackingCode, maxPoints);
+            return result.Success ? Ok(result) : NotFound(result);
         }
     }
 }

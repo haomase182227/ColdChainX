@@ -305,25 +305,26 @@
         // Parse URL parameters and auto-simulate
         async function checkUrlParamsAndSimulate() {
             const urlParams = new URLSearchParams(window.location.search);
+            const scheduleId = urlParams.get('scheduleId');
             const vId = urlParams.get('vehicleId');
             let lpnIdsRaw = urlParams.get('lpnIds');
 
-            if (vId && lpnIdsRaw) {
+            if (scheduleId && vId && lpnIdsRaw) {
                 setTimeout(async () => {
                     const ids = lpnIdsRaw.split(',').map(id => id.trim()).filter(id => id);
-                    await simulateFromUrl(vId, ids);
+                    await simulateFromUrl(scheduleId, vId, ids);
                 }, 500);
             } else {
-                showMessage("Vui lòng truyền vehicleId và lpnIds vào URL để xem 3D.", "error");
+                showMessage("Vui lòng truyền scheduleId, vehicleId và lpnIds vào URL để xem 3D.", "error");
             }
         }
 
-        async function simulateFromUrl(vehicleId, lpnIds) {
+        async function simulateFromUrl(scheduleId, vehicleId, lpnIds) {
             try {
                 const response = await fetch('/api/Dispatch/simulate-packing?for3d=true', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ vehicleId, lpnIds })
+                    body: JSON.stringify({ scheduleId, vehicleId, lpnIds })
                 });
 
                 const data = await response.json();

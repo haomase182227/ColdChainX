@@ -216,4 +216,53 @@ public class DeliveryController : ControllerBase
             return StatusCode(500, ApiResponse<string>.Failure($"Lỗi khi tải ảnh: {ex.Message}"));
         }
     }
+
+    /// <summary>
+    /// Update GPS Location and trigger Geofence ETA Notification
+    /// </summary>
+    [HttpPost("trips/{tripId:guid}/location")]
+    [Authorize(Roles = "Driver")]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UpdateLocation(Guid tripId, [FromBody] UpdateLocationRequest request)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
+            return Unauthorized(ApiResponse<object>.Failure("Unauthorized."));
+
+        var command = new UpdateLocationCommand
+        {
+            TripId = tripId,
+            Latitude = request.Latitude,
+            Longitude = request.Longitude,
+            UserId = userId
+        };
+
+        var result = await _mediator.Send(command);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Mark delivery as failed after waiting 30 mins
+    /// </summary>
+    [HttpPost("stops/{stopId:guid}/failed-delivery")]
+    [Authorize(Roles = "Driver")]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> MarkFailedDelivery(Guid stopId, [FromBody] MarkFailedDeliveryRequest request)
+    {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
+            return Unauthorized(ApiResponse<object>.Failure("Unauthorized."));
+
+        var command = new MarkFailedDeliveryCommand
+        {
+            StopId = stopId,
+            Reason = request.Reason,
+            UserId = userId
+        };
+
+        var result = await _mediator.Send(command);
+        return Ok(result);
+    }
 }
