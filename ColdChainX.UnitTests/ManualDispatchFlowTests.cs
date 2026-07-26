@@ -47,7 +47,19 @@ public class ManualDispatchFlowTests
         Assert.Equal(fixture.Schedule.ScheduleId, trip.ScheduleId);
     }
 
-    // LPN schedule constraint was removed in main to support flexible dispatching.
+    [Fact]
+    public async Task ManualDispatch_RejectsLpnFromAnotherSchedule()
+    {
+        await using var fixture = await CreateFixtureAsync();
+        fixture.Order.ScheduleId = Guid.NewGuid();
+        await fixture.Db.SaveChangesAsync();
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => fixture.Service.ManualDispatchAsync(fixture.Request));
+
+        Assert.Contains("does not belong to the selected schedule", error.Message);
+        Assert.Empty(fixture.Db.MasterTrips);
+    }
 
     [Fact]
     public async Task ManualDispatch_RejectsLpnThatCannotFitInsideVehicle()
@@ -188,7 +200,8 @@ public class ManualDispatchFlowTests
             InnerHeightCm = 240m,
             MinTemp = -25m,
             MaxTemp = 10m,
-            Status = "ACTIVE"
+            Status = "ACTIVE",
+            CurrentLocation = warehouseId.ToString()
         };
         var driver = new Driver
         {
@@ -198,7 +211,8 @@ public class ManualDispatchFlowTests
             PhoneNumber = "0900000000",
             DateOfBirth = new DateOnly(1990, 1, 1),
             JoinDate = new DateOnly(2025, 1, 1),
-            Status = "ACTIVE"
+            Status = "ACTIVE",
+            CurrentLocation = warehouseId.ToString()
         };
         driver.DriverLicenses.Add(new DriverLicense
         {
