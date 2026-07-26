@@ -86,7 +86,7 @@ public static class FirebaseServiceCollectionExtensions
         {
             var json = options.ServiceAccountJson.Trim();
             return new CredentialResolution(
-                GoogleCredential.FromJson(json),
+                CredentialFactory.FromJson<ServiceAccountCredential>(json).ToGoogleCredential(),
                 TryReadProjectId(json),
                 "Firebase:ServiceAccountJson",
                 null);
@@ -110,7 +110,7 @@ public static class FirebaseServiceCollectionExtensions
 
             var json = File.ReadAllText(path);
             return new CredentialResolution(
-                GoogleCredential.FromJson(json),
+                CredentialFactory.FromJson<ServiceAccountCredential>(json).ToGoogleCredential(),
                 TryReadProjectId(json),
                 "Firebase:ServiceAccountPath",
                 null);

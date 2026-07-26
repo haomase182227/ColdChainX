@@ -43,7 +43,7 @@ namespace ColdChainX.UnitTests
 
             var idToken = await client.ExchangeCodeForIdTokenAsync(
                 "authorization-code",
-                "https://api.example.com/api/Accounts/google/callback");
+                "https://api.example.com/api/auth/google/callback");
 
             Assert.Equal("google-id-token", idToken);
             Assert.Equal(HttpMethod.Post, handler.Method);

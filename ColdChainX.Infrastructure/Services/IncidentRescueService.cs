@@ -34,6 +34,7 @@ public class IncidentRescueService : IIncidentRescueService
     private readonly IHubContext<NotificationHub> _hubContext;
     private readonly IMqttCommandPublisher _mqttPublisher;
     private readonly ILogger<IncidentRescueService> _logger;
+    private readonly INotificationService? _notificationService;
 
     // Trạng thái chuyến cho phép điều xe cứu hộ — hàng phải đang trên đường
     private static readonly string[] OnRoadTripStatuses = { "SEALED", "DISPATCHED", "IN_TRANSIT", "DELAYED" };
@@ -48,13 +49,15 @@ public class IncidentRescueService : IIncidentRescueService
         IGoongMapService goongMapService,
         IHubContext<NotificationHub> hubContext,
         IMqttCommandPublisher mqttPublisher,
-        ILogger<IncidentRescueService> logger)
+        ILogger<IncidentRescueService> logger,
+        INotificationService? notificationService = null)
     {
         _db = db;
         _goongMapService = goongMapService;
         _hubContext = hubContext;
         _mqttPublisher = mqttPublisher;
         _logger = logger;
+        _notificationService = notificationService;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -388,15 +391,18 @@ public class IncidentRescueService : IIncidentRescueService
                 .Where(o => o.MasterTripId == trip.TripId)
                 .ToListAsync();
 
-            var templateId = await GetOrCreateTemplateAsync(
-                DelayedTemplateId,
-                "Chuyến hàng {{tracking_code}} dự kiến trễ {{delay_minutes}} phút do sự cố vận chuyển",
-                "Xe {{old_plate}} gặp sự cố ({{incident_type}}) trên đường giao hàng. " +
-                "Chúng tôi đã lập tức điều xe lạnh {{new_plate}} đến thay thế để đảm bảo chất lượng hàng hóa. " +
-                "Thời gian giao dự kiến mới: {{new_eta}} (kế hoạch cũ: {{old_eta}}). " +
-                "Thành thật xin lỗi quý khách vì sự bất tiện này.");
+            var templateId = _notificationService == null
+                ? await GetOrCreateTemplateAsync(
+                    DelayedTemplateId,
+                    "Chuyến hàng {{tracking_code}} dự kiến trễ {{delay_minutes}} phút do sự cố vận chuyển",
+                    "Xe {{old_plate}} gặp sự cố ({{incident_type}}) trên đường giao hàng. " +
+                    "Chúng tôi đã lập tức điều xe lạnh {{new_plate}} đến thay thế để đảm bảo chất lượng hàng hóa. " +
+                    "Thời gian giao dự kiến mới: {{new_eta}} (kế hoạch cũ: {{old_eta}}). " +
+                    "Thành thật xin lỗi quý khách vì sự bất tiện này.")
+                : null;
 
             var notifiedUserIds = new List<Guid>();
+            var customerPushTargets = new List<(Guid UserId, Guid OrderId)>();
             var customerUserCache = new Dictionary<Guid, Guid?>();
 
             foreach (var change in stopChanges)
@@ -408,7 +414,7 @@ public class IncidentRescueService : IIncidentRescueService
                 foreach (var order in stopOrders)
                 {
                     var customerUserId = await ResolveCustomerUserIdAsync(order.CustomerId, customerUserCache);
-                    if (templateId == null || !customerUserId.HasValue) continue;
+                    if (!customerUserId.HasValue) continue;
 
                     var notifParams = JsonSerializer.Serialize(new Dictionary<string, string>
                     {
@@ -421,17 +427,27 @@ public class IncidentRescueService : IIncidentRescueService
                         { "delay_minutes", change.DelayMinutes.ToString(CultureInfo.InvariantCulture) }
                     });
 
-                    _db.Notifications.Add(new Notification
+                    if (_notificationService == null)
                     {
-                        NotiId = Guid.NewGuid(),
-                        UserId = customerUserId.Value,
-                        SenderId = dispatcherId,
-                        TemplateId = templateId,
-                        Params = notifParams,
-                        OrderId = order.OrderId,
-                        IsRead = false,
-                        CreatedAt = now
-                    });
+                        if (templateId == null)
+                            continue;
+
+                        _db.Notifications.Add(new Notification
+                        {
+                            NotiId = Guid.NewGuid(),
+                            UserId = customerUserId.Value,
+                            SenderId = dispatcherId,
+                            TemplateId = templateId,
+                            Params = notifParams,
+                            OrderId = order.OrderId,
+                            IsRead = false,
+                            CreatedAt = now
+                        });
+                    }
+                    else
+                    {
+                        customerPushTargets.Add((customerUserId.Value, order.OrderId));
+                    }
 
                     change.NotifiedCustomers++;
                     notifiedUserIds.Add(customerUserId.Value);
@@ -440,6 +456,13 @@ public class IncidentRescueService : IIncidentRescueService
 
             await _db.SaveChangesAsync();
             await transaction.CommitAsync();
+
+            await SendFirebaseRescueNotificationsAsync(
+                incident,
+                trip,
+                rescueVehicle,
+                dispatcherId,
+                customerPushTargets);
 
             // ── Realtime (best-effort, không block API nếu SignalR lỗi) ──
             try
@@ -503,6 +526,78 @@ public class IncidentRescueService : IIncidentRescueService
         {
             _logger.LogError(ex, "Failed to dispatch rescue vehicle. IncidentId: {IncidentId}", incidentId);
             return ApiResponse<IncidentRescueResult>.Failure($"Failed to dispatch rescue vehicle: {ex.Message}");
+        }
+    }
+
+    private async Task SendFirebaseRescueNotificationsAsync(
+        IncidentReport incident,
+        MasterTrip trip,
+        Vehicle rescueVehicle,
+        Guid dispatcherId,
+        IReadOnlyCollection<(Guid UserId, Guid OrderId)> customerTargets)
+    {
+        if (_notificationService == null)
+            return;
+
+        try
+        {
+            foreach (var target in customerTargets.Distinct())
+            {
+                await _notificationService.SendToUserAsync(
+                    target.UserId,
+                    "Chuyến đi bị trì hoãn",
+                    "Chuyến vận chuyển đã được cập nhật trạng thái trì hoãn.",
+                    "TRIP_DELAYED",
+                    trip.TripId.ToString(),
+                    new Dictionary<string, string>
+                    {
+                        ["tripId"] = trip.TripId.ToString(),
+                        ["incidentId"] = incident.IncidentId.ToString(),
+                        ["orderId"] = target.OrderId.ToString(),
+                        ["screen"] = "trip-detail"
+                    });
+            }
+
+            var operationalRecipients = await _db.TripDrivers
+                .Where(td => td.TripId == trip.TripId && td.Driver.UserId.HasValue)
+                .Select(td => td.Driver.UserId!.Value)
+                .ToListAsync();
+            operationalRecipients.Add(dispatcherId);
+            operationalRecipients = operationalRecipients.Distinct().ToList();
+
+            await _notificationService.SendToUsersAsync(
+                operationalRecipients,
+                "Chuyến đi bị trì hoãn",
+                "Chuyến vận chuyển đã được cập nhật trạng thái trì hoãn.",
+                "TRIP_DELAYED",
+                trip.TripId.ToString(),
+                new Dictionary<string, string>
+                {
+                    ["tripId"] = trip.TripId.ToString(),
+                    ["incidentId"] = incident.IncidentId.ToString(),
+                    ["screen"] = "trip-detail"
+                });
+
+            await _notificationService.SendToUsersAsync(
+                operationalRecipients,
+                "Đã điều xe cứu hộ",
+                "Một xe thay thế đã được phân công cho chuyến gặp sự cố.",
+                "RESCUE_ASSIGNED",
+                incident.IncidentId.ToString(),
+                new Dictionary<string, string>
+                {
+                    ["tripId"] = trip.TripId.ToString(),
+                    ["incidentId"] = incident.IncidentId.ToString(),
+                    ["replacementVehicleId"] = rescueVehicle.VehicleId.ToString(),
+                    ["screen"] = "trip-detail"
+                });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Firebase notification dispatch failed after rescue transaction committed. IncidentId: {IncidentId}.",
+                incident.IncidentId);
         }
     }
 

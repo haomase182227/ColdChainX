@@ -33,19 +33,22 @@ public class IncidentReportService : IIncidentReportService
     private readonly IFileService _fileService;
     private readonly ILogger<IncidentReportService> _logger;
     private readonly IIncidentRealtimeNotifier? _realtimeNotifier;
+    private readonly INotificationService? _notificationService;
 
     public IncidentReportService(
         IApplicationDbContext db,
         IPdfGeneratorService pdfGeneratorService,
         IFileService fileService,
         ILogger<IncidentReportService> logger,
-        IIncidentRealtimeNotifier? realtimeNotifier = null)
+        IIncidentRealtimeNotifier? realtimeNotifier = null,
+        INotificationService? notificationService = null)
     {
         _db = db;
         _pdfGeneratorService = pdfGeneratorService;
         _fileService = fileService;
         _logger = logger;
         _realtimeNotifier = realtimeNotifier;
+        _notificationService = notificationService;
     }
 
     public async Task<ApiResponse<IncidentResponse>> ReportIncidentAsync(
@@ -147,18 +150,18 @@ public class IncidentReportService : IIncidentReportService
 
             _db.IncidentReports.Add(incident);
 
-            var templateId = await EnsureNotificationTemplateAsync(
-                ReportedTemplateId,
-                "Sự cố mới trên chuyến {{trip_id}}",
-                "Tài xế {{reporter_name}} vừa báo sự cố {{incident_type}} mức {{severity}}. Yêu cầu cứu hộ: {{requires_rescue}}.");
+            var recipientIds = await _db.Users
+                .Where(u => u.Role != null &&
+                            IncidentRecipientRoles.Contains(u.Role.RoleName.ToUpper()))
+                .Select(u => u.UserId)
+                .ToListAsync();
 
-            if (templateId != null)
+            if (_notificationService == null)
             {
-                var recipientIds = await _db.Users
-                    .Where(u => u.Role != null &&
-                                IncidentRecipientRoles.Contains(u.Role.RoleName.ToUpper()))
-                    .Select(u => u.UserId)
-                    .ToListAsync();
+                var templateId = await EnsureNotificationTemplateAsync(
+                    ReportedTemplateId,
+                    "Sự cố mới trên chuyến {{trip_id}}",
+                    "Tài xế {{reporter_name}} vừa báo sự cố {{incident_type}} mức {{severity}}. Yêu cầu cứu hộ: {{requires_rescue}}.");
 
                 var parameters = JsonSerializer.Serialize(new Dictionary<string, string>
                 {
@@ -170,22 +173,60 @@ public class IncidentReportService : IIncidentReportService
                     ["requires_rescue"] = incident.RequiresRescue ? "Có" : "Không"
                 });
 
-                foreach (var recipientId in recipientIds.Distinct())
+                if (templateId != null)
                 {
-                    _db.Notifications.Add(new Notification
+                    foreach (var recipientId in recipientIds.Distinct())
                     {
-                        NotiId = Guid.NewGuid(),
-                        UserId = recipientId,
-                        SenderId = userId,
-                        TemplateId = templateId,
-                        Params = parameters,
-                        IsRead = false,
-                        CreatedAt = now
-                    });
+                        _db.Notifications.Add(new Notification
+                        {
+                            NotiId = Guid.NewGuid(),
+                            UserId = recipientId,
+                            SenderId = userId,
+                            TemplateId = templateId,
+                            Params = parameters,
+                            IsRead = false,
+                            CreatedAt = now
+                        });
+                    }
                 }
             }
 
             await _db.SaveChangesAsync();
+
+            if (_notificationService != null && recipientIds.Count > 0)
+            {
+                try
+                {
+                    var pushResult = await _notificationService.SendToUsersAsync(
+                        recipientIds,
+                        "Tài xế vừa báo cáo sự cố",
+                        "Một sự cố mới vừa được ghi nhận trên chuyến vận chuyển.",
+                        "INCIDENT_CREATED",
+                        incident.IncidentId.ToString(),
+                        new Dictionary<string, string>
+                        {
+                            ["incidentId"] = incident.IncidentId.ToString(),
+                            ["tripId"] = incident.TripId?.ToString() ?? string.Empty,
+                            ["screen"] = "incident-detail"
+                        });
+
+                    if (pushResult.FailedSends > 0)
+                    {
+                        _logger.LogWarning(
+                            "Incident FCM notification was partially delivered. IncidentId: {IncidentId}, Successful: {Successful}, Failed: {Failed}.",
+                            incident.IncidentId,
+                            pushResult.SuccessfulSends,
+                            pushResult.FailedSends);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(
+                        ex,
+                        "Incident FCM notification failed after the incident was saved. IncidentId: {IncidentId}.",
+                        incident.IncidentId);
+                }
+            }
 
             await SafeNotifyGroupsAsync(
                 new[] { "Group_Dispatcher", "Group_Admin" },
@@ -308,20 +349,56 @@ public class IncidentReportService : IIncidentReportService
             incident.ExpenseApprovedAt = now;
             incident.ExpenseApprovalNote = request.ApprovalNote?.Trim();
 
-            await AddUserNotificationAsync(
-                incident.ReportedBy,
-                adminId,
-                ExpenseApprovedTemplateId,
-                "Chi phí sự cố đã được duyệt",
-                "Khoản chi {{approved_amount}} VND cho sự cố {{incident_id}} đã được duyệt.",
-                new Dictionary<string, string>
-                {
-                    ["incident_id"] = incident.IncidentId.ToString(),
-                    ["approved_amount"] = request.ApprovedAmount.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"))
-                },
-                now);
+            if (_notificationService == null)
+            {
+                await AddUserNotificationAsync(
+                    incident.ReportedBy,
+                    adminId,
+                    ExpenseApprovedTemplateId,
+                    "Chi phí sự cố đã được duyệt",
+                    "Khoản chi {{approved_amount}} VND cho sự cố {{incident_id}} đã được duyệt.",
+                    new Dictionary<string, string>
+                    {
+                        ["incident_id"] = incident.IncidentId.ToString(),
+                        ["approved_amount"] = request.ApprovedAmount.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"))
+                    },
+                    now);
+            }
 
             await _db.SaveChangesAsync();
+
+            if (_notificationService != null)
+            {
+                try
+                {
+                    var pushResult = await _notificationService.SendToUserAsync(
+                        incident.ReportedBy,
+                        "Chi phí đã được duyệt",
+                        "Chi phí phát sinh của chuyến đi đã được phê duyệt.",
+                        "EXPENSE_APPROVED",
+                        incident.IncidentId.ToString(),
+                        new Dictionary<string, string>
+                        {
+                            ["incidentId"] = incident.IncidentId.ToString(),
+                            ["tripId"] = incident.TripId?.ToString() ?? string.Empty,
+                            ["screen"] = "expense-detail"
+                        });
+
+                    if (pushResult.FailedSends > 0)
+                    {
+                        _logger.LogWarning(
+                            "Expense approval FCM notification was not delivered to every device. IncidentId: {IncidentId}.",
+                            incident.IncidentId);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(
+                        ex,
+                        "Expense approval FCM notification failed after the approval was saved. IncidentId: {IncidentId}.",
+                        incident.IncidentId);
+                }
+            }
 
             await SafeNotifyUserAsync(incident.ReportedBy, "IncidentExpenseApproved", new
             {

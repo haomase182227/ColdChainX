@@ -88,7 +88,9 @@ public sealed class FirebaseMessagingClient : IFirebaseMessagingClient
         var message = BuildMessage(title, body, data);
         return new MulticastMessage
         {
+#pragma warning disable CS0618 // Mobile clients provide FCM registration tokens, not Firebase Installation IDs.
             Tokens = tokens,
+#pragma warning restore CS0618
             Notification = message.Notification,
             Data = message.Data,
             Android = message.Android,
