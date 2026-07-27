@@ -91,11 +91,9 @@ namespace ColdChainX.UnitTests
                 Headers = new HeaderDictionary(),
                 ContentType = "image/jpeg"
             };
+            request.EvidenceFiles = new List<IFormFile> { photo };
 
-            var response = await _incidentService.ReportIncidentAsync(
-                request,
-                userId,
-                new[] { photo });
+            var response = await _incidentService.ReportIncidentAsync(request, userId);
 
             // Assert
             Assert.True(response.Success);
@@ -114,6 +112,36 @@ namespace ColdChainX.UnitTests
             Assert.NotNull(dbIncident);
             Assert.Equal("Pallet tipped over during sharp turn", dbIncident.Description);
             Assert.Equal(1_250_000m, dbIncident.DriverPaidAmount);
+        }
+
+        [Fact]
+        public async Task ReportIncident_WithoutEvidenceOrPayment_UsesOptionalDefaults()
+        {
+            var userId = Guid.NewGuid();
+            _db.Users.Add(new User
+            {
+                UserId = userId,
+                Username = "warehouse_operator",
+                PasswordHash = "hash",
+                RoleId = Guid.NewGuid(),
+                Email = "warehouse@test.com",
+                FullName = "Warehouse Operator"
+            });
+            await _db.SaveChangesAsync();
+
+            var response = await _incidentService.ReportIncidentAsync(
+                new CreateIncidentRequest
+                {
+                    IncidentType = IncidentType.DAMAGE_CARGO,
+                    Severity = IncidentSeverity.LOW,
+                    Description = "Bao bì bị móp nhẹ."
+                },
+                userId);
+
+            Assert.True(response.Success, response.Message);
+            Assert.Equal(0m, response.Data!.DriverPaidAmount);
+            Assert.Equal("NOT_REQUIRED", response.Data.ExpenseStatus);
+            Assert.Empty(response.Data.Evidences);
         }
 
         [Fact]
@@ -550,4 +578,3 @@ namespace ColdChainX.UnitTests
         }
     }
 }
-

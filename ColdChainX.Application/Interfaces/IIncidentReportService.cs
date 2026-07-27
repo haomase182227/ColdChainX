@@ -12,8 +12,7 @@ namespace ColdChainX.Application.Interfaces
     {
         Task<ApiResponse<IncidentResponse>> ReportIncidentAsync(
             CreateIncidentRequest request,
-            Guid userId,
-            IReadOnlyCollection<IFormFile>? evidenceFiles = null);
+            Guid userId);
         Task<ApiResponse<IncidentResponse>> AddEvidenceAsync(
             Guid incidentId,
             IReadOnlyCollection<IFormFile> files,

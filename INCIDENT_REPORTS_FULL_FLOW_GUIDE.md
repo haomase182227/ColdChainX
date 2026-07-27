@@ -45,31 +45,10 @@ Incident có `driverPaidAmount > 0` chỉ được đóng sau khi expense đạt
 
 ## 2. Driver báo sự cố
 
-### JSON, không gửi file trong cùng request
+### Một endpoint duy nhất, ảnh và chi phí đều tùy chọn
 
 ```http
 POST /api/v1/incidents
-Content-Type: application/json
-Authorization: Bearer <DRIVER_TOKEN>
-```
-
-```json
-{
-  "tripId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "incidentType": "VEHICLE_BREAKDOWN",
-  "severity": "HIGH",
-  "requiresRescue": true,
-  "description": "Xe mất khả năng vận hành.",
-  "currentLatitude": 10.762622,
-  "currentLongitude": 106.660172,
-  "driverPaidAmount": 1500000
-}
-```
-
-### Multipart cho mobile, có ảnh/hóa đơn
-
-```http
-POST /api/v1/incidents/with-evidence
 Content-Type: multipart/form-data
 Authorization: Bearer <DRIVER_TOKEN>
 ```
@@ -84,7 +63,7 @@ requiresRescue
 description
 currentLatitude
 currentLongitude
-driverPaidAmount
+driverPaidAmount (tùy chọn, mặc định 0)
 evidenceFiles (0..5 files, image hoặc PDF, tối đa 10 MB/file)
 ```
 

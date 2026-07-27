@@ -12,8 +12,8 @@
     ],
     "steps": [
       {"type": "msg", "from": "a", "to": "ui", "label": "1. Submit incident with photos"},
-      {"type": "msg", "from": "ui", "to": "c", "label": "2. POST /api/v1/incidents/with-evidence"},
-      {"type": "msg", "from": "c", "to": "s", "label": "3. CreateIncidentWithEvidenceAsync()"},
+      {"type": "msg", "from": "ui", "to": "c", "label": "2. POST /api/v1/incidents"},
+      {"type": "msg", "from": "c", "to": "s", "label": "3. ReportIncidentAsync()"},
       {"type": "msg", "from": "s", "to": "s", "label": "4. Validate Trip & Driver"},
       {"type": "msg", "from": "s", "to": "tp1", "label": "5. Upload evidences"},
       {"type": "msg", "from": "tp1", "to": "s", "label": "6. File URLs", "return": true},

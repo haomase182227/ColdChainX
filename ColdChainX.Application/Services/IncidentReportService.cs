@@ -53,8 +53,7 @@ public class IncidentReportService : IIncidentReportService
 
     public async Task<ApiResponse<IncidentResponse>> ReportIncidentAsync(
         CreateIncidentRequest request,
-        Guid userId,
-        IReadOnlyCollection<IFormFile>? evidenceFiles = null)
+        Guid userId)
     {
         if (request == null)
             return ApiResponse<IncidentResponse>.Failure("Request is null.");
@@ -71,7 +70,7 @@ public class IncidentReportService : IIncidentReportService
         if (request.CurrentLongitude is < -180m or > 180m)
             return ApiResponse<IncidentResponse>.Failure("Current longitude must be between -180 and 180.");
 
-        var files = evidenceFiles?.Where(f => f != null).ToList() ?? new List<IFormFile>();
+        var files = request.EvidenceFiles?.Where(f => f != null).ToList() ?? new List<IFormFile>();
         var fileValidation = ValidateEvidenceFiles(files, allowEmpty: true);
         if (fileValidation != null)
             return ApiResponse<IncidentResponse>.Failure(fileValidation);

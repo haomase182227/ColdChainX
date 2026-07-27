@@ -32,45 +32,22 @@ namespace ColdChainX.API.Controllers
         }
 
         /// <summary>
-        /// Log/Report a new operational or transport incident.
+        /// Reports an operational or transport incident with optional photos,
+        /// receipts and driver-paid amount.
         /// </summary>
         [HttpPost]
+        [Consumes("multipart/form-data")]
         [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Driver,DRIVER,WarehouseOperator")]
         [ProducesResponseType(typeof(ApiResponse<IncidentResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
-        public async Task<IActionResult> ReportIncident([FromBody] CreateIncidentRequest request)
+        public async Task<IActionResult> ReportIncident([FromForm] CreateIncidentRequest request)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (!Guid.TryParse(userIdClaim, out var userId))
                 return Unauthorized(ApiResponse<object>.Failure("User ID claim is missing or invalid in the token."));
 
             var result = await _incidentService.ReportIncidentAsync(request, userId);
-            if (!result.Success)
-                return BadRequest(result);
-
-            return Ok(result);
-        }
-
-        /// <summary>
-        /// Mobile-friendly incident report endpoint with optional photos/receipts.
-        /// </summary>
-        [HttpPost("with-evidence")]
-        [Consumes("multipart/form-data")]
-        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Driver,DRIVER,WarehouseOperator")]
-        [ProducesResponseType(typeof(ApiResponse<IncidentResponse>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
-        public async Task<IActionResult> ReportIncidentWithEvidence(
-            [FromForm] CreateIncidentWithEvidenceRequest request)
-        {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (!Guid.TryParse(userIdClaim, out var userId))
-                return Unauthorized(ApiResponse<object>.Failure("User ID claim is missing or invalid in the token."));
-
-            var result = await _incidentService.ReportIncidentAsync(
-                request,
-                userId,
-                request.EvidenceFiles);
             if (!result.Success)
                 return StatusCode(result.StatusCode, result);
 
