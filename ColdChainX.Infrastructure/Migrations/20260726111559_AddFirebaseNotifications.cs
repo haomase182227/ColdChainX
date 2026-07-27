@@ -16,10 +16,11 @@ namespace ColdChainX.Infrastructure.Migrations
                 schema: "public",
                 table: "notifications");
 
-            migrationBuilder.DropIndex(
-                name: "IX_notifications_user_id",
-                schema: "public",
-                table: "notifications");
+            // Some deployed databases no longer have the legacy EF-generated index.
+            // PostgreSQL requires IF EXISTS here so the migration works for both
+            // the original schema and those reconciled environments.
+            migrationBuilder.Sql(
+                @"DROP INDEX IF EXISTS public.""IX_notifications_user_id"";");
 
             migrationBuilder.AlterColumn<string>(
                 name: "template_id",

@@ -41,6 +41,8 @@ public class IncidentRescueService : IIncidentRescueService
 
     private const string RescueDispatchedStatus = "RESCUE_DISPATCHED";
     private const string DelayedTemplateId = "INCIDENT_TRIP_DELAYED";
+    private const string DefaultHandlingNote =
+        "Tài xế xác nhận đã xử lý sự cố tại chỗ và tiếp tục hành trình.";
     private const int DefaultTransloadMinutes = 45;
     private const decimal FallbackAvgSpeedKmh = 40m;
 
@@ -140,8 +142,9 @@ public class IncidentRescueService : IIncidentRescueService
         ContinueTripAfterIncidentRequest request,
         Guid driverUserId)
     {
-        if (request == null || string.IsNullOrWhiteSpace(request.HandlingNote))
-            return ApiResponse<IncidentWorkflowResult>.Failure("Handling note is required.");
+        var handlingNote = string.IsNullOrWhiteSpace(request.HandlingNote)
+            ? DefaultHandlingNote
+            : request.HandlingNote.Trim();
 
         try
         {
@@ -202,7 +205,7 @@ public class IncidentRescueService : IIncidentRescueService
             incident.Status = "CONTINUED";
             incident.HandledBy = driverUserId;
             incident.HandledAt = now;
-            incident.HandlingNote = request.HandlingNote.Trim();
+            incident.HandlingNote = handlingNote;
 
             await _db.SaveChangesAsync();
 

@@ -114,7 +114,7 @@ files = 1..5 image/PDF
 
 ```http
 POST /api/v1/incidents/{incidentId}/continue-trip
-Authorization: Dispatcher | Admin | Manager
+Authorization: Driver
 Content-Type: application/json
 ```
 
@@ -123,6 +123,9 @@ Content-Type: application/json
   "handlingNote": "Đã xử lý lỗi điện, kiểm tra nhiệt độ và cho xe tiếp tục."
 }
 ```
+
+`handlingNote` là tùy chọn. Mobile có thể gửi `{}`; backend sẽ lưu ghi chú mặc định
+khi trường này bị bỏ trống.
 
 Điều kiện:
 

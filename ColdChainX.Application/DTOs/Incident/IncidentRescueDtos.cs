@@ -36,7 +36,10 @@ namespace ColdChainX.Application.DTOs.Incident
 
     public class ContinueTripAfterIncidentRequest
     {
-        public string HandlingNote { get; set; } = null!;
+        /// <summary>
+        /// Ghi chú xử lý tại chỗ. Mobile có thể bỏ trống; backend sẽ lưu ghi chú mặc định.
+        /// </summary>
+        public string? HandlingNote { get; set; }
     }
 
     public class ConfirmTransloadRequest
