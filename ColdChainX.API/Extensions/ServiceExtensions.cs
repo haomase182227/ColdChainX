@@ -22,6 +22,8 @@ using ColdChainX.Infrastructure.Repositories;
 using ColdChainX.Infrastructure.Services;
 using ColdChainX.Infrastructure.Services.Firebase;
 using ColdChainX.Shared.Constants;
+using ColdChainX.API.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Npgsql;
 
 namespace ColdChainX.API.Extensions
@@ -94,6 +96,10 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IDriverService, DriverService>();
             services.AddScoped<IJwtService, JwtService>();
             services.AddScoped<IUserService, UserService>();
+            services.AddScoped<IPermissionService, PermissionService>();
+            services.AddScoped<IWorkAssignmentService, WorkAssignmentService>();
+            services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
+            services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
             services.AddScoped<IWarehouseService, WarehouseService>();
 
             services.AddScoped<ICustomerService, CustomerService>();
