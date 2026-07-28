@@ -433,8 +433,12 @@ namespace ColdChainX.Infrastructure.Services
                 if (order == null)
                     return ApiResponse<CreateOrderResponse>.Failure("Order not found or you don't have permission");
 
-                if (order.Status != "NEEDS_UPDATE")
-                    return ApiResponse<CreateOrderResponse>.Failure("Order can only be updated when it requires an update (NEEDS_UPDATE)");
+                if (!string.Equals(order.Status, PendingReview, StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(order.Status, "NEEDS_UPDATE", StringComparison.OrdinalIgnoreCase))
+                {
+                    return ApiResponse<CreateOrderResponse>.Failure(
+                        "Order can only be updated while pending review or when it requires an update (PENDING_REVIEW, NEEDS_UPDATE)");
+                }
 
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
@@ -510,7 +514,7 @@ namespace ColdChainX.Infrastructure.Services
                     }
                 }
 
-                if (order.Status == "NEEDS_UPDATE")
+                if (string.Equals(order.Status, "NEEDS_UPDATE", StringComparison.OrdinalIgnoreCase))
                 {
                     order.Status = PendingReview;
                 }
@@ -1223,7 +1227,6 @@ namespace ColdChainX.Infrastructure.Services
         }
     }
 }
-
 
 
 

@@ -742,8 +742,8 @@ namespace ColdChainX.Infrastructure.Migrations
 
                     b.Property<string>("Status")
                         .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
                         .HasColumnName("status")
                         .HasDefaultValueSql("'ACTIVE'::character varying");
 

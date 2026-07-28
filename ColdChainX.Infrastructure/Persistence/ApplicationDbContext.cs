@@ -453,7 +453,7 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasMaxLength(255)
                 .HasColumnName("signed_file_url");
             entity.Property(e => e.Status)
-                .HasMaxLength(20)
+                .HasMaxLength(30)
                 .HasDefaultValueSql("'ACTIVE'::character varying")
                 .HasColumnName("status");
             entity.Property(e => e.UploadedSignedAt)
