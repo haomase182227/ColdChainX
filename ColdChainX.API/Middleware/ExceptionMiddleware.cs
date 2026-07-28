@@ -47,7 +47,7 @@ namespace ColdChainX.API.Middleware
                 statusCode = (int)HttpStatusCode.BadRequest;
             }
 
-            var response = ApiResponse<object>.Failure(message);
+            var response = ApiResponse<object>.Failure(message, statusCode);
             context.Response.ContentType = "application/json";
             context.Response.StatusCode = statusCode;
             var result = JsonSerializer.Serialize(response, JsonOptions);

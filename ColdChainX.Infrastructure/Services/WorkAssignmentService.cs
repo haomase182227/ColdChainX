@@ -5,6 +5,7 @@ using ColdChainX.Infrastructure.Persistence;
 using ColdChainX.Shared.Constants;
 using ColdChainX.Shared.Exceptions;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace ColdChainX.Infrastructure.Services;
 
@@ -92,7 +93,16 @@ public sealed class WorkAssignmentService : IWorkAssignmentService
         };
 
         _db.WorkAssignments.Add(assignment);
-        await _db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception) when (IsDuplicateActiveAssignment(exception))
+        {
+            _db.Entry(assignment).State = EntityState.Detached;
+            throw new ConflictException("An active assignment already exists for this user and work item");
+        }
+
         return ToDto(assignment, assignee.FullName);
     }
 
@@ -260,4 +270,11 @@ public sealed class WorkAssignmentService : IWorkAssignmentService
 
     private static DateTime? ToDbDate(DateTime? value)
         => value.HasValue ? DateTime.SpecifyKind(value.Value, DateTimeKind.Unspecified) : null;
+
+    private static bool IsDuplicateActiveAssignment(DbUpdateException exception)
+        => exception.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: "ux_work_assignments_active_work"
+        };
 }

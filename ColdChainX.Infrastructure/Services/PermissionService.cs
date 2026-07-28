@@ -173,6 +173,33 @@ public sealed class PermissionService : IPermissionService
         IReadOnlyCollection<Guid> permissionIds,
         CancellationToken cancellationToken = default)
     {
+        if (!_db.Database.IsRelational())
+        {
+            await ReplaceRolePermissionsCoreAsync(roleId, permissionIds, cancellationToken);
+            return;
+        }
+
+        var executionStrategy = _db.Database.CreateExecutionStrategy();
+        await executionStrategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+
+            // Serialize full-replacement updates for the same role across all API instances.
+            // This prevents two concurrent checkbox submissions from being merged accidentally.
+            await _db.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT pg_advisory_xact_lock(hashtextextended({roleId.ToString()}, 0))",
+                cancellationToken);
+
+            await ReplaceRolePermissionsCoreAsync(roleId, permissionIds, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        });
+    }
+
+    private async Task ReplaceRolePermissionsCoreAsync(
+        Guid roleId,
+        IReadOnlyCollection<Guid> permissionIds,
+        CancellationToken cancellationToken)
+    {
         var role = await _db.Roles
             .Include(r => r.Perms)
             .FirstOrDefaultAsync(r => r.RoleId == roleId, cancellationToken)

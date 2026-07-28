@@ -1919,6 +1919,11 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.HasIndex(e => new { e.AssignedToUserId, e.Status }, "ix_work_assignments_assignee_status");
             entity.HasIndex(e => new { e.WarehouseId, e.Status }, "ix_work_assignments_warehouse_status");
             entity.HasIndex(e => new { e.ReferenceType, e.ReferenceId }, "ix_work_assignments_reference");
+            entity.HasIndex(
+                    e => new { e.TaskType, e.ReferenceType, e.ReferenceId, e.AssignedToUserId },
+                    "ux_work_assignments_active_work")
+                .IsUnique()
+                .HasFilter("status IN ('ASSIGNED', 'IN_PROGRESS')");
 
             entity.Property(e => e.AssignmentId)
                 .HasDefaultValueSql("gen_random_uuid()")

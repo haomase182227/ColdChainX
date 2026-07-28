@@ -22,6 +22,7 @@ using ColdChainX.Infrastructure.Repositories;
 using ColdChainX.Infrastructure.Services;
 using ColdChainX.Infrastructure.Services.Firebase;
 using ColdChainX.Shared.Constants;
+using ColdChainX.Shared.Responses;
 using ColdChainX.API.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Npgsql;
@@ -220,6 +221,31 @@ namespace ColdChainX.API.Extensions
                         }
 
                         return Task.CompletedTask;
+                    },
+                    OnChallenge = async context =>
+                    {
+                        context.HandleResponse();
+                        if (context.Response.HasStarted)
+                            return;
+
+                        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                        context.Response.ContentType = "application/json";
+                        await context.Response.WriteAsJsonAsync(
+                            ApiResponse<object>.Failure(
+                                "Authentication is required or the access token is invalid.",
+                                StatusCodes.Status401Unauthorized));
+                    },
+                    OnForbidden = async context =>
+                    {
+                        if (context.Response.HasStarted)
+                            return;
+
+                        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                        context.Response.ContentType = "application/json";
+                        await context.Response.WriteAsJsonAsync(
+                            ApiResponse<object>.Failure(
+                                "You do not have permission to perform this action.",
+                                StatusCodes.Status403Forbidden));
                     }
                 };
             });
