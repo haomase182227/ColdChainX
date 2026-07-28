@@ -150,6 +150,43 @@ namespace ColdChainX.UnitTests
             Assert.Equal("REJECTED", updatedOrder.Status);
         }
 
+        [Fact]
+        public async Task UpdateOrder_WhenPendingReview_UpdatesOrderAndKeepsPendingReviewStatus()
+        {
+            // Arrange
+            var customerId = Guid.NewGuid();
+            var orderId = Guid.NewGuid();
+            _db.TransportOrders.Add(new TransportOrder
+            {
+                OrderId = orderId,
+                TrackingCode = "TRK-UPDATE-01",
+                CustomerId = customerId,
+                ItemName = "Old cargo",
+                Category = "FOOD",
+                Quantity = 5,
+                PackingType = "PALLET",
+                TempCondition = "5",
+                Status = "PENDING_REVIEW"
+            });
+            await _db.SaveChangesAsync();
+
+            var request = new UpdateOrderRequest
+            {
+                ItemName = "Updated cargo",
+                Quantity = 10
+            };
+
+            // Act
+            var result = await _service.UpdateOrderAsync(orderId, request, customerId);
+
+            // Assert
+            Assert.True(result.Success, result.Message);
+            Assert.NotNull(result.Data);
+            Assert.Equal("Updated cargo", result.Data.ItemName);
+            Assert.Equal(10, result.Data.Quantity);
+            Assert.Equal("PENDING_REVIEW", result.Data.Status);
+        }
+
         #region Mock Classes
 
         private class MockLocationService : ILocationService

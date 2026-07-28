@@ -13,6 +13,7 @@ namespace ColdChainX.Application.Interfaces
         Task<ApiResponse<GenerateContractResponse>> UpdateContractDraftAsync(Guid contractId, UpdateContractDraftRequest request, Guid salesUserId);
         Task<ApiResponse<ContractInfoResponse>> SendContractAsync(Guid contractId, Guid salesUserId);
         Task<ApiResponse<UploadSignedContractResponse>> UploadSignedContractAsync(Guid contractId, UploadSignedContractRequest request, Guid customerId, string baseUrl);
+        Task<ApiResponse<ContractInfoResponse>> ReviewContractAsync(Guid contractId, ReviewContractRequest request, Guid salesUserId);
         Task<ApiResponse<ApproveContractResponse>> VerifyContractAsync(Guid contractId, Guid salesUserId);
         Task<ApiResponse<ApproveContractResponse>> ApproveContractAsync(Guid contractId, Guid customerId);
     }

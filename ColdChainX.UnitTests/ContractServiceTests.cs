@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.SignalR;
 using ColdChainX.Application.Interfaces;
@@ -99,6 +100,97 @@ namespace ColdChainX.UnitTests
             // Assert
             Assert.False(result.Success);
             Assert.Equal("Contract not found", result.Message);
+        }
+
+        [Fact]
+        public async Task ReviewContract_RequestResubmit_AllowsCustomerToUploadAgainAndSalesToVerify()
+        {
+            // Arrange
+            var customerId = Guid.NewGuid();
+            var orderId = Guid.NewGuid();
+            var contractId = Guid.NewGuid();
+            var salesUserId = Guid.NewGuid();
+
+            var order = new TransportOrder
+            {
+                OrderId = orderId,
+                TrackingCode = "REQ-RESUBMIT-01",
+                CustomerId = customerId,
+                ItemName = "Cargo",
+                Category = "FOOD",
+                Quantity = 5,
+                PackingType = "PALLET",
+                TempCondition = "5",
+                Status = "QUOTATION_ACCEPTED"
+            };
+            var contract = new CustomerContract
+            {
+                ContractId = contractId,
+                CustomerId = customerId,
+                OrderId = orderId,
+                ContractNumber = "HD-2026-RESUBMIT",
+                FileUrl = "http://test.com/contract.pdf",
+                SignedFileUrl = "http://test.com/rejected-contract.pdf",
+                UploadedSignedAt = DateTime.UtcNow,
+                Status = "PENDING_SALES_VERIFICATION",
+                ExpiredDate = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(1)),
+                Order = order
+            };
+            _db.CustomerContracts.Add(contract);
+            await _db.SaveChangesAsync();
+
+            // Sales requests a corrected signed contract.
+            var reviewResult = await _service.ReviewContractAsync(
+                contractId,
+                new ReviewContractRequest
+                {
+                    Action = "REQUEST_RESUBMIT",
+                    CustomerNote = "Missing signature on the last page."
+                },
+                salesUserId);
+
+            Assert.True(reviewResult.Success, reviewResult.Message);
+            Assert.NotNull(reviewResult.Data);
+            Assert.Equal("PENDING_CUSTOMER_SIGNATURE", reviewResult.Data.Status);
+            Assert.Equal("http://test.com/rejected-contract.pdf", reviewResult.Data.SignedFileUrl);
+            Assert.NotNull(reviewResult.Data.UploadedSignedAt);
+
+            // Customer uploads the corrected contract.
+            await using var stream = new MemoryStream(new byte[] { 1, 2, 3 });
+            var signedFile = new FormFile(stream, 0, stream.Length, "SignedFile", "signed-contract.pdf");
+            var uploadResult = await _service.UploadSignedContractAsync(
+                contractId,
+                new UploadSignedContractRequest { SignedFile = signedFile },
+                customerId,
+                "http://localhost");
+
+            Assert.True(uploadResult.Success, uploadResult.Message);
+            Assert.NotNull(uploadResult.Data);
+            Assert.Equal("PENDING_SALES_VERIFICATION", uploadResult.Data.Status);
+
+            // Sales verifies the corrected contract.
+            var verifyResult = await _service.VerifyContractAsync(contractId, salesUserId);
+
+            Assert.True(verifyResult.Success, verifyResult.Message);
+            Assert.NotNull(verifyResult.Data);
+            Assert.Equal("ACTIVE", verifyResult.Data.ContractStatus);
+            Assert.Equal("CONTRACT_SIGNED", verifyResult.Data.OrderStatus);
+        }
+
+        [Fact]
+        public async Task ReviewContract_RequestResubmit_RequiresCustomerNote()
+        {
+            // Act
+            var result = await _service.ReviewContractAsync(
+                Guid.NewGuid(),
+                new ReviewContractRequest { Action = "REQUEST_RESUBMIT" },
+                Guid.NewGuid());
+
+            // Assert
+            Assert.False(result.Success);
+            Assert.Equal(
+                "CustomerNote is required when action is REQUEST_RESUBMIT",
+                result.Message);
         }
 
         #region Mock Classes
