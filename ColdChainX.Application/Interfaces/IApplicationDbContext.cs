@@ -40,6 +40,7 @@ namespace ColdChainX.Application.Interfaces
         DbSet<LpnDeliveryConfirmation> LpnDeliveryConfirmations { get; }
         DbSet<TelemetryLog> TelemetryLogs { get; }
         DbSet<Seal> Seals { get; }
+        DbSet<DeviceToken> DeviceTokens { get; }
         DbSet<Notification> Notifications { get; }
         DbSet<NotificationTemplate> NotificationTemplates { get; }
         DbSet<Messagetype> Messagetypes { get; }

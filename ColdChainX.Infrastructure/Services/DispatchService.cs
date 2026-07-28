@@ -32,6 +32,7 @@ public class DispatchService : IDispatchService
     private readonly IMqttCommandPublisher _mqttPublisher;
     private readonly ILogger<DispatchService> _logger;
     private readonly ICargoCompatibilityService _cargoCompatibilityService;
+    private readonly INotificationService? _notificationService;
 
     // Tên role điều phối viên
     private const string CoordinatorRoleName = "Dispatcher";
@@ -65,7 +66,8 @@ public class DispatchService : IDispatchService
         IDriverAvailabilityService driverAvailability,
         IMqttCommandPublisher mqttPublisher,
         ILogger<DispatchService> logger,
-        ICargoCompatibilityService? cargoCompatibilityService = null)
+        ICargoCompatibilityService? cargoCompatibilityService = null,
+        INotificationService? notificationService = null)
     {
         _context = context;
         _geminiClient = geminiClient;
@@ -77,6 +79,7 @@ public class DispatchService : IDispatchService
         _mqttPublisher = mqttPublisher;
         _logger = logger;
         _cargoCompatibilityService = cargoCompatibilityService ?? new CargoCompatibilityService();
+        _notificationService = notificationService;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -2453,6 +2456,53 @@ public class DispatchService : IDispatchService
 
     private async Task<int> SendDriverNotificationsAsync(MasterTrip trip, Vehicle vehicle, List<Driver> drivers)
     {
+        if (_notificationService != null)
+        {
+            try
+            {
+                var recipientIds = drivers
+                    .Where(driver => driver.UserId.HasValue)
+                    .Select(driver => driver.UserId!.Value)
+                    .Distinct()
+                    .ToList();
+
+                if (recipientIds.Count == 0)
+                    return 0;
+
+                var result = await _notificationService.SendToUsersAsync(
+                    recipientIds,
+                    "Bạn có chuyến mới",
+                    "Bạn vừa được phân công một chuyến vận chuyển mới.",
+                    "TRIP_ASSIGNED",
+                    trip.TripId.ToString(),
+                    new Dictionary<string, string>
+                    {
+                        ["tripId"] = trip.TripId.ToString(),
+                        ["vehiclePlate"] = vehicle.TruckPlate,
+                        ["screen"] = "trip-detail"
+                    });
+
+                if (result.FailedSends > 0)
+                {
+                    _logger.LogWarning(
+                        "FCM trip assignment notification was only partially delivered. TripId: {TripId}, Successful: {Successful}, Failed: {Failed}.",
+                        trip.TripId,
+                        result.SuccessfulSends,
+                        result.FailedSends);
+                }
+
+                return result.NotificationIds.Count;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "FCM trip assignment notification failed after the trip assignment was saved. TripId: {TripId}.",
+                    trip.TripId);
+                return 0;
+            }
+        }
+
         var templateExists = await _context.NotificationTemplates
             .AnyAsync(t => t.TemplateId == DriverTripAssignedTemplateId
                         && (t.Status == null || t.Status == "ACTIVE"));
@@ -2513,4 +2563,3 @@ public class DispatchService : IDispatchService
         return notifiedCount;
     }
 }
-

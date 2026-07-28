@@ -46,6 +46,13 @@ public class GetAvailableTripsQueryHandler : IRequestHandler<GetAvailableTripsQu
             {
                 TripId = t.TripId,
                 Status = t.Status,
+                Vehicle = t.Vehicle != null ? t.Vehicle.TruckPlate : null,
+                Driver = t.TripDrivers.Count > 0
+                    ? string.Join(", ", t.TripDrivers.Select(td => td.Driver.FullName))
+                    : null,
+                PlannedStartTime = t.PlannedStartTime,
+                PlannedEndTime = t.PlannedEndTime,
+                EstimatedDurationHours = t.EstimatedDurationHours,
                 Lpns = _context.Lpns
                     .Where(l => l.TripId == t.TripId && inProgressStates.Contains(l.State))
                     .OrderBy(l => l.LpnCode)

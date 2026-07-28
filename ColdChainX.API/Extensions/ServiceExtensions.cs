@@ -20,6 +20,7 @@ using ColdChainX.Core.Interfaces;
 using ColdChainX.Infrastructure.Persistence;
 using ColdChainX.Infrastructure.Repositories;
 using ColdChainX.Infrastructure.Services;
+using ColdChainX.Infrastructure.Services.Firebase;
 using ColdChainX.Shared.Constants;
 using Npgsql;
 
@@ -30,6 +31,8 @@ namespace ColdChainX.API.Extensions
         public static IServiceCollection AddProjectServices(this IServiceCollection services, IConfiguration configuration)
         {
             services.Configure<JwtSettings>(configuration.GetSection("JwtSettings"));
+            services.Configure<GoogleAuthSettings>(
+                configuration.GetSection(GoogleAuthSettings.SectionName));
 
             // Required for IHttpContextAccessor used in SimplePdfService to build absolute PDF URLs
             services.AddHttpContextAccessor();
@@ -84,6 +87,9 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IVehicleRepository, VehicleRepository>();
             services.AddScoped<IDriverRepository, DriverRepository>();
             services.AddScoped<IAuthService, AuthService>();
+            services.AddScoped<IGoogleAuthService, GoogleAuthService>();
+            services.AddScoped<IGoogleIdTokenValidator, GoogleIdTokenValidator>();
+            services.AddScoped<IGoogleOAuthClient, GoogleOAuthClient>();
             services.AddScoped<IVehicleService, VehicleService>();
             services.AddScoped<IDriverService, DriverService>();
             services.AddScoped<IJwtService, JwtService>();
@@ -101,6 +107,11 @@ namespace ColdChainX.API.Extensions
                 client.BaseAddress = new Uri("https://rsapi.goong.io/");
                 client.Timeout = TimeSpan.FromSeconds(20);
             });
+            services.AddHttpClient(GoogleOAuthClient.HttpClientName, client =>
+            {
+                client.BaseAddress = new Uri("https://oauth2.googleapis.com/");
+                client.Timeout = TimeSpan.FromSeconds(20);
+            });
             services.AddScoped<IFileService, FileService>();
             services.AddScoped<ComplianceRulesEngine>();
             services.AddScoped<IOrderService, OrderService>();
@@ -113,6 +124,7 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IContractService, ContractService>();
             services.AddScoped<IContractAppendixService, ContractAppendixService>();
             services.AddScoped<IChatService, ChatService>();
+            services.AddFirebaseCloudMessaging(configuration);
             services.AddScoped<INotificationService, NotificationService>();
             services.AddScoped<IWarehouseReceiptService, WarehouseReceiptService>();
             services.AddScoped<IInvoiceService, InvoiceService>();
@@ -150,6 +162,7 @@ namespace ColdChainX.API.Extensions
             services.AddAutoMapper(typeof(MappingProfile));
 
             services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
+            services.AddSingleton<IGoogleLoginCodeStore, GoogleLoginCodeStore>();
 
             services.AddValidatorsFromAssemblyContaining<Application.Validators.RegisterRequestValidator>();
             services.AddFluentValidationAutoValidation();

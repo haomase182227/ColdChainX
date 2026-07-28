@@ -37,7 +37,20 @@ public sealed class RedisService : IAsyncDisposable
             () => ConnectionMultiplexer.Connect(options),
             LazyThreadSafetyMode.ExecutionAndPublication);
 
-        logger.LogInformation("Redis configured for {Endpoint}. Connection is established lazily.", connectionString);
+        logger.LogInformation(
+            "Redis configured for {Endpoints}. Connection is established lazily.",
+            string.Join(", ", options.EndPoints));
+    }
+
+    public async Task SetStringAsync(string key, string value, TimeSpan expiry)
+    {
+        await _redis.Value.GetDatabase().StringSetAsync(key, value, expiry);
+    }
+
+    public async Task<string?> GetAndDeleteStringAsync(string key)
+    {
+        var value = await _redis.Value.GetDatabase().StringGetDeleteAsync(key);
+        return value.HasValue ? value.ToString() : null;
     }
 
     public async Task<long> AddTelemetryAndTrimAsync(string deviceId, TelemetryData data)

@@ -4,6 +4,7 @@ using System.Globalization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Logging;
 using ColdChainX.Application.DTOs.Common;
 using ColdChainX.Application.DTOs.Orders;
 using ColdChainX.Application.Interfaces;
@@ -30,6 +31,8 @@ namespace ColdChainX.Infrastructure.Services
         private readonly IPdfService _pdfService;
         private readonly IWebHostEnvironment _environment;
         private readonly IHubContext<NotificationHub> _hubContext;
+        private readonly INotificationService? _notificationService;
+        private readonly ILogger<OrderService>? _logger;
 
         public OrderService(
             ApplicationDbContext db,
@@ -37,7 +40,9 @@ namespace ColdChainX.Infrastructure.Services
             IFileService fileService,
             IPdfService pdfService,
             IWebHostEnvironment environment,
-            IHubContext<NotificationHub> hubContext)
+            IHubContext<NotificationHub> hubContext,
+            INotificationService? notificationService = null,
+            ILogger<OrderService>? logger = null)
         {
             _db = db;
             _locationService = locationService;
@@ -45,6 +50,8 @@ namespace ColdChainX.Infrastructure.Services
             _pdfService = pdfService;
             _environment = environment;
             _hubContext = hubContext;
+            _notificationService = notificationService;
+            _logger = logger;
         }
 
         public async Task<ApiResponse<PagedResult<OrderResponse>>> GetOrdersAsync(
@@ -394,6 +401,8 @@ namespace ColdChainX.Infrastructure.Services
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
 
+                await SendOrderUpdatedNotificationAsync(order);
+
                 return ApiResponse<CreateOrderResponse>.SuccessResponse(new CreateOrderResponse
                 {
                     OrderId = order.OrderId,
@@ -509,6 +518,8 @@ namespace ColdChainX.Infrastructure.Services
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
 
+                await SendOrderUpdatedNotificationAsync(order);
+
                 return ApiResponse<CreateOrderResponse>.SuccessResponse(new CreateOrderResponse
                 {
                     OrderId = order.OrderId,
@@ -570,15 +581,20 @@ namespace ColdChainX.Infrastructure.Services
                     order.Status = "NEEDS_UPDATE";
 
                     var customerUserId = await ResolveCustomerUserIdAsync(order.CustomerId);
-                    await AddNotificationAsync(
-                        customerUserId,
-                        salesUserId,
-                        "NOTI_ORDER_NEEDS_UPDATE",
-                        order.OrderId,
-                        new { Tracking_Code = order.TrackingCode, Request_Reason = request.CustomerNote });
+                    if (_notificationService == null)
+                    {
+                        await AddNotificationAsync(
+                            customerUserId,
+                            salesUserId,
+                            "NOTI_ORDER_NEEDS_UPDATE",
+                            order.OrderId,
+                            new { Tracking_Code = order.TrackingCode, Request_Reason = request.CustomerNote });
+                    }
 
                     await _db.SaveChangesAsync();
                     await transaction.CommitAsync();
+
+                    await SendOrderUpdatedNotificationAsync(order, customerUserId);
 
                     await _hubContext.Clients.User(order.CustomerId.ToString()!).SendAsync("OrderNeedsUpdate", new
                     {
@@ -603,15 +619,20 @@ namespace ColdChainX.Infrastructure.Services
                     order.Status = Rejected;
 
                     var customerUserId = await ResolveCustomerUserIdAsync(order.CustomerId);
-                    await AddNotificationAsync(
-                        customerUserId,
-                        salesUserId,
-                        "NOTI_ORDER_REJECTED",
-                        order.OrderId,
-                        new { Tracking_Code = order.TrackingCode, Reject_Reason = request.CustomerNote });
+                    if (_notificationService == null)
+                    {
+                        await AddNotificationAsync(
+                            customerUserId,
+                            salesUserId,
+                            "NOTI_ORDER_REJECTED",
+                            order.OrderId,
+                            new { Tracking_Code = order.TrackingCode, Reject_Reason = request.CustomerNote });
+                    }
 
                     await _db.SaveChangesAsync();
                     await transaction.CommitAsync();
+
+                    await SendOrderUpdatedNotificationAsync(order, customerUserId);
 
                     await _hubContext.Clients.User(order.CustomerId.ToString()!).SendAsync("OrderRejected", new
                     {
@@ -643,6 +664,8 @@ namespace ColdChainX.Infrastructure.Services
 
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
+
+                await SendOrderUpdatedNotificationAsync(order);
 
                 return ApiResponse<ReviewOrderResponse>.SuccessResponse(new ReviewOrderResponse
                 {
@@ -855,6 +878,41 @@ namespace ColdChainX.Infrastructure.Services
             }
 
             return builder.ToString().Normalize(NormalizationForm.FormC);
+        }
+
+        private async Task SendOrderUpdatedNotificationAsync(
+            TransportOrder order,
+            Guid? resolvedCustomerUserId = null)
+        {
+            if (_notificationService == null)
+                return;
+
+            try
+            {
+                var userId = resolvedCustomerUserId ?? await ResolveCustomerUserIdAsync(order.CustomerId);
+                if (!userId.HasValue)
+                    return;
+
+                await _notificationService.SendToUserAsync(
+                    userId.Value,
+                    "Đơn hàng đã được cập nhật",
+                    "Trạng thái đơn hàng của bạn vừa thay đổi.",
+                    "ORDER_UPDATED",
+                    order.OrderId.ToString(),
+                    new Dictionary<string, string>
+                    {
+                        ["orderId"] = order.OrderId.ToString(),
+                        ["status"] = order.Status,
+                        ["screen"] = "order-detail"
+                    });
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(
+                    ex,
+                    "Firebase order update notification failed after the order transaction committed. OrderId: {OrderId}.",
+                    order.OrderId);
+            }
         }
 
         private async Task AddNotificationAsync(Guid? userId, Guid? senderId, string templateId, Guid orderId, object parameters)
@@ -1165,7 +1223,6 @@ namespace ColdChainX.Infrastructure.Services
         }
     }
 }
-
 
 
 

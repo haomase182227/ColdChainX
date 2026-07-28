@@ -9,6 +9,7 @@ namespace ColdChainX.Core.Interfaces
     public interface IUserRepository
     {
         Task<User?> GetByEmailAsync(string email);
+        Task<User?> GetByGoogleIdAsync(string googleId);
         Task<User?> GetByUsernameAsync(string username);
         Task<User?> GetByRefreshTokenAsync(string refreshToken);
         Task<User?> GetByIdAsync(Guid id);

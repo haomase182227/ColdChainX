@@ -13,6 +13,11 @@
 .env.*
 !.env.example
 
+# Firebase service-account credentials
+firebase-service-account*.json
+*firebase-adminsdk*.json
+service-account*.json
+
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 
@@ -430,4 +435,3 @@ discrepancy_flow_documentation.md
 # AI Operating System and Agent Customizations (Local only)
 .agents/
 .ai-os/
-

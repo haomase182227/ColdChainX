@@ -298,17 +298,11 @@ Ghi nhận sự cố vận chuyển hoặc vận hành kho (ví dụ: va chạm 
 *   **API Endpoint:** `POST /api/v1/incidents`
 *   **Controller:** [IncidentReportsController.cs](file:///c:/Users/tranl/OneDrive/Desktop/6-11-2026/ColdChainX/ColdChainX.API/Controllers/IncidentReportsController.cs#L32-L48)
 *   **Quyền hạn (Role):** `Admin`, `Manager`, `Driver`, `WarehouseOperator`
-*   **Tham số yêu cầu (Request Body):**
-    ```json
-    {
-      "tripId": "guid-chuyến-đi-nếu-bị-sự-cố-khi-vận-chuyển",
-      "incidentType": "DAMAGE_CARGO", // ACCIDENT, VEHICLE_BREAKDOWN, TEMP_EXCURSION, DAMAGE_CARGO, DELAY
-      "severity": "HIGH", // LOW, MEDIUM, HIGH, CRITICAL
-      "description": "Bể vỡ 5 thùng carton do va quệt xe cẩu",
-      "currentLatitude": 10.762622,
-      "currentLongitude": 106.660172
-    }
-    ```
+*   **Content-Type:** `multipart/form-data`
+*   **Form fields:** `tripId`, `incidentType`, `severity`, `description`,
+    `requiresRescue`, `currentLatitude`, `currentLongitude`,
+    `driverPaidAmount` (tùy chọn, mặc định `0`) và `evidenceFiles`
+    (tùy chọn, tối đa 5 ảnh/PDF).
 *   **Phản hồi thành công (Response):** Chi tiết sự cố kèm mã người báo cáo, trạng thái mặc định ban đầu là `REPORTED`.
 
 #### 2. Giải quyết đóng sự cố (Resolve Incident)
