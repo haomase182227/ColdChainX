@@ -221,7 +221,7 @@ namespace ColdChainX.API.Extensions
             services.AddAuthorization(options =>
             {
                 options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
-                options.AddPolicy("ManagerOnly", policy => policy.RequireRole("Manager"));
+                options.AddPolicy("WarehouseWorkerOnly", policy => policy.RequireRole("WarehouseWorker"));
                 options.AddPolicy("DriverOnly", policy => policy.RequireRole("Driver"));
                 options.AddPolicy("CustomerOnly", policy => policy.RequireRole("Customer"));
             });

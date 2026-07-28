@@ -1227,7 +1227,7 @@ public class DispatchController : ControllerBase
     /// toàn bộ dữ liệu vận hành liên quan.
     /// </remarks>
     [HttpGet("trips")]
-    [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Dispatcher,DISPATCHER")]
+    [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,Dispatcher,DISPATCHER")]
     [ProducesResponseType(typeof(ApiResponse<PagedResult<TripDetailsDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAllTrips(
         [FromQuery] int pageNumber = 1,
@@ -1285,7 +1285,7 @@ public class DispatchController : ControllerBase
     /// đã được sắp theo thứ tự xếp hàng LIFO.
     /// </summary>
     [HttpGet("trips/{id:guid}")]
-    [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Dispatcher,DISPATCHER")]
+    [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,Dispatcher,DISPATCHER")]
     [ProducesResponseType(typeof(ApiResponse<TripDetailsDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<TripDetailsDto>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetTripById(

@@ -143,7 +143,7 @@ namespace ColdChainX.Infrastructure.Services
         {
             if (!requesterRoles.Any(IsStaffRole))
                 return ApiResponse<PagedResult<ChatMessageResponse>>.Failure(
-                    "Only Sales, Admin, or Manager can view customer conversations");
+                    "Only Sales, Admin, or WarehouseWorker can view customer conversations");
 
             var customerExists = await _db.Customers
                 .AsNoTracking()
@@ -370,14 +370,14 @@ namespace ColdChainX.Infrastructure.Services
                 {
                     var receiverIsStaff = await IsUserInStaffRoleAsync(receiverId.Value);
                     if (!receiverIsStaff)
-                        return ApiResponse<object>.Failure("Customer can only send order chat messages to Sales/Admin/Manager users");
+                        return ApiResponse<object>.Failure("Customer can only send order chat messages to Sales/Admin/WarehouseWorker users");
                 }
 
                 return ApiResponse<object>.SuccessResponse(null);
             }
 
             if (!isStaff)
-                return ApiResponse<object>.Failure("Only Customer, Sales, Admin, or Manager can use order chat");
+                return ApiResponse<object>.Failure("Only Customer, Sales, Admin, or WarehouseWorker can use order chat");
 
             if (receiverId.HasValue)
             {
@@ -385,7 +385,7 @@ namespace ColdChainX.Infrastructure.Services
                     return ApiResponse<object>.Failure("Customer user for this order could not be resolved by customer email");
 
                 if (receiverId.Value != customerUserId.Value)
-                    return ApiResponse<object>.Failure("Sales/Admin/Manager can only send this order chat to the order customer");
+                    return ApiResponse<object>.Failure("Sales/Admin/WarehouseWorker can only send this order chat to the order customer");
             }
 
             return ApiResponse<object>.SuccessResponse(null);
@@ -420,7 +420,7 @@ namespace ColdChainX.Infrastructure.Services
         {
             return string.Equals(role, "Sales", StringComparison.OrdinalIgnoreCase)
                    || string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase)
-                   || string.Equals(role, "Manager", StringComparison.OrdinalIgnoreCase);
+                   || string.Equals(role, "WarehouseWorker", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

@@ -29,7 +29,7 @@ public class DeliveryEventService : IDeliveryEventService
         CancellationToken cancellationToken = default)
     {
         await _hubContext.Clients
-            .Groups("Group_Dispatcher", "Group_WarehouseMonitor", "Group_Admin")
+            .Groups("Group_Dispatcher", "Group_WarehouseWorker", "Group_Admin")
             .SendAsync("HandoverPartialReturn", new
             {
                 OrderId = orderId,

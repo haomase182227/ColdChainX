@@ -27,7 +27,7 @@ namespace ColdChainX.API.Controllers
         /// </summary>
         /// <remarks>
         /// For Customer role: Only returns ASNs belonging to the authenticated customer.
-        /// For Admin/Manager/WarehouseOperator roles: Returns all ASNs with optional filters.
+        /// For Admin/WarehouseWorker roles: Returns all ASNs with optional filters.
         /// </remarks>
         /// <param name="status">Optional status filter (e.g. SCHEDULED, ARRIVED).</param>
         /// <param name="dateFrom">Optional start date range for requested drop-off time.</param>
@@ -35,7 +35,7 @@ namespace ColdChainX.API.Controllers
         /// <param name="searchQuery">Optional search term matching code, tracking code, item name, customer name, or address.</param>
         /// <param name="warehouseId">Optional warehouse filter matching link or destination address.</param>
         /// <param name="orderId">Optional order filter.</param>
-        /// <param name="customerId">Optional customer filter (available only to Admin/Manager/Operator).</param>
+        /// <param name="customerId">Optional customer filter (available only to Admin/WarehouseWorker).</param>
         /// <param name="pageNumber">Page index (1-based).</param>
         /// <param name="pageSize">Size of each page.</param>
         /// <returns>A paginated list of scheduled inbound deliveries.</returns>
@@ -68,7 +68,7 @@ namespace ColdChainX.API.Controllers
             }
             else
             {
-                // Admin, Manager, and WarehouseOperator can optionally filter by customerId
+                // Admin and WarehouseWorker can optionally filter by customerId
                 finalCustomerId = customerId;
             }
 

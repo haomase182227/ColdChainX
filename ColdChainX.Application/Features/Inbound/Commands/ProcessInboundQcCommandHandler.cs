@@ -291,7 +291,7 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
                     var appendixIdStr = appendixResult.Success ? appendixResult.Data!.AppendixId.ToString() : "";
                     var appendixNumberStr = appendixResult.Success ? appendixResult.Data!.AppendixNumber : "";
 
-                    // Send notification to Sales, Admin, and Manager
+                    // Send notification to Sales, Admin, and WarehouseWorker
                     await EnsureNotificationTemplateAsync("NOTI_QC_DISCREPANCY", cancellationToken);
                     var salesUsers = await _context.Users
                         .Include(u => u.Role)

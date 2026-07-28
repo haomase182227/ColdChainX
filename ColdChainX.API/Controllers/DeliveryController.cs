@@ -168,7 +168,7 @@ public class DeliveryController : ControllerBase
     /// Handle driver COD handover at the end of trip.
     /// </summary>
     [HttpPost("/api/trips/{tripId:guid}/cod-handovers")]
-    [Authorize(Roles = "Admin,Manager")]
+    [Authorize(Roles = "Admin,WarehouseWorker")]
     [ProducesResponseType(typeof(ApiResponse<CodHandoverResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
@@ -196,7 +196,7 @@ public class DeliveryController : ControllerBase
     /// Upload an image to Cloudinary.
     /// </summary>
     [HttpPost("/api/deliveries/upload-image")]
-    [Authorize(Roles = "Driver,Admin,Manager")]
+    [Authorize(Roles = "Driver,Admin,WarehouseWorker")]
     [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> UploadImage(IFormFile file)

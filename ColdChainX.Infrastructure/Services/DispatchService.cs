@@ -1343,7 +1343,7 @@ public class DispatchService : IDispatchService
 
         try
         {
-            await _hubContext.Clients.Groups("Group_Loader", "Group_WarehouseMonitor")
+            await _hubContext.Clients.Group("Group_WarehouseWorker")
                 .SendAsync("PickingStarted", new
                 {
                     TripId = tripId,
@@ -1484,7 +1484,7 @@ public class DispatchService : IDispatchService
 
         try
         {
-            await _hubContext.Clients.Groups("Group_Loader", "Group_WarehouseMonitor", "Group_Admin")
+            await _hubContext.Clients.Groups("Group_WarehouseWorker", "Group_Admin")
                 .SendAsync("TripCancelled", new
                 {
                     TripId = tripId,
@@ -2300,11 +2300,11 @@ public class DispatchService : IDispatchService
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    //  Loader Notifications — Gửi thông báo cho Loader khi LIFO sẵn sàng
+    //  Warehouse worker notifications — Gửi thông báo khi LIFO sẵn sàng
     // ═══════════════════════════════════════════════════════════════════════
 
-    private const string LoaderRoleName = "Loader";
-    private const string LoaderNotificationTemplateId = "DISPATCH_LOADER_READY";
+    private const string WarehouseWorkerRoleName = "WarehouseWorker";
+    private const string WarehouseWorkerNotificationTemplateId = "DISPATCH_WAREHOUSE_WORKER_READY";
 
     public async Task NotifyLoadersAsync(Guid tripId)
     {
@@ -2314,11 +2314,11 @@ public class DispatchService : IDispatchService
             .FirstOrDefaultAsync(t => t.TripId == tripId)
             ?? throw new KeyNotFoundException("Không tìm thấy chuyến đi.");
 
-        // Tìm tất cả users có role Loader
+        // Tìm tất cả users có role WarehouseWorker
         var loaderUserIds = await _context.Users
             .Include(u => u.Role)
             .Where(u => u.Role != null
-                     && u.Role.RoleName == LoaderRoleName
+                     && u.Role.RoleName == WarehouseWorkerRoleName
                      && (u.Status == null || u.Status == "ACTIVE"))
             .Select(u => u.UserId)
             .ToListAsync();
@@ -2327,7 +2327,7 @@ public class DispatchService : IDispatchService
 
         // Tạo template nếu chưa có
         var templateExists = await _context.NotificationTemplates
-            .AnyAsync(t => t.TemplateId == LoaderNotificationTemplateId);
+            .AnyAsync(t => t.TemplateId == WarehouseWorkerNotificationTemplateId);
 
         if (!templateExists)
         {
@@ -2337,7 +2337,7 @@ public class DispatchService : IDispatchService
             {
                 _context.NotificationTemplates.Add(new NotificationTemplate
                 {
-                    TemplateId = LoaderNotificationTemplateId,
+                    TemplateId = WarehouseWorkerNotificationTemplateId,
                     TypeId = msgType.TypeId,
                     TitleTemplate = "Sơ đồ LIFO sẵn sàng — Xe {vehicle}",
                     BodyTemplate = "Chuyến hàng {tripId} đã có sơ đồ xếp hàng LIFO. " +
@@ -2352,9 +2352,9 @@ public class DispatchService : IDispatchService
 
         // Kiểm tra template tồn tại
         var actualTemplateId = await _context.NotificationTemplates
-            .AnyAsync(t => t.TemplateId == LoaderNotificationTemplateId
+            .AnyAsync(t => t.TemplateId == WarehouseWorkerNotificationTemplateId
                         && (t.Status == null || t.Status == "ACTIVE"))
-            ? LoaderNotificationTemplateId
+            ? WarehouseWorkerNotificationTemplateId
             : await GetFallbackTemplateIdAsync();
 
         if (actualTemplateId == null) return;
@@ -2387,7 +2387,7 @@ public class DispatchService : IDispatchService
 
         try
         {
-            await _hubContext.Clients.Groups("Group_Loader", "Group_Admin")
+            await _hubContext.Clients.Groups("Group_WarehouseWorker", "Group_Admin")
                 .SendAsync("WarehouseOrderApproved", new
                 {
                     TripId = tripId,

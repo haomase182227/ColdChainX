@@ -35,9 +35,9 @@ namespace ColdChainX.Application.Services
             if (!string.Equals(request.Role, "Admin", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(request.Role, "Dispatcher", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(request.Role, "Sales", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(request.Role, "Loader", StringComparison.OrdinalIgnoreCase))
+                !string.Equals(request.Role, "WarehouseWorker", StringComparison.OrdinalIgnoreCase))
             {
-                return ApiResponse<AuthResponseDto>.Failure("Only Admin, Dispatcher, Sales, or Loader roles can be created through this endpoint");
+                return ApiResponse<AuthResponseDto>.Failure("Only Admin, Dispatcher, Sales, or WarehouseWorker roles can be created through this endpoint");
             }
 
             var email = request.Email.Trim().ToLowerInvariant();
@@ -453,9 +453,9 @@ namespace ColdChainX.Application.Services
             if (existingUsername != null)
                 return ApiResponse<AuthResponseDto>.Failure("Username already in use");
 
-            var role = await _userRepository.GetRoleByNameAsync("WarehouseOperator");
+            var role = await _userRepository.GetRoleByNameAsync("WarehouseWorker");
             if (role == null)
-                return ApiResponse<AuthResponseDto>.Failure("WarehouseOperator role not found in the system");
+                return ApiResponse<AuthResponseDto>.Failure("WarehouseWorker role not found in the system");
 
             var user = new User
             {
@@ -488,7 +488,7 @@ namespace ColdChainX.Application.Services
             dto.RefreshToken = refreshToken;
             dto.AccessTokenExpiresAt = accessExpiresAt;
 
-            return ApiResponse<AuthResponseDto>.SuccessResponse(dto, "WarehouseOperator account created successfully");
+            return ApiResponse<AuthResponseDto>.SuccessResponse(dto, "WarehouseWorker account created successfully");
         }
 
         public async Task<ApiResponse<DriverDto>> UpdateDriverAsync(Guid driverId, UpdateDriverInfoRequest request)
