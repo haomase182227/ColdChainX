@@ -15,5 +15,6 @@ namespace ColdChainX.Application.Interfaces
         Task<ApiResponse<PagedResult<InvoiceResponse>>> GetInvoicesAsync(Guid? customerId, string? status, int pageNumber, int pageSize);
         Task<ApiResponse<InvoiceResponse>> GetInvoiceByIdAsync(Guid invoiceId, Guid? customerId, string userRole);
         Task<ApiResponse<List<InvoiceResponse>>> GetInvoicesByOrderIdAsync(Guid orderId, Guid? customerId, string userRole);
+        Task<ApiResponse<int>> GeneratePeriodicInvoicesAsync();
     }
 }
