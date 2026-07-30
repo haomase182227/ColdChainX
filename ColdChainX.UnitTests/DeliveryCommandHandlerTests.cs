@@ -609,7 +609,7 @@ namespace ColdChainX.UnitTests
         }
 
         [Fact]
-        public async Task Checkin_WithinRadius_ShouldSucceed()
+        public async Task Checkin_WithProofImage_ShouldSucceed()
         {
             // Arrange
             var stopId = Guid.NewGuid();
@@ -638,6 +638,7 @@ namespace ColdChainX.UnitTests
             var command = new CheckinDriverCommand
             {
                 StopId = stopId,
+                ProofImageUrl = "https://example.com/proofs/arrival.jpg",
                 Latitude = 10.8466m,
                 Longitude = 106.8043m,
                 UserId = _userId
@@ -650,6 +651,7 @@ namespace ColdChainX.UnitTests
             Assert.True(result.Success);
             Assert.NotNull(result.Data);
             Assert.Equal(stopId, result.Data.StopId);
+            Assert.Equal("https://example.com/proofs/arrival.jpg", result.Data.ProofImageUrl);
 
             var dbStop = await _db.TripStops.FindAsync(stopId);
             Assert.NotNull(dbStop);
@@ -658,7 +660,7 @@ namespace ColdChainX.UnitTests
         }
 
         [Fact]
-        public async Task Checkin_TooFar_ShouldThrowValidationException()
+        public async Task Checkin_WithoutProofImage_ShouldThrowValidationException()
         {
             // Arrange
             var stopId = Guid.NewGuid();
@@ -687,8 +689,49 @@ namespace ColdChainX.UnitTests
             var command = new CheckinDriverCommand
             {
                 StopId = stopId,
-                Latitude = 11.0000m,
-                Longitude = 107.0000m,
+                ProofImageUrl = "", // Missing arrival proof image
+                Latitude = 10.8465m,
+                Longitude = 106.8042m,
+                UserId = _userId
+            };
+
+            // Act & Assert
+            await Assert.ThrowsAsync<ValidationException>(() => handler.Handle(command, CancellationToken.None));
+        }
+
+        [Fact]
+        public async Task Checkin_TooFar700m_ShouldThrowValidationException()
+        {
+            // Arrange
+            var stopId = Guid.NewGuid();
+            var locationId = Guid.NewGuid();
+            _db.Locations.Add(new Location
+            {
+                LocationId = locationId,
+                Address = "Test Destination",
+                Latitude = 10.8465m,
+                Longitude = 106.8042m
+            });
+            _db.TripStops.Add(new TripStop
+            {
+                StopId = stopId,
+                TripId = _tripId,
+                LocationId = locationId,
+                StopSequence = 12,
+                StopType = "DELIVERY",
+                PlannedArrivalTime = DateTime.UtcNow,
+                PlannedDepartureTime = DateTime.UtcNow.AddHours(1),
+                Status = "PLANNED"
+            });
+            await _db.SaveChangesAsync();
+
+            var handler = new CheckinDriverCommandHandler(_db, _configuration);
+            var command = new CheckinDriverCommand
+            {
+                StopId = stopId,
+                ProofImageUrl = "https://example.com/proofs/arrival.jpg",
+                Latitude = 11.5000m, // Far away (> 700m)
+                Longitude = 107.5000m,
                 UserId = _userId
             };
 
@@ -756,6 +799,114 @@ namespace ColdChainX.UnitTests
             // Act & Assert
             var ex = await Assert.ThrowsAsync<ValidationException>(() => handler.Handle(command, CancellationToken.None));
             Assert.Contains("must check in", ex.Message);
+        }
+
+        [Fact]
+        public async Task ReportNoShow_WithEvidence_ShouldSucceedWithoutSlaWait()
+        {
+            // Arrange: Trạm đã Check-In chỉ mới 1 phút trước (không cần đợi 30 phút)
+            var stopId = Guid.NewGuid();
+            var locationId = Guid.NewGuid();
+            var orderId = Guid.NewGuid();
+
+            _db.Locations.Add(new Location
+            {
+                LocationId = locationId,
+                Address = "Kho Lạnh Khách Vắng Mặt",
+                Latitude = 10.8m,
+                Longitude = 106.8m
+            });
+
+            var tripStop = new TripStop
+            {
+                StopId = stopId,
+                TripId = _tripId,
+                LocationId = locationId,
+                StopSequence = 2,
+                StopType = "DELIVERY",
+                ActualArrivalTime = DateTime.UtcNow.AddMinutes(-1), // Mới đến 1 phút trước!
+                Status = "ARRIVED",
+                Note = "Đến trước cổng bãi."
+            };
+            _db.TripStops.Add(tripStop);
+
+            _db.TransportOrders.Add(new TransportOrder
+            {
+                OrderId = orderId,
+                MasterTripId = _tripId,
+                TrackingCode = "TRK-NOSHOW",
+                ItemName = "Seafood Box",
+                Category = "SEAFOOD",
+                Quantity = 5,
+                PackingType = "BOX",
+                TempCondition = "FROZEN",
+                OrderDimension = new ColdChainX.Core.Entities.OrderDimension { ExpectedWeightKg = 50, ActualWeightKg = 50, ExpectedCbm = 1 },
+                CustomerId = Guid.NewGuid(),
+                DestLocation = locationId,
+                Status = "IN_TRANSIT"
+            });
+            await _db.SaveChangesAsync();
+
+            var goongService = new FakeGoongService();
+            var handler = new ReportNoShowCommandHandler(_db, goongService);
+            var command = new ReportNoShowCommand
+            {
+                TripStopId = stopId,
+                DriverId = _userId,
+                EvidenceImageUrl = "https://example.com/proofs/no-show-evidence.jpg"
+            };
+
+            // Act
+            var result = await handler.Handle(command, CancellationToken.None);
+
+            // Assert
+            Assert.True(result.Success);
+
+            // 1. Trạng thái trạm lập tức chuyển SKIPPED_NOSHOW và có mốc giờ đi để di chuyển điểm kế tiếp
+            var dbStop = await _db.TripStops.FindAsync(stopId);
+            Assert.NotNull(dbStop);
+            Assert.Equal("SKIPPED_NOSHOW", dbStop.Status);
+            Assert.NotNull(dbStop.ActualDepartureTime);
+            Assert.Contains("No-Show Evidence: https://example.com/proofs/no-show-evidence.jpg", dbStop.Note);
+
+            // 2. Kiểm tra Nhật Ký Biến Cố Bãi (TripStopEvents) lưu Bằng chứng như cơ chế Check-in
+            var stopEvent = await _db.TripStopEvents.FirstOrDefaultAsync(e => e.StopId == stopId && e.EventType == "NO_SHOW_REPORT");
+            Assert.NotNull(stopEvent);
+            Assert.Contains("ProofImageUrl: https://example.com/proofs/no-show-evidence.jpg", stopEvent.MetaData);
+
+            // 3. Kiểm tra chứng từ TransportDocument 3NF được gia cố
+            var doc = await _db.TransportDocuments.FirstOrDefaultAsync(d => d.OrderId == orderId && d.DocType == "NO_SHOW_EVIDENCE");
+            Assert.NotNull(doc);
+
+            // 4. Tuyệt đối không sinh hóa đơn phạt PenaltyBill
+            var penaltyCount = await _db.PenaltyBills.CountAsync();
+            Assert.Equal(0, penaltyCount);
+        }
+
+        [Fact]
+        public async Task ReportNoShow_WithoutEvidence_ShouldThrowValidationException()
+        {
+            // Arrange
+            var stopId = Guid.NewGuid();
+            var handler = new ReportNoShowCommandHandler(_db, new FakeGoongService());
+            var command = new ReportNoShowCommand
+            {
+                TripStopId = stopId,
+                DriverId = _userId,
+                EvidenceImageUrl = "" // Thiếu ảnh bằng chứng
+            };
+
+            // Act & Assert
+            await Assert.ThrowsAsync<ValidationException>(() => handler.Handle(command, CancellationToken.None));
+        }
+    }
+
+    internal class FakeGoongService : IGoongMapService
+    {
+        public Task<ColdChainX.Application.DTOs.Dispatch.GoongOptimizedRouteResult> GetOptimizedRouteAsync(
+            string origin, string destination, string? waypoints, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new ColdChainX.Application.DTOs.Dispatch.GoongOptimizedRouteResult());
         }
     }
 

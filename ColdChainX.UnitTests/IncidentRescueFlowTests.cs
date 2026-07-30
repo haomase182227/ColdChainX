@@ -444,6 +444,15 @@ public sealed class IncidentRescueFlowTests : IDisposable
                 StreamingDeviceCodes.Add(deviceCode);
             return Task.FromResult(PublishSucceeds);
         }
+
+        public Task<bool> StopStreamingAsync(
+            string deviceCode,
+            CancellationToken cancellationToken)
+        {
+            if (PublishSucceeds)
+                StreamingDeviceCodes.Remove(deviceCode);
+            return Task.FromResult(PublishSucceeds);
+        }
     }
 
     private sealed class FakeNotificationHubContext : IHubContext<NotificationHub>
