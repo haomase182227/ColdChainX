@@ -41,7 +41,7 @@ namespace ColdChainX.API.Controllers
         /// Setup physical storage facilities to receive, store, and dispatch cold-chain products.
         /// 
         /// Required roles:
-        /// Admin, Manager
+        /// Admin, WarehouseWorker
         /// 
         /// Workflow impact:
         /// Creates the parent entity under which storage zones and specific storage locations can be configured.
@@ -49,7 +49,7 @@ namespace ColdChainX.API.Controllers
         /// <param name="request">The warehouse creation request containing code, name, capacity, and temperature limits.</param>
         /// <returns>The newly created warehouse details.</returns>
         [HttpPost]
-        [Authorize(Roles = "Admin,Manager")]
+        [Authorize(Roles = "Admin,WarehouseWorker")]
         [ProducesResponseType(typeof(ApiResponse<WarehouseResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
@@ -77,7 +77,7 @@ namespace ColdChainX.API.Controllers
         /// Modify name, type, capacity, address, or temperature parameters as operations evolve.
         /// 
         /// Required roles:
-        /// Admin, Manager
+        /// Admin, WarehouseWorker
         /// 
         /// Workflow impact:
         /// Instantly changes default compliance thresholds for inbound quality checks and capacity warnings.
@@ -86,7 +86,7 @@ namespace ColdChainX.API.Controllers
         /// <param name="request">The updated warehouse details.</param>
         /// <returns>The updated warehouse details.</returns>
         [HttpPut("{id:guid}")]
-        [Authorize(Roles = "Admin,Manager")]
+        [Authorize(Roles = "Admin,WarehouseWorker")]
         [ProducesResponseType(typeof(ApiResponse<WarehouseResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]

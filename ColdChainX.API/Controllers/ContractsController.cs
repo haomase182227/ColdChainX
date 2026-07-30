@@ -279,6 +279,19 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
+        [HttpPost("{contractId:guid}/review")]
+        [Authorize(Roles = "Sales,Admin,Dispatcher")]
+        public async Task<IActionResult> ReviewContract(Guid contractId, [FromBody] ReviewContractRequest request)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var salesUserId))
+                return Unauthorized("UserId claim is missing from token");
+
+            var result = await _contractService.ReviewContractAsync(contractId, request, salesUserId);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
         [HttpPost("{contractId:guid}/verify")]
         [Authorize(Roles = "Sales,Admin,Dispatcher")]
         public async Task<IActionResult> VerifyContract(Guid contractId)

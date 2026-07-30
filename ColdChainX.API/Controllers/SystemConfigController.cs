@@ -33,7 +33,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPut("{key}")]
-        [Authorize(Roles = "Admin,Manager")]
+        [Authorize(Roles = "Admin,WarehouseWorker")]
         public async Task<IActionResult> UpdateConfig(string key, [FromBody] UpdateSystemConfigRequest request)
         {
             var result = await _systemConfigService.UpdateConfigAsync(key, request);

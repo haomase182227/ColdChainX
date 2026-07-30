@@ -30,6 +30,7 @@ public sealed class IotDevicesController : ControllerBase
                 TruckPlate = d.Vehicle != null ? d.Vehicle.TruckPlate : null,
                 d.BatteryLevel,
                 d.Status,
+                d.IsOnline,
                 d.LastPingTime,
                 d.CreatedAt
             })
@@ -59,6 +60,7 @@ public sealed class IotDevicesController : ControllerBase
                 TruckPlate = device.Vehicle?.TruckPlate,
                 device.BatteryLevel,
                 device.Status,
+                device.IsOnline,
                 device.LastPingTime,
                 device.CreatedAt
             }

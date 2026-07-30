@@ -57,7 +57,7 @@ public class ManualDispatchFlowTests
         var error = await Assert.ThrowsAsync<InvalidOperationException>(
             () => fixture.Service.ManualDispatchAsync(fixture.Request));
 
-        Assert.Contains("must belong to orders", error.Message);
+        Assert.Contains("does not belong to the selected schedule", error.Message);
         Assert.Empty(fixture.Db.MasterTrips);
     }
 
@@ -79,7 +79,7 @@ public class ManualDispatchFlowTests
     }
 
     [Fact]
-    public async Task ManualDispatch_RejectsLoadAboveEightyPercentCapacity()
+    public async Task ManualDispatch_RejectsUnpackableLoad()
     {
         await using var fixture = await CreateFixtureAsync();
         fixture.Vehicle.MaxCbm = 1m;
@@ -95,7 +95,7 @@ public class ManualDispatchFlowTests
         var error = await Assert.ThrowsAsync<InvalidOperationException>(
             () => fixture.Service.ManualDispatchAsync(fixture.Request));
 
-        Assert.Contains("80%", error.Message);
+        Assert.Contains("3D Packing", error.Message);
         Assert.Empty(fixture.Db.MasterTrips);
     }
 
@@ -200,7 +200,8 @@ public class ManualDispatchFlowTests
             InnerHeightCm = 240m,
             MinTemp = -25m,
             MaxTemp = 10m,
-            Status = "ACTIVE"
+            Status = "ACTIVE",
+            CurrentLocation = warehouseId.ToString()
         };
         var driver = new Driver
         {
@@ -210,7 +211,8 @@ public class ManualDispatchFlowTests
             PhoneNumber = "0900000000",
             DateOfBirth = new DateOnly(1990, 1, 1),
             JoinDate = new DateOnly(2025, 1, 1),
-            Status = "ACTIVE"
+            Status = "ACTIVE",
+            CurrentLocation = warehouseId.ToString()
         };
         driver.DriverLicenses.Add(new DriverLicense
         {

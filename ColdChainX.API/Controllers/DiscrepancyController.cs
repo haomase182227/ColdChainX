@@ -1,8 +1,11 @@
+using ColdChainX.API.Authorization;
 using ColdChainX.Application.Features.Discrepancy.Commands;
 using ColdChainX.Application.Features.Discrepancy.Queries;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
 using MediatR;
+using ColdChainX.Shared.Constants;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -28,6 +31,7 @@ public class DiscrepancyController : ControllerBase
     }
 
     [HttpGet("debug-columns")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> DebugColumns()
     {
         var conn = _context.Database.GetDbConnection();
@@ -57,6 +61,7 @@ public class DiscrepancyController : ControllerBase
     }
 
     [HttpGet("pending")]
+    [HasPermission(PermissionCodes.WarehouseTaskView)]
     public async Task<IActionResult> GetPendingDiscrepancies([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
     {
         var result = await _mediator.Send(new GetPendingDiscrepanciesQuery
@@ -68,6 +73,7 @@ public class DiscrepancyController : ControllerBase
     }
 
     [HttpGet("{lpnId:guid}")]
+    [HasPermission(PermissionCodes.WarehouseTaskView)]
     public async Task<IActionResult> GetDiscrepancyDetail(Guid lpnId)
     {
         var result = await _mediator.Send(new GetDiscrepancyDetailQuery(lpnId));
@@ -78,6 +84,7 @@ public class DiscrepancyController : ControllerBase
     }
 
     [HttpPost("resolve")]
+    [HasPermission(PermissionCodes.WarehouseIncidentResolve)]
     public async Task<IActionResult> ResolveDiscrepancy([FromBody] ResolveDiscrepancyCommand command)
     {
         var result = await _mediator.Send(command);
@@ -88,6 +95,7 @@ public class DiscrepancyController : ControllerBase
     }
 
     [HttpGet("{receiptId}/pdf")]
+    [HasPermission(PermissionCodes.WarehouseTaskView)]
     public async Task<IActionResult> GetDiscrepancyPdf(Guid receiptId)
     {
         try
@@ -102,6 +110,7 @@ public class DiscrepancyController : ControllerBase
     }
 
     [HttpPost("regenerate-all-pdfs")]
+    [HasPermission(PermissionCodes.WarehouseIncidentResolve)]
     public async Task<IActionResult> RegenerateAllPdfs()
     {
         var receipts = await _context.WarehouseReceipts

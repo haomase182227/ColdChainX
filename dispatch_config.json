@@ -1,0 +1,225 @@
+[
+  {
+    "title": "Manual Dispatch Sequence Diagram",
+    "participants": [
+      {"id": "a", "name": "Dispatcher", "type": "actor"},
+      {"id": "ui", "name": "Dispatch Screen", "type": "screen"},
+      {"id": "c", "name": "DispatchController", "type": "system"},
+      {"id": "s", "name": "DispatchService", "type": "system"},
+      {"id": "r", "name": "ApplicationDbContext", "type": "system"},
+      {"id": "tp1", "name": "Goong", "type": "thirdparty"},
+      {"id": "tp2", "name": "PdfService/Cloudinary", "type": "thirdparty"},
+      {"id": "d", "name": "PostgreSQL", "type": "db"}
+    ],
+    "steps": [
+      {"type": "msg", "from": "a", "to": "ui", "label": "1. Click Dispatch"},
+      {"type": "msg", "from": "ui", "to": "c", "label": "2. POST /api/Dispatch/manual-dispatch"},
+      {"type": "msg", "from": "c", "to": "s", "label": "3. ManualDispatchAsync()"},
+      {"type": "msg", "from": "s", "to": "r", "label": "4. SELECT LPNs, Orders..."},
+      {"type": "msg", "from": "r", "to": "d", "label": "5. Query DB"},
+      {"type": "msg", "from": "d", "to": "r", "label": "6. DB Records", "return": true},
+      {"type": "msg", "from": "r", "to": "s", "label": "7. Entities", "return": true},
+      {"type": "msg", "from": "s", "to": "tp1", "label": "8. GetOptimizedRouteAsync()"},
+      {"type": "msg", "from": "tp1", "to": "s", "label": "9. GoongOptimizedRouteResult", "return": true},
+      {"type": "msg", "from": "s", "to": "r", "label": "10. Add MasterTrip, TripStops; Assign drivers"},
+      {"type": "msg", "from": "r", "to": "d", "label": "11. INSERT / UPDATE; COMMIT"},
+      {"type": "msg", "from": "d", "to": "r", "label": "12. Commit Success", "return": true},
+      {"type": "msg", "from": "r", "to": "s", "label": "13. Saved Trip Graph", "return": true},
+      {"type": "msg", "from": "s", "to": "tp2", "label": "14. SavePdfFromUrlAsync()"},
+      {"type": "msg", "from": "tp2", "to": "s", "label": "15. LifoPdfUrl", "return": true},
+      {"type": "msg", "from": "s", "to": "c", "label": "16. ManualDispatchResult", "return": true},
+      {"type": "msg", "from": "c", "to": "ui", "label": "17. 200 OK", "return": true},
+      {"type": "msg", "from": "ui", "to": "a", "label": "18. Show Dispatch Success", "return": true}
+    ]
+  },
+  {
+    "title": "Get Dispatch Candidates Sequence Diagram",
+    "participants": [
+      {"id": "a", "name": "Dispatcher", "type": "actor"},
+      {"id": "ui", "name": "Dispatch Candidates Screen", "type": "screen"},
+      {"id": "c", "name": "DispatchController", "type": "system"},
+      {"id": "s", "name": "InventoryAnalysisService", "type": "system"},
+      {"id": "d", "name": "PostgreSQL", "type": "db"}
+    ],
+    "steps": [
+      {"type": "msg", "from": "a", "to": "ui", "label": "1. Open available LPNs view"},
+      {"type": "msg", "from": "ui", "to": "c", "label": "2. GET /api/Dispatch/available-lpns"},
+      {"type": "msg", "from": "c", "to": "s", "label": "3. GetAvailableLpnsAsync()"},
+      {"type": "msg", "from": "s", "to": "d", "label": "4. Query IN_STOCK LPNs"},
+      {"type": "msg", "from": "d", "to": "s", "label": "5. DB Records", "return": true},
+      {"type": "msg", "from": "s", "to": "c", "label": "6. List<LpnDto>", "return": true},
+      {"type": "msg", "from": "c", "to": "ui", "label": "7. 200 OK", "return": true},
+      {"type": "msg", "from": "ui", "to": "a", "label": "8. Render Candidates", "return": true}
+    ]
+  },
+  {
+    "title": "Assign Vehicle Sequence Diagram",
+    "participants": [
+      {"id": "a", "name": "Dispatcher", "type": "actor"},
+      {"id": "ui", "name": "Vehicle Assignment Screen", "type": "screen"},
+      {"id": "c", "name": "DispatchController", "type": "system"},
+      {"id": "s", "name": "VehicleService", "type": "system"},
+      {"id": "d", "name": "PostgreSQL", "type": "db"}
+    ],
+    "steps": [
+      {"type": "msg", "from": "a", "to": "ui", "label": "1. Request vehicle lookup"},
+      {"type": "msg", "from": "ui", "to": "c", "label": "2. GET /api/Dispatch/lookup/vehicles"},
+      {"type": "msg", "from": "c", "to": "s", "label": "3. SearchAvailableVehicles()"},
+      {"type": "msg", "from": "s", "to": "d", "label": "4. Query Vehicles"},
+      {"type": "msg", "from": "d", "to": "s", "label": "5. Vehicles", "return": true},
+      {"type": "msg", "from": "s", "to": "c", "label": "6. List<VehicleDto>", "return": true},
+      {"type": "msg", "from": "c", "to": "ui", "label": "7. 200 OK", "return": true},
+      {"type": "msg", "from": "ui", "to": "a", "label": "8. Display Vehicle List", "return": true}
+    ]
+  },
+  {
+    "title": "Assign Driver Sequence Diagram",
+    "participants": [
+      {"id": "a", "name": "Dispatcher", "type": "actor"},
+      {"id": "ui", "name": "Driver Assignment Screen", "type": "screen"},
+      {"id": "c", "name": "DispatchController", "type": "system"},
+      {"id": "s", "name": "DriverAvailabilityService", "type": "system"},
+      {"id": "d", "name": "PostgreSQL", "type": "db"}
+    ],
+    "steps": [
+      {"type": "msg", "from": "a", "to": "ui", "label": "1. Request driver lookup"},
+      {"type": "msg", "from": "ui", "to": "c", "label": "2. GET /api/Dispatch/lookup/drivers"},
+      {"type": "msg", "from": "c", "to": "s", "label": "3. GetAvailableDrivers()"},
+      {"type": "msg", "from": "s", "to": "d", "label": "4. Query Drivers"},
+      {"type": "msg", "from": "d", "to": "s", "label": "5. Drivers", "return": true},
+      {"type": "msg", "from": "s", "to": "c", "label": "6. List<DriverDto>", "return": true},
+      {"type": "msg", "from": "c", "to": "ui", "label": "7. 200 OK", "return": true},
+      {"type": "msg", "from": "ui", "to": "a", "label": "8. Display Driver List", "return": true}
+    ]
+  },
+  {
+    "title": "Create Trip Sequence Diagram",
+    "participants": [
+      {"id": "a", "name": "Dispatcher", "type": "actor"},
+      {"id": "ui", "name": "Dispatch Screen", "type": "screen"},
+      {"id": "c", "name": "DispatchService", "type": "system"},
+      {"id": "tp", "name": "Goong", "type": "thirdparty"},
+      {"id": "d", "name": "PostgreSQL", "type": "db"}
+    ],
+    "steps": [
+      {"type": "msg", "from": "a", "to": "ui", "label": "1. Start automatic dispatch"},
+      {"type": "msg", "from": "ui", "to": "c", "label": "2. CreateTripAsync()"},
+      {"type": "msg", "from": "c", "to": "tp", "label": "3. GetOptimizedRouteAsync()"},
+      {"type": "msg", "from": "tp", "to": "c", "label": "4. RouteResult", "return": true},
+      {"type": "msg", "from": "c", "to": "d", "label": "5. Insert MasterTrip & Stops"},
+      {"type": "msg", "from": "d", "to": "c", "label": "6. DB Saved", "return": true},
+      {"type": "msg", "from": "c", "to": "ui", "label": "7. Trip Created", "return": true},
+      {"type": "msg", "from": "ui", "to": "a", "label": "8. Show Success Message", "return": true}
+    ]
+  },
+  {
+    "title": "Confirm Dispatch Sequence Diagram",
+    "participants": [
+      {"id": "a", "name": "Dispatcher", "type": "actor"},
+      {"id": "ui", "name": "Dispatch Operations Screen", "type": "screen"},
+      {"id": "c", "name": "DispatchController", "type": "system"},
+      {"id": "s", "name": "DispatchService", "type": "system"},
+      {"id": "d", "name": "PostgreSQL", "type": "db"}
+    ],
+    "steps": [
+      {"type": "msg", "from": "a", "to": "ui", "label": "1. Confirm vehicle seal"},
+      {"type": "msg", "from": "ui", "to": "c", "label": "2. POST /api/Dispatch/seal-and-dispatch/{id}"},
+      {"type": "msg", "from": "c", "to": "s", "label": "3. SealAndDispatchAsync(id)"},
+      {"type": "msg", "from": "s", "to": "d", "label": "4. Query Trip"},
+      {"type": "msg", "from": "d", "to": "s", "label": "5. MasterTrip", "return": true},
+      {"type": "msg", "from": "s", "to": "s", "label": "6. Set Status = IN_TRANSIT"},
+      {"type": "msg", "from": "s", "to": "d", "label": "7. Update DB"},
+      {"type": "msg", "from": "d", "to": "s", "label": "8. Commit", "return": true},
+      {"type": "msg", "from": "s", "to": "c", "label": "9. Success", "return": true},
+      {"type": "msg", "from": "c", "to": "ui", "label": "10. 200 OK", "return": true},
+      {"type": "msg", "from": "ui", "to": "a", "label": "11. Redirect to In Transit", "return": true}
+    ]
+  },
+  {
+    "title": "Cancel Dispatch Sequence Diagram",
+    "participants": [
+      {"id": "a", "name": "Dispatcher", "type": "actor"},
+      {"id": "ui", "name": "Dispatch Management Screen", "type": "screen"},
+      {"id": "c", "name": "DispatchController", "type": "system"},
+      {"id": "s", "name": "DispatchService", "type": "system"},
+      {"id": "d", "name": "PostgreSQL", "type": "db"}
+    ],
+    "steps": [
+      {"type": "msg", "from": "a", "to": "ui", "label": "1. Cancel trip"},
+      {"type": "msg", "from": "ui", "to": "c", "label": "2. POST /api/Dispatch/trip/{id}/cancel"},
+      {"type": "msg", "from": "c", "to": "s", "label": "3. CancelTripAsync(id)"},
+      {"type": "msg", "from": "s", "to": "d", "label": "4. Load MasterTrip"},
+      {"type": "msg", "from": "d", "to": "s", "label": "5. Data", "return": true},
+      {"type": "msg", "from": "s", "to": "s", "label": "6. Release Resources"},
+      {"type": "msg", "from": "s", "to": "d", "label": "7. Save Changes"},
+      {"type": "msg", "from": "d", "to": "s", "label": "8. Success", "return": true},
+      {"type": "msg", "from": "s", "to": "c", "label": "9. Result", "return": true},
+      {"type": "msg", "from": "c", "to": "ui", "label": "10. 200 OK", "return": true},
+      {"type": "msg", "from": "ui", "to": "a", "label": "11. Trip cancelled visually", "return": true}
+    ]
+  },
+  {
+    "title": "Update Dispatch Status Sequence Diagram",
+    "participants": [
+      {"id": "a", "name": "Warehouse Worker", "type": "actor"},
+      {"id": "ui", "name": "Picking App Screen", "type": "screen"},
+      {"id": "c", "name": "DispatchController", "type": "system"},
+      {"id": "s", "name": "DispatchService", "type": "system"},
+      {"id": "d", "name": "PostgreSQL", "type": "db"}
+    ],
+    "steps": [
+      {"type": "msg", "from": "a", "to": "ui", "label": "1. Start picking"},
+      {"type": "msg", "from": "ui", "to": "c", "label": "2. POST /api/Dispatch/trip/{id}/start-picking"},
+      {"type": "msg", "from": "c", "to": "s", "label": "3. StartPickingAsync(id)"},
+      {"type": "msg", "from": "s", "to": "d", "label": "4. Load MasterTrip"},
+      {"type": "msg", "from": "d", "to": "s", "label": "5. Data", "return": true},
+      {"type": "msg", "from": "s", "to": "s", "label": "6. Set Status = LOADING"},
+      {"type": "msg", "from": "s", "to": "d", "label": "7. SaveChanges"},
+      {"type": "msg", "from": "d", "to": "s", "label": "8. Success", "return": true},
+      {"type": "msg", "from": "s", "to": "c", "label": "9. Result", "return": true},
+      {"type": "msg", "from": "c", "to": "ui", "label": "10. 200 OK", "return": true},
+      {"type": "msg", "from": "ui", "to": "a", "label": "11. Update UI Status", "return": true}
+    ]
+  },
+  {
+    "title": "Get Dispatch Details Sequence Diagram",
+    "participants": [
+      {"id": "a", "name": "Client", "type": "actor"},
+      {"id": "ui", "name": "Trip Details Screen", "type": "screen"},
+      {"id": "c", "name": "DispatchController", "type": "system"},
+      {"id": "r", "name": "ApplicationDbContext", "type": "system"},
+      {"id": "d", "name": "PostgreSQL", "type": "db"}
+    ],
+    "steps": [
+      {"type": "msg", "from": "a", "to": "ui", "label": "1. View trip route"},
+      {"type": "msg", "from": "ui", "to": "c", "label": "2. GET /api/Dispatch/trip/{id}/route"},
+      {"type": "msg", "from": "c", "to": "r", "label": "3. Query MasterTrip & Stops"},
+      {"type": "msg", "from": "r", "to": "d", "label": "4. SQL SELECT"},
+      {"type": "msg", "from": "d", "to": "r", "label": "5. Entities", "return": true},
+      {"type": "msg", "from": "r", "to": "c", "label": "6. Data", "return": true},
+      {"type": "msg", "from": "c", "to": "c", "label": "7. Build TripRouteResponse"},
+      {"type": "msg", "from": "c", "to": "ui", "label": "8. 200 OK", "return": true},
+      {"type": "msg", "from": "ui", "to": "a", "label": "9. Render Route Details", "return": true}
+    ]
+  },
+  {
+    "title": "Get Dispatch List Sequence Diagram",
+    "participants": [
+      {"id": "a", "name": "Client", "type": "actor"},
+      {"id": "ui", "name": "Dispatch Dashboard Screen", "type": "screen"},
+      {"id": "c", "name": "DispatchController", "type": "system"},
+      {"id": "s", "name": "DispatchService", "type": "system"},
+      {"id": "d", "name": "PostgreSQL", "type": "db"}
+    ],
+    "steps": [
+      {"type": "msg", "from": "a", "to": "ui", "label": "1. View ready trips"},
+      {"type": "msg", "from": "ui", "to": "c", "label": "2. GET /trips/ready-to-seal"},
+      {"type": "msg", "from": "c", "to": "s", "label": "3. GetTripsByStatus()"},
+      {"type": "msg", "from": "s", "to": "d", "label": "4. Query Trips"},
+      {"type": "msg", "from": "d", "to": "s", "label": "5. DB Records", "return": true},
+      {"type": "msg", "from": "s", "to": "c", "label": "6. List<TripDto>", "return": true},
+      {"type": "msg", "from": "c", "to": "ui", "label": "7. 200 OK", "return": true},
+      {"type": "msg", "from": "ui", "to": "a", "label": "8. Display Trips Table", "return": true}
+    ]
+  }
+]

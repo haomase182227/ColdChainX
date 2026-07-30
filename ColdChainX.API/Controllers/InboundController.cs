@@ -1,6 +1,7 @@
+using ColdChainX.API.Authorization;
 using ColdChainX.Application.Features.Inbound.Commands;
+using ColdChainX.Shared.Constants;
 using MediatR;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
@@ -18,7 +19,7 @@ public class InboundController : ControllerBase
     }
 
     [HttpPost("qc")]
-    [Authorize]
+    [HasPermission(PermissionCodes.WarehouseQcInspect)]
     public async Task<IActionResult> ProcessQc([FromForm] ProcessInboundQcRequest request)
     {
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -46,7 +47,7 @@ public class InboundController : ControllerBase
     }
 
     [HttpPut("qc/re-evaluate")]
-    [Authorize]
+    [HasPermission(PermissionCodes.WarehouseQcInspect)]
     public async Task<IActionResult> ReEvaluateQc([FromForm] ColdChainX.Application.DTOs.WarehouseFlow.ReEvaluateInboundQcRequest request)
     {
         var warehouseIdClaim = User.FindFirst("WarehouseId")?.Value;
@@ -72,6 +73,7 @@ public class InboundController : ControllerBase
     }
 
     [HttpPost("putaway")]
+    [HasPermission(PermissionCodes.WarehouseReceivingConfirm)]
     public async Task<IActionResult> Putaway([FromBody] PutawayLpnCommand command)
     {
         var result = await _mediator.Send(command);
@@ -82,6 +84,7 @@ public class InboundController : ControllerBase
     }
 
     [HttpGet("receipts")]
+    [HasPermission(PermissionCodes.WarehouseTaskView)]
     public async Task<IActionResult> GetReceipts([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
     {
         var result = await _mediator.Send(new ColdChainX.Application.Features.Inbound.Queries.GetInboundReceiptsQuery
@@ -93,6 +96,7 @@ public class InboundController : ControllerBase
     }
 
     [HttpGet("receipts/{id}")]
+    [HasPermission(PermissionCodes.WarehouseTaskView)]
     public async Task<IActionResult> GetReceipt(Guid id)
     {
         var result = await _mediator.Send(new ColdChainX.Application.Features.Inbound.Queries.GetInboundReceiptDetailQuery(id));
@@ -101,6 +105,7 @@ public class InboundController : ControllerBase
     }
 
     [HttpGet("receipts/{id}/pdf")]
+    [HasPermission(PermissionCodes.WarehouseTaskView)]
     public async Task<IActionResult> GetReceiptPdf(Guid id)
     {
         try
@@ -114,7 +119,7 @@ public class InboundController : ControllerBase
         }
     }
     [HttpPost("receipts/generate")]
-    [Authorize]
+    [HasPermission(PermissionCodes.WarehouseReceivingConfirm)]
     public async Task<IActionResult> GenerateReceipt([FromBody] GenerateWarehouseReceiptRequest request)
     {
         var command = new GenerateWarehouseReceiptCommand

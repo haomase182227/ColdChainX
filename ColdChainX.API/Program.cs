@@ -16,6 +16,7 @@ using ColdChainX.API.Swagger;
 using ColdChainX.API.Workers;
 using ColdChainX.Infrastructure.Hubs;
 using ColdChainX.Infrastructure.Persistence;
+using ColdChainX.Infrastructure.Services.Firebase;
 using System.Threading.Channels;
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
@@ -128,6 +129,20 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 var app = builder.Build();
+
+var firebaseStatus = app.Services.GetRequiredService<FirebaseConfigurationStatus>();
+if (firebaseStatus.IsConfigured)
+{
+    app.Logger.LogInformation(
+        "Firebase Cloud Messaging initialized from {CredentialSource}.",
+        firebaseStatus.CredentialSource);
+}
+else
+{
+    app.Logger.LogWarning(
+        "Firebase Cloud Messaging is unavailable: {FirebaseConfigurationError}",
+        firebaseStatus.Error);
+}
 
 if (configuration.GetValue("Startup:ApplyDatabaseBootstrap", true))
 {

@@ -1,4 +1,6 @@
+using ColdChainX.API.Authorization;
 using ColdChainX.Application.Features.Outbound.Commands;
+using ColdChainX.Shared.Constants;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
@@ -34,6 +36,7 @@ public class OutboundController : ControllerBase
     /// Next step: POST /api/Outbound/load-trip (khi tat ca LPN da LOADING_COMPLETED)
     /// </remarks>
     [HttpPost("pick")]
+    [HasPermission(PermissionCodes.WarehouseLoadingConfirm)]
     [ProducesResponseType(typeof(PickLpnResponse), 200)]
     [ProducesResponseType(typeof(PickLpnResponse), 400)]
     public async Task<IActionResult> Pick([FromBody] PickLpnCommand command)
@@ -64,6 +67,7 @@ public class OutboundController : ControllerBase
     /// Next step: POST /api/Dispatch/seal-and-dispatch/{tripId}
     /// </remarks>
     [HttpPost("load-trip")]
+    [HasPermission(PermissionCodes.WarehouseLoadingConfirm)]
     [ProducesResponseType(typeof(CompleteTripLoadingResponse), 200)]
     [ProducesResponseType(typeof(CompleteTripLoadingResponse), 400)]
     public async Task<IActionResult> LoadTrip([FromBody] CompleteTripLoadingCommand command)
@@ -85,6 +89,7 @@ public class OutboundController : ControllerBase
     /// Tham so tuy chon: ?tripId={guid} de chi lay LPN cua mot chuyen cu the.
     /// </remarks>
     [HttpGet("available-lpns")]
+    [HasPermission(PermissionCodes.WarehouseTaskView)]
     [ProducesResponseType(typeof(List<ColdChainX.Application.Features.Outbound.DTOs.AvailableLpnDto>), 200)]
     public async Task<IActionResult> GetAvailableLpns([FromQuery] Guid? tripId)
     {
@@ -105,6 +110,7 @@ public class OutboundController : ControllerBase
     /// Tham so tuy chon: ?tripId={guid} de xem chi tiet mot chuyen.
     /// </remarks>
     [HttpGet("available-trips")]
+    [HasPermission(PermissionCodes.WarehouseTaskView)]
     [ProducesResponseType(typeof(List<ColdChainX.Application.Features.Outbound.DTOs.AvailableTripDto>), 200)]
     public async Task<IActionResult> GetAvailableTrips([FromQuery] Guid? tripId)
     {
@@ -113,6 +119,7 @@ public class OutboundController : ControllerBase
     }
 
     [HttpGet("orders")]
+    [HasPermission(PermissionCodes.WarehouseTaskView)]
     public async Task<IActionResult> GetOrders([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
     {
         var result = await _mediator.Send(new ColdChainX.Application.Features.Outbound.Queries.GetOutboundOrdersQuery
@@ -124,6 +131,7 @@ public class OutboundController : ControllerBase
     }
 
     [HttpGet("pick-list/{masterTripId}")]
+    [HasPermission(PermissionCodes.WarehouseTaskView)]
     public async Task<IActionResult> GetPickList(Guid masterTripId)
     {
         var result = await _mediator.Send(new ColdChainX.Application.Features.Outbound.Queries.GetOutboundPickListQuery(masterTripId));
@@ -131,6 +139,7 @@ public class OutboundController : ControllerBase
     }
 
     [HttpGet("orders/{orderId}/epod-pdf")]
+    [HasPermission(PermissionCodes.WarehouseTaskView)]
     public async Task<IActionResult> GetEpodPdf(Guid orderId)
     {
         try

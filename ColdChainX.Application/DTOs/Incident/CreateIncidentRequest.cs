@@ -14,14 +14,8 @@ namespace ColdChainX.Application.DTOs.Incident
         public decimal? CurrentLongitude { get; set; }
         public decimal DriverPaidAmount { get; set; }
         public bool RequiresRescue { get; set; }
-    }
 
-    /// <summary>
-    /// Multipart request used by the mobile application when the driver wants
-    /// to report an incident together with optional photos or receipts.
-    /// </summary>
-    public class CreateIncidentWithEvidenceRequest : CreateIncidentRequest
-    {
-        public List<IFormFile> EvidenceFiles { get; set; } = new();
+        /// <summary>Optional incident photos or receipts (0..5 files).</summary>
+        public List<IFormFile>? EvidenceFiles { get; set; }
     }
 }

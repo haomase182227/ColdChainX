@@ -312,7 +312,7 @@ public class DeliveryController : ControllerBase
     /// Handle driver COD handover at the end of trip.
     /// </summary>
     [HttpPost("/api/trips/{tripId:guid}/cod-handovers")]
-    [Authorize(Roles = "Admin,Dispatcher")]
+    [Authorize(Roles = "Admin,Manager, WarehouseWorker, Dispatcher")]
     [ProducesResponseType(typeof(ApiResponse<CodHandoverResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
@@ -358,7 +358,7 @@ public class DeliveryController : ControllerBase
     /// Upload an image to Cloudinary.
     /// </summary>
     [HttpPost("/api/deliveries/upload-image")]
-    [Authorize(Roles = "Driver,Admin,Dispatcher")]
+    [Authorize(Roles = "Driver,Admin,Manager")]
     [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]

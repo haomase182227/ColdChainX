@@ -1,4 +1,6 @@
+using ColdChainX.API.Authorization;
 using ColdChainX.Application.Features.Inventory.Queries;
+using ColdChainX.Shared.Constants;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
@@ -16,6 +18,7 @@ public class InventoryController : ControllerBase
     }
 
     [HttpGet("aging")]
+    [HasPermission(PermissionCodes.WarehouseTaskView)]
     public async Task<IActionResult> GetInventoryAging()
     {
         var result = await _mediator.Send(new GetInventoryAgingQuery());
@@ -23,6 +26,7 @@ public class InventoryController : ControllerBase
     }
 
     [HttpGet("lpns")]
+    [HasPermission(PermissionCodes.WarehouseTaskView)]
     public async Task<IActionResult> GetLpns([FromQuery] ColdChainX.Core.Enums.LpnState? status, [FromQuery] string? keyword, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
     {
         var query = new ColdChainX.Application.Features.Inventory.Queries.GetLpnListQuery 
@@ -37,6 +41,7 @@ public class InventoryController : ControllerBase
     }
 
     [HttpGet("lpns/{id}")]
+    [HasPermission(PermissionCodes.WarehouseTaskView)]
     public async Task<IActionResult> GetLpn(Guid id)
     {
         var result = await _mediator.Send(new ColdChainX.Application.Features.Inventory.Queries.GetLpnDetailQuery(id));
@@ -45,6 +50,7 @@ public class InventoryController : ControllerBase
     }
 
     [HttpGet("lpns/{id}/documents")]
+    [HasPermission(PermissionCodes.WarehouseTaskView)]
     public async Task<IActionResult> GetLpnDocuments(Guid id)
     {
         var result = await _mediator.Send(new ColdChainX.Application.Features.Inventory.Queries.GetLpnDocumentsQuery(id));
@@ -53,6 +59,7 @@ public class InventoryController : ControllerBase
     }
 
     [HttpPut("lpns/{id}")]
+    [HasPermission(PermissionCodes.WarehouseInventoryAdjust)]
     public async Task<IActionResult> UpdateLpn(Guid id, [FromBody] ColdChainX.Application.Features.Inventory.Commands.UpdateLpnCommand command)
     {
         if (id != command.LpnId) return BadRequest();
@@ -75,6 +82,7 @@ public class InventoryController : ControllerBase
     /// </remarks>
     /// <param name="id">LpnId can xoa mem</param>
     [HttpDelete("lpns/{id}")]
+    [HasPermission(PermissionCodes.WarehouseInventoryAdjust)]
     [ProducesResponseType(typeof(ColdChainX.Application.Features.Inventory.Commands.DeleteLpnResponse), 200)]
     [ProducesResponseType(typeof(ColdChainX.Application.Features.Inventory.Commands.DeleteLpnResponse), 400)]
     public async Task<IActionResult> DeleteLpn(Guid id)

@@ -32,6 +32,7 @@ public class DispatchService : IDispatchService
     private readonly IMqttCommandPublisher _mqttPublisher;
     private readonly ILogger<DispatchService> _logger;
     private readonly ICargoCompatibilityService _cargoCompatibilityService;
+    private readonly INotificationService? _notificationService;
 
     // Tên role điều phối viên
     private const string CoordinatorRoleName = "Dispatcher";
@@ -41,6 +42,19 @@ public class DispatchService : IDispatchService
 
     // Chỉ sử dụng tối đa 80% thể tích thùng xe để bảo đảm lưu thông khí lạnh.
     private const decimal MaxColdAirflowVolumeUtilization = 0.80m;
+
+    private static readonly string[] BusyTripStatuses =
+    {
+        "PLANNED",
+        "PICKING",
+        "LOADING",
+        "LOADED",
+        "LOADING_COMPLETED",
+        "SEALED",
+        "DISPATCHED",
+        "IN_TRANSIT",
+        "DELAYED"
+    };
 
     public DispatchService(
         ApplicationDbContext context,
@@ -52,7 +66,8 @@ public class DispatchService : IDispatchService
         IDriverAvailabilityService driverAvailability,
         IMqttCommandPublisher mqttPublisher,
         ILogger<DispatchService> logger,
-        ICargoCompatibilityService? cargoCompatibilityService = null)
+        ICargoCompatibilityService? cargoCompatibilityService = null,
+        INotificationService? notificationService = null)
     {
         _context = context;
         _geminiClient = geminiClient;
@@ -64,6 +79,7 @@ public class DispatchService : IDispatchService
         _mqttPublisher = mqttPublisher;
         _logger = logger;
         _cargoCompatibilityService = cargoCompatibilityService ?? new CargoCompatibilityService();
+        _notificationService = notificationService;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -972,9 +988,8 @@ public class DispatchService : IDispatchService
             // Chặn double-book: tài xế đang gắn với một chuyến khác còn hoạt động
             var driverBusy = await _context.TripDrivers
                 .AnyAsync(td => td.DriverId == driver.DriverId
-                    && (td.Trip.Status == "PLANNED" || td.Trip.Status == "PICKING"
-                     || td.Trip.Status == "LOADING" || td.Trip.Status == "LOADING_COMPLETED"
-                     || td.Trip.Status == "SEALED" || td.Trip.Status == "DISPATCHED"));
+                    && td.Trip.Status != null
+                    && BusyTripStatuses.Contains(td.Trip.Status));
             if (driverBusy)
                 throw new InvalidOperationException($"Tài xế {driver.FullName} hiện đang bận một chuyến khác.");
         }
@@ -985,12 +1000,8 @@ public class DispatchService : IDispatchService
         // Kiểm tra xe bận — bao gồm PLANNED để tránh double-book
         var isBusy = await _context.MasterTrips
             .AnyAsync(t => t.VehicleId == request.VehicleId
-                        && (t.Status == "PLANNED"
-                         || t.Status == "PICKING"
-                         || t.Status == "LOADING"
-                         || t.Status == "LOADING_COMPLETED"
-                         || t.Status == "SEALED"
-                         || t.Status == "DISPATCHED"));
+                        && t.Status != null
+                        && BusyTripStatuses.Contains(t.Status));
 
         if (isBusy)
             throw new InvalidOperationException($"Xe {vehicle.TruckPlate} hiện đang bận một chuyến khác.");
@@ -1332,7 +1343,7 @@ public class DispatchService : IDispatchService
 
         try
         {
-            await _hubContext.Clients.Groups("Group_Loader", "Group_WarehouseMonitor")
+            await _hubContext.Clients.Group("Group_WarehouseWorker")
                 .SendAsync("PickingStarted", new
                 {
                     TripId = tripId,
@@ -1358,6 +1369,7 @@ public class DispatchService : IDispatchService
             .Include(t => t.Vehicle)
             .Include(t => t.TripDrivers)
                 .ThenInclude(td => td.Driver)
+                    .ThenInclude(d => d.DriverLicenses)
             .Include(t => t.TransportOrders)
             .Include(t => t.Seals)
             .Include(t => t.TripStops)
@@ -1448,20 +1460,22 @@ public class DispatchService : IDispatchService
         foreach (var stop in trip.TripStops.Where(s => s.Status != "CANCELLED"))
             stop.Status = "CANCELLED";
 
-        // 7. Reset xe → ACTIVE và tài xế → ACTIVE (free); giải phóng giờ lái đã ghi nhận cho chuyến
+        // 7. Giải phóng xe, tài xế và giờ lái đã ghi nhận cho chuyến
         if (trip.Vehicle != null)
             trip.Vehicle.Status = "ACTIVE";
-        foreach (var td in trip.TripDrivers)
-        {
-            if (td.Driver != null)
-                td.Driver.Status = "ACTIVE";
-        }
+
         // Xóa các bản ghi giờ lái của chuyến này để trả lại quota cho tài xế
         var workLogs = await _context.DriverWorkLogs
             .Where(w => w.TripId == tripId)
             .ToListAsync();
         if (workLogs.Count > 0)
             _context.DriverWorkLogs.RemoveRange(workLogs);
+
+        foreach (var td in trip.TripDrivers)
+        {
+            if (td.Driver != null)
+                await ReleaseDriverAsync(td.Driver, tripId);
+        }
 
         // 8. Đánh dấu chuyến CANCELLED
         trip.Status = "CANCELLED";
@@ -1470,7 +1484,7 @@ public class DispatchService : IDispatchService
 
         try
         {
-            await _hubContext.Clients.Groups("Group_Loader", "Group_WarehouseMonitor", "Group_Admin")
+            await _hubContext.Clients.Groups("Group_WarehouseWorker", "Group_Admin")
                 .SendAsync("TripCancelled", new
                 {
                     TripId = tripId,
@@ -1576,8 +1590,17 @@ public class DispatchService : IDispatchService
         else
         {
             // Tất cả đều online -> bật streaming thành công rồi mới cho chuyến chạy.
-            var trip = await _context.MasterTrips.FindAsync(tripId)
+            var trip = await _context.MasterTrips
+                .Include(t => t.TripDrivers)
+                    .ThenInclude(td => td.Driver)
+                        .ThenInclude(d => d.DriverLicenses)
+                .FirstOrDefaultAsync(t => t.TripId == tripId)
                 ?? throw new KeyNotFoundException("Không tìm thấy chuyến đi.");
+
+            if (trip.VehicleId != vehicleId)
+                throw new InvalidOperationException("Xe được kiểm tra không thuộc chuyến đi này.");
+
+            EnsureDriversCanDepart(trip);
 
             foreach (var device in devices)
             {
@@ -1595,6 +1618,13 @@ public class DispatchService : IDispatchService
             if (trip.Status != "IN_TRANSIT" && trip.Status != "COMPLETED")
             {
                 trip.Status = "IN_TRANSIT";
+                trip.StartedAt ??= DateTime.UtcNow;
+                vehicle.Status = "ONTRIP";
+                foreach (var td in trip.TripDrivers)
+                {
+                    if (td.Driver != null)
+                        td.Driver.Status = "ONTRIP";
+                }
                 await _context.SaveChangesAsync();
             }
         }
@@ -1621,6 +1651,9 @@ public class DispatchService : IDispatchService
             .Include(t => t.TripDrivers)
                 .ThenInclude(td => td.Driver)
                     .ThenInclude(d => d.User)
+            .Include(t => t.TripDrivers)
+                .ThenInclude(td => td.Driver)
+                    .ThenInclude(d => d.DriverLicenses)
             .Include(t => t.TransportOrders)
             .Include(t => t.Seals)
             .Include(t => t.OriginLocation)
@@ -1637,6 +1670,8 @@ public class DispatchService : IDispatchService
         // Kiểm tra đã kẹp chì chưa
         if (trip.Seals.Any(s => s.Status == "APPLIED") || !string.IsNullOrEmpty(trip.SealNumber))
             throw new InvalidOperationException("Chuyến hàng đã được kẹp chì trước đó.");
+
+        EnsureDriversCanDepart(trip);
 
         // Lấy tất cả LPN của chuyến này kèm thông tin để tạo OutboundOrder
         var lpns = await _context.Lpns
@@ -2270,11 +2305,11 @@ public class DispatchService : IDispatchService
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    //  Loader Notifications — Gửi thông báo cho Loader khi LIFO sẵn sàng
+    //  Warehouse worker notifications — Gửi thông báo khi LIFO sẵn sàng
     // ═══════════════════════════════════════════════════════════════════════
 
-    private const string LoaderRoleName = "Loader";
-    private const string LoaderNotificationTemplateId = "DISPATCH_LOADER_READY";
+    private const string WarehouseWorkerRoleName = "WarehouseWorker";
+    private const string WarehouseWorkerNotificationTemplateId = "DISPATCH_WAREHOUSE_WORKER_READY";
 
     public async Task NotifyLoadersAsync(Guid tripId)
     {
@@ -2284,11 +2319,11 @@ public class DispatchService : IDispatchService
             .FirstOrDefaultAsync(t => t.TripId == tripId)
             ?? throw new KeyNotFoundException("Không tìm thấy chuyến đi.");
 
-        // Tìm tất cả users có role Loader
+        // Tìm tất cả users có role WarehouseWorker
         var loaderUserIds = await _context.Users
             .Include(u => u.Role)
             .Where(u => u.Role != null
-                     && u.Role.RoleName == LoaderRoleName
+                     && u.Role.RoleName == WarehouseWorkerRoleName
                      && (u.Status == null || u.Status == "ACTIVE"))
             .Select(u => u.UserId)
             .ToListAsync();
@@ -2297,7 +2332,7 @@ public class DispatchService : IDispatchService
 
         // Tạo template nếu chưa có
         var templateExists = await _context.NotificationTemplates
-            .AnyAsync(t => t.TemplateId == LoaderNotificationTemplateId);
+            .AnyAsync(t => t.TemplateId == WarehouseWorkerNotificationTemplateId);
 
         if (!templateExists)
         {
@@ -2307,7 +2342,7 @@ public class DispatchService : IDispatchService
             {
                 _context.NotificationTemplates.Add(new NotificationTemplate
                 {
-                    TemplateId = LoaderNotificationTemplateId,
+                    TemplateId = WarehouseWorkerNotificationTemplateId,
                     TypeId = msgType.TypeId,
                     TitleTemplate = "Sơ đồ LIFO sẵn sàng — Xe {vehicle}",
                     BodyTemplate = "Chuyến hàng {tripId} đã có sơ đồ xếp hàng LIFO. " +
@@ -2322,9 +2357,9 @@ public class DispatchService : IDispatchService
 
         // Kiểm tra template tồn tại
         var actualTemplateId = await _context.NotificationTemplates
-            .AnyAsync(t => t.TemplateId == LoaderNotificationTemplateId
+            .AnyAsync(t => t.TemplateId == WarehouseWorkerNotificationTemplateId
                         && (t.Status == null || t.Status == "ACTIVE"))
-            ? LoaderNotificationTemplateId
+            ? WarehouseWorkerNotificationTemplateId
             : await GetFallbackTemplateIdAsync();
 
         if (actualTemplateId == null) return;
@@ -2357,7 +2392,7 @@ public class DispatchService : IDispatchService
 
         try
         {
-            await _hubContext.Clients.Groups("Group_Loader", "Group_Admin")
+            await _hubContext.Clients.Groups("Group_WarehouseWorker", "Group_Admin")
                 .SendAsync("WarehouseOrderApproved", new
                 {
                     TripId = tripId,
@@ -2373,10 +2408,106 @@ public class DispatchService : IDispatchService
         }
     }
 
+    private static bool HasValidDriverLicense(Driver driver)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        return driver.DriverLicenses.Any(l =>
+            l.ExpiryDate >= today
+            && (string.IsNullOrWhiteSpace(l.Status)
+                || l.Status.Equals("ACTIVE", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static void EnsureDriversCanDepart(MasterTrip trip)
+    {
+        var assignedDrivers = trip.TripDrivers
+            .Select(td => td.Driver)
+            .Where(driver => driver != null)
+            .Cast<Driver>()
+            .ToList();
+
+        if (assignedDrivers.Count == 0)
+            throw new InvalidOperationException("Chuyến đi chưa được gán tài xế.");
+
+        foreach (var driver in assignedDrivers)
+        {
+            var status = driver.Status?.Trim().ToUpperInvariant();
+            if (status is "INACTIVE" or "RELAX" or "SUSPENDED_DOCS" or "DELETED")
+            {
+                throw new InvalidOperationException(
+                    $"Tài xế {driver.FullName} không thể xuất phát — trạng thái hiện tại: '{driver.Status}'.");
+            }
+
+            if (!HasValidDriverLicense(driver))
+            {
+                throw new InvalidOperationException(
+                    $"Tài xế {driver.FullName} không thể xuất phát vì GPLX đang thiếu hoặc đã hết hạn.");
+            }
+        }
+    }
+
+    private async Task ReleaseDriverAsync(Driver driver, Guid? excludedTripId = null)
+    {
+        if (!HasValidDriverLicense(driver))
+        {
+            driver.Status = "SUSPENDED_DOCS";
+            return;
+        }
+
+        driver.Status = "ACTIVE";
+        await _driverAvailability.ReconcileStatusAsync(driver, excludedTripId);
+    }
+
     private const string DriverTripAssignedTemplateId = "DISPATCH_DRIVER_ASSIGNED";
 
     private async Task<int> SendDriverNotificationsAsync(MasterTrip trip, Vehicle vehicle, List<Driver> drivers)
     {
+        if (_notificationService != null)
+        {
+            try
+            {
+                var recipientIds = drivers
+                    .Where(driver => driver.UserId.HasValue)
+                    .Select(driver => driver.UserId!.Value)
+                    .Distinct()
+                    .ToList();
+
+                if (recipientIds.Count == 0)
+                    return 0;
+
+                var result = await _notificationService.SendToUsersAsync(
+                    recipientIds,
+                    "Bạn có chuyến mới",
+                    "Bạn vừa được phân công một chuyến vận chuyển mới.",
+                    "TRIP_ASSIGNED",
+                    trip.TripId.ToString(),
+                    new Dictionary<string, string>
+                    {
+                        ["tripId"] = trip.TripId.ToString(),
+                        ["vehiclePlate"] = vehicle.TruckPlate,
+                        ["screen"] = "trip-detail"
+                    });
+
+                if (result.FailedSends > 0)
+                {
+                    _logger.LogWarning(
+                        "FCM trip assignment notification was only partially delivered. TripId: {TripId}, Successful: {Successful}, Failed: {Failed}.",
+                        trip.TripId,
+                        result.SuccessfulSends,
+                        result.FailedSends);
+                }
+
+                return result.NotificationIds.Count;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "FCM trip assignment notification failed after the trip assignment was saved. TripId: {TripId}.",
+                    trip.TripId);
+                return 0;
+            }
+        }
+
         var templateExists = await _context.NotificationTemplates
             .AnyAsync(t => t.TemplateId == DriverTripAssignedTemplateId
                         && (t.Status == null || t.Status == "ACTIVE"));
@@ -2437,4 +2568,3 @@ public class DispatchService : IDispatchService
         return notifiedCount;
     }
 }
-

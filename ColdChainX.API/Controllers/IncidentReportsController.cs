@@ -32,45 +32,22 @@ namespace ColdChainX.API.Controllers
         }
 
         /// <summary>
-        /// Log/Report a new operational or transport incident.
+        /// Reports an operational or transport incident with optional photos,
+        /// receipts and driver-paid amount.
         /// </summary>
         [HttpPost]
-        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Driver,DRIVER,WarehouseOperator")]
+        [Consumes("multipart/form-data")]
+        [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,Driver,DRIVER")]
         [ProducesResponseType(typeof(ApiResponse<IncidentResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
-        public async Task<IActionResult> ReportIncident([FromBody] CreateIncidentRequest request)
+        public async Task<IActionResult> ReportIncident([FromForm] CreateIncidentRequest request)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (!Guid.TryParse(userIdClaim, out var userId))
                 return Unauthorized(ApiResponse<object>.Failure("User ID claim is missing or invalid in the token."));
 
             var result = await _incidentService.ReportIncidentAsync(request, userId);
-            if (!result.Success)
-                return BadRequest(result);
-
-            return Ok(result);
-        }
-
-        /// <summary>
-        /// Mobile-friendly incident report endpoint with optional photos/receipts.
-        /// </summary>
-        [HttpPost("with-evidence")]
-        [Consumes("multipart/form-data")]
-        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Driver,DRIVER,WarehouseOperator")]
-        [ProducesResponseType(typeof(ApiResponse<IncidentResponse>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
-        public async Task<IActionResult> ReportIncidentWithEvidence(
-            [FromForm] CreateIncidentWithEvidenceRequest request)
-        {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (!Guid.TryParse(userIdClaim, out var userId))
-                return Unauthorized(ApiResponse<object>.Failure("User ID claim is missing or invalid in the token."));
-
-            var result = await _incidentService.ReportIncidentAsync(
-                request,
-                userId,
-                request.EvidenceFiles);
             if (!result.Success)
                 return StatusCode(result.StatusCode, result);
 
@@ -80,7 +57,7 @@ namespace ColdChainX.API.Controllers
         /// <summary>Add optional incident photos or driver receipts after reporting.</summary>
         [HttpPost("{id:guid}/evidences")]
         [Consumes("multipart/form-data")]
-        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Driver,DRIVER")]
+        [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,Driver,DRIVER")]
         [ProducesResponseType(typeof(ApiResponse<IncidentResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> AddEvidence(
             [FromRoute] Guid id,
@@ -105,7 +82,7 @@ namespace ColdChainX.API.Controllers
         /// Resolve a reported incident (mark as RESOLVED).
         /// </summary>
         [HttpPost("{id:guid}/resolve")]
-        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER")]
+        [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER")]
         [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
@@ -156,7 +133,7 @@ namespace ColdChainX.API.Controllers
         /// Dùng để Điều phối viên chọn ReplacementVehicleId cho POST /dispatch-rescue.
         /// </remarks>
         [HttpGet("{id:guid}/rescue-candidates")]
-        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Dispatcher,DISPATCHER")]
+        [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,Dispatcher,DISPATCHER")]
         [ProducesResponseType(typeof(ApiResponse<List<RescueCandidateResponse>>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
@@ -183,7 +160,7 @@ namespace ColdChainX.API.Controllers
         ///   - Incident.Status → RESCUE_DISPATCHED (đóng hẳn bằng POST /{id}/resolve sau khi hoàn tất)
         /// </remarks>
         [HttpPost("{id:guid}/dispatch-rescue")]
-        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Dispatcher,DISPATCHER")]
+        [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,Dispatcher,DISPATCHER")]
         [ProducesResponseType(typeof(ApiResponse<IncidentRescueResult>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
@@ -207,7 +184,7 @@ namespace ColdChainX.API.Controllers
         /// published successfully before the trip returns to IN_TRANSIT.
         /// </summary>
         [HttpPost("{id:guid}/confirm-transload")]
-        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Dispatcher,DISPATCHER,WarehouseOperator,Loader,LOADER")]
+        [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,Dispatcher,DISPATCHER")]
         [ProducesResponseType(typeof(ApiResponse<IncidentWorkflowResult>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ConfirmTransload(
             [FromRoute] Guid id,

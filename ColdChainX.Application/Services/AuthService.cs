@@ -35,9 +35,9 @@ namespace ColdChainX.Application.Services
             if (!string.Equals(request.Role, "Admin", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(request.Role, "Dispatcher", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(request.Role, "Sales", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(request.Role, "Loader", StringComparison.OrdinalIgnoreCase))
+                !string.Equals(request.Role, "WarehouseWorker", StringComparison.OrdinalIgnoreCase))
             {
-                return ApiResponse<AuthResponseDto>.Failure("Only Admin, Dispatcher, Sales, or Loader roles can be created through this endpoint");
+                return ApiResponse<AuthResponseDto>.Failure("Only Admin, Dispatcher, Sales, or WarehouseWorker roles can be created through this endpoint");
             }
 
             var email = request.Email.Trim().ToLowerInvariant();
@@ -102,6 +102,9 @@ namespace ColdChainX.Application.Services
 
             if (IsInactive(user))
                 return ApiResponse<AuthResponseDto>.Failure("Account has been deactivated");
+
+            if (string.IsNullOrWhiteSpace(user.PasswordHash))
+                return ApiResponse<AuthResponseDto>.Failure("Invalid credentials");
 
             var verify = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.Password);
             if (verify == PasswordVerificationResult.Failed)
@@ -171,6 +174,46 @@ namespace ColdChainX.Application.Services
             await _userRepository.SaveChangesAsync();
 
             return ApiResponse<bool>.SuccessResponse(true, "Logout successful");
+        }
+
+        public async Task<ApiResponse<bool>> ChangePasswordAsync(Guid userId, ChangePasswordRequest request)
+        {
+            var user = await _userRepository.GetByIdAsync(userId);
+            if (user == null)
+                return ApiResponse<bool>.Failure("User not found");
+
+            if (IsInactive(user))
+                return ApiResponse<bool>.Failure("Account has been deactivated");
+
+            if (string.IsNullOrWhiteSpace(user.PasswordHash))
+                return ApiResponse<bool>.Failure("Password login is not configured for this account");
+
+            var currentPasswordVerification = _passwordHasher.VerifyHashedPassword(
+                user,
+                user.PasswordHash,
+                request.CurrentPassword);
+
+            if (currentPasswordVerification == PasswordVerificationResult.Failed)
+                return ApiResponse<bool>.Failure("Current password is incorrect");
+
+            var newPasswordVerification = _passwordHasher.VerifyHashedPassword(
+                user,
+                user.PasswordHash,
+                request.NewPassword);
+
+            if (newPasswordVerification != PasswordVerificationResult.Failed)
+                return ApiResponse<bool>.Failure("New password must be different from current password");
+
+            user.PasswordHash = _passwordHasher.HashPassword(user, request.NewPassword);
+            user.RefreshToken = null;
+            user.RefreshTokenExpiryTime = null;
+            user.UpdatedAt = DbNow();
+            user.UpdatedBy = userId;
+
+            await _userRepository.UpdateAsync(user);
+            await _userRepository.SaveChangesAsync();
+
+            return ApiResponse<bool>.SuccessResponse(true, "Password changed successfully");
         }
 
         public async Task<ApiResponse<UserProfileDto>> UpdateUserAsync(Guid userId, UpdateUserRequest request)
@@ -410,9 +453,9 @@ namespace ColdChainX.Application.Services
             if (existingUsername != null)
                 return ApiResponse<AuthResponseDto>.Failure("Username already in use");
 
-            var role = await _userRepository.GetRoleByNameAsync("WarehouseOperator");
+            var role = await _userRepository.GetRoleByNameAsync("WarehouseWorker");
             if (role == null)
-                return ApiResponse<AuthResponseDto>.Failure("WarehouseOperator role not found in the system");
+                return ApiResponse<AuthResponseDto>.Failure("WarehouseWorker role not found in the system");
 
             var user = new User
             {
@@ -445,7 +488,7 @@ namespace ColdChainX.Application.Services
             dto.RefreshToken = refreshToken;
             dto.AccessTokenExpiresAt = accessExpiresAt;
 
-            return ApiResponse<AuthResponseDto>.SuccessResponse(dto, "WarehouseOperator account created successfully");
+            return ApiResponse<AuthResponseDto>.SuccessResponse(dto, "WarehouseWorker account created successfully");
         }
 
         public async Task<ApiResponse<DriverDto>> UpdateDriverAsync(Guid driverId, UpdateDriverInfoRequest request)

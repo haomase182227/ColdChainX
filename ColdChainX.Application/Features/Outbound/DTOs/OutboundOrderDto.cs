@@ -48,6 +48,11 @@ public class AvailableTripDto
 {
     public Guid TripId { get; set; }
     public string? Status { get; set; }
+    public string? Vehicle { get; set; }
+    public string? Driver { get; set; }
+    public DateTime? PlannedStartTime { get; set; }
+    public DateTime? PlannedEndTime { get; set; }
+    public decimal? EstimatedDurationHours { get; set; }
     public int TotalLpns { get; set; }
     public int LoadingCompletedLpns { get; set; }
     /// <summary>True khi tat ca LPN da LOADING_COMPLETED — co the goi load-trip.</summary>

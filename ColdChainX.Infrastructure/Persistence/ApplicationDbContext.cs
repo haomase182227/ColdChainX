@@ -30,6 +30,8 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
 
     public virtual DbSet<DeliveryEpod> DeliveryEpods { get; set; }
 
+    public virtual DbSet<DeviceToken> DeviceTokens { get; set; }
+
     public virtual DbSet<Driver> Drivers { get; set; }
 
     public virtual DbSet<DriverLicense> DriverLicenses { get; set; }
@@ -73,6 +75,10 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
     public virtual DbSet<NotificationTemplate> NotificationTemplates { get; set; }
 
     public virtual DbSet<Permission> Permissions { get; set; }
+
+    public virtual DbSet<UserPermission> UserPermissions { get; set; }
+
+    public virtual DbSet<WorkAssignment> WorkAssignments { get; set; }
 
     public virtual DbSet<PricingMatrix> PricingMatrices { get; set; }
 
@@ -510,7 +516,7 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasMaxLength(255)
                 .HasColumnName("signed_file_url");
             entity.Property(e => e.Status)
-                .HasMaxLength(20)
+                .HasMaxLength(30)
                 .HasDefaultValueSql("'ACTIVE'::character varying")
                 .HasColumnName("status");
             entity.Property(e => e.UploadedSignedAt)
@@ -1263,6 +1269,54 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasConstraintName("fk_driver_work_logs_trip");
         });
 
+        modelBuilder.Entity<DeviceToken>(entity =>
+        {
+            entity.HasKey(e => e.DeviceTokenId).HasName("device_tokens_pkey");
+
+            entity.ToTable("device_tokens");
+
+            entity.HasIndex(e => e.Token, "device_tokens_token_key").IsUnique();
+            entity.HasIndex(e => new { e.UserId, e.IsActive }, "ix_device_tokens_user_active");
+            entity.HasIndex(e => new { e.UserId, e.DeviceId }, "ix_device_tokens_user_device");
+
+            entity.Property(e => e.DeviceTokenId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("device_token_id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.Token)
+                .HasMaxLength(4096)
+                .HasColumnName("token");
+            entity.Property(e => e.Platform)
+                .HasMaxLength(20)
+                .HasColumnName("platform");
+            entity.Property(e => e.DeviceId)
+                .HasMaxLength(255)
+                .HasColumnName("device_id");
+            entity.Property(e => e.DeviceName)
+                .HasMaxLength(200)
+                .HasColumnName("device_name");
+            entity.Property(e => e.AppVersion)
+                .HasMaxLength(50)
+                .HasColumnName("app_version");
+            entity.Property(e => e.IsActive)
+                .HasDefaultValue(true)
+                .HasColumnName("is_active");
+            entity.Property(e => e.CreatedAt)
+                .HasColumnType("timestamp with time zone")
+                .HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt)
+                .HasColumnType("timestamp with time zone")
+                .HasColumnName("updated_at");
+            entity.Property(e => e.LastUsedAt)
+                .HasColumnType("timestamp with time zone")
+                .HasColumnName("last_used_at");
+
+            entity.HasOne(d => d.User).WithMany(p => p.DeviceTokens)
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_device_tokens_users");
+        });
+
         modelBuilder.Entity<Messagetype>(entity =>
         {
             entity.HasKey(e => e.TypeId).HasName("messagetype_pkey");
@@ -1286,13 +1340,30 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
 
             entity.ToTable("notifications");
 
+            entity.HasIndex(e => new { e.UserId, e.CreatedAt }, "ix_notifications_user_created_at");
+            entity.HasIndex(e => new { e.UserId, e.IsRead, e.CreatedAt }, "ix_notifications_user_read_created_at");
+            entity.HasIndex(e => new { e.UserId, e.Type }, "ix_notifications_user_type");
+
             entity.Property(e => e.NotiId)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("noti_id");
+            entity.Property(e => e.Body)
+                .HasMaxLength(1000)
+                .HasColumnName("body");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
+            entity.Property(e => e.DataJson)
+                .HasColumnType("jsonb")
+                .HasColumnName("data_json");
+            entity.Property(e => e.DeliveryStatus)
+                .HasMaxLength(20)
+                .HasDefaultValue("PENDING")
+                .HasColumnName("delivery_status");
+            entity.Property(e => e.FailureReason)
+                .HasMaxLength(1000)
+                .HasColumnName("failure_reason");
             entity.Property(e => e.IsRead)
                 .HasDefaultValue(false)
                 .HasColumnName("is_read");
@@ -1300,10 +1371,25 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.Params)
                 .HasColumnType("json")
                 .HasColumnName("params");
+            entity.Property(e => e.ReadAt)
+                .HasColumnType("timestamp with time zone")
+                .HasColumnName("read_at");
+            entity.Property(e => e.ReferenceId)
+                .HasMaxLength(100)
+                .HasColumnName("reference_id");
             entity.Property(e => e.SenderId).HasColumnName("sender_id");
+            entity.Property(e => e.SentAt)
+                .HasColumnType("timestamp with time zone")
+                .HasColumnName("sent_at");
             entity.Property(e => e.TemplateId)
                 .HasMaxLength(50)
                 .HasColumnName("template_id");
+            entity.Property(e => e.Title)
+                .HasMaxLength(200)
+                .HasColumnName("title");
+            entity.Property(e => e.Type)
+                .HasMaxLength(50)
+                .HasColumnName("type");
             entity.Property(e => e.UserId).HasColumnName("user_id");
 
             entity.HasOne(d => d.Order).WithMany(p => p.Notifications)
@@ -1316,7 +1402,7 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
 
             entity.HasOne(d => d.Template).WithMany(p => p.Notifications)
                 .HasForeignKey(d => d.TemplateId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
+                .OnDelete(DeleteBehavior.SetNull)
                 .HasConstraintName("fk_noti_template");
 
             entity.HasOne(d => d.User).WithMany(p => p.NotificationUsers)
@@ -1368,8 +1454,20 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasMaxLength(50)
                 .HasColumnName("module");
             entity.Property(e => e.PermCode)
-                .HasMaxLength(50)
+                .HasMaxLength(100)
                 .HasColumnName("perm_code");
+            entity.Property(e => e.DisplayName)
+                .HasMaxLength(150)
+                .HasColumnName("display_name");
+            entity.Property(e => e.Description)
+                .HasMaxLength(500)
+                .HasColumnName("description");
+            entity.Property(e => e.IsActive)
+                .HasDefaultValue(true)
+                .HasColumnName("is_active");
+            entity.Property(e => e.SortOrder)
+                .HasDefaultValue(0)
+                .HasColumnName("sort_order");
         });
 
         modelBuilder.Entity<PricingMatrix>(entity =>
@@ -1828,14 +1926,142 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasConstraintName("fk_ts_mtrip");
         });
 
+        modelBuilder.Entity<UserPermission>(entity =>
+        {
+            entity.HasKey(e => e.UserPermissionId).HasName("user_permissions_pkey");
+
+            entity.ToTable("user_permissions");
+
+            entity.HasIndex(e => new { e.UserId, e.PermId }, "user_permissions_user_perm_key").IsUnique();
+            entity.HasIndex(e => e.ValidTo, "ix_user_permissions_valid_to");
+
+            entity.Property(e => e.UserPermissionId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("user_permission_id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.PermId).HasColumnName("perm_id");
+            entity.Property(e => e.Effect)
+                .HasMaxLength(10)
+                .HasColumnName("effect");
+            entity.Property(e => e.ValidFrom)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("valid_from");
+            entity.Property(e => e.ValidTo)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("valid_to");
+            entity.Property(e => e.Reason)
+                .HasMaxLength(500)
+                .HasColumnName("reason");
+            entity.Property(e => e.GrantedBy).HasColumnName("granted_by");
+            entity.Property(e => e.GrantedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("granted_at");
+            entity.Property(e => e.RevokedBy).HasColumnName("revoked_by");
+            entity.Property(e => e.RevokedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("revoked_at");
+
+            entity.HasOne(e => e.User).WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_user_permissions_users");
+
+            entity.HasOne(e => e.Permission).WithMany(p => p.UserPermissions)
+                .HasForeignKey(e => e.PermId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_user_permissions_permissions");
+        });
+
+        modelBuilder.Entity<WorkAssignment>(entity =>
+        {
+            entity.HasKey(e => e.AssignmentId).HasName("work_assignments_pkey");
+
+            entity.ToTable("work_assignments");
+
+            entity.HasIndex(e => new { e.AssignedToUserId, e.Status }, "ix_work_assignments_assignee_status");
+            entity.HasIndex(e => new { e.WarehouseId, e.Status }, "ix_work_assignments_warehouse_status");
+            entity.HasIndex(e => new { e.ReferenceType, e.ReferenceId }, "ix_work_assignments_reference");
+            entity.HasIndex(
+                    e => new { e.TaskType, e.ReferenceType, e.ReferenceId, e.AssignedToUserId },
+                    "ux_work_assignments_active_work")
+                .IsUnique()
+                .HasFilter("status IN ('ASSIGNED', 'IN_PROGRESS')");
+
+            entity.Property(e => e.AssignmentId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("assignment_id");
+            entity.Property(e => e.TaskType)
+                .HasMaxLength(100)
+                .HasColumnName("task_type");
+            entity.Property(e => e.ReferenceType)
+                .HasMaxLength(100)
+                .HasColumnName("reference_type");
+            entity.Property(e => e.ReferenceId)
+                .HasMaxLength(100)
+                .HasColumnName("reference_id");
+            entity.Property(e => e.RequiredPermissionCode)
+                .HasMaxLength(100)
+                .HasColumnName("required_permission_code");
+            entity.Property(e => e.WarehouseId).HasColumnName("warehouse_id");
+            entity.Property(e => e.AssignedToUserId).HasColumnName("assigned_to_user_id");
+            entity.Property(e => e.AssignedByUserId).HasColumnName("assigned_by_user_id");
+            entity.Property(e => e.Priority)
+                .HasMaxLength(20)
+                .HasDefaultValue("NORMAL")
+                .HasColumnName("priority");
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .HasColumnName("status");
+            entity.Property(e => e.Note)
+                .HasMaxLength(1000)
+                .HasColumnName("note");
+            entity.Property(e => e.AssignedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("assigned_at");
+            entity.Property(e => e.DueAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("due_at");
+            entity.Property(e => e.StartedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("started_at");
+            entity.Property(e => e.CompletedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("completed_at");
+            entity.Property(e => e.CancelledAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("cancelled_at");
+
+            entity.HasOne(e => e.AssignedToUser).WithMany()
+                .HasForeignKey(e => e.AssignedToUserId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_work_assignments_assigned_to_user");
+
+            entity.HasOne(e => e.Warehouse).WithMany()
+                .HasForeignKey(e => e.WarehouseId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_work_assignments_warehouse");
+        });
+
         modelBuilder.Entity<User>(entity =>
         {
             entity.HasKey(e => e.UserId).HasName("users_pkey");
 
             entity.ToTable("users");
 
+            entity.HasIndex(e => e.GoogleId, "users_google_id_key")
+                .IsUnique()
+                .HasFilter("google_id IS NOT NULL");
+
             entity.HasIndex(e => e.Username, "users_username_key").IsUnique();
 
+            entity.Property(e => e.AuthProvider)
+                .HasMaxLength(20)
+                .HasColumnName("auth_provider");
+            entity.Property(e => e.AvatarUrl)
+                .HasMaxLength(1024)
+                .HasColumnName("avatar_url");
             entity.Property(e => e.UserId)
                 .HasMaxLength(36)
                 .HasColumnName("user_id");
@@ -1850,6 +2076,9 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.FullName)
                 .HasMaxLength(100)
                 .HasColumnName("full_name");
+            entity.Property(e => e.GoogleId)
+                .HasMaxLength(255)
+                .HasColumnName("google_id");
             entity.Property(e => e.PasswordHash)
                 .HasMaxLength(255)
                 .HasColumnName("password_hash");

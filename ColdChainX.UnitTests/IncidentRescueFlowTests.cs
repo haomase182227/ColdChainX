@@ -179,6 +179,24 @@ public sealed class IncidentRescueFlowTests : IDisposable
     }
 
     [Fact]
+    public async Task ContinueTrip_WithoutHandlingNote_UsesDefaultNote()
+    {
+        await SeedNoRescueTripAsync();
+
+        var result = await _service.ContinueTripAsync(
+            _incidentId,
+            new ContinueTripAfterIncidentRequest(),
+            _driverUserId);
+
+        Assert.True(result.Success, result.Message);
+        var incident = await _db.IncidentReports.FindAsync(_incidentId);
+        Assert.Equal("CONTINUED", incident!.Status);
+        Assert.Equal(
+            "Tài xế xác nhận đã xử lý sự cố tại chỗ và tiếp tục hành trình.",
+            incident.HandlingNote);
+    }
+
+    [Fact]
     public async Task ContinueTrip_RejectsDriverNotAssignedToTrip()
     {
         await SeedNoRescueTripAsync();

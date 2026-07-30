@@ -38,6 +38,14 @@ namespace ColdChainX.Infrastructure.Repositories
                 .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == normalizedEmail);
         }
 
+        public async Task<User?> GetByGoogleIdAsync(string googleId)
+        {
+            return await _db.Users
+                .IgnoreQueryFilters()
+                .Include(u => u.Role)
+                .FirstOrDefaultAsync(u => u.GoogleId == googleId);
+        }
+
         public async Task<User?> GetByUsernameAsync(string username)
         {
             var normalizedUsername = username.ToLower();

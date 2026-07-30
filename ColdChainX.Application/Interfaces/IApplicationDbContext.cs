@@ -10,6 +10,9 @@ namespace ColdChainX.Application.Interfaces
     {
         DbSet<User> Users { get; }
         DbSet<Role> Roles { get; }
+        DbSet<Permission> Permissions { get; }
+        DbSet<UserPermission> UserPermissions { get; }
+        DbSet<WorkAssignment> WorkAssignments { get; }
         DbSet<Warehouse> Warehouses { get; }
         DbSet<WarehouseReceipt> WarehouseReceipts { get; }
         DbSet<WeightTier> WeightTiers { get; }
@@ -40,6 +43,7 @@ namespace ColdChainX.Application.Interfaces
         DbSet<LpnDeliveryConfirmation> LpnDeliveryConfirmations { get; }
         DbSet<TelemetryLog> TelemetryLogs { get; }
         DbSet<Seal> Seals { get; }
+        DbSet<DeviceToken> DeviceTokens { get; }
         DbSet<Notification> Notifications { get; }
         DbSet<NotificationTemplate> NotificationTemplates { get; }
         DbSet<Messagetype> Messagetypes { get; }

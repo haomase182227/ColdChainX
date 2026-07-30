@@ -34,7 +34,7 @@ namespace ColdChainX.API.Controllers
         /// Lodge/Create a new customer claim with evidence attachments.
         /// </summary>
         [HttpPost]
-        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Customer,CUSTOMER,WarehouseOperator")]
+        [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,Customer,CUSTOMER")]
         [ProducesResponseType(typeof(ApiResponse<ClaimResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
@@ -55,7 +55,7 @@ namespace ColdChainX.API.Controllers
         /// Resolve/Finalize a customer claim (mark as RESOLVED/REJECTED and set fault owner).
         /// </summary>
         [HttpPost("{id:guid}/resolve")]
-        [Authorize(Roles = "Admin,Dispatcher")]
+        [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,WarehouseWorker,WAREHOUSEWORKER, Dispatcher")]
         [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]

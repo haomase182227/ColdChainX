@@ -20,6 +20,7 @@ namespace ColdChainX.Infrastructure.Services
         private const string PendingSignature = "PENDING_SIGNATURE";
         private const string PendingCustomerSignature = "PENDING_CUSTOMER_SIGNATURE";
         private const string PendingSalesVerification = "PENDING_SALES_VERIFICATION";
+        private const string RequestResubmit = "REQUEST_RESUBMIT";
         private const string Active = "ACTIVE";
         private const string ContractSigned = "CONTRACT_SIGNED";
 
@@ -310,6 +311,77 @@ namespace ColdChainX.Infrastructure.Services
                     Status = contract.Status ?? string.Empty
                 },
                 "Signed contract uploaded");
+        }
+
+        public async Task<ApiResponse<ContractInfoResponse>> ReviewContractAsync(
+            Guid contractId,
+            ReviewContractRequest request,
+            Guid salesUserId)
+        {
+            var action = request.Action?.Trim().ToUpperInvariant();
+            if (!string.Equals(action, RequestResubmit, StringComparison.Ordinal))
+            {
+                return ApiResponse<ContractInfoResponse>.Failure(
+                    $"Action must be {RequestResubmit}");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.CustomerNote))
+            {
+                return ApiResponse<ContractInfoResponse>.Failure(
+                    $"CustomerNote is required when action is {RequestResubmit}");
+            }
+
+            var strategy = _db.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                var contract = await _db.CustomerContracts
+                    .Include(c => c.Order)
+                    .FirstOrDefaultAsync(c => c.ContractId == contractId);
+
+                if (contract?.Order == null)
+                    return ApiResponse<ContractInfoResponse>.Failure("Contract/order not found");
+
+                if (!string.Equals(contract.Status, PendingSalesVerification, StringComparison.OrdinalIgnoreCase))
+                {
+                    return ApiResponse<ContractInfoResponse>.Failure(
+                        "Contract is not pending sales verification");
+                }
+
+                await using var transaction = await _db.Database.BeginTransactionAsync();
+
+                contract.Status = PendingCustomerSignature;
+
+                var customerUserId = await ResolveCustomerUserIdAsync(contract.CustomerId);
+                await AddNotificationAsync(
+                    customerUserId,
+                    salesUserId,
+                    "NOTI_CONTRACT_RESUBMIT_REQUESTED",
+                    contract.Order.OrderId,
+                    new
+                    {
+                        Contract_Number = contract.ContractNumber,
+                        Tracking_Code = contract.Order.TrackingCode,
+                        Request_Reason = request.CustomerNote.Trim()
+                    });
+
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                await _hubContext.Clients.User(contract.CustomerId.ToString()!).SendAsync(
+                    "ContractResubmitRequested",
+                    new
+                    {
+                        contract.ContractId,
+                        contract.ContractNumber,
+                        contract.Order.OrderId,
+                        contract.Status,
+                        CustomerNote = request.CustomerNote.Trim()
+                    });
+
+                return ApiResponse<ContractInfoResponse>.SuccessResponse(
+                    ToContractInfoResponse(contract),
+                    "Contract resubmission requested");
+            });
         }
 
         public async Task<ApiResponse<ApproveContractResponse>> VerifyContractAsync(Guid contractId, Guid salesUserId)
@@ -708,6 +780,9 @@ namespace ColdChainX.Infrastructure.Services
                 "NOTI_CONTRACT_PENDING_SIGNATURE" => (
                     "Hợp đồng {{Contract_Number}} đang chờ ký",
                     "Hợp đồng {{Contract_Number}} đã được tạo. Vui lòng xem file và ký duyệt để hệ thống cấp mã tracking."),
+                "NOTI_CONTRACT_RESUBMIT_REQUESTED" => (
+                    "Hợp đồng {{Contract_Number}} cần được gửi lại",
+                    "Hợp đồng {{Contract_Number}} chưa hợp lệ. Lý do: {{Request_Reason}}. Vui lòng ký và gửi lại hợp đồng."),
                 "NOTI_CONTRACT_APPROVED_SALES" => (
                     "Khách hàng đã ký hợp đồng {{Contract_Number}}",
                     "Hợp đồng {{Contract_Number}} đã được ký. Mã tracking đã cấp: {{Tracking_Code}}."),
@@ -745,8 +820,5 @@ namespace ColdChainX.Infrastructure.Services
         private sealed record ContractData(TransportOrder Order, Customer Customer, Quotation Quotation);
     }
 }
-
-
-
 
 
