@@ -6,9 +6,9 @@ public class PenaltyBillResponse
 
     public string BillCode { get; set; } = null!;
 
-    public Guid LpnId { get; set; }
+    public Guid? LpnId { get; set; }
 
-    public Guid OrderId { get; set; }
+    public Guid? OrderId { get; set; }
 
     public decimal HandlingFee { get; set; }
 
