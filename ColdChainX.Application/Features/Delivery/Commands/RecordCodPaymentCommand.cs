@@ -74,8 +74,12 @@ public class RecordCodPaymentCommandHandler : IRequestHandler<RecordCodPaymentCo
         if (method != "CASH" && method != "QR")
             throw new ValidationException("Payment method must be 'CASH' or 'QR'.");
 
-        // 5. Record COD discrepancy (do NOT hard-reject — operational reality allows over/under)
+        // 5. Automatically adopt exact Dynamic COD amount from ePOD if not specified or set to 0
         var expectedCod = epod.CodAmount ?? 0m;
+        if (request.CodAmountPaid <= 0 && expectedCod > 0)
+        {
+            request.CodAmountPaid = expectedCod;
+        }
         var codDiscrepancy = request.CodAmountPaid - expectedCod;
         // Will be appended to note for accountant review during COD handover reconciliation
 
@@ -165,6 +169,26 @@ public class RecordCodPaymentCommandHandler : IRequestHandler<RecordCodPaymentCo
                 epod.Status = "COMPLETED";
                 if (Math.Abs(codDiscrepancy) > 0.01m)
                     epod.Note = $"{epod.Note} [COD discrepancy: {codDiscrepancy:+0.##;-0.##} VND — verify at handover]".Trim();
+
+                // Record formal PaymentTransaction in financial ledger
+                var cashTx = new ColdChainX.Core.Entities.PaymentTransaction
+                {
+                    TransactionId = Guid.NewGuid(),
+                    TransactionCode = $"TX-CASH-{now:yyyyMMddHHmmss}-{order.OrderId.ToString("N")[..6].ToUpperInvariant()}",
+                    OrderId = order.OrderId,
+                    CustomerId = order.CustomerId,
+                    TransactionType = "IN",
+                    Amount = request.CodAmountPaid,
+                    PaymentMethod = "CASH",
+                    ReferenceCode = "CASH_RECEIPT",
+                    EvidenceImageUrl = paymentEvidenceUrl,
+                    Status = "COMPLETED",
+                    Note = "Thu tiền COD mặt từ khách tại bãi sau đồng kiểm OS&D",
+                    CreatedAt = now,
+                    CompletedAt = now,
+                    CreatedBy = command.UserId
+                };
+                _context.PaymentTransactions.Add(cashTx);
 
                 await _context.SaveChangesAsync(cancellationToken);
 

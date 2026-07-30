@@ -207,9 +207,14 @@ namespace ColdChainX.API.Controllers
                     StopCount = t.TripStops.Count,
                     Stops = t.TripStops.OrderBy(s => s.StopSequence).Select(s => new
                     {
+                        s.StopId,
+                        s.LocationId,
                         s.StopSequence,
                         Address = s.Location != null ? s.Location.Address : "N/A",
-                        s.PlannedArrivalTime
+                        s.PlannedArrivalTime,
+                        s.ActualArrivalTime,
+                        s.Status,
+                        s.StopType
                     }).ToList()
                 })
                 .ToListAsync();
@@ -293,12 +298,16 @@ namespace ColdChainX.API.Controllers
                     Stops = t.TripStops.OrderBy(s => s.StopSequence).Select(s => new
                     {
                         s.StopId,
+                        s.LocationId,
                         s.StopSequence,
                         Address = s.Location != null ? s.Location.Address : "N/A",
                         s.PlannedArrivalTime,
                         s.PlannedDepartureTime,
+                        s.ActualArrivalTime,
+                        s.ActualDepartureTime,
                         s.Status,
                         s.StopType,
+                        s.Note,
                         Location = s.Location
                     }).ToList(),
                     OriginLocation = t.OriginLocation,
@@ -316,10 +325,18 @@ namespace ColdChainX.API.Controllers
             {
                 if (trip.OriginLocation != null && trip.DestinationLocation != null)
                 {
+                    var actualDestinationLocation = trip.DestinationLocation;
+                    var lastStop = trip.Stops.OrderBy(s => s.StopSequence).LastOrDefault(s => s.Location != null);
+                    if (lastStop != null && lastStop.Location != null)
+                    {
+                        actualDestinationLocation = lastStop.Location;
+                    }
+
                     var origin = ColdChainX.Infrastructure.Services.GoongMapService.FormatCoordinate(trip.OriginLocation.Latitude, trip.OriginLocation.Longitude);
-                    var destination = ColdChainX.Infrastructure.Services.GoongMapService.FormatCoordinate(trip.DestinationLocation.Latitude, trip.DestinationLocation.Longitude);
-                    var waypoints = string.Join("|", trip.Stops.Where(s => s.Location != null).Select(s => 
-                        ColdChainX.Infrastructure.Services.GoongMapService.FormatCoordinate(s.Location.Latitude, s.Location.Longitude)));
+                    var destination = ColdChainX.Infrastructure.Services.GoongMapService.FormatCoordinate(actualDestinationLocation.Latitude, actualDestinationLocation.Longitude);
+                    var waypoints = string.Join("|", trip.Stops
+                        .Where(s => s.Location != null && s.Location.LocationId != actualDestinationLocation.LocationId)
+                        .Select(s => ColdChainX.Infrastructure.Services.GoongMapService.FormatCoordinate(s.Location.Latitude, s.Location.Longitude)));
 
                     var optimizedRoute = await _goongMapService.GetOptimizedRouteAsync(
                         origin,
@@ -351,12 +368,18 @@ namespace ColdChainX.API.Controllers
                     Stops = trip.Stops.Select(s => new 
                     { 
                         s.StopId,
+                        s.LocationId,
                         s.StopSequence, 
                         s.Address, 
                         s.PlannedArrivalTime, 
                         s.PlannedDepartureTime, 
+                        s.ActualArrivalTime,
+                        s.ActualDepartureTime,
                         s.Status, 
-                        s.StopType 
+                        s.StopType,
+                        s.Note,
+                        Latitude = s.Location != null ? (decimal?)s.Location.Latitude : null,
+                        Longitude = s.Location != null ? (decimal?)s.Location.Longitude : null
                     })
                 }
             });

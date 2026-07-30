@@ -45,11 +45,15 @@ public sealed class GoongMapService : IGoongMapService
 
         requestUri.Append("&api_key=").Append(Uri.EscapeDataString(apiKey));
 
+        Console.WriteLine("==================================================================");
+        Console.WriteLine($"[GOONG API CALL] URL: https://rsapi.goong.io/{requestUri}");
+        Console.WriteLine("==================================================================");
+
         using var response = await _httpClient.GetAsync(requestUri.ToString(), cancellationToken);
         var content = await response.Content.ReadAsStringAsync(cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            throw new InvalidOperationException($"Goong optimized route request failed: {content}");
+            throw new InvalidOperationException($"Goong optimized route request failed for URI: {requestUri.ToString()} Response: {content}");
         }
 
         using var document = JsonDocument.Parse(content);

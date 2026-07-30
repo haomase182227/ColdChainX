@@ -27,6 +27,10 @@ public partial class Claim
 
     public DateTime? ResolvedAt { get; set; }
 
+    public string? BankTransferImageUrl { get; set; }
+
+    public string? InternalChargebackOption { get; set; } // "DRIVER_DEBT" hoặc "COMPANY_EXPENSE"
+
     public virtual ICollection<ClaimEvidence> ClaimEvidences { get; set; } = new List<ClaimEvidence>();
 
     public virtual TransportOrder? Order { get; set; }

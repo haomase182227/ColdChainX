@@ -108,6 +108,30 @@ public class DispatchController : ControllerBase
     }
 
     /// <summary>
+    /// Reconcile a completed trip (compare expected COD with remitted amount).
+    /// </summary>
+    [HttpPost("trip/{tripId:guid}/reconcile")]
+    [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Accountant,ACCOUNTANT")]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ReconcileTrip([FromRoute] Guid tripId, [FromBody] ColdChainX.Application.Features.Dispatch.Commands.ReconcileTripCommand request)
+    {
+        request.TripId = tripId;
+        
+        // Extract user id from claims if we needed it in request, but it's fine.
+        var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (Guid.TryParse(userIdStr, out var userId))
+        {
+            request.UserId = userId;
+        }
+
+        var result = await _mediator.Send(request);
+        if (!result.Success)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Lấy danh sách các LPN khả dụng (chưa lên xe) trong một kho cụ thể. (Dùng để chọn Pivot LPN)
     /// </summary>
     [HttpGet("available-lpns")]
@@ -1083,6 +1107,17 @@ public class DispatchController : ControllerBase
             var lifoReportUrl = $"{baseUrl}/lifo-report.html?vehicleId={request.VehicleId}&lpnIds={lpnQuery}";
             var pdfUrl = await _pdfService.SavePdfFromUrlAsync(lifoReportUrl, result.TripId.ToString(), "lifo");
             result.LifoPdfUrl = pdfUrl;
+            if (!string.IsNullOrEmpty(pdfUrl))
+            {
+                _db.TransportDocuments.Add(new TransportDocument
+                {
+                    DocId = Guid.NewGuid(),
+                    DocType = "LIFO-PLAN",
+                    ImageUrl = pdfUrl,
+                    CreatedAt = DateTime.UtcNow
+                });
+                await _db.SaveChangesAsync();
+            }
             return Ok(ApiResponse<ManualDispatchResult>.SuccessResponse(result, "GhÃ©p chuyáº¿n thÃ nh cÃ´ng!"));
         }
         catch (InvalidOperationException ex)
@@ -1162,6 +1197,7 @@ public class DispatchController : ControllerBase
     // ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â
 
     [HttpGet("trip/{tripId}/route")]
+    [AllowAnonymous]
     [ProducesResponseType(typeof(TripRouteResponse), 200)]
     [ProducesResponseType(typeof(object), 404)]
     public async Task<IActionResult> GetTripRoute(string tripId)
@@ -1180,10 +1216,20 @@ public class DispatchController : ControllerBase
         if (trip == null)
             return NotFound(new { Success = false, Error = "KhÃ´ng tÃ¬m tháº¥y chuyáº¿n Ä‘i." });
 
+        var actualDestinationLocation = trip.DestinationLocation;
+        if (trip.TripStops != null && trip.TripStops.Any())
+        {
+            var lastStop = trip.TripStops.OrderBy(s => s.StopSequence).LastOrDefault(s => s.Location != null);
+            if (lastStop != null && lastStop.Location != null)
+            {
+                actualDestinationLocation = lastStop.Location;
+            }
+        }
+
         var deliveryStops = trip.TripStops
             .Where(stop => stop.Location != null)
             .Where(stop => !IsSameLocation(stop.Location!, trip.OriginLocation)
-                && !IsSameLocation(stop.Location!, trip.DestinationLocation))
+                && !IsSameLocation(stop.Location!, actualDestinationLocation))
             .OrderBy(stop => stop.StopSequence)
             .ToList();
 
@@ -1191,8 +1237,8 @@ public class DispatchController : ControllerBase
             trip.OriginLocation.Latitude,
             trip.OriginLocation.Longitude);
         var destination = GoongMapService.FormatCoordinate(
-            trip.DestinationLocation.Latitude,
-            trip.DestinationLocation.Longitude);
+            actualDestinationLocation.Latitude,
+            actualDestinationLocation.Longitude);
         var waypoints = string.Join("|", deliveryStops.Select(stop =>
             GoongMapService.FormatCoordinate(stop.Location!.Latitude, stop.Location.Longitude)));
 

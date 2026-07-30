@@ -6,9 +6,9 @@ public partial class PenaltyBill
 
     public string BillCode { get; set; } = null!;
 
-    public Guid LpnId { get; set; }
+    public Guid? LpnId { get; set; }
 
-    public Guid OrderId { get; set; }
+    public Guid? OrderId { get; set; }
 
     public Guid? CustomerId { get; set; }
 
@@ -28,9 +28,9 @@ public partial class PenaltyBill
 
     public Guid? PaidBy { get; set; }
 
-    public virtual Lpn Lpn { get; set; } = null!;
+    public virtual Lpn? Lpn { get; set; }
 
-    public virtual TransportOrder Order { get; set; } = null!;
+    public virtual TransportOrder? Order { get; set; }
 
     public virtual Customer? Customer { get; set; }
 

@@ -26,15 +26,27 @@ public class PayOsPaymentService : IPaymentGatewayService
     {
         var section = configuration.GetSection("PayOS");
 
-        var clientId = section["ClientId"]
-            ?? throw new InvalidOperationException("PayOS:ClientId is not configured.");
-        var apiKey = section["ApiKey"]
-            ?? throw new InvalidOperationException("PayOS:ApiKey is not configured.");
-        _checksumKey = section["ChecksumKey"]
-            ?? throw new InvalidOperationException("PayOS:ChecksumKey is not configured.");
+        var clientId = Environment.GetEnvironmentVariable("PAYOS_CLIENT_ID") 
+            ?? Environment.GetEnvironmentVariable("PayOS__ClientId") 
+            ?? section["ClientId"];
+        if (string.IsNullOrWhiteSpace(clientId)) 
+            throw new InvalidOperationException("PAYOS_CLIENT_ID is not configured in .env or settings.");
 
-        _returnUrl = section["ReturnUrl"] ?? "https://coldchainx.app/payment/success";
-        _cancelUrl = section["CancelUrl"] ?? "https://coldchainx.app/payment/cancel";
+        var apiKey = Environment.GetEnvironmentVariable("PAYOS_API_KEY") 
+            ?? Environment.GetEnvironmentVariable("PayOS__ApiKey") 
+            ?? section["ApiKey"];
+        if (string.IsNullOrWhiteSpace(apiKey)) 
+            throw new InvalidOperationException("PAYOS_API_KEY is not configured in .env or settings.");
+
+        var checksum = Environment.GetEnvironmentVariable("PAYOS_CHECKSUM_KEY") 
+            ?? Environment.GetEnvironmentVariable("PayOS__ChecksumKey") 
+            ?? section["ChecksumKey"];
+        if (string.IsNullOrWhiteSpace(checksum)) 
+            throw new InvalidOperationException("PAYOS_CHECKSUM_KEY is not configured in .env or settings.");
+        
+        _checksumKey = checksum;
+        _returnUrl = Environment.GetEnvironmentVariable("PAYOS_RETURN_URL") ?? section["ReturnUrl"] ?? "http://localhost:3000/payment/success";
+        _cancelUrl = Environment.GetEnvironmentVariable("PAYOS_CANCEL_URL") ?? section["CancelUrl"] ?? "http://localhost:3000/payment/cancel";
 
         _payOsClient = new PayOSClient(new PayOSOptions
         {
@@ -67,7 +79,7 @@ public class PayOsPaymentService : IPaymentGatewayService
             return new CreateQrResult
             {
                 CheckoutUrl = $"https://checkout-mock.payos.vn/payment/{orderCode}",
-                QrCodeUrl = $"https://img.vietqr.io/image/vietcombank-1039812355-compact.png?amount={amount}&addInfo=ColdChainX%20Order%20{orderCode}&accountName=TRAN%20LE%20SI%20QUYNH",
+                QrCodeUrl = $"https://qr.payos.vn/image/{orderCode}?amount={amount}&addInfo={Uri.EscapeDataString(description)}",
                 OrderCode = orderCode
             };
         }

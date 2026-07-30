@@ -82,6 +82,16 @@ public class CompleteTripLoadingCommandHandler : IRequestHandler<CompleteTripLoa
         try
         {
             manifestUrl = await _pdfService.GenerateManifestPdfAsync(trip.TripId);
+            if (!string.IsNullOrEmpty(manifestUrl))
+            {
+                _context.TransportDocuments.Add(new Core.Entities.TransportDocument
+                {
+                    DocId = Guid.NewGuid(),
+                    DocType = "MANIFEST",
+                    ImageUrl = manifestUrl,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
         }
         catch (Exception ex)
         {
@@ -91,10 +101,25 @@ public class CompleteTripLoadingCommandHandler : IRequestHandler<CompleteTripLoa
         try
         {
             outboundTicketUrl = await _pdfService.GenerateOutboundTicketPdfAsync(trip.TripId);
+            if (!string.IsNullOrEmpty(outboundTicketUrl))
+            {
+                _context.TransportDocuments.Add(new Core.Entities.TransportDocument
+                {
+                    DocId = Guid.NewGuid(),
+                    DocType = "OUTBOUND-TICKET",
+                    ImageUrl = outboundTicketUrl,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Không thể sinh Phiếu Xuất Kho PDF cho trip {TripId}.", trip.TripId);
+        }
+
+        if (!string.IsNullOrEmpty(manifestUrl) || !string.IsNullOrEmpty(outboundTicketUrl))
+        {
+            await _context.SaveChangesAsync(cancellationToken);
         }
 
         return new CompleteTripLoadingResponse

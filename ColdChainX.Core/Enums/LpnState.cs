@@ -30,5 +30,7 @@ public enum LpnState
     SHIPPING          = 8,
     DELETED           = 10,
     DELIVERED         = 11,
-    DELIVERY_RETURNED = 12
+    DELIVERY_RETURNED = 12,
+    RECEIVED_AT_HUB   = 13,
+    PENDING_REDELIVERY = 14
 }

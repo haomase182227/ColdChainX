@@ -154,6 +154,9 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnName("claim_id")
                         .HasDefaultValueSql("gen_random_uuid()");
 
+                    b.Property<string>("BankTransferImageUrl")
+                        .HasColumnType("text");
+
                     b.Property<string>("ClaimCode")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -181,6 +184,9 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)")
                         .HasColumnName("fault_owner");
+
+                    b.Property<string>("InternalChargebackOption")
+                        .HasColumnType("text");
 
                     b.Property<Guid?>("LpnId")
                         .HasColumnType("uuid");
@@ -2748,6 +2754,102 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.ToTable("outbound_order_items", "public");
                 });
 
+            modelBuilder.Entity("ColdChainX.Core.Entities.PaymentTransaction", b =>
+                {
+                    b.Property<Guid>("TransactionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("transaction_id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<Guid?>("ClaimId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("claim_id");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("customer_id");
+
+                    b.Property<string>("EvidenceImageUrl")
+                        .HasColumnType("text")
+                        .HasColumnName("evidence_image_url");
+
+                    b.Property<Guid?>("InvoiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("invoice_id");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text")
+                        .HasColumnName("note");
+
+                    b.Property<Guid?>("OrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_id");
+
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("payment_method");
+
+                    b.Property<string>("ReferenceCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("reference_code");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("TransactionCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("transaction_code");
+
+                    b.Property<string>("TransactionType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("transaction_type");
+
+                    b.HasKey("TransactionId")
+                        .HasName("payment_transactions_pkey");
+
+                    b.HasIndex("ClaimId");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.HasIndex("OrderId");
+
+                    b.ToTable("payment_transactions", "public");
+                });
+
             modelBuilder.Entity("ColdChainX.Core.Entities.PenaltyBill", b =>
                 {
                     b.Property<Guid>("PenaltyBillId")
@@ -2781,11 +2883,11 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_paid");
 
-                    b.Property<Guid>("LpnId")
+                    b.Property<Guid?>("LpnId")
                         .HasColumnType("uuid")
                         .HasColumnName("lpn_id");
 
-                    b.Property<Guid>("OrderId")
+                    b.Property<Guid?>("OrderId")
                         .HasColumnType("uuid")
                         .HasColumnName("order_id");
 
@@ -5271,6 +5373,44 @@ namespace ColdChainX.Infrastructure.Migrations
                     b.Navigation("OutboundOrder");
                 });
 
+            modelBuilder.Entity("ColdChainX.Core.Entities.PaymentTransaction", b =>
+                {
+                    b.HasOne("ColdChainX.Core.Entities.Claim", "Claim")
+                        .WithMany()
+                        .HasForeignKey("ClaimId")
+                        .HasConstraintName("fk_payment_transaction_claim");
+
+                    b.HasOne("ColdChainX.Core.Entities.User", "CreatedByNavigation")
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .HasConstraintName("fk_payment_transaction_user");
+
+                    b.HasOne("ColdChainX.Core.Entities.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .HasConstraintName("fk_payment_transaction_customer");
+
+                    b.HasOne("ColdChainX.Core.Entities.Invoice", "Invoice")
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .HasConstraintName("fk_payment_transaction_invoice");
+
+                    b.HasOne("ColdChainX.Core.Entities.TransportOrder", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .HasConstraintName("fk_payment_transaction_order");
+
+                    b.Navigation("Claim");
+
+                    b.Navigation("CreatedByNavigation");
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("Invoice");
+
+                    b.Navigation("Order");
+                });
+
             modelBuilder.Entity("ColdChainX.Core.Entities.PenaltyBill", b =>
                 {
                     b.HasOne("ColdChainX.Core.Entities.Customer", "Customer")
@@ -5283,14 +5423,12 @@ namespace ColdChainX.Infrastructure.Migrations
                         .WithMany("PenaltyBills")
                         .HasForeignKey("LpnId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
                         .HasConstraintName("fk_penalty_bills_lpn");
 
                     b.HasOne("ColdChainX.Core.Entities.TransportOrder", "Order")
                         .WithMany()
                         .HasForeignKey("OrderId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
                         .HasConstraintName("fk_penalty_bills_order");
 
                     b.HasOne("ColdChainX.Core.Entities.User", "PaidByNavigation")

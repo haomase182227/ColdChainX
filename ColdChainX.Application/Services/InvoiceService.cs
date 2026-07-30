@@ -155,5 +155,84 @@ namespace ColdChainX.Application.Services
                 }).ToList()
             };
         }
+        public async Task<ApiResponse<int>> GeneratePeriodicInvoicesAsync()
+        {
+            var generatedCount = 0;
+            using var transaction = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                // Find all COMPLETED orders that have an APPROVED quotation but no invoice lines yet.
+                var ordersToInvoice = await _db.TransportOrders
+                    .Include(o => o.Quotations)
+                    .Include(o => o.InvoiceLines)
+                    .Where(o => o.Status == "COMPLETED" && o.InvoiceLines.Count == 0 && o.Quotations.Any(q => q.Status == "APPROVED"))
+                    .ToListAsync();
+
+                var customerGroups = ordersToInvoice.GroupBy(o => o.CustomerId);
+
+                foreach (var group in customerGroups)
+                {
+                    if (group.Key == null) continue; // Skip orders without a customer
+
+                    var invoiceId = Guid.NewGuid();
+                    decimal subTotal = 0;
+                    var invoiceLines = new List<ColdChainX.Core.Entities.InvoiceLine>();
+
+                    foreach (var order in group)
+                    {
+                        var quotation = order.Quotations.First(q => q.Status == "APPROVED");
+                        var lineAmount = quotation.BaseFreight + (quotation.LastMileSurcharge ?? 0) + (quotation.VasAmount ?? 0); // Excluding VAT
+
+                        var line = new ColdChainX.Core.Entities.InvoiceLine
+                        {
+                            LineId = Guid.NewGuid(),
+                            InvoiceId = invoiceId,
+                            OrderId = order.OrderId,
+                            ChargeType = "TRANSPORT_FEE",
+                            Description = $"Transport fee for order {order.TrackingCode}",
+                            Quantity = 1,
+                            UnitPrice = lineAmount,
+                            Amount = lineAmount,
+                            TaxRate = 8 // Assume 8% VAT
+                        };
+
+                        invoiceLines.Add(line);
+                        subTotal += lineAmount;
+                    }
+
+                    var taxAmount = subTotal * 0.08m;
+                    var grandTotal = subTotal + taxAmount;
+
+                    var invoice = new ColdChainX.Core.Entities.Invoice
+                    {
+                        InvoiceId = invoiceId,
+                        InvoiceCode = $"INV-{DateTime.UtcNow:yyyyMMddHHmmss}-{group.Key.Value.ToString().Substring(0, 4).ToUpper()}",
+                        CustomerId = group.Key.Value,
+                        SubTotal = subTotal,
+                        TaxRate = 8,
+                        TaxAmount = taxAmount,
+                        GrandTotal = grandTotal,
+                        IssuedDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                        DueDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(15)), // Due in 15 days
+                        Status = "PENDING",
+                        CreatedAt = DateTime.UtcNow,
+                        InvoiceLines = invoiceLines
+                    };
+
+                    _db.Invoices.Add(invoice);
+                    generatedCount++;
+                }
+
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return ApiResponse<int>.SuccessResponse(generatedCount, $"Generated {generatedCount} invoices.");
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return ApiResponse<int>.Failure($"Failed to generate invoices: {ex.Message}");
+            }
+        }
     }
 }

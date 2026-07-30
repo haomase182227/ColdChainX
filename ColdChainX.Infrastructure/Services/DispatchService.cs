@@ -1913,6 +1913,11 @@ public class DispatchService : IDispatchService
             });
         }
 
+        if (destLocationIds.Any())
+        {
+            trip.DestinationLocationId = destLocationIds.Last();
+        }
+
         await _context.SaveChangesAsync();
     }
 

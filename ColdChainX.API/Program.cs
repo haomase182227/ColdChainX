@@ -63,6 +63,11 @@ if (configuration.GetValue("HostedWorkers:ScheduleBookingStatus", true))
     builder.Services.AddHostedService<ScheduleBookingStatusWorker>();
 }
 
+if (configuration.GetValue("HostedWorkers:AutoInvoicing", true))
+{
+    builder.Services.AddHostedService<AutoInvoicingWorker>();
+}
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {

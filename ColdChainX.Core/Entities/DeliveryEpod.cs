@@ -33,6 +33,7 @@ public partial class DeliveryEpod
 
     public DateTime? CreatedAt { get; set; }
 
+
     public decimal? CodAmount { get; set; }
 
     public decimal? CodAmountPaid { get; set; }
@@ -48,6 +49,7 @@ public partial class DeliveryEpod
 
     /// <summary>Link PDF Biên bản giao nhận hàng (sinh ngay sau bước ký nhận).</summary>
     public string? HandoverPdfUrl { get; set; }
+
 
     /// <summary>Thời điểm thu tiền COD xong (Bước 3).</summary>
     public DateTime? PaymentConfirmedAt { get; set; }

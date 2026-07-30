@@ -30,10 +30,36 @@
 <div id="sidebar">
     <h2>🚚 Lệnh Điều Phối Giả Lập</h2>
     <div class="card">
+        <h3>📶 Giả lập IoT Online & MQTT Stream</h3>
+        <p style="font-size: 12px; color: #555; margin-bottom: 10px;">Bật Online cho thiết bị (set <b>IsOnline = true</b>, mặc định ở trạng thái <b>Stream OFF</b>). Khi hệ thống gọi API <b>iot-check</b> (hoặc khởi hành), thiết bị sẽ tự động mở <b>Stream ON</b> và phát tín hiệu telemetry qua MQTT.</p>
+        
+        <label>Danh sách IoT thực tế trong CSDL</label>
+        <div style="display:flex; gap: 5px;">
+            <select id="selectIotDevice" style="width: 100%; padding: 8px; margin: 5px 0 10px 0; border: 1px solid #ccc; border-radius: 4px;" onchange="onIotSelected()">
+                <option value="">-- Đang tải danh sách IoT --</option>
+            </select>
+            <button onclick="loadIotDevices()" style="width: auto; padding: 0 10px; margin: 5px 0 10px 0; background: #28a745;" title="Làm mới danh sách">🔄</button>
+        </div>
+
+        <div style="display:flex; gap: 5px;">
+            <input type="text" id="inputCustomIotCode" placeholder="Mã IoT trong hệ thống (VD: ESP32-COLDCHAIN-001)" style="width: 100%; padding: 8px; margin: 0 0 10px 0; border: 1px solid #ccc; border-radius: 4px;">
+        </div>
+
+        <div style="display:flex; gap: 4px; flex-wrap: wrap;">
+            <button class="btn-success" onclick="activateIotOnline()" style="background: #28a745; font-size: 12px; padding: 6px 10px;">⚡ BẬT ONLINE (Stream OFF)</button>
+            <button class="btn" onclick="toggleIotStream(true)" style="background: #007bff; color: white; font-size: 12px; padding: 6px 10px;" title="Mở stream thủ công không cần chờ API iot-check">📡 Bật Stream ON</button>
+            <button class="btn" onclick="toggleIotStream(false)" style="background: #6c757d; color: white; font-size: 12px; padding: 6px 10px;">⏸️ Tắt Stream OFF</button>
+            <button class="btn-danger" onclick="deactivateIotOnline()" style="font-size: 12px; padding: 6px 10px;">❌ TẮT OFFLINE</button>
+        </div>
+        <div id="iotStatusDisplay" style="margin-top: 10px; font-size: 13px; padding: 8px; background: #e9ecef; border-radius: 4px;">Trạng thái: Chưa chọn thiết bị</div>
+    </div>
+
+    <div class="card">
         <h3>Khởi tạo xe chạy</h3>
         <label>Trip ID (Dán mã Trip ID vào đây)</label>
         <div style="display:flex; gap: 5px;">
-            <input type="text" id="inputTripId" onchange="onTripSelected()" placeholder="VD: 550e8400-e29b-41d4-a716-446655440000" style="width: 100%; padding: 8px; margin: 5px 0 15px 0; border: 1px solid #ccc; border-radius: 4px;">
+            <input type="text" id="inputTripId" list="tripList" onchange="onTripSelected()" placeholder="VD: 550e8400-e29b-41d4-a716-446655440000" style="width: 100%; padding: 8px; margin: 5px 0 15px 0; border: 1px solid #ccc; border-radius: 4px;">
+            <datalist id="tripList"></datalist>
             <button onclick="fetchTripPolyline()" style="width: auto; padding: 0 10px; margin-bottom: 10px;">Tải Tuyến</button>
         </div>
 
@@ -57,7 +83,11 @@
             <input type="checkbox" id="inputHybrid" style="width: 20px; height: 20px; margin: 0;"> BẬT CHẾ ĐỘ HYBRID (Chêm GPS vào mạch thật)
         </label>
         
-        <button onclick="startSimulation()">BẮT ĐẦU CHẠY MÔ PHỎNG</button>
+        <label style="display:flex; align-items:center; gap: 5px; margin-top: 10px; font-weight: bold; color: #28a745;">
+            <input type="checkbox" id="inputAutoActivate" checked style="width: 20px; height: 20px; margin: 0;"> Tự động Bật Online IoT nếu đang Offline (Auto-Wake)
+        </label>
+        
+        <button onclick="startSimulation()" style="margin-top: 10px;">BẮT ĐẦU CHẠY MÔ PHỎNG</button>
     </div>
 
     <div class="card">
@@ -82,8 +112,131 @@
             goongMapKey = data.goongMapKey;
             initMap();
             loadTripsFromDb();
+            loadIotDevices();
             setInterval(fetchStatus, 1000);
         });
+
+    let allIotDevices = [];
+
+    function loadIotDevices() {
+        fetch('/api/iot/devices')
+            .then(res => res.json())
+            .then(data => {
+                allIotDevices = data;
+                const selectEl = document.getElementById('selectIotDevice');
+                if (!selectEl) return;
+                selectEl.innerHTML = '<option value="">-- Chọn thiết bị IoT trong hệ thống --</option>';
+                if(Array.isArray(data)) {
+                    data.forEach(d => {
+                        let text = `${d.deviceCode || d.DeviceCode}`;
+                        if (d.plateNumber || d.PlateNumber) text += ` (Xe: ${d.plateNumber || d.PlateNumber})`;
+                        
+                        let isOnline = d.isOnline ?? d.IsOnline ?? false;
+                        let isStreaming = d.isStreaming ?? d.IsStreaming ?? false;
+                        
+                        let statusText = "🔴 Offline | ⏹️ Stream OFF";
+                        if (isOnline) {
+                            if (isStreaming) {
+                                statusText = "🟢 Online | 📡 STREAM ON";
+                            } else {
+                                statusText = "🟢 Online | ⏸️ Stream OFF";
+                            }
+                        }
+                        
+                        selectEl.innerHTML += `<option value="${d.deviceCode || d.DeviceCode}">${text} - [${statusText}]</option>`;
+                    });
+                }
+            })
+            .catch(e => console.error("Lỗi tải IoT", e));
+    }
+
+    function onIotSelected() {
+        const val = document.getElementById('selectIotDevice').value;
+        if(val) {
+            document.getElementById('inputCustomIotCode').value = val;
+            document.getElementById('inputDeviceId').value = val;
+            const found = allIotDevices.find(x => (x.deviceCode || x.DeviceCode) === val);
+            if(found) {
+                const isOnline = found.isOnline ?? found.IsOnline ?? false;
+                const isStreaming = found.isStreaming ?? found.IsStreaming ?? false;
+                const display = document.getElementById('iotStatusDisplay');
+                if (!isOnline) {
+                    display.innerHTML = `Trạng thái: <b style="color:#dc3545;">🔴 Offline | ⏹️ Stream OFF</b> (Pin: ${found.batteryLevel || found.BatteryLevel || 100}%)`;
+                } else if (isStreaming) {
+                    display.innerHTML = `Trạng thái: <b style="color:#28a745;">🟢 Online | 📡 STREAM ON (Đang gửi Telemetry)</b>`;
+                } else {
+                    display.innerHTML = `Trạng thái: <b style="color:#28a745;">🟢 Online | ⏸️ Stream OFF (Đang chờ lệnh từ API iot-check)</b>`;
+                }
+            }
+        }
+    }
+
+    function activateIotOnline() {
+        const code = document.getElementById('inputCustomIotCode').value.trim();
+        if(!code) {
+            alert('Vui lòng chọn từ danh sách hoặc nhập Mã IoT hợp lệ!');
+            return;
+        }
+        document.getElementById('inputDeviceId').value = code;
+        const temp = parseFloat(document.getElementById('inputTemp').value) || -18.0;
+        fetch('/api/iot/activate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ deviceCode: code, targetTemperature: temp, lat: 0, lon: 0 })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.success) {
+                alert(`Đã BẬT ONLINE thành công cho thiết bị '${code}'! Hiện thiết bị ở trạng thái STREAM OFF và đang lắng nghe lệnh MQTT từ API iot-check.`);
+                document.getElementById('iotStatusDisplay').innerHTML = `Trạng thái: <b style="color:#28a745;">🟢 Online | ⏸️ Stream OFF (Đang chờ lệnh API iot-check)</b>`;
+                loadIotDevices();
+            } else {
+                alert('Lỗi: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(e => alert('Lỗi API: ' + e));
+    }
+
+    function toggleIotStream(enableStream) {
+        const code = document.getElementById('inputCustomIotCode').value.trim();
+        if(!code) {
+            alert('Vui lòng chọn Mã IoT!');
+            return;
+        }
+        fetch(`/api/iot/${code}/stream`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ stream: enableStream })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.success) {
+                const text = enableStream ? "📡 STREAM ON (Đang phát Telemetry qua MQTT)" : "⏸️ Stream OFF";
+                const color = enableStream ? "#28a745" : "#ff9800";
+                document.getElementById('iotStatusDisplay').innerHTML = `Trạng thái: <b style="color:${color};">🟢 Online | ${text}</b>`;
+                loadIotDevices();
+            } else {
+                alert('Lỗi: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(e => alert('Lỗi API: ' + e));
+    }
+
+    function deactivateIotOnline() {
+        const code = document.getElementById('inputCustomIotCode').value.trim();
+        if(!code) {
+            alert('Vui lòng chọn hoặc nhập Mã IoT cần tắt!');
+            return;
+        }
+        fetch(`/api/iot/${code}/deactivate`, { method: 'POST' })
+        .then(res => res.json())
+        .then(() => {
+            alert(`Đã chuyển thiết bị '${code}' sang trạng thái OFFLINE!`);
+            document.getElementById('iotStatusDisplay').innerHTML = `Trạng thái: <b style="color:#dc3545;">🔴 Offline | ⏹️ Stream OFF</b>`;
+            loadIotDevices();
+        })
+        .catch(e => alert('Lỗi API: ' + e));
+    }
 
     let allTrips = [];
     let currentPolylineLayer = null;
@@ -131,13 +284,15 @@
             .then(data => {
                 allTrips = data;
                 const dataList = document.getElementById('tripList');
-                dataList.innerHTML = '';
-                if(Array.isArray(data)) {
-                    data.forEach(t => {
-                        let text = `${t.TripId || t.tripId} (${t.Status || t.status})`;
-                        if (t.DeviceCode || t.deviceCode) text += ` - [Xe: ${t.DeviceCode || t.deviceCode}]`;
-                        dataList.innerHTML += `<option value="${t.TripId || t.tripId}">${text}</option>`;
-                    });
+                if (dataList) {
+                    dataList.innerHTML = '';
+                    if(Array.isArray(data)) {
+                        data.forEach(t => {
+                            let text = `${t.TripId || t.tripId} (${t.Status || t.status})`;
+                            if (t.DeviceCode || t.deviceCode) text += ` - [Xe: ${t.DeviceCode || t.deviceCode}]`;
+                            dataList.innerHTML += `<option value="${t.TripId || t.tripId}">${text}</option>`;
+                        });
+                    }
                 }
             })
             .catch(e => {
@@ -197,13 +352,21 @@
     }
 
     function startSimulation() {
+        let rawPolyline = document.getElementById('inputPolyline').value;
+        if (rawPolyline) {
+            // Loại bỏ tất cả ký tự xuống dòng (nếu copy từ text bị ngắt dòng)
+            // và chuyển double backslashes (\\) thành single backslash (\) (nếu copy từ JSON)
+            rawPolyline = rawPolyline.replace(/\\r?\\n/g, '').replace(/\\\\/g, '\\');
+        }
+
         const payload = {
-            deviceId: document.getElementById('inputDeviceId').value,
-            polyline: document.getElementById('inputPolyline').value,
+            deviceId: document.getElementById('inputDeviceId').value || document.getElementById('inputCustomIotCode').value,
+            polyline: rawPolyline,
             speedKmh: parseFloat(document.getElementById('inputSpeed').value),
             targetTemperature: parseFloat(document.getElementById('inputTemp').value),
             isHybridMode: document.getElementById('inputHybrid').checked,
-            injectTemp: document.getElementById('inputInjectTemp').checked
+            injectTemp: document.getElementById('inputInjectTemp').checked,
+            autoActivateIot: document.getElementById('inputAutoActivate').checked
         };
 
         fetch('/api/fleet/start', {
@@ -219,7 +382,12 @@
 
     function stopSimulation(deviceId) {
         fetch(`/api/fleet/${deviceId}/stop`, { method: 'POST' })
-            .then(() => alert('Đã gửi lệnh Dừng xe thành công!'));
+            .then(() => alert('Đã gửi lệnh Hủy / Kết thúc xe!'));
+    }
+
+    function togglePauseSimulation(deviceId) {
+        fetch(`/api/fleet/${deviceId}/pause`, { method: 'POST' })
+            .then(() => fetchActiveFleets());
     }
 
     function injectAnomaly(deviceId, type, value) {
@@ -327,7 +495,10 @@
                                 <button class="btn-warning" onclick="injectAnomaly('${v.deviceId}', 'DoorOpen', null)">Mở Cửa</button>
                                 <button class="btn-warning" onclick="injectAnomaly('${v.deviceId}', 'DoorClose', null)">Đóng Cửa</button>
                             </div>
-                            <button class="btn-danger" style="margin-top:5px;" onclick="stopSimulation('${v.deviceId}')">Dừng Xe</button>
+                            <div style="display:flex; gap:5px; margin-top:8px;">
+                                <button id="btnPause_${v.deviceId}" style="flex:1; background:${v.isPaused ? '#28a745' : '#ffc107'}; color:${v.isPaused ? 'white' : 'black'}; font-weight:bold; padding:6px; border:none; border-radius:4px; cursor:pointer;" onclick="togglePauseSimulation('${v.deviceId}')">${v.isPaused ? '▶️ Tiếp Tục Chạy' : '⏸️ Tạm Dừng'}</button>
+                                <button class="btn-danger" style="flex:1; margin-top:0; padding:6px; font-weight:bold;" onclick="stopSimulation('${v.deviceId}')">⏹️ Kết Thúc (Hủy)</button>
+                            </div>
                         `;
                         listEl.appendChild(newItem);
                     } else {
@@ -361,6 +532,19 @@
                         } else {
                             btnTemp.className = 'btn-success';
                             btnTemp.innerText = 'Mô phỏng';
+                        }
+                    }
+
+                    let btnPause = document.getElementById('btnPause_' + v.deviceId);
+                    if (btnPause) {
+                        if (v.isPaused) {
+                            btnPause.style.background = '#28a745';
+                            btnPause.style.color = 'white';
+                            btnPause.innerText = '▶️ Tiếp Tục Chạy';
+                        } else {
+                            btnPause.style.background = '#ffc107';
+                            btnPause.style.color = 'black';
+                            btnPause.innerText = '⏸️ Tạm Dừng';
                         }
                     }
                 });

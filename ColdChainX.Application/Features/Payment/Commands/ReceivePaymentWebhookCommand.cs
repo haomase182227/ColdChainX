@@ -104,28 +104,24 @@ public class ReceivePaymentWebhookCommandHandler : IRequestHandler<ReceivePaymen
             using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
             try
             {
-                // 4. Update ePOD payment details
-                epod.CodAmountPaid = request.Amount;
-                epod.PaymentStatus = "PAID";
-                epod.PaymentMethod = "QR";
-                epod.PaymentConfirmedAt = DateTime.UtcNow;
-                epod.Status = "COMPLETED";
-                epod.Note = $"{epod.Note} [PayOS confirmed. TxID: {request.TransactionId}]".Trim();
-
-                if (pdfUrl != null)
-                    epod.PdfUrl = pdfUrl;
-
-                // 5. Sync Order Status (release the SHIPPING gate)
-                var lpns = await _context.Lpns
-                    .Where(l => l.OrderId == order.OrderId)
-                    .ToListAsync(cancellationToken);
-
-                var allDelivered = lpns.All(l => l.State == LpnState.DELIVERED);
-                var allReturned = lpns.All(l => l.State == LpnState.RETURN_PENDING || l.State == LpnState.DELIVERY_RETURNED);
-
-                order.Status = allDelivered ? "DELIVERED"
-                             : allReturned ? "RETURNED"
-                             : "PARTIALLY_DELIVERED";
+                // 4. Record formal PaymentTransaction in financial ledger for PayOS settlement
+                // Note: We do NOT update Epod.PaymentStatus to PAID here. The driver MUST call verify-qr-payment.
+                var qrTx = new ColdChainX.Core.Entities.PaymentTransaction
+                {
+                    TransactionId = Guid.NewGuid(),
+                    TransactionCode = $"TX-PAYOS-{DateTime.UtcNow:yyyyMMddHHmmss}-{order.OrderId.ToString("N")[..6].ToUpperInvariant()}",
+                    OrderId = order.OrderId,
+                    CustomerId = order.CustomerId,
+                    TransactionType = "IN",
+                    Amount = request.Amount,
+                    PaymentMethod = "PAYOS",
+                    ReferenceCode = request.TransactionId ?? request.OrderCode,
+                    Status = "COMPLETED",
+                    Note = $"Thanh toán QR PayOS thành công cho vận đơn {order.TrackingCode} (Chờ tài xế Verify).",
+                    CreatedAt = DateTime.UtcNow,
+                    CompletedAt = DateTime.UtcNow
+                };
+                _context.PaymentTransactions.Add(qrTx);
 
                 await _context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);

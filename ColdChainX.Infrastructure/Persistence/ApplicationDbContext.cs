@@ -136,6 +136,8 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
 
     public virtual DbSet<VehicleOdometerLog> VehicleOdometerLogs { get; set; }
 
+    public virtual DbSet<PaymentTransaction> PaymentTransactions { get; set; }
+
 
 
 
@@ -151,6 +153,67 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
         modelBuilder.HasPostgresEnum<ProductCategory>();
         modelBuilder.HasPostgresEnum<DocumentStatus>();
         modelBuilder.HasPostgresEnum<RequirementLevel>();
+
+        modelBuilder.Entity<PaymentTransaction>(entity =>
+        {
+            entity.HasKey(e => e.TransactionId).HasName("payment_transactions_pkey");
+            entity.ToTable("payment_transactions");
+
+            entity.Property(e => e.TransactionId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("transaction_id");
+
+            entity.Property(e => e.TransactionCode)
+                .HasMaxLength(50)
+                .HasColumnName("transaction_code");
+
+            entity.Property(e => e.OrderId).HasColumnName("order_id");
+            entity.Property(e => e.InvoiceId).HasColumnName("invoice_id");
+            entity.Property(e => e.ClaimId).HasColumnName("claim_id");
+            entity.Property(e => e.CustomerId).HasColumnName("customer_id");
+            entity.Property(e => e.TransactionType).HasMaxLength(20).HasColumnName("transaction_type");
+            entity.Property(e => e.Amount).HasPrecision(18, 2).HasColumnName("amount");
+            entity.Property(e => e.PaymentMethod).HasMaxLength(50).HasColumnName("payment_method");
+            entity.Property(e => e.ReferenceCode).HasMaxLength(100).HasColumnName("reference_code");
+            entity.Property(e => e.EvidenceImageUrl).HasColumnName("evidence_image_url");
+            entity.Property(e => e.Status).HasMaxLength(20).HasColumnName("status");
+            entity.Property(e => e.Note).HasColumnName("note");
+            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
+
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+
+            entity.Property(e => e.CompletedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("completed_at");
+
+            entity.HasOne(d => d.Order)
+                .WithMany()
+                .HasForeignKey(d => d.OrderId)
+                .HasConstraintName("fk_payment_transaction_order");
+
+            entity.HasOne(d => d.Invoice)
+                .WithMany()
+                .HasForeignKey(d => d.InvoiceId)
+                .HasConstraintName("fk_payment_transaction_invoice");
+
+            entity.HasOne(d => d.Claim)
+                .WithMany()
+                .HasForeignKey(d => d.ClaimId)
+                .HasConstraintName("fk_payment_transaction_claim");
+
+            entity.HasOne(d => d.Customer)
+                .WithMany()
+                .HasForeignKey(d => d.CustomerId)
+                .HasConstraintName("fk_payment_transaction_customer");
+
+            entity.HasOne(d => d.CreatedByNavigation)
+                .WithMany()
+                .HasForeignKey(d => d.CreatedBy)
+                .HasConstraintName("fk_payment_transaction_user");
+        });
 
         modelBuilder.Entity<ChatMessage>(entity =>
         {

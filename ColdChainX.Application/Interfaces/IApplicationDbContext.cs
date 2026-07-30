@@ -56,8 +56,10 @@ namespace ColdChainX.Application.Interfaces
         DbSet<VehicleOdometerLog> VehicleOdometerLogs { get; }
         DbSet<TripStopEvent> TripStopEvents { get; }
         DbSet<DetentionCharge> DetentionCharges { get; }
+        DbSet<PaymentTransaction> PaymentTransactions { get; }
         DbSet<IncidentEvidence> IncidentEvidences { get; }
         DbSet<ServiceCatalog> ServiceCatalogs { get; }
+        DbSet<IotDevice> IotDevices { get; }
 
         DatabaseFacade Database { get; }
         Microsoft.EntityFrameworkCore.ChangeTracking.ChangeTracker ChangeTracker { get; }

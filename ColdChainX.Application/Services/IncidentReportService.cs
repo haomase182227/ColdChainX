@@ -190,6 +190,64 @@ public class IncidentReportService : IIncidentReportService
                 }
             }
 
+            // =================================================================================
+            // THÔNG BÁO SỰ CỐ / KẸT XE TRỌNG QUÁ TRÌNH GIAO HÀNG CHO KHÁCH HÀNG (ĐƠN GIẢN HÓA)
+            // =================================================================================
+            if (incident.TripId.HasValue)
+            {
+                var remainingStops = await _db.TripStops
+                    .Where(s => s.TripId == incident.TripId.Value && s.ActualArrivalTime == null)
+                    .ToListAsync();
+
+                Guid? targetStopId = null;
+                foreach (var stop in remainingStops)
+                {
+                    stop.Status = "DELAYED_INCIDENT";
+                    stop.Note = $"{stop.Note} [Sự cố cung đường: {incident.IncidentType} ({incident.Description})]".Trim();
+                    if (targetStopId == null) targetStopId = stop.StopId;
+                }
+
+                if (targetStopId == null && trip != null)
+                {
+                    var firstStop = await _db.TripStops.FirstOrDefaultAsync(s => s.TripId == trip.TripId);
+                    if (firstStop != null) targetStopId = firstStop.StopId;
+                }
+
+                var customerTemplateId = await EnsureNotificationTemplateAsync(
+                    "INCIDENT_AUTO_ETA",
+                    "⚠️ Thông báo sự cố trong quá trình vận chuyển: Chuyến {{trip_code}}",
+                    "Xe vận chuyển chuỗi lạnh gặp sự cố ({{incident_type}}: {{description}}) trên đường đi, lộ trình giao đến bãi của bạn có thể bị gián đoạn hoặc trễ hơn kế hoạch. Cam kết hệ thống bảo quản nhiệt độ 2°C - 8°C vẫn đang hoạt động ổn định!");
+
+                if (customerTemplateId != null)
+                {
+                    var customerUserIds = await _db.Users
+                        .Where(u => u.Role != null && u.Role.RoleName.ToUpper() == "CUSTOMER")
+                        .Select(u => u.UserId)
+                        .ToListAsync();
+
+                    var custParams = JsonSerializer.Serialize(new Dictionary<string, string>
+                    {
+                        ["trip_code"] = incident.TripId.Value.ToString(),
+                        ["incident_type"] = incident.IncidentType,
+                        ["description"] = incident.Description
+                    });
+
+                    foreach (var custId in customerUserIds.Distinct())
+                    {
+                        _db.Notifications.Add(new Notification
+                        {
+                            NotiId = Guid.NewGuid(),
+                            UserId = custId,
+                            SenderId = userId,
+                            TemplateId = customerTemplateId,
+                            Params = custParams,
+                            IsRead = false,
+                            CreatedAt = now
+                        });
+                    }
+                }
+            }
+
             await _db.SaveChangesAsync();
 
             if (_notificationService != null && recipientIds.Count > 0)
@@ -228,7 +286,7 @@ public class IncidentReportService : IIncidentReportService
             }
 
             await SafeNotifyGroupsAsync(
-                new[] { "Group_Dispatcher", "Group_Admin" },
+                new[] { "Group_Dispatcher", "Group_Admin", "Group_Customer" },
                 "IncidentReported",
                 new
                 {

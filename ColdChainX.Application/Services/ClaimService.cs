@@ -204,5 +204,66 @@ namespace ColdChainX.Application.Services
                 }).ToList()
             };
         }
+        public async Task<ApiResponse<bool>> CompleteClaimPayoutAsync(Guid claimId, CompleteClaimPayoutRequest request, Guid userId)
+        {
+            var claim = await _db.Claims
+                .FirstOrDefaultAsync(c => c.ClaimId == claimId);
+
+            if (claim == null)
+                return ApiResponse<bool>.Failure("Claim not found.", 404);
+
+            if (claim.Status != "RESOLVED" && claim.Status != "APPROVED" && claim.Status != "PENDING_ACCOUNTANT_REVIEW" && claim.Status != "ACCOUNTANT_APPROVED")
+                return ApiResponse<bool>.Failure("Hồ sơ bồi thường cần ở trạng thái được duyệt (APPROVED / PENDING_ACCOUNTANT_REVIEW / RESOLVED) trước khi hạch toán xuất chi hoàn trả.", 400);
+
+            using var transaction = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                // Find or create PaymentTransaction (Bút toán OUT cho bồi thường OS&D)
+                var paymentTx = await _db.PaymentTransactions
+                    .FirstOrDefaultAsync(pt => pt.ClaimId == claimId);
+
+                if (paymentTx == null)
+                {
+                    paymentTx = new ColdChainX.Core.Entities.PaymentTransaction
+                    {
+                        TransactionId = Guid.NewGuid(),
+                        TransactionCode = $"PTX-OUT-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}",
+                        TransactionType = "OUT", // Dòng tiền chi ra (Hoàn bồi thường cho khách hàng)
+                        ClaimId = claimId,
+                        OrderId = claim.OrderId, // Gắn kèm OrderId nếu hồ sơ thuộc về Đơn hàng cụ thể
+                        Amount = request.Amount,
+                        Status = "COMPLETED",
+                        PaymentMethod = request.PaymentMethod ?? "BANK_TRANSFER",
+                        ReferenceCode = request.TransactionRef ?? $"CLAIM-PAYOUT-{claim.ClaimId.ToString()[..8].ToUpper()}",
+                        CreatedAt = DateTime.UtcNow,
+                        CompletedAt = DateTime.UtcNow,
+                        CreatedBy = userId,
+                        Note = request.Note ?? "Chi bồi thường sự cố OS&D sau đối soát cùng Kế toán & Khách hàng"
+                    };
+                    _db.PaymentTransactions.Add(paymentTx);
+                }
+                else
+                {
+                    paymentTx.Status = "COMPLETED";
+                    if (!string.IsNullOrEmpty(request.PaymentMethod)) paymentTx.PaymentMethod = request.PaymentMethod;
+                    if (!string.IsNullOrEmpty(request.TransactionRef)) paymentTx.ReferenceCode = request.TransactionRef;
+                    paymentTx.CompletedAt = DateTime.UtcNow;
+                    if (!string.IsNullOrEmpty(request.Note)) paymentTx.Note = request.Note;
+                }
+
+                claim.Status = "PAID_CLOSED"; // Hoàn tất thanh toán hoàn tiền bồi thường
+                claim.ResolvedAt ??= DateTime.UtcNow;
+
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return ApiResponse<bool>.SuccessResponse(true, "Hạch toán xuất chi bồi thường (OUT) và khóa sổ hồ sơ thành công.");
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return ApiResponse<bool>.Failure($"Error completing payout: {ex.Message}", 500);
+            }
+        }
     }
 }

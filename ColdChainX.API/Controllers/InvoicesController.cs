@@ -142,5 +142,18 @@ namespace ColdChainX.API.Controllers
 
             return Ok(result);
         }
+
+        /// <summary>
+        /// Manually trigger the generation of periodic invoices for COMPLETED orders.
+        /// </summary>
+        /// <returns>Result of the operation.</returns>
+        [HttpPost("generate-periodic")]
+        [Authorize(Roles = "Accountant,Admin,Manager")]
+        [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GeneratePeriodicInvoices()
+        {
+            var result = await _invoiceService.GeneratePeriodicInvoicesAsync();
+            return Ok(result);
+        }
     }
 }

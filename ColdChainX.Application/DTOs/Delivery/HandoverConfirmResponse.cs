@@ -24,7 +24,7 @@ public class HandoverConfirmResponse
 
     /// <summary>
     /// Bước tiếp theo cần thực hiện.
-    /// Ví dụ: "POST /api/epods/{epodId}/payments để thu tiền COD"
+    /// Ví dụ: "GET /api/Delivery/epods/{epodId}/payment-qr để hiển thị mã QR thanh toán"
     /// </summary>
     public string NextStep { get; set; } = null!;
 }

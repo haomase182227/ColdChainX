@@ -14,6 +14,8 @@ namespace ColdChainX.Application.Interfaces
         Task<ApiResponse<CreateOrderResponse>> AdminUpdateOrderAsync(Guid orderId, UpdateOrderRequest request, Guid salesUserId);
         Task<ApiResponse<bool>> DeleteOrderAsync(Guid orderId, Guid customerId);
         Task<ApiResponse<ReviewOrderResponse>> ReviewOrderAsync(Guid orderId, ReviewOrderRequest request, Guid salesUserId);
+        Task<ApiResponse<bool>> UploadPhysicalPodAsync(Guid orderId, string physicalPodImageUrl);
+        Task<ApiResponse<byte[]>> ExportDigitalArchiveAsync(Guid orderId);
         Task<ApiResponse<IReadOnlyCollection<ColdChainX.Application.DTOs.Routes.WarehouseOptionDto>>> GetOriginWarehousesForOrderAsync(Guid orderId);
         Task<ApiResponse<PublicTrackingResponseDto>> GetPublicTrackingAsync(string trackingCode);
         Task<ApiResponse<object>> GetPublicTemperatureChartAsync(string trackingCode, int maxPoints = 200);
@@ -21,4 +23,3 @@ namespace ColdChainX.Application.Interfaces
 
     }
 }
-
