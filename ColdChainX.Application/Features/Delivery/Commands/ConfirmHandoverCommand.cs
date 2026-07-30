@@ -66,16 +66,11 @@ public class ConfirmHandoverCommandHandler : IRequestHandler<ConfirmHandoverComm
         // 2. Load Order and validate it belongs to this stop's location
         var order = await _context.TransportOrders
             .Include(o => o.Customer)
-            .FirstOrDefaultAsync(o => o.OrderId == request.OrderId, cancellationToken);
+            .Include(o => o.Quotations)
+            .FirstOrDefaultAsync(o => o.MasterTripId == request.TripId && o.CustomerId == request.CustomerId && o.DestLocation == stop.LocationId, cancellationToken);
 
         if (order == null)
-            throw new NotFoundException($"Order '{request.OrderId}' was not found.");
-
-        if (order.DestLocation != stop.LocationId)
-            throw new ValidationException("This order's destination does not match the current stop's location.");
-
-        if (order.MasterTripId == null)
-            throw new ValidationException("Order has not been assigned to a trip yet.");
+            throw new NotFoundException($"Không tìm thấy đơn hàng nào của khách hàng '{request.CustomerId}' trên chuyến đi '{request.TripId}' tại điểm dừng này.");
 
         var trip = stop.Trip;
         if (trip == null)
@@ -106,58 +101,7 @@ public class ConfirmHandoverCommandHandler : IRequestHandler<ConfirmHandoverComm
         if (lpns.Count == 0)
             throw new ValidationException("No LPNs found for this order on this trip. Ensure dispatch was completed.");
 
-        // Auto-accept all LPNs if driver did not specify any
-        if (request.Lpns == null || request.Lpns.Count == 0)
-        {
-            request.Lpns = lpns.Select(l => new HandoverConfirmLpnInput
-            {
-                LpnId = l.LpnId,
-                IsAccepted = true
-            }).ToList();
-        }
-
-        // 5a. Map flat file lists from request to LPN inputs (Swagger workaround)
-        if (request.EvidencePhotos != null && request.EvidencePhotos.Count > 0)
-        {
-            var rejectedInputs = request.Lpns.Where(i => !i.IsAccepted).ToList();
-            for (int i = 0; i < rejectedInputs.Count; i++)
-            {
-                if (i < request.EvidencePhotos.Count && rejectedInputs[i].EvidencePhotoFile == null)
-                {
-                    rejectedInputs[i].EvidencePhotoFile = request.EvidencePhotos[i];
-                }
-            }
-        }
-
-        if (request.ConditionPhotos != null && request.ConditionPhotos.Count > 0)
-        {
-            var acceptedInputs = request.Lpns.Where(i => i.IsAccepted).ToList();
-            for (int i = 0; i < acceptedInputs.Count; i++)
-            {
-                if (i < request.ConditionPhotos.Count && acceptedInputs[i].ConditionPhotoFile == null)
-                {
-                    acceptedInputs[i].ConditionPhotoFile = request.ConditionPhotos[i];
-                }
-            }
-        }
-
-        // 6. Validate each submitted LPN input
-        foreach (var lpnInput in request.Lpns)
-        {
-            if (!lpns.Any(l => l.LpnId == lpnInput.LpnId))
-                throw new ValidationException($"LPN '{lpnInput.LpnId}' does not belong to order '{order.TrackingCode}' on this trip.");
-
-            if (!lpnInput.IsAccepted)
-            {
-                if (string.IsNullOrWhiteSpace(lpnInput.RejectionReason))
-                    throw new ValidationException($"RejectionReason is required when LPN '{lpnInput.LpnId}' is rejected.");
-
-                if (lpnInput.EvidencePhotoFile == null)
-                    throw new ValidationException($"Evidence photo (EvidencePhotoFile) is required when LPN '{lpnInput.LpnId}' is rejected.");
-            }
-        }
-
-        // 7. Upload signature (required) and optional handover photo — in parallel
+        // 6. Upload signature (required) and optional handover photo — in parallel
         var signatureTask = _fileService.UploadFileAsync(request.SignatureFile);
         var handoverPhotoTask = request.HandoverPhotoFile != null
             ? _fileService.UploadFileAsync(request.HandoverPhotoFile)
@@ -167,43 +111,28 @@ public class ConfirmHandoverCommandHandler : IRequestHandler<ConfirmHandoverComm
         var signatureUrl = signatureTask.Result;
         var handoverPhotoUrl = handoverPhotoTask.Result;
 
-        // 8. Upload per-LPN evidence/condition photos in parallel
-        var lpnUploadTasks = request.Lpns.Select(async input =>
-        {
-            string? evidenceUrl = input.EvidencePhotoFile != null
-                ? await _fileService.UploadFileAsync(input.EvidencePhotoFile)
-                : null;
-            string? conditionUrl = input.ConditionPhotoFile != null
-                ? await _fileService.UploadFileAsync(input.ConditionPhotoFile)
-                : null;
-            return (input.LpnId, evidenceUrl, conditionUrl);
-        });
-        var lpnUploadResults = await Task.WhenAll(lpnUploadTasks);
-        var lpnUrlMap = lpnUploadResults.ToDictionary(r => r.LpnId, r => (r.evidenceUrl, r.conditionUrl));
-
-        // 9. Get latest IoT temperature for this trip (cold chain standard fallback: 4.5°C)
+        // 7. Get latest IoT temperature for this trip (cold chain standard fallback: 4.5°C)
         var latestTelemetry = await _context.TelemetryLogs
             .Where(t => t.TripId == trip.TripId)
             .OrderByDescending(t => t.Timestamp)
             .FirstOrDefaultAsync(cancellationToken);
         var recordedTemp = latestTelemetry?.Temperature ?? 4.5m;
 
-        // 10. Calculate expected COD with safe divide-by-zero guard
-        var expectedCod = CalculateExpectedCod(order, lpns, request.Lpns);
+        // 8. Calculate expected COD
+        var expectedCod = CalculateExpectedCod(order, lpns);
 
         var epodId = Guid.NewGuid();
         var now = DateTime.UtcNow;
 
-        // 11. All DB writes inside a transaction (Handover stage)
+        // 9. All DB writes inside a transaction (Handover stage)
         var strategy = _context.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync(async () =>
         {
             using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
             try
             {
-                // Update LPN states + create ReturnedItem records
-                var hasReturnedLpns = UpdateLpnStates(
-                    order, lpns, request.Lpns, lpnUrlMap, recordedTemp, epodId);
+                // Update LPN states (Auto-accept all)
+                UpdateLpnStates(order, lpns, recordedTemp);
 
                 // Create ePOD record (handover stage — payment step pending)
                 var epod = new DeliveryEpod
@@ -213,14 +142,9 @@ public class ConfirmHandoverCommandHandler : IRequestHandler<ConfirmHandoverComm
                     CheckinTime = stop.ActualArrivalTime ?? now,
                     SignedAt = now,
                     HandoverConfirmedAt = now,
-                    ReceiverName = request.ReceiverName,
-                    ReceiverPhone = request.ReceiverPhone,
                     SignImageUrl = signatureUrl,
-                    // Coordinates from Location (check-in validated GPS position)
                     SignLatitude = stop.Location?.Latitude,
                     SignLongitude = stop.Location?.Longitude,
-                    DeliveryRating = request.DeliveryRating,
-                    Note = request.Note,
                     Status = "HANDOVER_CONFIRMED",
                     CodAmount = expectedCod,
                     PaymentStatus = "AWAITING_PAYMENT",
@@ -229,10 +153,10 @@ public class ConfirmHandoverCommandHandler : IRequestHandler<ConfirmHandoverComm
                 _context.DeliveryEpods.Add(epod);
                 await _context.SaveChangesAsync(cancellationToken);
 
-                // Generate Handover Receipt PDF (Biên bản giao nhận hàng)
+                // Generate Handover Receipt PDF
                 var pdfData = BuildHandoverPdfData(
                     order, trip, driver, stop.Location, lpns,
-                    request, signatureUrl, handoverPhotoUrl, lpnUrlMap, recordedTemp, now);
+                    request, signatureUrl, handoverPhotoUrl, recordedTemp, now);
 
                 var pdfBytes = await _pdfGeneratorService.GeneratePdfAsync("Epod", pdfData);
                 var pdfUrl = await _fileService.UploadFileAsync(
@@ -242,16 +166,6 @@ public class ConfirmHandoverCommandHandler : IRequestHandler<ConfirmHandoverComm
                 await _context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
 
-                // 12. SignalR via IDeliveryEventService — Alert if any LPN was returned
-                if (hasReturnedLpns)
-                {
-                    var rejectedCount = request.Lpns.Count(l => !l.IsAccepted);
-                    await _deliveryEvents.NotifyHandoverPartialReturnAsync(
-                        order.OrderId, order.TrackingCode, epodId,
-                        rejectedCount, request.Lpns.Count,
-                        order.Status, pdfUrl, cancellationToken);
-                }
-
                 return ApiResponse<HandoverConfirmResponse>.SuccessResponse(new HandoverConfirmResponse
                 {
                     EpodId = epodId,
@@ -259,7 +173,7 @@ public class ConfirmHandoverCommandHandler : IRequestHandler<ConfirmHandoverComm
                     OrderStatus = order.Status,
                     CodAmountDue = expectedCod,
                     HandoverPdfUrl = pdfUrl,
-                    NextStep = $"POST /api/epods/{epodId}/payments — Thu tiền COD từ khách"
+                    NextStep = $"GET /api/Delivery/epods/{epodId}/payment-qr — Hiển thị mã QR thanh toán tổng COD chính xác cho khách hàng"
                 }, "Nghiệm thu hàng và ký nhận thành công. Vui lòng thu tiền COD ở bước tiếp theo.");
             }
             catch
@@ -272,96 +186,40 @@ public class ConfirmHandoverCommandHandler : IRequestHandler<ConfirmHandoverComm
 
     // ── Private Helpers ──────────────────────────────────────────────────────
 
-    /// <summary>
-    /// COD tính theo tỷ lệ số lượng hàng được nhận / tổng số lượng đơn hàng.
-    /// Guard: nếu CargoValue = 0 hoặc Quantity = 0 → COD = 0 (không thu hộ).
-    /// </summary>
-    private static decimal CalculateExpectedCod(
-        TransportOrder order,
-        List<Lpn> lpns,
-        List<HandoverConfirmLpnInput> lpnInputs)
+    private static decimal CalculateExpectedCod(TransportOrder order, List<Lpn> lpns)
     {
-        if (order.Quantity <= 0)
-            return 0m;
+        if (order.Quantity <= 0) return 0m;
 
-        var acceptedIds = lpnInputs.Where(i => i.IsAccepted).Select(i => i.LpnId).ToHashSet();
-        if (acceptedIds.Count == 0) return 0m;
+        var acceptedQty = lpns.Sum(l => l.Quantity); // All accepted
 
-        var acceptedQty = lpns.Where(l => acceptedIds.Contains(l.LpnId)).Sum(l => l.Quantity);
-        return 0m;
+        var quotation = order.Quotations
+            .Where(q => q.Status == "ACCEPTED" || q.Status == "APPROVED" || q.Status == "DRAFT" || q.FinalAmount > 0)
+            .OrderByDescending(q => q.CreatedAt)
+            .FirstOrDefault();
+
+        decimal baseAmount = quotation?.FinalAmount ?? 0m;
+        if (baseAmount <= 0)
+            throw new ValidationException($"Đơn hàng '{order.TrackingCode}' ({order.OrderId}) chưa có Báo giá (Quotation) hợp lệ hoặc giá trị bằng 0. Không thể tính tiền COD nghiệm thu!");
+
+        return Math.Round((decimal)acceptedQty / order.Quantity * baseAmount, 2);
     }
 
-    /// <summary>
-    /// Cập nhật trạng thái từng LPN, gán nhiệt độ ghi nhận, tạo ReturnedItem nếu từ chối.
-    /// Cập nhật Order.Status tổng quát: DELIVERED / RETURNED / PARTIALLY_DELIVERED.
-    /// Trả về true nếu có hàng trả lại.
-    /// </summary>
-    private bool UpdateLpnStates(
-        TransportOrder order,
-        List<Lpn> lpns,
-        List<HandoverConfirmLpnInput> lpnInputs,
-        Dictionary<Guid, (string? evidenceUrl, string? conditionUrl)> urlMap,
-        decimal recordedTemp,
-        Guid epodId)
+    private void UpdateLpnStates(TransportOrder order, List<Lpn> lpns, decimal recordedTemp)
     {
-        bool hasReturns = false;
         var now = DateTime.UtcNow;
-
-        foreach (var input in lpnInputs)
+        foreach (var lpn in lpns)
         {
-            var lpn = lpns.First(l => l.LpnId == input.LpnId);
             lpn.RecordedTemperature = recordedTemp;
             lpn.UpdatedAt = now;
-
-            if (input.IsAccepted)
-            {
-                lpn.State = LpnState.DELIVERED;
-                if (urlMap.TryGetValue(input.LpnId, out var urls) && urls.conditionUrl != null)
-                    lpn.EvidenceImageUrl = urls.conditionUrl;
-            }
-            else
-            {
-                hasReturns = true;
-                lpn.State = LpnState.RETURN_PENDING;
-                lpn.DiscrepancyReason = input.RejectionReason;
-                if (urlMap.TryGetValue(input.LpnId, out var urls))
-                    lpn.EvidenceImageUrl = urls.evidenceUrl;
-
-                _context.ReturnedItems.Add(new ReturnedItem
-                {
-                    ReturnId = Guid.NewGuid(),
-                    EpodId = epodId,
-                    ItemName = order.ItemName,
-                    ItemCode = lpn.LpnCode,
-                    Unit = order.PackingType ?? "PALLET",
-                    ReturnedQty = lpn.Quantity,
-                    ReasonType = input.RejectionReason!.ToUpper(),
-                    ReasonNote = input.RejectionNotes,
-                    ProcessingStatus = "PENDING",
-                    ReturnedAt = now
-                });
-            }
+            lpn.State = LpnState.DELIVERED;
         }
-
-        var allAccepted = lpnInputs.All(i => i.IsAccepted);
-        var allRejected = lpnInputs.All(i => !i.IsAccepted);
-        order.Status = allAccepted ? "DELIVERED" : allRejected ? "RETURNED" : "PARTIALLY_DELIVERED";
-
-        return hasReturns;
+        order.Status = "DELIVERED";
     }
 
     private static object BuildHandoverPdfData(
-        TransportOrder order,
-        MasterTrip trip,
-        Driver driver,
-        Location? location,
-        List<Lpn> lpns,
-        HandoverConfirmRequest request,
-        string signatureUrl,
-        string? handoverPhotoUrl,
-        Dictionary<Guid, (string? evidenceUrl, string? conditionUrl)> urlMap,
-        decimal recordedTemp,
-        DateTime now)
+        TransportOrder order, MasterTrip trip, Driver driver, Location? location,
+        List<Lpn> lpns, HandoverConfirmRequest request, string signatureUrl,
+        string? handoverPhotoUrl, decimal recordedTemp, DateTime now)
     {
         return new
         {
@@ -372,31 +230,24 @@ public class ConfirmHandoverCommandHandler : IRequestHandler<ConfirmHandoverComm
             VehiclePlateNumber = trip.Vehicle?.TruckPlate ?? "N/A",
             DriverName = driver.FullName,
             CustomerName = order.Customer?.CompanyName ?? "Khách hàng",
-            ReceiverName = request.ReceiverName,
-            ReceiverPhone = request.ReceiverPhone ?? "N/A",
+            ReceiverName = order.Customer?.CompanyName ?? "Khách hàng",
+            ReceiverPhone = "N/A",
             OrderCode = order.TrackingCode,
             RecordedTemperatureCelsius = recordedTemp,
             SignatureUrl = signatureUrl,
             HandoverPhotoUrl = handoverPhotoUrl,
-            DeliveryNote = request.Note,
-            DeliveryRating = request.DeliveryRating,
-            Items = lpns.Select((l, i) =>
+            Items = lpns.Select((l, i) => new
             {
-                var input = request.Lpns.First(li => li.LpnId == l.LpnId);
-                urlMap.TryGetValue(l.LpnId, out var urls);
-                return new
-                {
-                    Index = i + 1,
-                    LpnCode = l.LpnCode,
-                    ItemName = order.ItemName,
-                    Unit = order.PackingType ?? "PALLET",
-                    Quantity = l.Quantity,
-                    WeightKg = l.ActualWeightKg,
-                    Status = input.IsAccepted ? "Đã nhận ✓" : "Từ chối ✗",
-                    RejectionReason = input.IsAccepted ? null : input.RejectionReason,
-                    RejectionNotes = input.IsAccepted ? null : input.RejectionNotes,
-                    PhotoUrl = input.IsAccepted ? urls.conditionUrl : urls.evidenceUrl
-                };
+                Index = i + 1,
+                LpnCode = l.LpnCode,
+                ItemName = order.ItemName,
+                Unit = order.PackingType ?? "PALLET",
+                Quantity = l.Quantity,
+                WeightKg = l.ActualWeightKg,
+                Status = "Đã nhận ✓",
+                RejectionReason = (string?)null,
+                RejectionNotes = (string?)null,
+                PhotoUrl = (string?)null
             }).ToList()
         };
     }
