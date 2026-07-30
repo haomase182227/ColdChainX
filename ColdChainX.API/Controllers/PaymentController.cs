@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.Authorization;
 using ColdChainX.Application.DTOs.Payment;
 using ColdChainX.Application.Features.Payment.Commands;
 using ColdChainX.Shared.Responses;
+using System.Security.Claims;
+using System;
 
 namespace ColdChainX.API.Controllers;
 
@@ -58,4 +60,53 @@ public class PaymentController : ControllerBase
         var result = await _mediator.Send(command);
         return Ok(result);
     }
+
+    /// <summary>
+    /// Lấy tất cả lịch sử giao dịch thanh toán COD, PayOS QR và chi bồi thường OS&D trong toàn bộ hệ thống.
+    /// </summary>
+    [HttpGet("/api/payments/transactions")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAllPaymentTransactions([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+    {
+        var result = await _mediator.Send(new ColdChainX.Application.Features.Payment.Queries.GetAllPaymentTransactionsQuery
+        {
+            PageNumber = pageNumber,
+            PageSize = pageSize
+        });
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Lấy lịch sử giao dịch thanh toán và bồi thường của riêng một Khách hàng (Customer).
+    /// </summary>
+    [HttpGet("/api/payments/transactions/customer/me")]
+    [Authorize]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetCustomerPaymentTransactions()
+    {
+        var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdString) || !Guid.TryParse(userIdString, out var customerId))
+        {
+            return Unauthorized(ApiResponse<object>.Failure("Không thể xác thực danh tính khách hàng từ token."));
+        }
+
+        var result = await _mediator.Send(new ColdChainX.Application.Features.Payment.Queries.GetCustomerPaymentTransactionsQuery { CustomerId = customerId });
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Lấy thông tin hóa đơn (e-Invoice / COD Receipt) theo ID cụ thể (InvoiceId, OrderId, hoặc EpodId).
+    /// </summary>
+    [HttpGet("/api/payments/invoices/{referenceId:guid}")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetPaymentInvoiceById(Guid referenceId)
+    {
+        var result = await _mediator.Send(new ColdChainX.Application.Features.Payment.Queries.GetPaymentInvoiceQuery { ReferenceId = referenceId });
+        return Ok(result);
+    }
+
 }
+
