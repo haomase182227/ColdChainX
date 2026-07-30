@@ -19,7 +19,145 @@ app.UseStaticFiles();
 
 // In-memory state for multiple vehicles
 var FleetState = new ConcurrentDictionary<string, VehicleSimulationState>();
+var StandaloneDevices = new ConcurrentDictionary<string, StandaloneIotState>();
 var factory = new MqttFactory();
+
+app.MapGet("/api/iot/devices", async (IConfiguration config) =>
+{
+    try
+    {
+        var connStr = config.GetConnectionString("LocalConnection");
+        using var conn = new NpgsqlConnection(connStr);
+        // Xóa sạch các thiết bị SIM-TRUCK giả rác trong CSDL nếu trước đó từng tạo
+        try { await conn.ExecuteAsync("DELETE FROM iot_devices WHERE device_code LIKE 'SIM-TRUCK-%'"); } catch { }
+
+        var sql = @"
+            SELECT 
+                d.device_id as ""DeviceId"",
+                d.device_code as ""DeviceCode"",
+                d.vehicle_id as ""VehicleId"",
+                v.truck_plate as ""PlateNumber"",
+                d.battery_level as ""BatteryLevel"",
+                d.last_ping_time as ""LastPingTime"",
+                d.status as ""Status"",
+                d.""IsOnline"" as ""IsOnline""
+            FROM iot_devices d
+            LEFT JOIN vehicles v ON d.vehicle_id = v.vehicle_id
+            WHERE d.device_code NOT LIKE 'SIM-TRUCK-%'
+            ORDER BY d.""IsOnline"" DESC, d.last_ping_time DESC NULLS LAST, d.created_at DESC";
+        var items = await conn.QueryAsync(sql);
+        var devices = items.Select(d =>
+        {
+            var code = (string?)d.DeviceCode;
+            var isSimRunning = code != null && StandaloneDevices.TryGetValue(code, out var std) && std.IsOnline;
+            var isStreaming = code != null && StandaloneDevices.TryGetValue(code, out var std2) && std2.IsStreaming;
+
+            return new
+            {
+                d.DeviceId,
+                d.DeviceCode,
+                d.VehicleId,
+                d.PlateNumber,
+                d.BatteryLevel,
+                d.LastPingTime,
+                d.Status,
+                d.IsOnline,
+                IsSimulatedOnline = isSimRunning,
+                IsStreaming = isStreaming
+            };
+        });
+        return Results.Ok(devices);
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+});
+
+app.MapPost("/api/iot/activate", async (ActivateIotRequest req, ILoggerFactory loggerFactory, IConfiguration config) =>
+{
+    var logger = loggerFactory.CreateLogger("IotSimulator");
+    if (string.IsNullOrWhiteSpace(req.DeviceCode)) return Results.BadRequest(new { error = "DeviceCode is required." });
+
+    try
+    {
+        var connStr = config.GetConnectionString("LocalConnection");
+        using var conn = new NpgsqlConnection(connStr);
+        await conn.OpenAsync();
+
+        var updateSql = @"UPDATE iot_devices SET ""IsOnline"" = true, status = 'ACTIVE', last_ping_time = CURRENT_TIMESTAMP WHERE device_code = @dc";
+        var affected = await conn.ExecuteAsync(updateSql, new { dc = req.DeviceCode });
+        if (affected == 0)
+        {
+            return Results.BadRequest(new { error = $"Thiết bị '{req.DeviceCode}' không tồn tại trong hệ thống (CSDL)!" });
+        }
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Error updating DB for IoT activate");
+    }
+
+    if (StandaloneDevices.TryGetValue(req.DeviceCode, out var existingState))
+    {
+        existingState.CancellationTokenSource?.Cancel();
+    }
+
+    // Theo BRD/Hệ thống thực tế: Khi bật online thì chỉ set IsOnline = true, để ở trạng thái STREAM OFF
+    // Khi gọi API iot-check (hoặc nhận lệnh START_STREAMING qua MQTT) mới bật STREAM ON và bắt đầu gửi tín hiệu
+    var state = new StandaloneIotState
+    {
+        DeviceCode = req.DeviceCode,
+        VehicleId = req.VehicleId,
+        IsOnline = true,
+        IsStreaming = false, // STREAM OFF mặc định!
+        CurrentLat = req.Lat,
+        CurrentLon = req.Lon,
+        Temperature = req.TargetTemperature ?? -18.0,
+        CancellationTokenSource = new CancellationTokenSource()
+    };
+    StandaloneDevices[req.DeviceCode] = state;
+
+    _ = Task.Run(() => RunStandaloneIotSimulation(state, logger, config), state.CancellationTokenSource.Token);
+    _ = PublishMqttStatusAsync(req.DeviceCode, true, logger);
+    return Results.Ok(new { success = true, deviceCode = req.DeviceCode, isOnline = true, isStreaming = false });
+});
+
+app.MapPost("/api/iot/{deviceCode}/stream", (string deviceCode, StreamIotRequest req) =>
+{
+    if (StandaloneDevices.TryGetValue(deviceCode, out var state))
+    {
+        state.IsStreaming = req.Stream;
+        return Results.Ok(new { success = true, isStreaming = state.IsStreaming });
+    }
+    return Results.BadRequest(new { error = $"Thiết bị '{deviceCode}' chưa được bật Online!" });
+});
+
+app.MapPost("/api/iot/{deviceCode}/deactivate", async (string deviceCode, ILoggerFactory loggerFactory, IConfiguration config) =>
+{
+    var logger = loggerFactory.CreateLogger("IotSimulator");
+    _ = PublishMqttStatusAsync(deviceCode, false, logger);
+    if (StandaloneDevices.TryGetValue(deviceCode, out var state))
+    {
+        state.CancellationTokenSource?.Cancel();
+        state.IsOnline = false;
+        state.IsStreaming = false;
+        StandaloneDevices.TryRemove(deviceCode, out _);
+    }
+
+    try
+    {
+        var connStr = config.GetConnectionString("LocalConnection");
+        using var conn = new NpgsqlConnection(connStr);
+        var updateSql = @"UPDATE iot_devices SET ""IsOnline"" = false, status = 'OFFLINE' WHERE device_code = @dc";
+        await conn.ExecuteAsync(updateSql, new { dc = deviceCode });
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Error updating DB for IoT deactivate");
+    }
+
+    return Results.Ok(new { success = true });
+});
 
 app.MapGet("/api/fleet/status", () =>
 {
@@ -82,7 +220,8 @@ app.MapGet("/api/fleet/trip/{tripId}/polyline", async (string tripId, IConfigura
         }
 
         using var client = new HttpClient();
-        var res = await client.GetAsync($"http://localhost:5000/api/dispatch/trip/{tripId}/route");
+        var backendUrl = config["BackendApiUrl"] ?? "http://localhost:5244";
+        var res = await client.GetAsync($"{backendUrl}/api/dispatch/trip/{tripId}/route");
         if (!res.IsSuccessStatusCode) return Results.BadRequest("Cannot fetch from ColdChainX API");
         
         var json = await res.Content.ReadAsStringAsync();
@@ -116,9 +255,11 @@ app.MapPost("/api/fleet/start", async (SimulationRequest req, ILoggerFactory log
     var logger = loggerFactory.CreateLogger("Simulator");
     if (string.IsNullOrEmpty(req.Polyline)) return Results.BadRequest(new { error = "Polyline is required." });
     
-    string deviceId = string.IsNullOrWhiteSpace(req.DeviceId) 
-        ? $"SIM-TRUCK-{Guid.NewGuid().ToString().Substring(0,4)}" 
-        : req.DeviceId;
+    string deviceId = req.DeviceId?.Trim() ?? "";
+    if (string.IsNullOrWhiteSpace(deviceId))
+    {
+        return Results.BadRequest(new { error = "Vui lòng chỉ định Mã thiết bị IoT trong hệ thống cho chuyến đi này." });
+    }
 
     // Bổ sung yêu cầu: Chỉ chạy giả lập nếu thiết bị IoT thực tế (trong DB) đang ONLINE
     try
@@ -126,6 +267,15 @@ app.MapPost("/api/fleet/start", async (SimulationRequest req, ILoggerFactory log
         var connStr = config.GetConnectionString("LocalConnection");
         using var conn = new NpgsqlConnection(connStr);
         await conn.OpenAsync();
+        
+        var checkExistsSql = "SELECT COUNT(1) FROM iot_devices WHERE device_code = @deviceId";
+        using var checkCmd = new NpgsqlCommand(checkExistsSql, conn);
+        checkCmd.Parameters.AddWithValue("deviceId", deviceId);
+        if ((long)await checkCmd.ExecuteScalarAsync() == 0)
+        {
+            return Results.BadRequest(new { error = $"Thiết bị IoT '{deviceId}' không tồn tại trong hệ thống." });
+        }
+
         var sql = "SELECT \"IsOnline\" FROM iot_devices WHERE device_code = @deviceId";
         using var cmd = new NpgsqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("deviceId", deviceId);
@@ -133,7 +283,29 @@ app.MapPost("/api/fleet/start", async (SimulationRequest req, ILoggerFactory log
         
         if (res == null || !(bool)res)
         {
-            return Results.BadRequest(new { error = $"Thiết bị IoT '{deviceId}' hiện đang OFFLINE hoặc chưa phát dữ liệu thực tế. Vui lòng bật IoT thiết bị thực trước khi chạy giả lập!" });
+            if (req.AutoActivateIot)
+            {
+                logger.LogInformation($"Tự động bật Online (IsOnline=true, Stream ON) cho '{deviceId}' trước khi chạy chuyến.");
+                var updateSql = @"UPDATE iot_devices SET ""IsOnline"" = true, status = 'ACTIVE', last_ping_time = CURRENT_TIMESTAMP WHERE device_code = @deviceId";
+                using var updCmd = new NpgsqlCommand(updateSql, conn);
+                updCmd.Parameters.AddWithValue("deviceId", deviceId);
+                await updCmd.ExecuteNonQueryAsync();
+                _ = PublishMqttStatusAsync(deviceId, true, logger);
+                
+                if (StandaloneDevices.TryGetValue(deviceId, out var std))
+                {
+                    std.IsOnline = true;
+                    std.IsStreaming = true; // Khi bắt đầu lái xe, tự động stream on
+                }
+            }
+            else
+            {
+                return Results.BadRequest(new { error = $"Thiết bị IoT '{deviceId}' hiện đang OFFLINE. Vui lòng bật IoT Online hoặc chọn Tự động Bật trước khi chạy!" });
+            }
+        }
+        else if (StandaloneDevices.TryGetValue(deviceId, out var runningStd))
+        {
+            runningStd.IsStreaming = true; // Bật stream khi khởi hành
         }
     }
     catch (Exception ex)
@@ -161,6 +333,7 @@ app.MapPost("/api/fleet/start", async (SimulationRequest req, ILoggerFactory log
         SpeedKmh = req.SpeedKmh > 0 ? req.SpeedKmh : 60,
         CurrentPointIndex = 0,
         TargetTemperature = req.TargetTemperature ?? -18.0,
+        CurrentTemperature = req.TargetTemperature ?? -18.0,
         CancellationTokenSource = new CancellationTokenSource(),
         Path = DecodePolyline(req.Polyline)
     };
@@ -173,7 +346,7 @@ app.MapPost("/api/fleet/start", async (SimulationRequest req, ILoggerFactory log
     FleetState[deviceId] = state;
     
     // Fire and forget background task for this vehicle
-    _ = Task.Run(() => RunVehicleSimulation(state, logger), state.CancellationTokenSource.Token);
+    _ = Task.Run(() => RunVehicleSimulation(state, logger, config), state.CancellationTokenSource.Token);
     
     return Results.Ok(new { deviceId = deviceId, points = state.Path.Count });
 });
@@ -185,6 +358,16 @@ app.MapPost("/api/fleet/{deviceId}/stop", (string deviceId) =>
         state.CancellationTokenSource?.Cancel();
         state.IsRunning = false;
         return Results.Ok();
+    }
+    return Results.NotFound();
+});
+
+app.MapPost("/api/fleet/{deviceId}/pause", (string deviceId) =>
+{
+    if (FleetState.TryGetValue(deviceId, out var state))
+    {
+        state.IsPaused = !state.IsPaused;
+        return Results.Ok(new { isPaused = state.IsPaused });
     }
     return Results.NotFound();
 });
@@ -308,20 +491,45 @@ static void InterpolatePosition(VehicleSimulationState state, double distanceToM
     }
 }
 
-async Task RunVehicleSimulation(VehicleSimulationState state, ILogger logger)
+async Task RunVehicleSimulation(VehicleSimulationState state, ILogger logger, IConfiguration config)
 {
-    var mqttClient = factory.CreateMqttClient();
-    var options = new MqttClientOptionsBuilder()
+    string clientId = $"VEHICLE_SIM_{state.DeviceId}_{Guid.NewGuid().ToString().Substring(0, 8)}";
+    string statusTopic = $"telemetry/coldchain/{state.DeviceId}/status";
+    string offlinePayload = JsonSerializer.Serialize(new { status = "OFFLINE", clientId = clientId, timestamp = DateTime.UtcNow.ToString("O") });
+
+    var optionsBuilder = new MqttClientOptionsBuilder()
         .WithTcpServer("8.231.129.222", 1883)
         .WithCredentials("esp32user", "183732")
-        .WithClientId($"{state.DeviceId}{Guid.NewGuid().ToString().Substring(0,4)}")
-        .Build();
+        .WithClientId(clientId);
+
+    if (!state.IsHybridMode)
+    {
+        optionsBuilder
+            .WithWillTopic(statusTopic)
+            .WithWillPayload(System.Text.Encoding.UTF8.GetBytes(offlinePayload))
+            .WithWillQualityOfServiceLevel(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
+    }
+
+    var mqttClient = factory.CreateMqttClient();
+    var options = optionsBuilder.Build();
 
     try
     {
         await mqttClient.ConnectAsync(options, state.CancellationTokenSource.Token);
-        logger.LogInformation($"[{state.DeviceId}] Connected to MQTT. HybridMode={state.IsHybridMode}");
+        logger.LogInformation($"[{state.DeviceId}] Connected to MQTT as {clientId}. HybridMode={state.IsHybridMode}");
         
+        if (!state.IsHybridMode)
+        {
+            string onlinePayload = JsonSerializer.Serialize(new { status = "ONLINE", clientId = clientId, timestamp = DateTime.UtcNow.ToString("O") });
+            var onlineMsg = new MqttApplicationMessageBuilder()
+                .WithTopic(statusTopic)
+                .WithPayload(onlinePayload)
+                .WithQualityOfServiceLevel(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce)
+                .Build();
+            await mqttClient.PublishAsync(onlineMsg, state.CancellationTokenSource.Token);
+            logger.LogInformation($"[{state.DeviceId}] Published MQTT Status ONLINE to backend worker.");
+        }
+
         if (state.IsHybridMode)
         {
             var rawTopic = $"telemetry/coldchain/{state.DeviceId}/raw";
@@ -357,7 +565,10 @@ async Task RunVehicleSimulation(VehicleSimulationState state, ILogger logger)
                             if (root.TryGetProperty("Lat", out var latEl)) state.CurrentLat = latEl.GetDouble();
                             if (root.TryGetProperty("Lon", out var lonEl)) state.CurrentLon = lonEl.GetDouble();
                         } else {
-                            InterpolatePosition(state, (DateTime.UtcNow - lastMessageTime).TotalSeconds * (state.SpeedKmh / 3600.0));
+                            if (!state.IsPaused)
+                            {
+                                InterpolatePosition(state, (DateTime.UtcNow - lastMessageTime).TotalSeconds * (state.SpeedKmh / 3600.0));
+                            }
                         }
                         lastMessageTime = DateTime.UtcNow;
 
@@ -434,15 +645,41 @@ async Task RunVehicleSimulation(VehicleSimulationState state, ILogger logger)
                 await mqttClient.PublishAsync(msg, state.CancellationTokenSource.Token);
                 logger.LogInformation($"[{state.DeviceId}] Published: {state.CurrentLat},{state.CurrentLon} Temp:{state.CurrentTemperature}C");
                 
-                double distanceKm = (state.SpeedKmh / 3600.0) * (tickDelayMs / 1000.0);
-                InterpolatePosition(state, distanceKm);
+                try
+                {
+                    var connStr = config.GetConnectionString("LocalConnection");
+                    using var conn = new NpgsqlConnection(connStr);
+                    await conn.ExecuteAsync(@"UPDATE iot_devices SET ""IsOnline"" = true, last_ping_time = CURRENT_TIMESTAMP WHERE device_code = @dc", new { dc = state.DeviceId });
+                }
+                catch { }
+                
+                if (!state.IsPaused)
+                {
+                    double distanceKm = (state.SpeedKmh / 3600.0) * (tickDelayMs / 1000.0);
+                    InterpolatePosition(state, distanceKm);
+                }
                 
                 await Task.Delay(tickDelayMs, state.CancellationTokenSource.Token);
             }
         }
         
         state.IsRunning = false;
-        await mqttClient.DisconnectAsync();
+        if (mqttClient.IsConnected)
+        {
+            try
+            {
+                string offPayload = JsonSerializer.Serialize(new { status = "OFFLINE", clientId = $"ESP32_SIM_{state.DeviceId}", timestamp = DateTime.UtcNow.ToString("O") });
+                var offMsg = new MqttApplicationMessageBuilder()
+                    .WithTopic(statusTopic)
+                    .WithPayload(offPayload)
+                    .WithQualityOfServiceLevel(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce)
+                    .Build();
+                await mqttClient.PublishAsync(offMsg);
+                await mqttClient.DisconnectAsync();
+                logger.LogInformation($"[{state.DeviceId}] Published MQTT Status OFFLINE upon stopping.");
+            }
+            catch { }
+        }
     }
     catch (TaskCanceledException)
     {
@@ -455,6 +692,24 @@ async Task RunVehicleSimulation(VehicleSimulationState state, ILogger logger)
     finally
     {
         state.IsRunning = false;
+        try
+        {
+            if (mqttClient.IsConnected)
+            {
+                if (!state.IsHybridMode)
+                {
+                    string offPayload = JsonSerializer.Serialize(new { status = "OFFLINE", clientId = $"ESP32_SIM_{state.DeviceId}", timestamp = DateTime.UtcNow.ToString("O") });
+                    var offMsg = new MqttApplicationMessageBuilder()
+                        .WithTopic($"telemetry/coldchain/{state.DeviceId}/status")
+                        .WithPayload(offPayload)
+                        .WithQualityOfServiceLevel(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce)
+                        .Build();
+                    await mqttClient.PublishAsync(offMsg);
+                }
+                await mqttClient.DisconnectAsync();
+            }
+        }
+        catch { }
     }
 }
 
@@ -472,30 +727,65 @@ static List<Coordinate> DecodePolyline(string encodedPoints)
 
     while (index < polylineChars.Length)
     {
-        int sum = 0, shifter = 0, next5Bits;
+        int sum = 0, shifter = 0, next5Bits = 0;
         do
         {
+            if (index >= polylineChars.Length) break;
             next5Bits = polylineChars[index++] - 63;
             sum |= (next5Bits & 31) << shifter;
             shifter += 5;
         } while (next5Bits >= 32 && index < polylineChars.Length);
-        if (index >= polylineChars.Length && next5Bits >= 32) break;
+        if (index > polylineChars.Length || (index == polylineChars.Length && next5Bits >= 32)) break;
         currentLat += (sum & 1) == 1 ? ~(sum >> 1) : (sum >> 1);
 
         sum = 0;
         shifter = 0;
         do
         {
+            if (index >= polylineChars.Length) break;
             next5Bits = polylineChars[index++] - 63;
             sum |= (next5Bits & 31) << shifter;
             shifter += 5;
         } while (next5Bits >= 32 && index < polylineChars.Length);
-        if (index >= polylineChars.Length && next5Bits >= 32) break;
+        if (index > polylineChars.Length || (index == polylineChars.Length && next5Bits >= 32)) break;
         currentLng += (sum & 1) == 1 ? ~(sum >> 1) : (sum >> 1);
 
         coordinates.Add(new Coordinate(currentLat / 1E5, currentLng / 1E5));
     }
     return coordinates;
+}
+
+async Task PublishMqttStatusAsync(string deviceCode, bool isOnline, ILogger logger)
+{
+    var statusClient = factory.CreateMqttClient();
+    var options = new MqttClientOptionsBuilder()
+        .WithTcpServer("8.231.129.222", 1883)
+        .WithCredentials("esp32user", "183732")
+        .WithClientId($"STATUS_PUB_{deviceCode}_{Guid.NewGuid():N}")
+        .Build();
+        
+    try
+    {
+        await statusClient.ConnectAsync(options);
+        string statusStr = isOnline ? "ONLINE" : "OFFLINE";
+        string clientId = $"ESP32_SIM_{deviceCode}";
+        string payload = JsonSerializer.Serialize(new { status = statusStr, clientId = clientId, timestamp = DateTime.UtcNow.ToString("O") });
+        string topic = $"telemetry/coldchain/{deviceCode}/status";
+
+        var msg = new MqttApplicationMessageBuilder()
+            .WithTopic(topic)
+            .WithPayload(payload)
+            .WithQualityOfServiceLevel(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce)
+            .Build();
+
+        await statusClient.PublishAsync(msg);
+        await statusClient.DisconnectAsync();
+        logger.LogInformation($"[{deviceCode}] Published MQTT Status: {statusStr} to topic {topic}");
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, $"[{deviceCode}] Failed to publish MQTT status ({isOnline})");
+    }
 }
 
 async Task SendMqttCommandAsync(string deviceId, string action, ILogger logger)
@@ -523,6 +813,176 @@ async Task SendMqttCommandAsync(string deviceId, string action, ILogger logger)
     }
 }
 
+async Task RunStandaloneIotSimulation(StandaloneIotState state, ILogger logger, IConfiguration config)
+{
+    string clientId = $"ESP32_SIM_{state.DeviceCode}";
+    string statusTopic = $"telemetry/coldchain/{state.DeviceCode}/status";
+    string offlinePayload = JsonSerializer.Serialize(new { status = "OFFLINE", clientId = clientId, timestamp = DateTime.UtcNow.ToString("O") });
+
+    var mqttClient = factory.CreateMqttClient();
+    var options = new MqttClientOptionsBuilder()
+        .WithTcpServer("8.231.129.222", 1883)
+        .WithCredentials("esp32user", "183732")
+        .WithClientId(clientId)
+        .WithWillTopic(statusTopic)
+        .WithWillPayload(System.Text.Encoding.UTF8.GetBytes(offlinePayload))
+        .WithWillQualityOfServiceLevel(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce)
+        .Build();
+
+    try
+    {
+        await mqttClient.ConnectAsync(options, state.CancellationTokenSource.Token);
+        logger.LogInformation($"[{state.DeviceCode}] Standalone IoT connected to MQTT. IsOnline=true, Stream OFF (Waiting for API iot-check command)...");
+        
+        string onlinePayload = JsonSerializer.Serialize(new { status = "ONLINE", clientId = clientId, timestamp = DateTime.UtcNow.ToString("O") });
+        var onlineMsg = new MqttApplicationMessageBuilder()
+            .WithTopic(statusTopic)
+            .WithPayload(onlinePayload)
+            .WithQualityOfServiceLevel(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce)
+            .Build();
+        await mqttClient.PublishAsync(onlineMsg, state.CancellationTokenSource.Token);
+        logger.LogInformation($"[{state.DeviceCode}] Published MQTT Status ONLINE to backend worker.");
+
+        // Đăng ký nghe topic command từ backend (ví dụ khi gọi API vehicle-iot-check)
+        string commandTopic = $"command/coldchain/{state.DeviceCode}";
+        mqttClient.ApplicationMessageReceivedAsync += e =>
+        {
+            try
+            {
+                var topic = e.ApplicationMessage.Topic;
+                var payloadStr = System.Text.Encoding.UTF8.GetString(e.ApplicationMessage.PayloadSegment);
+                logger.LogInformation($"[{state.DeviceCode}] Nhận lệnh từ Backend MQTT topic {topic}: {payloadStr}");
+                
+                if (payloadStr.Contains("START_STREAMING", StringComparison.OrdinalIgnoreCase))
+                {
+                    state.IsStreaming = true;
+                    logger.LogInformation($"[{state.DeviceCode}] => STREAM ON! (Đã kích hoạt gửi tín hiệu telemetry!)");
+                }
+                else if (payloadStr.Contains("STOP_STREAMING", StringComparison.OrdinalIgnoreCase))
+                {
+                    state.IsStreaming = false;
+                    logger.LogInformation($"[{state.DeviceCode}] => STREAM OFF! (Đã tạm dừng phát telemetry)");
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError($"[{state.DeviceCode}] Lỗi xử lý MQTT Command: {ex.Message}");
+            }
+            return Task.CompletedTask;
+        };
+
+        await mqttClient.SubscribeAsync(new MqttTopicFilterBuilder().WithTopic(commandTopic).Build());
+        logger.LogInformation($"[{state.DeviceCode}] Subscribed topic: {commandTopic}");
+
+        var rnd = new Random();
+        var connStr = config.GetConnectionString("LocalConnection");
+
+        while (!state.CancellationTokenSource.Token.IsCancellationRequested && state.IsOnline)
+        {
+            // Cập nhật last_ping_time để giữ kết nối trong DB (heartbeat)
+            try
+            {
+                using var conn = new NpgsqlConnection(connStr);
+                await conn.ExecuteAsync(@"UPDATE iot_devices SET ""IsOnline"" = true, last_ping_time = CURRENT_TIMESTAMP WHERE device_code = @dc", new { dc = state.DeviceCode });
+            }
+            catch { }
+
+            // Khi Stream ON: gửi telemetry
+            // - Nếu có chuyến xe fleet đang chạy: đồng bộ GPS từ FleetState (xe chạy trên polyline)
+            // - Nếu ở chế độ Hybrid: gửi vào topic RAW để xe fleet nối tọa độ GPS
+            // - Nếu standalone thuần (không có fleet chạy): dùng tọa độ riêng của IoT
+            if (state.IsStreaming)
+            {
+                var runningTrip = FleetState.Values.FirstOrDefault(f => f.DeviceId == state.DeviceCode && f.IsRunning);
+
+                // Đồng bộ GPS: Khi có xe fleet đang chạy, IoT tự động kế thừa tọa độ GPS real-time từ xe
+                double sendLat = state.CurrentLat;
+                double sendLon = state.CurrentLon;
+                if (runningTrip != null)
+                {
+                    sendLat = runningTrip.CurrentLat;
+                    sendLon = runningTrip.CurrentLon;
+                    // Cập nhật ngược lại vào state để đồng bộ 2 chiều
+                    state.CurrentLat = sendLat;
+                    state.CurrentLon = sendLon;
+                }
+
+                bool isForHybridTrip = (runningTrip != null && runningTrip.IsHybridMode);
+
+                // Chế độ bình thường (fleet non-Hybrid): xe fleet đã tự gửi telemetry rồi, 
+                // IoT chỉ cần cập nhật GPS vào state (đã làm ở trên) mà không gửi trùng.
+                // Chế độ Hybrid hoặc Standalone: IoT phải tự gửi telemetry.
+                if (runningTrip == null || isForHybridTrip)
+                {
+                    double temp = state.Temperature + (rnd.NextDouble() * 0.6 - 0.3);
+                    double currentTemp = Math.Round(temp, 1);
+
+                    string topic = isForHybridTrip 
+                        ? $"telemetry/coldchain/{state.DeviceCode}/raw" 
+                        : $"telemetry/coldchain/{state.DeviceCode}/data";
+
+                    var payload = new
+                    {
+                        DeviceId = state.DeviceCode,
+                        TempC = currentTemp,
+                        DoorOpen = state.IsDoorOpen,
+                        Lat = sendLat,
+                        Lon = sendLon,
+                        Timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:sszzz"),
+                        IsSimulated = !isForHybridTrip
+                    };
+
+                    string json = JsonSerializer.Serialize(payload);
+
+                    var msg = new MqttApplicationMessageBuilder()
+                        .WithTopic(topic)
+                        .WithPayload(json)
+                        .WithQualityOfServiceLevel(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce)
+                        .Build();
+
+                    await mqttClient.PublishAsync(msg, state.CancellationTokenSource.Token);
+                    
+                    if (isForHybridTrip)
+                        logger.LogInformation($"[{state.DeviceCode} STREAM ON -> HYBRID RAW] Pinged Raw Temp:{currentTemp}°C to vehicle trip simulator.");
+                    else
+                        logger.LogInformation($"[{state.DeviceCode} STREAM ON] Pinged MQTT Telemetry Temp:{currentTemp}°C Lat:{sendLat} Lon:{sendLon}");
+                }
+            }
+
+            await Task.Delay(8000, state.CancellationTokenSource.Token);
+        }
+    }
+    catch (TaskCanceledException)
+    {
+        logger.LogInformation($"[{state.DeviceCode}] Standalone simulation stopped.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError($"[{state.DeviceCode}] Error in standalone simulation: {ex.Message}");
+    }
+    finally
+    {
+        state.IsOnline = false;
+        state.IsStreaming = false;
+        try
+        {
+            if (mqttClient.IsConnected)
+            {
+                string offPayload = JsonSerializer.Serialize(new { status = "OFFLINE", clientId = $"ESP32_SIM_{state.DeviceCode}", timestamp = DateTime.UtcNow.ToString("O") });
+                var offMsg = new MqttApplicationMessageBuilder()
+                    .WithTopic(statusTopic)
+                    .WithPayload(offPayload)
+                    .WithQualityOfServiceLevel(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce)
+                    .Build();
+                await mqttClient.PublishAsync(offMsg);
+                logger.LogInformation($"[{state.DeviceCode}] Published MQTT Status OFFLINE upon disconnect.");
+                await mqttClient.DisconnectAsync();
+            }
+        }
+        catch { }
+    }
+}
+
 // ==========================================
 // MODELS
 // ==========================================
@@ -534,6 +994,36 @@ public class SimulationRequest
     public double? TargetTemperature { get; set; }
     public bool IsHybridMode { get; set; }
     public bool InjectTemp { get; set; }
+    public bool AutoActivateIot { get; set; } = true;
+}
+
+public class ActivateIotRequest
+{
+    public string? DeviceCode { get; set; }
+    public Guid? VehicleId { get; set; }
+    public double Lat { get; set; }
+    public double Lon { get; set; }
+    public double? TargetTemperature { get; set; }
+}
+
+public class StreamIotRequest
+{
+    public bool Stream { get; set; }
+}
+
+public class StandaloneIotState
+{
+    public string DeviceCode { get; set; } = "";
+    public Guid? VehicleId { get; set; }
+    public bool IsOnline { get; set; }
+    public bool IsStreaming { get; set; }
+    public double CurrentLat { get; set; }
+    public double CurrentLon { get; set; }
+    public double Temperature { get; set; }
+    public bool IsDoorOpen { get; set; }
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public CancellationTokenSource? CancellationTokenSource { get; set; }
 }
 
 public class AnomalyRequest
@@ -553,6 +1043,7 @@ public class VehicleSimulationState
 {
     public string DeviceId { get; set; } = "";
     public bool IsRunning { get; set; }
+    public bool IsPaused { get; set; }
     public bool IsHybridMode { get; set; }
     public bool InjectTemp { get; set; }
     public bool UseRealGps { get; set; }
