@@ -3,6 +3,7 @@ using ColdChainX.Application.Features.Inbound.Commands;
 using ColdChainX.Shared.Constants;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 
 namespace ColdChainX.API.Controllers;
