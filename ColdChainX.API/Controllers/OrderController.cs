@@ -126,5 +126,27 @@ namespace ColdChainX.API.Controllers
             var result = await _orderService.GetPublicTemperatureChartAsync(trackingCode, maxPoints);
             return result.Success ? Ok(result) : NotFound(result);
         }
+
+        [HttpPost("{orderId}/physical-pod")]
+        [Authorize(Roles = "Driver,Admin")]
+        public async Task<IActionResult> UploadPhysicalPod(Guid orderId, [FromBody] string physicalPodImageUrl)
+        {
+            var result = await _orderService.UploadPhysicalPodAsync(orderId, physicalPodImageUrl);
+            if (!result.Success)
+                return BadRequest(result);
+
+            return Ok(result);
+        }
+
+        [HttpGet("{orderId}/digital-archive")]
+        [Authorize(Roles = "Accountant,Admin,Customer")]
+        public async Task<IActionResult> ExportDigitalArchive(Guid orderId)
+        {
+            var result = await _orderService.ExportDigitalArchiveAsync(orderId);
+            if (!result.Success)
+                return BadRequest(result);
+
+            return File(result.Data, "application/zip", $"OrderArchive_{orderId}.zip");
+        }
     }
 }

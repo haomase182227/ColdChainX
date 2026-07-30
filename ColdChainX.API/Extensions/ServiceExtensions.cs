@@ -91,15 +91,18 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IWarehouseService, WarehouseService>();
 
             services.AddScoped<ICustomerService, CustomerService>();
+            services.AddScoped<IRealtimeTelemetryService, ColdChainX.API.Implementations.RedisRealtimeTelemetryService>();
             services.AddHttpClient<ILocationService, GoongLocationService>(client =>
             {
                 client.BaseAddress = new Uri("https://rsapi.goong.io/");
                 client.Timeout = TimeSpan.FromSeconds(20);
+                client.DefaultRequestHeaders.Add("User-Agent", "ColdChainX/1.0");
             });
             services.AddHttpClient<IGoongMapService, GoongMapService>(client =>
             {
                 client.BaseAddress = new Uri("https://rsapi.goong.io/");
                 client.Timeout = TimeSpan.FromSeconds(20);
+                client.DefaultRequestHeaders.Add("User-Agent", "ColdChainX/1.0");
             });
             services.AddScoped<IFileService, FileService>();
             services.AddScoped<ComplianceRulesEngine>();
@@ -123,7 +126,7 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IClaimService, ClaimService>();
             services.AddScoped<IDeliveryEventService, DeliveryEventService>();
             services.AddScoped<IPaymentGatewayService, PayOsPaymentService>();
-
+            services.AddScoped<IErpIntegrationService, MockErpIntegrationService>();
 
             services.AddScoped<IOutboundOrderService, OutboundOrderService>();
             services.AddScoped<IFleetManagementService, FleetManagementService>();
@@ -131,6 +134,7 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<IWarehouseFlowService, WarehouseFlowService>();
             services.AddScoped<IColdChainMonitoringService, ColdChainMonitoringService>();
             services.AddSingleton<IColdChainRiskService, ColdChainRiskService>();
+            services.AddSingleton<IAiAlertingControlService, AiAlertingControlService>();
             services.AddScoped<IMqttCommandPublisher, MqttCommandPublisher>();
             if (configuration.GetValue("HostedWorkers:FleetCompliance", true))
             {

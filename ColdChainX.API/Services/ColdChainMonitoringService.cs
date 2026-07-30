@@ -24,6 +24,7 @@ public sealed class ColdChainMonitoringService : IColdChainMonitoringService
     private readonly IHubContext<MonitoringHub> _hubContext;
     private readonly IHubContext<NotificationHub> _notificationHub;
     private readonly IColdChainRiskService _riskService;
+    private readonly IAiAlertingControlService _aiAlertingControl;
     private readonly IMqttCommandPublisher _mqttCommandPublisher;
     private readonly ILogger<ColdChainMonitoringService> _logger;
 
@@ -33,6 +34,7 @@ public sealed class ColdChainMonitoringService : IColdChainMonitoringService
         IHubContext<MonitoringHub> hubContext,
         IHubContext<NotificationHub> notificationHub,
         IColdChainRiskService riskService,
+        IAiAlertingControlService aiAlertingControl,
         IMqttCommandPublisher mqttCommandPublisher,
         ILogger<ColdChainMonitoringService> logger)
     {
@@ -41,6 +43,7 @@ public sealed class ColdChainMonitoringService : IColdChainMonitoringService
         _hubContext = hubContext;
         _notificationHub = notificationHub;
         _riskService = riskService;
+        _aiAlertingControl = aiAlertingControl;
         _mqttCommandPublisher = mqttCommandPublisher;
         _logger = logger;
     }
@@ -117,13 +120,14 @@ public sealed class ColdChainMonitoringService : IColdChainMonitoringService
         var geoFence = await EvaluateGeoFenceAsync(trip, data, cancellationToken);
         var atDeliveryPoint = await IsAtDeliveryPointAsync(trip, data, cancellationToken);
         var graceState = UpdateDoorDeliveryGraceState(trip.TripId, data, atDeliveryPoint);
+        var isAiMuted = graceState.IsMuted || _aiAlertingControl.IsTripAiAlertingMuted(trip.TripId);
         var expert = _riskService.AssessExpertSystem(
             risk,
             forecast,
             geoFence,
             thermalVelocity,
             data.DoorOpen,
-            graceState.IsMuted);
+            isAiMuted);
 
         await TriggerGeofenceEtaAsync(trip, data, cancellationToken);
 
@@ -141,7 +145,7 @@ public sealed class ColdChainMonitoringService : IColdChainMonitoringService
 
         await BroadcastTelemetryAsync(trip.TripId, data, risk, forecast, geoFence, expert, cancellationToken);
 
-        var alerts = BuildAlerts(trip, data, latitude, longitude, risk, forecast, geoFence, expert, atDeliveryPoint, graceState.IsMuted);
+        var alerts = BuildAlerts(trip, data, latitude, longitude, risk, forecast, geoFence, expert, atDeliveryPoint, isAiMuted);
         if (alerts.Count == 0)
         {
             return;

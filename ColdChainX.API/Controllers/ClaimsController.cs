@@ -4,6 +4,8 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using MediatR;
+using ColdChainX.Application.Features.Claims.Commands;
 using ColdChainX.Application.DTOs.Common;
 using ColdChainX.Application.DTOs.Claim;
 using ColdChainX.Application.Interfaces;
@@ -20,10 +22,12 @@ namespace ColdChainX.API.Controllers
     public class ClaimsController : ControllerBase
     {
         private readonly IClaimService _claimService;
+        private readonly IMediator _mediator;
 
-        public ClaimsController(IClaimService claimService)
+        public ClaimsController(IClaimService claimService, IMediator mediator)
         {
             _claimService = claimService;
+            _mediator = mediator;
         }
 
         /// <summary>
@@ -51,7 +55,7 @@ namespace ColdChainX.API.Controllers
         /// Resolve/Finalize a customer claim (mark as RESOLVED/REJECTED and set fault owner).
         /// </summary>
         [HttpPost("{id:guid}/resolve")]
-        [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER")]
+        [Authorize(Roles = "Admin,Dispatcher")]
         [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
@@ -97,6 +101,76 @@ namespace ColdChainX.API.Controllers
             [FromQuery] int pageSize = 10)
         {
             var result = await _claimService.GetPagedClaimsAsync(orderId, pageNumber, pageSize);
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// [Bước 2 - Dispatcher & Sale] Lấy danh sách hồ sơ báo lỗi OS&D Dock chờ Dispatcher mở biểu đồ nhiệt độ IoT Log rà soát.
+        /// </summary>
+        [HttpGet("pending-dispatcher")]
+        [HttpGet("osd-incidents")]
+        [HttpGet("/api/Delivery/osd-incidents")]
+        [Authorize(Roles = "Admin,Dispatcher,Accountant,Manager")]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetPendingOsdIncidents([FromQuery] string? status = null)
+        {
+            var result = await _mediator.Send(new ColdChainX.Application.Features.Claims.Queries.GetPendingOsdClaimsQuery { Status = status });
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Complete payout for a resolved claim.
+        /// </summary>
+        [HttpPost("{id:guid}/payout")]
+        [Authorize(Roles = "Admin,Accountant,Dispatcher")]
+        [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> CompletePayout([FromRoute] Guid id, [FromBody] CompleteClaimPayoutRequest request)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var userId))
+                return Unauthorized(ApiResponse<object>.Failure("User ID claim is missing or invalid in the token."));
+
+            var result = await _claimService.CompleteClaimPayoutAsync(id, request, userId);
+            if (!result.Success)
+                return BadRequest(result);
+
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// [Bước 2 - Dispatcher & Sale] Dispatcher check biểu đồ IoT Log -> Bấm [Duyệt lỗi] chuyển thẳng sang Dashboard Kế toán.
+        /// </summary>
+        [HttpPost("{id:guid}/dispatcher-approve")]
+        [HttpPost("{id:guid}/approve-qa")]
+        [Authorize(Roles = "Admin,Dispatcher,WarehouseWorker")]
+        public async Task<IActionResult> ApproveByQa([FromRoute] Guid id, [FromBody] ApproveClaimByQaCommand command)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var userId))
+                return Unauthorized(ApiResponse<object>.Failure("Invalid User ID claim."));
+
+            command.ClaimId = id;
+            command.QaUserId = userId;
+            var result = await _mediator.Send(command);
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// [Fast-Track 24h] Kế toán chi tiền đền bù (Cash Refund) trong vòng 24h và đóng luồng khiếu nại.
+        /// </summary>
+        [HttpPost("{id:guid}/payout-accountant")]
+        [Authorize(Roles = "Admin,Accountant")]
+        public async Task<IActionResult> PayoutByAccountant([FromRoute] Guid id, [FromBody] PayoutClaimByAccountantCommand command)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var userId))
+                return Unauthorized(ApiResponse<object>.Failure("Invalid User ID claim."));
+
+            command.ClaimId = id;
+            command.AccountantUserId = userId;
+            var result = await _mediator.Send(command);
             return Ok(result);
         }
     }
