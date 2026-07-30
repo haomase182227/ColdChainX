@@ -23,6 +23,7 @@ public partial class TripStop
 
     public DateTime? ActualDepartureTime { get; set; }
 
+
     public string? Status { get; set; }
 
     public string? Note { get; set; }

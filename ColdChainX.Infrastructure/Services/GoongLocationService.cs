@@ -49,7 +49,7 @@ namespace ColdChainX.Infrastructure.Services
             var content = await response.Content.ReadAsStringAsync();
 
             if (!response.IsSuccessStatusCode)
-                throw new InvalidOperationException($"Goong distance matrix request failed: {content}");
+                throw new InvalidOperationException($"Goong distance matrix request failed for URI {requestUri}: {content}");
 
             using var document = JsonDocument.Parse(content);
             var root = document.RootElement;

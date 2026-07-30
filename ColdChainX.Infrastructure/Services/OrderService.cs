@@ -541,6 +541,62 @@ namespace ColdChainX.Infrastructure.Services
             return ApiResponse<bool>.SuccessResponse(true, "Order deleted successfully");
         }
 
+        public async Task<ApiResponse<bool>> UploadPhysicalPodAsync(Guid orderId, string physicalPodImageUrl)
+        {
+            var strategy = _db.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                using var transaction = await _db.Database.BeginTransactionAsync();
+                try
+                {
+                    var order = await _db.TransportOrders
+                        .Include(o => o.DeliveryEpods)
+                        .FirstOrDefaultAsync(o => o.OrderId == orderId);
+
+                    if (order == null)
+                        return ApiResponse<bool>.Failure("Order not found");
+                    
+                    var epod = order.DeliveryEpods.FirstOrDefault();
+                    if (epod == null)
+                        return ApiResponse<bool>.Failure("Epod not found for order");
+
+                    _db.TransportDocuments.Add(new ColdChainX.Core.Entities.TransportDocument
+                    {
+                        DocId = Guid.NewGuid(),
+                        OrderId = orderId,
+                        DocType = "PHYSICAL_POD",
+                        ImageUrl = physicalPodImageUrl,
+                        UploadedBy = Guid.Empty, // System or default driver ID
+                        CreatedAt = DateTime.UtcNow
+                    });
+                    
+                    // Trigger inventory deduction logic (mark state as DELIVERED)
+                    var lpns = await _db.Lpns.Where(l => l.OrderId == orderId).ToListAsync();
+                    foreach (var lpn in lpns)
+                    {
+                        if (lpn.State != ColdChainX.Core.Enums.LpnState.DELIVERY_RETURNED &&
+                            lpn.State != ColdChainX.Core.Enums.LpnState.RETURN_PENDING)
+                        {
+                            lpn.State = ColdChainX.Core.Enums.LpnState.DELIVERED;
+                        }
+                    }
+
+                    // Set order status
+                    order.Status = "COMPLETED";
+
+                    await _db.SaveChangesAsync();
+                    await transaction.CommitAsync();
+
+                    return ApiResponse<bool>.SuccessResponse(true, "Physical POD uploaded successfully. Inventory deducted and Invoice generation triggered (Mock).");
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    return ApiResponse<bool>.Failure($"Upload POD failed: {ex.Message}");
+                }
+            });
+        }
+
         public async Task<ApiResponse<ReviewOrderResponse>> ReviewOrderAsync(Guid orderId, ReviewOrderRequest request, Guid salesUserId)
         {
             var strategy = _db.Database.CreateExecutionStrategy();
@@ -1162,6 +1218,71 @@ namespace ColdChainX.Infrastructure.Services
                     TempC = t.TempC
                 })
             });
+        }
+
+        public async Task<ApiResponse<byte[]>> ExportDigitalArchiveAsync(Guid orderId)
+        {
+            var order = await _db.TransportOrders
+                .Include(o => o.TransportDocuments)
+                .Include(o => o.DeliveryEpods)
+                .Include(o => o.InvoiceLines)
+                    .ThenInclude(il => il.Invoice)
+                .Include(o => o.Claims)
+                .FirstOrDefaultAsync(o => o.OrderId == orderId);
+
+            if (order == null)
+                return ApiResponse<byte[]>.Failure("Order not found");
+
+            using var memoryStream = new System.IO.MemoryStream();
+            using (var archive = new System.IO.Compression.ZipArchive(memoryStream, System.IO.Compression.ZipArchiveMode.Create, true))
+            {
+                // Add POD Images
+                if (order.DeliveryEpods != null && order.DeliveryEpods.Any())
+                {
+                    foreach (var epod in order.DeliveryEpods)
+                    {
+                        var podUrl = order.TransportDocuments?.FirstOrDefault(d => d.DocType == "PHYSICAL_POD")?.ImageUrl ?? "N/A";
+                        var entry = archive.CreateEntry($"POD_{epod.EpodId}.txt");
+                        using var entryStream = entry.Open();
+                        using var writer = new System.IO.StreamWriter(entryStream);
+                        writer.WriteLine($"Physical POD URL: {podUrl}");
+                        writer.WriteLine($"Customer Signature URL: {epod.SignImageUrl}");
+                    }
+                }
+
+                // Add Invoices
+                var invoices = order.InvoiceLines?.Select(il => il.Invoice).Where(i => i != null).Distinct().ToList();
+                if (invoices != null && invoices.Any())
+                {
+                    foreach (var invoice in invoices)
+                    {
+                        var entry = archive.CreateEntry($"Invoice_{invoice.InvoiceId}.txt");
+                        using var entryStream = entry.Open();
+                        using var writer = new System.IO.StreamWriter(entryStream);
+                        writer.WriteLine($"Invoice ID: {invoice.InvoiceId}");
+                        writer.WriteLine($"Grand Total: {invoice.GrandTotal}");
+                        writer.WriteLine($"Status: {invoice.Status}");
+                    }
+                }
+
+                // Add Claims
+                if (order.Claims != null && order.Claims.Any())
+                {
+                    foreach (var claim in order.Claims)
+                    {
+                        var entry = archive.CreateEntry($"Claim_{claim.ClaimId}.txt");
+                        using var entryStream = entry.Open();
+                        using var writer = new System.IO.StreamWriter(entryStream);
+                        writer.WriteLine($"Claim ID: {claim.ClaimId}");
+                        writer.WriteLine($"Reason: {claim.Description}");
+                        writer.WriteLine($"Status: {claim.Status}");
+                        var evidenceUrls = string.Join(", ", claim.ClaimEvidences?.Select(e => e.ImageUrl) ?? Array.Empty<string>());
+                        writer.WriteLine($"Evidence URLs: {evidenceUrls}");
+                    }
+                }
+            }
+
+            return ApiResponse<byte[]>.SuccessResponse(memoryStream.ToArray(), "Archive generated successfully.");
         }
     }
 }
