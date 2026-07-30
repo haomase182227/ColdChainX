@@ -93,21 +93,29 @@ public class UpdateLocationCommandHandler : IRequestHandler<UpdateLocationComman
                         var vehicle = trip.VehicleId.HasValue ? await _context.Vehicles.FirstOrDefaultAsync(v => v.VehicleId == trip.VehicleId, cancellationToken) : null;
                         string truckPlate = vehicle?.TruckPlate ?? "Không xác định";
 
-                        // Make sure GEOFENCE_ETA template exists in DB or create a fallback logic
-                        var templateExists = await _context.NotificationTemplates.AnyAsync(t => t.TemplateId == "GEOFENCE_ETA", cancellationToken);
-                        if (!templateExists)
+                        // Ensure GEOFENCE_ETA template has clean Shopee-style notification without specific time details or URLs
+                        var existingTemplate = await _context.NotificationTemplates.FirstOrDefaultAsync(t => t.TemplateId == "GEOFENCE_ETA", cancellationToken);
+                        string shopeeTitle = "📦 Đơn hàng chuỗi lạnh của bạn sắp được giao tới!";
+                        string shopeeBody = "Xe vận chuyển {{TruckPlate}} đang di chuyển ở sát khu vực giao hàng của bạn. Vui lòng chuẩn bị sẵn nhân sự KCS và súng bắn nhiệt để tiếp nhận hàng hoá theo quy trình LIFO nhé!";
+                        
+                        if (existingTemplate == null)
                         {
                             var typeId = await _context.Messagetypes.Select(m => m.TypeId).FirstOrDefaultAsync(cancellationToken);
                             _context.NotificationTemplates.Add(new NotificationTemplate
                             {
                                 TemplateId = "GEOFENCE_ETA",
-                                TitleTemplate = "Xe lạnh sắp đến",
-                                BodyTemplate = "Xe lạnh {{TruckPlate}} đang cách điểm giao {{DistanceKm}}km (dự kiến ~10 phút nữa tới). Vui lòng chuẩn bị nhân sự và cửa nhận hàng để đảm bảo chuỗi lạnh!",
+                                TitleTemplate = shopeeTitle,
+                                BodyTemplate = shopeeBody,
                                 Channel = "ALL",
                                 Status = "ACTIVE",
                                 TypeId = typeId
                             });
                             await _context.SaveChangesAsync(cancellationToken);
+                        }
+                        else if (existingTemplate.TitleTemplate != shopeeTitle || existingTemplate.BodyTemplate != shopeeBody)
+                        {
+                            existingTemplate.TitleTemplate = shopeeTitle;
+                            existingTemplate.BodyTemplate = shopeeBody;
                         }
 
                         _context.Notifications.Add(new Notification
@@ -115,7 +123,7 @@ public class UpdateLocationCommandHandler : IRequestHandler<UpdateLocationComman
                             NotiId = Guid.NewGuid(),
                             UserId = customerId.Value,
                             TemplateId = "GEOFENCE_ETA",
-                            Params = $"{{\"TruckPlate\":\"{truckPlate}\",\"DistanceKm\":\"{distance / 1000.0:F1}\"}}",
+                            Params = $"{{\"TruckPlate\":\"{truckPlate}\",\"TripId\":\"{trip.TripId}\",\"StopId\":\"{nextStop.StopId}\"}}",
                             IsRead = false,
                             CreatedAt = DateTime.UtcNow
                         });

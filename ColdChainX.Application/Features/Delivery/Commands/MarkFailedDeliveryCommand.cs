@@ -15,6 +15,7 @@ public class MarkFailedDeliveryCommand : IRequest<ApiResponse<bool>>
 {
     public Guid StopId { get; set; }
     public string Reason { get; set; } = null!;
+    public string? EvidenceImageUrl { get; set; }
     public Guid UserId { get; set; } // Set from JWT token by Controller
 }
 
@@ -66,10 +67,32 @@ public class MarkFailedDeliveryCommandHandler : IRequestHandler<MarkFailedDelive
         if (waitMinutes < 30)
             throw new ValidationException($"Chưa hết thời gian chờ quy định (30 phút), không được phép hủy giao hàng. Bạn mới đợi {waitMinutes:F0} phút.");
 
+        // 3.5 Validate Reason and Evidence
+        if (string.IsNullOrWhiteSpace(request.Reason))
+            throw new ValidationException("Lý do giao hàng thất bại là bắt buộc.");
+            
+        if (string.IsNullOrWhiteSpace(request.EvidenceImageUrl))
+            throw new ValidationException("Hình ảnh bằng chứng là bắt buộc khi báo cáo giao hàng thất bại.");
+
         // 4. Update Stop Status
         stop.Status = "FAILED_DELIVERY";
         stop.Note = $"Failed Delivery: {request.Reason}";
         stop.ActualDepartureTime = DateTime.UtcNow;
+
+        // Lưu bằng chứng vào TransportDocument (chuẩn 3NF)
+        var sampleOrder = await _context.TransportOrders.FirstOrDefaultAsync(o => o.MasterTripId == trip.TripId, cancellationToken);
+        if (sampleOrder != null)
+        {
+            _context.TransportDocuments.Add(new ColdChainX.Core.Entities.TransportDocument
+            {
+                DocId = Guid.NewGuid(),
+                OrderId = sampleOrder.OrderId,
+                DocType = "NO_SHOW_EVIDENCE",
+                ImageUrl = request.EvidenceImageUrl,
+                UploadedBy = request.UserId,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
 
         // 5. Update LPNs and Transport Orders to PENDING_REDELIVERY
         var lpns = await _context.Lpns

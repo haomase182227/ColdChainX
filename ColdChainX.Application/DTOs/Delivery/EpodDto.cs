@@ -1,0 +1,24 @@
+using System;
+
+namespace ColdChainX.Application.DTOs.Delivery;
+
+public class EpodDto
+{
+    public Guid EpodId { get; set; }
+    public Guid? OrderId { get; set; }
+    public DateTime CheckinTime { get; set; }
+    public DateTime? SignedAt { get; set; }
+    public string? SignImageUrl { get; set; }
+    public decimal? SignLatitude { get; set; }
+    public decimal? SignLongitude { get; set; }
+    public string? Status { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    public decimal? CodAmount { get; set; }
+    public decimal? CodAmountPaid { get; set; }
+    public string? PaymentMethod { get; set; }
+    public string? PaymentStatus { get; set; }
+    public string? PaymentEvidenceImageUrl { get; set; }
+    public DateTime? HandoverConfirmedAt { get; set; }
+    public string? HandoverPdfUrl { get; set; }
+    public DateTime? PaymentConfirmedAt { get; set; }
+}
