@@ -355,13 +355,12 @@ namespace ColdChainX.Infrastructure.Services
                 }
 
                 // 2. Create Inbound Return Slip
-                var slipCode = await GenerateUniqueSlipCodeAsync();
                 var returnSlip = new InboundReturnSlip
                 {
                     ReturnSlipId = Guid.NewGuid(),
                     OrderId = appendix.OrderId,
                     LpnId = lpn.LpnId,
-                    SlipCode = slipCode,
+                    SlipCode = lpn.LpnCode,
                     ReturnedWeightKg = lpn.ActualWeightKg,
                     ReturnedCbm = lpn.ActualCbm,
                     ReturnedQty = lpn.Quantity,
@@ -575,13 +574,12 @@ namespace ColdChainX.Infrastructure.Services
                     }
 
                     // 2. Create Inbound Return Slip
-                    var slipCode = await GenerateUniqueSlipCodeAsync();
                     var returnSlip = new InboundReturnSlip
                     {
                         ReturnSlipId = Guid.NewGuid(),
                         OrderId = appendix.OrderId,
                         LpnId = lpn.LpnId,
-                        SlipCode = slipCode,
+                        SlipCode = lpn.LpnCode,
                         ReturnedWeightKg = lpn.ActualWeightKg,
                         ReturnedCbm = lpn.ActualCbm,
                         ReturnedQty = lpn.Quantity,

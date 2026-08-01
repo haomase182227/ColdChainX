@@ -13,9 +13,9 @@ namespace ColdChainX.Application.Features.Warehouse.Commands;
 
 public class ProcessInboundDispositionCommand : IRequest<ApiResponse<object>>
 {
-    public string SlipCode { get; set; } = null!;
-    public Guid WarehouseManagerId { get; set; }
-    public string? Notes { get; set; }
+    public string LpnCode { get; set; } = null!;
+    
+    public Guid ReturnWarehouseId { get; set; }
 }
 
 public class ProcessInboundDispositionCommandHandler : IRequestHandler<ProcessInboundDispositionCommand, ApiResponse<object>>
@@ -32,10 +32,11 @@ public class ProcessInboundDispositionCommandHandler : IRequestHandler<ProcessIn
         var returnSlip = await _context.InboundReturnSlips
             .Include(r => r.Lpn)
             .Include(r => r.Order)
-            .FirstOrDefaultAsync(r => r.SlipCode == request.SlipCode, cancellationToken);
+            .OrderByDescending(r => r.CreatedAt)
+            .FirstOrDefaultAsync(r => r.SlipCode == request.LpnCode || r.Lpn.LpnCode == request.LpnCode, cancellationToken);
 
         if (returnSlip == null)
-            throw new NotFoundException($"Không tìm thấy phiếu trả hàng có mã '{request.SlipCode}'.");
+            throw new NotFoundException($"Không tìm thấy phiếu trả hàng cho mã kiện '{request.LpnCode}'.");
 
         var lpn = returnSlip.Lpn;
         if (lpn == null)
@@ -54,29 +55,29 @@ public class ProcessInboundDispositionCommandHandler : IRequestHandler<ProcessIn
 
         if (isNoShow)
         {
-            // Trường hợp No-Show: Hàng còn nguyên vẹn -> Chuyển thẳng sang Pending Redelivery
-            lpn.State = LpnState.PENDING_REDELIVERY;
-            dispositionAction = "PENDING_REDELIVERY (Chờ bốc xếp chuyển chuyến sau do khách No-Show)";
+            // Trường hợp No-Show: Hàng còn nguyên vẹn -> Đưa lại vào kho chờ ghép chuyến mới (manual-dispatch)
+            lpn.State = LpnState.IN_STOCK;
+            lpn.TripId = null; // Xóa TripId cũ để sẵn sàng cho manual-dispatch
+            if (request.ReturnWarehouseId != Guid.Empty)
+            {
+                lpn.WarehouseId = request.ReturnWarehouseId;
+            }
+            if (returnSlip.Order != null)
+            {
+                returnSlip.Order.Status = "READY_FOR_ROUTING";
+            }
+            
+            // Reset thời gian lưu kho và SLA sau khi rớt lại (gia hạn thêm thời gian xử lý)
+            lpn.InboundTime = DateTime.UtcNow;
+            lpn.SlaDeadline = lpn.IsFastTrack ? DateTime.UtcNow.AddHours(12) : DateTime.UtcNow.AddHours(24);
+
+            dispositionAction = "IN_STOCK (Hàng nguyên vẹn, nhập lại kho, gia hạn SLA chờ ghép chuyến mới)";
         }
         else
         {
-            // Trường hợp Reject (Hỏng / lỗi nhiệt độ / OS&D): Khởi tạo Claim Urgent cho QA/KCS kiểm tra
+            // Trường hợp Reject (Hỏng / lỗi nhiệt độ / OS&D): Cô lập kiềm tỏa tang vật tại bãi
             lpn.State = LpnState.DISCREPANCY_HOLD;
-            dispositionAction = "URGENT_CLAIM_CREATED (Hàng lỗi/từ chối OS&D -> Đã khởi tạo Claim Urgent chờ QA/KCS kiểm tra)";
-            generatedClaimCode = $"CLM-URGENT-{DateTime.UtcNow:yyyyMMddHHmmss}";
-
-            var claim = new Claim
-            {
-                ClaimId = Guid.NewGuid(),
-                ClaimCode = generatedClaimCode,
-                OrderId = returnSlip.OrderId,
-                LpnId = lpn.LpnId,
-                ClaimType = "URGENT_REVERSE_LOGISTICS",
-                Description = $"[URGENT] Hàng trả về do từ chối đồng kiểm OS&D/Nhiệt độ. Lý do: {returnSlip.Reason}. Ghi chú kho: {request.Notes}",
-                Status = "PENDING_QA_REVIEW",
-                CreatedAt = DateTime.UtcNow
-            };
-            _context.Claims.Add(claim);
+            dispositionAction = "DISCREPANCY_HOLD (Hàng lỗi/từ chối OS&D -> Cách ly chờ xử lý riêng)";
         }
 
         await _context.SaveChangesAsync(cancellationToken);

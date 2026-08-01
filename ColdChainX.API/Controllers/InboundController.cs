@@ -137,6 +137,7 @@ public class InboundController : ControllerBase
 
         return Ok(result);
     }
+    
     [HttpPost("reverse")]
     public async Task<IActionResult> ProcessReverse([FromBody] ColdChainX.Application.DTOs.WarehouseFlow.ProcessInboundReverseRequest request)
     {
@@ -158,17 +159,22 @@ public class InboundController : ControllerBase
     }
 
     /// <summary>
+    /// [Lookup] Danh sách các Phiếu Hậu cần ngược (Inbound Return Slip) đang chờ xử lý để Frontend làm Dropdown chọn SlipCode.
+    /// </summary>
+    [HttpGet("lookup/return-slips")]
+    public async Task<IActionResult> LookupReturnSlips()
+    {
+        var result = await _mediator.Send(new ColdChainX.Application.Features.Inbound.Queries.GetPendingReturnSlipsQuery());
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Tiếp nhận hàng trả về kho và tự động phân luồng (Inbound Disposition: No-Show -> Redelivery, Reject -> Urgent Claim).
     /// </summary>
     [HttpPost("disposition")]
     [Authorize(Roles = "Admin,Dispatcher,WarehouseWorker")]
-    public async Task<IActionResult> ProcessDisposition([FromBody] ColdChainX.Application.Features.Warehouse.Commands.ProcessInboundDispositionCommand command)
+    public async Task<IActionResult> ProcessDisposition([FromForm] ColdChainX.Application.Features.Warehouse.Commands.ProcessInboundDispositionCommand command)
     {
-        var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
-            return Unauthorized(ColdChainX.Shared.Responses.ApiResponse<object>.Failure("Unauthorized."));
-
-        command.WarehouseManagerId = userId;
         var result = await _mediator.Send(command);
         return Ok(result);
     }
