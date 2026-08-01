@@ -107,29 +107,6 @@ public class DispatchController : ControllerBase
         return $"{d:yyyy-MM-dd} ({dayOfWeek})";
     }
 
-    /// <summary>
-    /// Reconcile a completed trip (compare expected COD with remitted amount).
-    /// </summary>
-    [HttpPost("trip/{tripId:guid}/reconcile")]
-    [Authorize(Roles = "Admin,ADMIN,Manager,MANAGER,Accountant,ACCOUNTANT")]
-    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> ReconcileTrip([FromRoute] Guid tripId, [FromBody] ColdChainX.Application.Features.Dispatch.Commands.ReconcileTripCommand request)
-    {
-        request.TripId = tripId;
-        
-        // Extract user id from claims if we needed it in request, but it's fine.
-        var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        if (Guid.TryParse(userIdStr, out var userId))
-        {
-            request.UserId = userId;
-        }
-
-        var result = await _mediator.Send(request);
-        if (!result.Success)
-            return BadRequest(result);
-
-        return Ok(result);
-    }
 
     /// <summary>
     /// Lấy danh sách các LPN khả dụng (chưa lên xe) trong một kho cụ thể. (Dùng để chọn Pivot LPN)
@@ -395,7 +372,7 @@ public class DispatchController : ControllerBase
             .Select(v => new
             {
                 v.VehicleId,
-                Label      = $"{v.TruckPlate} ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â {v.VehicleType} | tÃƒÂ¡Ã‚ÂºÃ‚Â£i {v.MaxWeight}kg / {v.MaxCbm}mÃƒâ€šÃ‚Â³",
+                Label      = $"{v.TruckPlate} ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â  {v.VehicleType} | tÃƒÂ¡Ã‚ÂºÃ‚Â£i {v.MaxWeight}kg / {v.MaxCbm}mÃƒâ€šÃ‚Â³",
                 v.TruckPlate,
                 v.VehicleType,
                 v.MaxWeight,
@@ -962,6 +939,53 @@ public class DispatchController : ControllerBase
     }
 
     /// <summary>
+    /// API thông minh: Tìm ra Lịch trình (Schedule) từ một ID bất kỳ (có thể là LpnId, OrderId, TripId hoặc chính ScheduleId).
+    /// </summary>
+    [HttpGet("resolve-schedule/{entityId:guid}")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ResolveScheduleFromId(Guid entityId)
+    {
+        // 1. Thử xem ID này có phải là LPN ID không?
+        var lpn = await _db.Lpns
+            .Include(l => l.Order)
+                .ThenInclude(o => o.Schedule)
+            .FirstOrDefaultAsync(l => l.LpnId == entityId);
+        if (lpn?.Order?.Schedule != null)
+        {
+            return Ok(ApiResponse<object>.SuccessResponse(new { EntityType = "LPN", Schedule = lpn.Order.Schedule }, "Success"));
+        }
+
+        // 2. Thử xem ID này có phải là Order ID không?
+        var order = await _db.TransportOrders
+            .Include(o => o.Schedule)
+            .FirstOrDefaultAsync(o => o.OrderId == entityId);
+        if (order?.Schedule != null)
+        {
+            return Ok(ApiResponse<object>.SuccessResponse(new { EntityType = "ORDER", Schedule = order.Schedule }, "Success"));
+        }
+
+        // 3. Thử xem ID này có phải là Trip ID không?
+        var trip = await _db.MasterTrips.FirstOrDefaultAsync(t => t.TripId == entityId);
+        if (trip != null)
+        {
+            var sched = await _db.RouteSchedules.FirstOrDefaultAsync(s => s.ScheduleId == trip.ScheduleId);
+            if (sched != null)
+            {
+                return Ok(ApiResponse<object>.SuccessResponse(new { EntityType = "TRIP", Schedule = sched }, "Success"));
+            }
+        }
+
+        // 4. Thử xem ID này có phải là chính Schedule ID không?
+        var schedule = await _db.RouteSchedules.FirstOrDefaultAsync(s => s.ScheduleId == entityId);
+        if (schedule != null)
+        {
+            return Ok(ApiResponse<object>.SuccessResponse(new { EntityType = "SCHEDULE", Schedule = schedule }, "Success"));
+        }
+
+        return NotFound(ApiResponse<object>.Failure($"Không thể truy xuất được Lịch trình (Schedule) nào từ ID: {entityId}"));
+    }
+
+    /// <summary>
     /// [BUOC 1/5] Ghép chuyến thủ công để chọn xe, tài xế và danh sách LPN.
     /// </summary>
     /// <remarks>
@@ -1109,12 +1133,20 @@ public class DispatchController : ControllerBase
             result.LifoPdfUrl = pdfUrl;
             if (!string.IsNullOrEmpty(pdfUrl))
             {
+                var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                if (!Guid.TryParse(userIdStr, out var currentUserId))
+                {
+                    var adminUser = await _db.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.Role != null && (u.Role.RoleName.ToUpper() == "ADMIN" || u.Role.RoleName.ToUpper() == "MANAGER"));
+                    currentUserId = adminUser?.UserId ?? Guid.Empty;
+                }
+
                 _db.TransportDocuments.Add(new TransportDocument
                 {
                     DocId = Guid.NewGuid(),
                     DocType = "LIFO-PLAN",
                     ImageUrl = pdfUrl,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.UtcNow,
+                    UploadedBy = currentUserId
                 });
                 await _db.SaveChangesAsync();
             }
