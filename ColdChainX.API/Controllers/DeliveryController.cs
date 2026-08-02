@@ -189,6 +189,17 @@ public class DeliveryController : ControllerBase
     }
 
     /// <summary>
+    /// Tài xế xác nhận đóng ca chuyến xe, cập nhật vị trí xe và tài xế về bãi đỗ, chuyển trạng thái về sẵn sàng.
+    /// </summary>
+    [HttpPost("/api/Delivery/depart")]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> CloseShift([FromBody] CloseShiftCommand command)
+    {
+        var result = await _mediator.Send(command);
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Nghiệm thu bàn giao tay tại điểm hạ hàng, tải lên ảnh chụp Phiếu Giao Hàng/E-Waybill có chữ ký giấy và hợp thức hóa thành ePOD.
     /// </summary>
     [HttpPost("/api/Delivery/stops/{stopId:guid}/confirm-handover")]
@@ -241,45 +252,70 @@ public class DeliveryController : ControllerBase
     }
 
     /// <summary>
-    /// Đồng kiểm OS&D, tính lại Dynamic COD thực thu và phát lệnh trả hàng (Reverse Logistics).
+    /// Đồng kiểm OS&D khi bàn giao hàng tại điểm dừng (ngang tầm confirm-handover), tự động tính chi phí bồi thường và COD theo % từ chối trên báo giá gốc, gửi thông báo OsdNotes về Kế toán và sinh ra ePOD.
     /// </summary>
-    [HttpPost("/api/epods/{epodId:guid}/dynamic-cod")]
+    [HttpPost("/api/Delivery/stops/{stopId:guid}/dynamic-cod")]
     [Authorize(Roles = "Driver,Dispatcher,Admin")]
+    [Consumes("multipart/form-data")]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> ProcessDynamicCod(Guid epodId, [FromBody] ProcessDynamicCodCommand command)
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> ProcessDynamicCod(Guid stopId, [FromForm] ColdChainX.Application.DTOs.Delivery.ProcessDynamicCodRequest request)
     {
         var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
             return Unauthorized(ApiResponse<object>.Failure("Unauthorized."));
 
-        command.EpodId = epodId;
-        command.UserId = userId;
+        var command = new ColdChainX.Application.Features.Delivery.Commands.ProcessDynamicCodCommand
+        {
+            StopId = stopId,
+            TripId = request.TripId,
+            CustomerId = request.CustomerId,
+            UserId = userId,
+            RejectedQuantity = request.RejectedQuantity,
+            RejectionReason = request.RejectionReason,
+            IsReturnToWarehouse = request.IsReturnToWarehouse,
+            EvidenceImageFile = request.EvidenceImageFile
+        };
+
         var result = await _mediator.Send(command);
         return Ok(result);
     }
 
     /// <summary>
-    /// [Sau Bước 3 Ký Chốt Sổ] Thanh toán COD tại Dock theo số lượng Thực Nhận (sau sự cố OS&D) và tạo bút toán IN vào sổ cái.
+    /// [Từ chối 100% LPN] Báo cáo sự cố toàn vẹn khi khách từ chối nhận toàn bộ kiện hàng trong LPN. Có biến cờ IsReturnToWarehouse quyết định thu hồi về kho, gửi thông báo Kế toán tính bồi thường toàn bối theo Báo giá, tự động lược qua quy trình thanh toán COD (payment-qr & verify-qr-payment) và chuyển hướng sang đóng kẹp chì (Seal) mới.
     /// </summary>
-    [HttpPost("/api/epods/{epodId:guid}/pay-actual-received")]
-    [Authorize(Roles = "Driver,Dispatcher,Admin,Customer")]
+    [HttpPost("/api/Delivery/stops/{stopId:guid}/reject-entire-lpn")]
+    [Authorize(Roles = "Driver,Dispatcher,Admin")]
+    [Consumes("multipart/form-data")]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PayActualReceived(Guid epodId, [FromBody] PayActualReceivedCodCommand command)
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> RejectEntireLpn(Guid stopId, [FromForm] ColdChainX.Application.DTOs.Delivery.RejectEntireLpnRequest request)
     {
         var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
             return Unauthorized(ApiResponse<object>.Failure("Unauthorized."));
 
-        command.EpodId = epodId;
-        command.UserId = userId;
+        var command = new ColdChainX.Application.Features.Delivery.Commands.RejectEntireLpnCommand
+        {
+            StopId = stopId,
+            TripId = request.TripId,
+            CustomerId = request.CustomerId,
+            UserId = userId,
+            RejectionReason = request.RejectionReason,
+            IsReturnToWarehouse = request.IsReturnToWarehouse,
+            EvidenceImageFile = request.EvidenceImageFile
+        };
+
         var result = await _mediator.Send(command);
         return Ok(result);
     }
+
 
     /// <summary>
     /// [Bước 3.2 Xác nhận thanh toán & Chụp bill] Kiểm tra xem hệ thống PayOS đã "tinh tinh" nhận tiền chưa và đính kèm ảnh chụp màn hình chuyển khoản của Khách hàng.
@@ -336,23 +372,7 @@ public class DeliveryController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Đối soát tài chính chốt chuyến (COD + Phí neo xe), tự động sinh hóa đơn phạt nếu hụt và kết nối MISA/SAP ERP.
-    /// </summary>
-    [HttpPost("/api/trips/{tripId:guid}/reconcile")]
-    [Authorize(Roles = "Admin,Dispatcher,Accountant")]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> ReconcileTripFinances(Guid tripId, [FromBody] ColdChainX.Application.Features.Accounting.Commands.ReconcileTripFinancesCommand command)
-    {
-        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
-            return Unauthorized(ApiResponse<object>.Failure("Unauthorized."));
 
-        command.TripId = tripId;
-        command.AccountantUserId = userId;
-        var result = await _mediator.Send(command);
-        return Ok(result);
-    }
 
     /// <summary>
     /// Upload an image to Cloudinary.
@@ -405,33 +425,18 @@ public class DeliveryController : ControllerBase
         return Ok(result);
     }
 
+
     /// <summary>
-    /// Mark delivery as failed after waiting 30 mins
+    /// Báo cáo No-Show (khách hàng không xuất hiện hoặc từ chối nhận hàng) tại điểm giao hàng, đính kèm file ảnh chụp minh chứng.
     /// </summary>
-    [HttpPost("stops/{stopId:guid}/failed-delivery")]
-    [Authorize(Roles = "Driver")]
-    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
+    [HttpPost("{stopId:guid}/report-no-show")]
+    [Authorize(Roles = "Driver,Admin,Dispatcher")]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> MarkFailedDelivery(Guid stopId, [FromBody] MarkFailedDeliveryRequest request)
-    {
-        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
-            return Unauthorized(ApiResponse<object>.Failure("Unauthorized."));
-
-        var command = new MarkFailedDeliveryCommand
-        {
-            StopId = stopId,
-            Reason = request.Reason,
-            EvidenceImageUrl = request.EvidenceImageUrl,
-            UserId = userId
-        };
-
-        var result = await _mediator.Send(command);
-        return Ok(result);
-    }
-
-    [HttpPost("{stopId}/report-no-show")]
-    public async Task<IActionResult> ReportNoShow(Guid stopId, [FromBody] ReportNoShowRequest request)
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ReportNoShow(Guid stopId, [FromForm] ReportNoShowRequest request)
     {
         var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
@@ -441,10 +446,31 @@ public class DeliveryController : ControllerBase
         {
             TripStopId = stopId,
             DriverId = userId,
-            EvidenceImageUrl = request.EvidenceImageUrl
+            EvidenceImageFile = request.EvidenceImageFile
         };
 
         var result = await _mediator.Send(command);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// [Sau khi giao xong xe quy đầu] Lấy danh sách 5 kho/Hub gần nhất theo khoảng cách tính từ tọa độ hiện tại của xe (được trích xuất qua dữ liệu IoT Telemetry dưới DB) từ TripId.
+    /// </summary>
+    [HttpGet("/api/Delivery/nearest-return-warehouses")]
+    [Authorize(Roles = "Driver,Dispatcher,Admin,WarehouseWorker")]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetNearestReturnWarehouses([FromQuery] Guid tripId)
+    {
+        if (tripId == Guid.Empty)
+            return BadRequest(ApiResponse<object>.Failure("Vui lòng cung cấp tham số tripId hợp lệ."));
+
+        var query = new ColdChainX.Application.Features.Delivery.Queries.GetNearestReturnWarehousesQuery
+        {
+            TripId = tripId
+        };
+
+        var result = await _mediator.Send(query);
         return Ok(result);
     }
 }

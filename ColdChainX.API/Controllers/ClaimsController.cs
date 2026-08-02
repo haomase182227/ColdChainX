@@ -38,7 +38,7 @@ namespace ColdChainX.API.Controllers
         [ProducesResponseType(typeof(ApiResponse<ClaimResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
-        public async Task<IActionResult> CreateClaim([FromBody] CreateClaimRequest request)
+        public async Task<IActionResult> CreateClaim([FromForm] CreateClaimRequest request)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (!Guid.TryParse(userIdClaim, out var userId))
@@ -146,6 +146,23 @@ namespace ColdChainX.API.Controllers
         [HttpPost("{id:guid}/approve-qa")]
         [Authorize(Roles = "Admin,Dispatcher,WarehouseWorker")]
         public async Task<IActionResult> ApproveByQa([FromRoute] Guid id, [FromBody] ApproveClaimByQaCommand command)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var userId))
+                return Unauthorized(ApiResponse<object>.Failure("Invalid User ID claim."));
+
+            command.ClaimId = id;
+            command.QaUserId = userId;
+            var result = await _mediator.Send(command);
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// [Bước 2 - Dispatcher & Sale] Dispatcher check biểu đồ IoT Log -> Bấm [Từ chối bồi thường] khép lại hồ sơ.
+        /// </summary>
+        [HttpPost("{id:guid}/dispatcher-reject")]
+        [Authorize(Roles = "Admin,Dispatcher,WarehouseWorker")]
+        public async Task<IActionResult> RejectByQa([FromRoute] Guid id, [FromBody] RejectClaimByQaCommand command)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (!Guid.TryParse(userIdClaim, out var userId))

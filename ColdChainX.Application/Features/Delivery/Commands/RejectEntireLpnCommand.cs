@@ -15,44 +15,32 @@ using ColdChainX.Shared.Responses;
 
 namespace ColdChainX.Application.Features.Delivery.Commands;
 
-public class ProcessDynamicCodCommand : IRequest<ApiResponse<object>>
+public class RejectEntireLpnCommand : IRequest<ApiResponse<object>>
 {
     public Guid StopId { get; set; }
     public Guid TripId { get; set; }
     public Guid CustomerId { get; set; }
     public Guid UserId { get; set; }
-    public int RejectedQuantity { get; set; }
     public string? RejectionReason { get; set; }
-    public bool IsReturnToWarehouse { get; set; } = false;
+    public bool IsReturnToWarehouse { get; set; } = true;
     public IFormFile? EvidenceImageFile { get; set; }
     public string? EvidenceImageUrl { get; set; } // Fallback cho unit test
 }
 
-public class ProcessDynamicCodCommandHandler : IRequestHandler<ProcessDynamicCodCommand, ApiResponse<object>>
+public class RejectEntireLpnCommandHandler : IRequestHandler<RejectEntireLpnCommand, ApiResponse<object>>
 {
     private readonly IApplicationDbContext _context;
     private readonly IFileService? _fileService;
 
-    public ProcessDynamicCodCommandHandler(IApplicationDbContext context, IFileService? fileService = null)
+    public RejectEntireLpnCommandHandler(IApplicationDbContext context, IFileService? fileService = null)
     {
         _context = context;
         _fileService = fileService;
     }
 
-    public async Task<ApiResponse<object>> Handle(ProcessDynamicCodCommand request, CancellationToken cancellationToken)
+    public async Task<ApiResponse<object>> Handle(RejectEntireLpnCommand request, CancellationToken cancellationToken)
     {
-        string? evidenceUrl = request.EvidenceImageUrl;
-        if (request.EvidenceImageFile != null && _fileService != null)
-        {
-            evidenceUrl = await _fileService.UploadFileAsync(request.EvidenceImageFile);
-        }
-
-        if (string.IsNullOrWhiteSpace(evidenceUrl))
-        {
-            throw new ValidationException("Vui lòng đính kèm file ảnh chụp minh chứng đồng kiểm OS&D (EvidenceImageFile hoặc EvidenceImageUrl).");
-        }
-
-        // 1. Tìm điểm dừng TripStop và kiểm tra check-in
+        // 1. Kiểm tra StopId có tồn tại và thuộc TripId truyền vào không
         var stop = await _context.TripStops
             .Include(ts => ts.Location)
             .Include(ts => ts.Trip)
@@ -61,8 +49,11 @@ public class ProcessDynamicCodCommandHandler : IRequestHandler<ProcessDynamicCod
         if (stop == null)
             throw new NotFoundException($"Không tìm thấy điểm dừng có StopId '{request.StopId}'.");
 
+        if (stop.TripId != request.TripId)
+            throw new ValidationException($"Điểm dừng (StopId: {request.StopId}) không thuộc chuyến đi (TripId: {request.TripId}).");
+
         if (stop.ActualArrivalTime == null)
-            throw new ValidationException("Tài xế phải check-in tại điểm dừng trước khi đồng kiểm bàn giao hàng.");
+            throw new ValidationException("Tài xế phải check-in tại điểm dừng trước khi xử lý từ chối bàn giao hàng.");
 
         // 2. Tìm đơn hàng (Order) của Customer trên chuyến xe (Trip) tại điểm dừng này
         var order = await _context.TransportOrders
@@ -71,41 +62,46 @@ public class ProcessDynamicCodCommandHandler : IRequestHandler<ProcessDynamicCod
             .FirstOrDefaultAsync(o => o.MasterTripId == request.TripId && o.CustomerId == request.CustomerId && o.DestLocation == stop.LocationId, cancellationToken);
 
         if (order == null)
-            throw new NotFoundException($"Không tìm thấy đơn hàng nào của khách hàng '{request.CustomerId}' trên chuyến đi '{request.TripId}' tại điểm dừng này.");
+            throw new NotFoundException($"Không tìm thấy Đơn hàng nào thuộc khách hàng (CustomerId: {request.CustomerId}) trong chuyến xe (TripId: {request.TripId}) tại điểm dừng này.");
 
-        // 3. Kiểm tra tính trùng lặp (nếu đã tạo ePOD xác nhận giao hàng rồi thì không tạo lại)
+        // 3. Kiểm tra tính trùng lặp
         var existingEpod = await _context.DeliveryEpods
             .FirstOrDefaultAsync(e => e.OrderId == order.OrderId && e.HandoverConfirmedAt != null, cancellationToken);
         if (existingEpod != null)
-            throw new ConflictException($"Đơn hàng '{order.TrackingCode}' đã được hoàn tất bàn giao và ký chốt sổ trước đó (ePOD: {existingEpod.EpodId}). Không thể thực hiện đồng kiểm OS&D lại.");
+            throw new ConflictException($"Đơn hàng '{order.TrackingCode}' đã được hoàn tất bàn giao và ký chốt sổ trước đó (ePOD: {existingEpod.EpodId}). Không thể thao tác từ chối LPN lại.");
 
-        // 4. Tìm LPN của đơn hàng
+        // 4. Xử lý lưu ảnh minh chứng (bắt buộc)
+        string evidenceUrl = request.EvidenceImageUrl ?? "";
+        if (request.EvidenceImageFile != null && _fileService != null)
+        {
+            try
+            {
+                evidenceUrl = await _fileService.UploadFileAsync(request.EvidenceImageFile);
+            }
+            catch (Exception ex)
+            {
+                throw new ValidationException($"Lỗi khi tải lên ảnh minh chứng từ chối LPN: {ex.Message}");
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(evidenceUrl))
+        {
+            throw new ValidationException("Vui lòng đính kèm file ảnh chụp minh chứng sự cố từ chối toàn bộ LPN.");
+        }
+
+        // 5. Tìm LPN duy nhất của đơn hàng (theo BRD hiện tại mỗi khách/đơn hàng thuộc 1 LPN)
         var lpns = await _context.Lpns
             .Where(l => l.OrderId == order.OrderId && (l.TripId == request.TripId || stop.Trip == null || l.TripId == stop.Trip.TripId))
             .ToListAsync(cancellationToken);
 
         if (lpns.Count == 0)
-            throw new NotFoundException("Không tìm thấy kiện hàng LPN nào thuộc đơn hàng trên chuyến xe này.");
+            throw new NotFoundException($"Đơn hàng (OrderId: {order.OrderId}) hiện chưa có kiện LPN nào trên chuyến xe để xử lý sự cố từ chối.");
 
         var orderLpn = lpns.First();
+        int originalQty = orderLpn.Quantity > 0 ? orderLpn.Quantity : (order.Quantity);
+        string primaryReason = string.IsNullOrWhiteSpace(request.RejectionReason) ? "TEMP_VIOLATION_FULL" : request.RejectionReason;
 
-        int rejectedQty = request.RejectedQuantity;
-        if (rejectedQty <= 0)
-        {
-            throw new ValidationException("Số lượng hộp/kiện từ chối (RejectedQuantity) phải lớn hơn 0.");
-        }
-
-        int originalQty = orderLpn.Quantity > 0 ? orderLpn.Quantity : (order.Quantity > 0 ? order.Quantity : 50);
-        if (rejectedQty > originalQty)
-        {
-            throw new ValidationException($"Số lượng từ chối ({rejectedQty}) không được vượt quá tổng số lượng kiện trong LPN/Đơn hàng ({originalQty}).");
-        }
-
-        int acceptedQty = originalQty - rejectedQty;
-        decimal rejectedRatio = (decimal)rejectedQty / originalQty;
-        string primaryReason = string.IsNullOrWhiteSpace(request.RejectionReason) ? "TEMP_VIOLATION_OSD" : request.RejectionReason;
-
-        // 5. QUAY VỀ BÁO GIÁ (QUOTATION) ĐỂ CHIẾT TÍNH TIỀN THỰC NHẬN VÀ BỒI THƯỜNG (Tài xế KHÔNG có quyền tự phán quyết số tiền)
+        // 6. QUAY VỀ BÁO GIÁ (QUOTATION) ĐỂ GHI NHẬN TOÀN BỘ SỐ TIỀN KHẤU TRỪ / BỒI THƯỜNG
         var quotation = order.Quotations
             .Where(q => q.Status == "ACCEPTED" || q.Status == "APPROVED" || q.Status == "DRAFT" || q.FinalAmount > 0)
             .OrderByDescending(q => q.CreatedAt)
@@ -114,37 +110,28 @@ public class ProcessDynamicCodCommandHandler : IRequestHandler<ProcessDynamicCod
         decimal baseAmount = quotation?.FinalAmount ?? 0m;
         if (baseAmount <= 0)
         {
-            throw new ValidationException($"Đơn hàng '{order.TrackingCode}' chưa có Báo giá (Quotation) hợp lệ hoặc giá trị cước bằng 0. Hệ thống không thể tự động chiết tính phí giảm trừ bồi thường!");
+            throw new ValidationException($"Đơn hàng '{order.TrackingCode}' chưa có Báo giá (Quotation) hợp lệ hoặc giá trị cước bằng 0. Hệ thống không thể chiết tính phí bồi thường!");
         }
 
-        // Tính toán hoàn toàn tự động theo % tỷ lệ hàng bị từ chối trên giá trị Báo giá gốc
-        decimal estimatedDeduction = Math.Round(baseAmount * rejectedRatio, 0);
-        decimal actualCodToCollect = Math.Max(0m, Math.Round(baseAmount - estimatedDeduction, 0));
+        decimal estimatedDeduction = baseAmount; // Khách từ chối 100%, khấu trừ/bồi thường toàn bộ giá trị báo giá
 
-        // TỰ ĐỘNG SINH GHI CHÚ OS&D (Tài xế không cần tự nhập tay vào ứng dụng)
-        string returnStatusText = request.IsReturnToWarehouse ? "Đã lập Phiếu trả hàng về bãi kho (InboundReturnSlip)" : "Tài xế bàn giao hàng hỏng cho khách xử lý tại bãi (Không mang về kho)";
-        string generatedOsdNotes = $"[Hệ thống tự động lập] Khách hàng từ chối {rejectedQty}/{originalQty} kiện (Tỷ lệ: {rejectedRatio:P0}) tại điểm giao. Lý do chính: {primaryReason}. Đã thu cước cho {acceptedQty} kiện thực nhận. Tự động khấu trừ bồi thường theo Quotation: -{estimatedDeduction:N0}đ | COD thu thực: {actualCodToCollect:N0}đ | Xử lý hàng hư hỏng: {returnStatusText}.";
+        // TỰ ĐỘNG SINH GHI CHÚ OS&D TOÀN VẸN
+        string returnStatusText = request.IsReturnToWarehouse ? "Đã lập Phiếu thu hồi về kho bãi (InboundReturnSlip) cho toàn bộ LPN" : "Tài xế bàn giao tang vật cho khách tự thỏa thuận tiêu hủy/xử lý tại chỗ (Không mang về bãi kho)";
+        string generatedOsdNotes = $"[Hệ thống tự động lập - TỪ CHỐI 100% LPN] Khách hàng từ chối toàn bộ {originalQty}/{originalQty} kiện tại bãi Dock. Lý do: {primaryReason}. Tự động chiết tính bồi thường 100% theo Quotation: -{estimatedDeduction:N0}đ | COD thực thu: 0đ | Xử lý tang vật: {returnStatusText}.";
 
-        // 6. Cập nhật số lượng THỰC NHẬN trong LPN và Đơn hàng
-        orderLpn.Quantity = acceptedQty;
+        var now = DateTime.UtcNow;
+
+        // 7. Cập nhật trạng thái LPN và Đơn hàng
+        orderLpn.State = LpnState.DELIVERY_RETURNED;
         orderLpn.DiscrepancyReason = primaryReason;
         orderLpn.EvidenceImageUrl = evidenceUrl;
-        orderLpn.UpdatedAt = DateTime.UtcNow;
+        orderLpn.UpdatedAt = now;
 
-        if (acceptedQty == 0)
-        {
-            orderLpn.State = LpnState.DELIVERY_RETURNED;
-            order.Status = "OSD_DOCK_PENDING";
-        }
-        else
-        {
-            orderLpn.State = LpnState.DELIVERED;
-            order.Quantity = acceptedQty;
-            order.Status = "PARTIAL_DELIVER_OSD";
-        }
+        order.Status = "OSD_REJECT_PENDING";
+        order.Quantity = 0; // Số lượng thực nhận = 0
 
-        // 7. Tạo Hồ sơ Khiếu nại (Claim) đối soát giảm cước trên sổ sách cho Kế toán
-        string claimCode = $"CLM-{DateTime.UtcNow:yyyyMMdd}-OSD{Random.Shared.Next(100, 999)}";
+        // 8. Tạo Hồ sơ Khiếu nại (Claim) cho Kế toán tính bồi thường
+        string claimCode = $"CLM-{now:yyyyMMdd}-FULL{Random.Shared.Next(100, 999)}";
         Guid claimId = Guid.NewGuid();
 
         var accountingClaim = new Claim
@@ -156,14 +143,12 @@ public class ProcessDynamicCodCommandHandler : IRequestHandler<ProcessDynamicCod
             ClaimType = primaryReason.Trim().ToUpperInvariant(),
             Description = generatedOsdNotes,
             Status = "PENDING_REVIEW",
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = now
         };
         _context.Claims.Add(accountingClaim);
 
-        // 8. SINH RA CHỨNG TỪ GIAO HÀNG ĐIỆN TỬ (ePOD) NGAY SAU KHI ĐỒNG KIỂM XONG (Tương đương confirm-handover)
+        // 9. SINH RA CHỨNG TỪ GIAO HÀNG (ePOD) VỚI TRẠNG THÁI OSD_FULL_REJECTED VÀ COD = 0 (LƯỢC QUA THANH TOÁN QR)
         var epodId = Guid.NewGuid();
-        var now = DateTime.UtcNow;
-
         var epod = new DeliveryEpod
         {
             EpodId = epodId,
@@ -173,18 +158,18 @@ public class ProcessDynamicCodCommandHandler : IRequestHandler<ProcessDynamicCod
             HandoverConfirmedAt = now,
             SignLatitude = stop.Location?.Latitude,
             SignLongitude = stop.Location?.Longitude,
-            Status = "OSD_PARTIAL_DELIVER",
-            CodAmount = actualCodToCollect,
-            CodAmountPaid = actualCodToCollect,
-            PaymentStatus = actualCodToCollect > 0 ? "AWAITING_PAYMENT" : "PAID",
+            Status = "OSD_FULL_REJECTED",
+            CodAmount = 0m,
+            CodAmountPaid = 0m,
+            PaymentStatus = "SKIPPED_FULL_REJECT",
             Note = generatedOsdNotes,
             CreatedAt = now
         };
         _context.DeliveryEpods.Add(epod);
 
-        // 8.1 LẬP PHIẾU HẬU CẦN NGƯỢC (InboundReturnSlip) NẾU BIẾN CỜ IsReturnToWarehouse = TRUE
+        // 8.1 LẬP PHIẾU HẬU CẦN NGƯỢC (InboundReturnSlip)
         object? returnSlipResult = null;
-        if (request.IsReturnToWarehouse && rejectedQty > 0)
+        if (request.IsReturnToWarehouse)
         {
             var returnSlip = new InboundReturnSlip
             {
@@ -192,9 +177,9 @@ public class ProcessDynamicCodCommandHandler : IRequestHandler<ProcessDynamicCod
                 OrderId = order.OrderId,
                 LpnId = orderLpn.LpnId,
                 SlipCode = orderLpn.LpnCode,
-                ReturnedQty = rejectedQty,
-                ReturnedWeightKg = Math.Round(orderLpn.ActualWeightKg * rejectedRatio, 2),
-                ReturnedCbm = Math.Round(orderLpn.ActualCbm * rejectedRatio, 4),
+                ReturnedQty = originalQty,
+                ReturnedWeightKg = orderLpn.ActualWeightKg,
+                ReturnedCbm = orderLpn.ActualCbm,
                 Reason = primaryReason,
                 CreatedAt = now
             };
@@ -204,12 +189,12 @@ public class ProcessDynamicCodCommandHandler : IRequestHandler<ProcessDynamicCod
             {
                 ReturnId = returnSlip.ReturnSlipId,
                 EpodId = epodId,
-                ItemName = !string.IsNullOrWhiteSpace(order.ItemName) ? order.ItemName : "Hàng hoá trả về từ sự cố bãi Dock",
+                ItemName = !string.IsNullOrWhiteSpace(order.ItemName) ? order.ItemName : "Toàn bộ LPN bị từ chối tại Dock",
                 ItemCode = orderLpn.LpnCode,
                 Unit = "BOX",
-                ReturnedQty = rejectedQty,
+                ReturnedQty = originalQty,
                 ReasonType = primaryReason,
-                ReasonNote = $"[Đồng kiểm OS&D] Từ chối {rejectedQty} kiện. Cờ IsReturnToWarehouse = TRUE.",
+                ReasonNote = $"[Từ chối trọn gói LPN] Khách từ chối 100% lô hàng. Cờ IsReturnToWarehouse = TRUE.",
                 ProcessingStatus = "PENDING_INBOUND",
                 ReturnedAt = now
             };
@@ -219,18 +204,18 @@ public class ProcessDynamicCodCommandHandler : IRequestHandler<ProcessDynamicCod
             {
                 ReturnSlipId = returnSlip.ReturnSlipId,
                 SlipCode = returnSlip.SlipCode,
-                ReturnedQty = rejectedQty,
+                ReturnedQty = originalQty,
                 Status = "PENDING_INBOUND",
-                Note = "Phiếu hậu cần ngược đính kèm để tài xế chở số hàng từ chối về bàn giao nhập kho bãi."
+                Note = "Phiếu hậu cần ngược được tự động lập để tài xế chở toàn bộ LPN về nhập bãi kho bảo lưu."
             };
         }
 
-        // 9. Lưu minh chứng hình ảnh đồng kiểm
+        // 11. Lưu minh chứng hình ảnh đồng kiểm
         _context.TransportDocuments.Add(new TransportDocument
         {
             DocId = Guid.NewGuid(),
             OrderId = order.OrderId,
-            DocType = "OSD_DOCK_EVIDENCE",
+            DocType = "OSD_FULL_REJECT_EVIDENCE",
             ImageUrl = evidenceUrl,
             UploadedBy = request.UserId,
             CreatedAt = now
@@ -240,13 +225,13 @@ public class ProcessDynamicCodCommandHandler : IRequestHandler<ProcessDynamicCod
         {
             EvidenceId = Guid.NewGuid(),
             ClaimId = claimId,
-            EvidenceType = "DOCK_OSD_PHOTO",
+            EvidenceType = "DOCK_OSD_FULL_PHOTO",
             ImageUrl = evidenceUrl,
             UploadedBy = request.UserId,
             CreatedAt = now
         });
 
-        // 10. GỬI NOTIFICATION CÓ HỆ TRỤC TRẠNG THÁI OSDNOTES VỀ KẾ TOÁN (ACCOUNTANT) VÀ ĐIỀU PHỐI (DISPATCHER)
+        // 12. GỬI NOTIFICATION VỀ KẾ TOÁN (ACCOUNTANT) VÀ ĐIỀU PHỐI (DISPATCHER) ĐỂ TÍNH BỒI THƯỜNG
         var existingTemplate = await _context.NotificationTemplates.FirstOrDefaultAsync(t => t.TemplateId == "OSD_CLAIM_ALERT", cancellationToken);
         if (existingTemplate == null)
         {
@@ -274,8 +259,8 @@ public class ProcessDynamicCodCommandHandler : IRequestHandler<ProcessDynamicCod
         var notiParams = JsonSerializer.Serialize(new
         {
             OrderCode = order.TrackingCode ?? order.OrderId.ToString()[..8],
-            Qty = rejectedQty,
-            Ratio = $"{rejectedRatio:P0}",
+            Qty = originalQty,
+            Ratio = "100%",
             OsdNotes = generatedOsdNotes,
             Deduction = $"{estimatedDeduction:N0}",
             ClaimCode = claimCode
@@ -301,25 +286,40 @@ public class ProcessDynamicCodCommandHandler : IRequestHandler<ProcessDynamicCod
 
         await _context.SaveChangesAsync(cancellationToken);
 
+        // 13. TRẢ VỀ KẾT QUẢ ĐÃ LƯỢC QUA BƯỚC THANH TOÁN QR VÀ CHỈ DẪN QUA API ĐÓNG SEAL MỚI
         var resultData = new
         {
             EpodId = epod.EpodId,
-            HandoverConfirmedAt = now,
+            HandoverProcessedAt = now,
             OrderStatus = order.Status,
             LpnCode = orderLpn.LpnCode,
             OriginalQuantity = originalQty,
-            RejectedQuantity = rejectedQty,
-            AcceptedQuantity = acceptedQty,
-            RejectedRatio = $"{rejectedRatio:P0}",
+            RejectedQuantity = originalQty,
+            AcceptedQuantity = 0,
+            RejectedRatio = "100%",
             RejectionReason = primaryReason,
             OsdNotes = generatedOsdNotes,
             IsReturnToWarehouse = request.IsReturnToWarehouse,
-            InboundReturnSlip = returnSlipResult ?? "Không tạo phiếu trả hàng về kho (Khách nhận bàn giao tiêu hủy tại bãi)",
-            NextStep = $"GET /api/Delivery/epods/{epod.EpodId}/payment-qr — Hiển thị mã QR thanh toán COD thu thực nhận cho khách hàng"
+            InboundReturnSlip = returnSlipResult ?? "Không tạo phiếu trả hàng về kho (Khách và tài xế tự thỏa thuận xử lý/tiêu hủy tại hiện trường)",
+            AutomatedClaimCalculation = new
+            {
+                QuotationBaseAmount = baseAmount,
+                EstimatedClaimDeduction = estimatedDeduction,
+                ActualCodDue = 0m,
+                Note = "Khách hàng từ chối 100% lô hàng LPN. Hệ thống tự động trích lập hồ sơ bồi thường toàn bối gửi Kế toán."
+            },
+            Step1_EvidenceCapture = new
+            {
+                ClaimId = claimId,
+                ClaimCode = claimCode,
+                Status = "PENDING_DISPATCHER_REVIEW",
+                EvidenceImageUrl = evidenceUrl,
+                Action = "Đã chụp ảnh minh chứng sự cố từ chối toàn bối và thông báo tức thời tới bộ phận Kế toán & Điều phối."
+            },
+            PaymentSkipped = true,
+            NextStep = $"POST /api/Delivery/trips/{request.TripId}/seals/apply — Do khách không nhận hàng và COD thu thực = 0, hệ thống tự động lược qua khúc thanh toán QR (payment-qr & verify-qr-payment). Tài xế chuyển tiếp sang thực hiện đóng kẹp chì (Seal) mới để xuất phát tới điểm dừng tiếp theo!"
         };
 
-        return ApiResponse<object>.SuccessResponse(resultData, $"Xử lý bàn giao đồng kiểm OS&D thành công: Khách nhận {acceptedQty}/{originalQty} kiện, đã tạo ePOD và gửi thông báo cho Kế toán.");
+        return ApiResponse<object>.SuccessResponse(resultData, "Xử lý từ chối toàn bộ LPN thành công. Đã thông báo Kế toán tính bồi thường, lược bỏ quy trình thu COD và chuẩn bị đóng seal mới.");
     }
 }
-
-

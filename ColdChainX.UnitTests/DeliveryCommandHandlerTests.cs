@@ -874,9 +874,9 @@ namespace ColdChainX.UnitTests
             Assert.NotNull(stopEvent);
             Assert.Contains("ProofImageUrl: https://example.com/proofs/no-show-evidence.jpg", stopEvent.MetaData);
 
-            // 3. Kiểm tra chứng từ TransportDocument 3NF được gia cố
-            var doc = await _db.TransportDocuments.FirstOrDefaultAsync(d => d.OrderId == orderId && d.DocType == "NO_SHOW_EVIDENCE");
-            Assert.NotNull(doc);
+            // 3. Không ghi vào TransportDocuments vì đã lưu đầy đủ trong TripStopEvents
+            var docCount = await _db.TransportDocuments.CountAsync(d => d.OrderId == orderId && d.DocType == "NO_SHOW_EVIDENCE");
+            Assert.Equal(0, docCount);
 
             // 4. Tuyệt đối không sinh hóa đơn phạt PenaltyBill
             var penaltyCount = await _db.PenaltyBills.CountAsync();

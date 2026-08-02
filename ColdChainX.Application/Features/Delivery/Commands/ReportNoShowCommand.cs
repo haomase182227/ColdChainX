@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Http;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
 using ColdChainX.Shared.Exceptions;
@@ -16,6 +17,7 @@ public class ReportNoShowCommand : IRequest<ApiResponse<string>>
 {
     public Guid TripStopId { get; set; }
     public Guid DriverId { get; set; }
+    public IFormFile? EvidenceImageFile { get; set; }
     public string EvidenceImageUrl { get; set; } = string.Empty;
 }
 
@@ -23,18 +25,26 @@ public class ReportNoShowCommandHandler : IRequestHandler<ReportNoShowCommand, A
 {
     private readonly IApplicationDbContext _context;
     private readonly IGoongMapService _goongMapService;
+    private readonly IFileService? _fileService;
 
-    public ReportNoShowCommandHandler(IApplicationDbContext context, IGoongMapService goongMapService)
+    public ReportNoShowCommandHandler(IApplicationDbContext context, IGoongMapService goongMapService, IFileService? fileService = null)
     {
         _context = context;
         _goongMapService = goongMapService;
+        _fileService = fileService;
     }
 
     public async Task<ApiResponse<string>> Handle(ReportNoShowCommand request, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.EvidenceImageUrl))
+        string proofUrl = request.EvidenceImageUrl;
+        if (request.EvidenceImageFile != null && _fileService != null)
         {
-            throw new ValidationException("Vui lòng cung cấp bằng chứng hình ảnh (EvidenceImageUrl) xác nhận tình trạng khách hàng không xuất hiện / từ chối nhận hàng.");
+            proofUrl = await _fileService.UploadFileAsync(request.EvidenceImageFile);
+        }
+
+        if (string.IsNullOrWhiteSpace(proofUrl))
+        {
+            throw new ValidationException("Vui lòng đính kèm hình ảnh bằng chứng (EvidenceImageFile hoặc EvidenceImageUrl) xác nhận tình trạng khách hàng không xuất hiện / từ chối nhận hàng.");
         }
 
         var stop = await _context.TripStops
@@ -57,35 +67,23 @@ public class ReportNoShowCommandHandler : IRequestHandler<ReportNoShowCommand, A
         stop.ActualDepartureTime = DateTime.UtcNow;
 
         // 2. Ghi bằng chứng hình ảnh vào TripStop (Ghi chú Note) và TripStopEvents (giống cơ chế check-in)
-        stop.Note = $"{stop.Note} [No-Show Evidence: {request.EvidenceImageUrl}]".Trim();
+        stop.Note = $"{stop.Note} [No-Show Evidence: {proofUrl}]".Trim();
         _context.TripStopEvents.Add(new TripStopEvent
         {
             EventId = Guid.NewGuid(),
             StopId = stop.StopId,
             EventType = "NO_SHOW_REPORT",
             EventTime = DateTime.UtcNow,
-            MetaData = $"ProofImageUrl: {request.EvidenceImageUrl}"
+            MetaData = $"ProofImageUrl: {proofUrl}"
         });
 
-        // 3. Tra cứu đơn hàng tại Stop (dựa vào LocationId) và cập nhật chứng từ TransportDocument 3NF
+        // 3. Tra cứu đơn hàng tại Stop (dựa vào LocationId) và chuyển trạng thái LPN (không ghi vào bảng TransportDocument vì đã lưu tại TripStopEvents)
         if (stop.Trip?.TransportOrders != null && stop.LocationId != null)
         {
             var order = stop.Trip.TransportOrders.FirstOrDefault(o => o.DestLocation == stop.LocationId);
             if (order != null)
             {
                 order.Status = "DELIVERY_FAILED_NOSHOW";
-
-                // Lưu Bằng chứng No-Show vào bảng TransportDocuments theo chuẩn 3NF
-                var evidenceDoc = new TransportDocument
-                {
-                    DocId = Guid.NewGuid(),
-                    OrderId = order.OrderId,
-                    DocType = "NO_SHOW_EVIDENCE",
-                    ImageUrl = request.EvidenceImageUrl,
-                    UploadedBy = request.DriverId,
-                    CreatedAt = DateTime.UtcNow
-                };
-                _context.TransportDocuments.Add(evidenceDoc);
 
                 // Chuyển các kiện LPNs sang trạng thái chờ trả hàng (RETURN_PENDING)
                 var lpns = await _context.Lpns.Where(l => l.OrderId == order.OrderId).ToListAsync(cancellationToken);
@@ -94,7 +92,7 @@ public class ReportNoShowCommandHandler : IRequestHandler<ReportNoShowCommand, A
                     lpn.State = ColdChainX.Core.Enums.LpnState.RETURN_PENDING;
                 }
 
-                // (Đã hoàn toàn loại bỏ tự động sinh hóa đơn phạt PenaltyBill theo yêu cầu)
+                // (Đã loại bỏ lưu TransportDocument và PenaltyBill)
             }
         }
 

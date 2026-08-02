@@ -43,7 +43,7 @@ namespace ColdChainX.UnitTests
                 _fileService,
                 NullLogger<IncidentReportService>.Instance,
                 _realtimeNotifier);
-            _claimService = new ClaimService(_db, NullLogger<ClaimService>.Instance);
+            _claimService = new ClaimService(_db, NullLogger<ClaimService>.Instance, _fileService);
         }
 
         public void Dispose()
@@ -447,9 +447,9 @@ namespace ColdChainX.UnitTests
             var request = new CreateClaimRequest
             {
                 OrderId = orderId,
-                ClaimType = "Damage",
+                ClaimType = ClaimCategory.DAMAGE,
                 Description = "Frozen meat thawed during transport",
-                EvidenceImages = new List<string> { "http://cloud.com/img1.jpg", "http://cloud.com/img2.jpg" }
+                EvidenceImages = new List<Microsoft.AspNetCore.Http.IFormFile>()
             };
 
             // Act

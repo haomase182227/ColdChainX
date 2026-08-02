@@ -139,6 +139,14 @@ public class CheckinDriverCommandHandler : IRequestHandler<CheckinDriverCommand,
             }
         }
 
+        // Lớp 2 (Client GPS Fallback / Test Environment): Nếu không lấy được từ Redis hoặc TelemetryLogs, sử dụng tọa độ GPS được gửi trực tiếp từ thiết bị di động của tài xế
+        if (!driverLat.HasValue && (request.Latitude != 0 || request.Longitude != 0))
+        {
+            driverLat = request.Latitude;
+            driverLon = request.Longitude;
+            gpsSource = "CLIENT_GPS_FALLBACK (Mobile Driver App)";
+        }
+
         if (!driverLat.HasValue || !driverLon.HasValue)
         {
             throw new ValidationException("Không nhận được tín hiệu định vị GPS từ Redis real-time hoặc IoT TelemetryLogs. Vui lòng kiểm tra kết nối thiết bị giám sát hành trình trước khi Check-in.");

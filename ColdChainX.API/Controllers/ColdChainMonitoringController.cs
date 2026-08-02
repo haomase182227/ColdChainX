@@ -403,6 +403,60 @@ public sealed class ColdChainMonitoringController : ControllerBase
         });
     }
 
+    [HttpGet("stops/{stopId:guid}/chart/temperature")]
+    public async Task<IActionResult> GetStopTemperatureChart(
+        Guid stopId,
+        [FromQuery] int maxPoints = 200,
+        CancellationToken cancellationToken = default)
+    {
+        var tripStop = await _db.TripStops
+            .FirstOrDefaultAsync(s => s.StopId == stopId, cancellationToken);
+
+        if (tripStop == null || tripStop.TripId == null)
+            return NotFound(new { Success = false, Message = "Không tìm thấy điểm dừng hoặc chuyến xe tương ứng." });
+
+        // Dữ liệu nhiệt độ của thùng hàng tại điểm dừng này chỉ cần tính đến lúc xe tới nơi (ActualArrivalTime).
+        // Bởi vì sau khi dỡ hàng xuống thì nhiệt độ trên xe tải không còn ảnh hưởng đến kiện hàng này nữa.
+        var endTime = tripStop.ActualArrivalTime ?? tripStop.ActualDepartureTime ?? tripStop.PlannedArrivalTime;
+
+        var rawLogs = await _db.TelemetryLogs
+            .Where(t => t.TripId == tripStop.TripId && t.Timestamp <= endTime)
+            .OrderByDescending(t => t.Timestamp)
+            .Take(2000)
+            .OrderBy(t => t.Timestamp)
+            .Select(t => new
+            {
+                t.Timestamp,
+                t.Temperature,
+                t.Latitude,
+                t.Longitude
+            })
+            .ToListAsync(cancellationToken);
+
+        var points = rawLogs
+            .Select(t => new TrackingPoint(t.Timestamp, t.Temperature, t.Latitude, t.Longitude))
+            .ToList();
+        var sampledPoints = TrackingDownsampler.Downsample(points, Math.Clamp(maxPoints, 20, 1000));
+
+        return Ok(new
+        {
+            Success = true,
+            Data = new
+            {
+                TripId = tripStop.TripId,
+                StopId = tripStop.StopId,
+                EndTime = endTime,
+                RawPointCount = points.Count,
+                SampledPointCount = sampledPoints.Count,
+                Points = sampledPoints.Select(t => new
+                {
+                    t.Timestamp,
+                    t.TempC
+                })
+            }
+        });
+    }
+
     [HttpGet("trip/{tripId:guid}/chart/route")]
     public async Task<IActionResult> GetTripRouteChart(
         Guid tripId,

@@ -16,11 +16,13 @@ namespace ColdChainX.Application.Services
     {
         private readonly IApplicationDbContext _db;
         private readonly ILogger<ClaimService> _logger;
+        private readonly IFileService _fileService;
 
-        public ClaimService(IApplicationDbContext db, ILogger<ClaimService> logger)
+        public ClaimService(IApplicationDbContext db, ILogger<ClaimService> logger, IFileService fileService)
         {
             _db = db;
             _logger = logger;
+            _fileService = fileService;
         }
 
         public async Task<ApiResponse<ClaimResponse>> CreateClaimAsync(CreateClaimRequest request, Guid userId)
@@ -48,7 +50,7 @@ namespace ColdChainX.Application.Services
                     ClaimId = Guid.NewGuid(),
                     ClaimCode = claimCode,
                     OrderId = request.OrderId,
-                    ClaimType = request.ClaimType.Trim().ToUpperInvariant(),
+                    ClaimType = request.ClaimType.ToString(),
                     Description = request.Description.Trim(),
                     Status = "OPEN",
                     CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
@@ -56,16 +58,17 @@ namespace ColdChainX.Application.Services
 
                 _db.Claims.Add(claim);
 
-                if (request.EvidenceImages != null)
+                if (request.EvidenceImages != null && request.EvidenceImages.Any())
                 {
-                    foreach (var imgUrl in request.EvidenceImages)
+                    foreach (var file in request.EvidenceImages)
                     {
+                        var imgUrl = await _fileService.UploadFileAsync(file);
                         var evidence = new ClaimEvidence
                         {
                             EvidenceId = Guid.NewGuid(),
                             ClaimId = claim.ClaimId,
                             EvidenceType = "IMAGE",
-                            ImageUrl = imgUrl.Trim(),
+                            ImageUrl = imgUrl,
                             UploadedBy = userId,
                             CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
                         };

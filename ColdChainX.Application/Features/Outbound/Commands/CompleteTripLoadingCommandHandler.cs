@@ -84,12 +84,16 @@ public class CompleteTripLoadingCommandHandler : IRequestHandler<CompleteTripLoa
             manifestUrl = await _pdfService.GenerateManifestPdfAsync(trip.TripId);
             if (!string.IsNullOrEmpty(manifestUrl))
             {
+                var adminUser = await _context.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.Role != null && (u.Role.RoleName.ToUpper() == "ADMIN" || u.Role.RoleName.ToUpper() == "MANAGER"));
+                var currentUserId = adminUser?.UserId ?? Guid.Empty;
+
                 _context.TransportDocuments.Add(new Core.Entities.TransportDocument
                 {
                     DocId = Guid.NewGuid(),
                     DocType = "MANIFEST",
                     ImageUrl = manifestUrl,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.UtcNow,
+                    UploadedBy = currentUserId
                 });
             }
         }
@@ -103,12 +107,16 @@ public class CompleteTripLoadingCommandHandler : IRequestHandler<CompleteTripLoa
             outboundTicketUrl = await _pdfService.GenerateOutboundTicketPdfAsync(trip.TripId);
             if (!string.IsNullOrEmpty(outboundTicketUrl))
             {
+                var adminUser = await _context.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.Role != null && (u.Role.RoleName.ToUpper() == "ADMIN" || u.Role.RoleName.ToUpper() == "MANAGER"));
+                var currentUserId = adminUser?.UserId ?? Guid.Empty;
+
                 _context.TransportDocuments.Add(new Core.Entities.TransportDocument
                 {
                     DocId = Guid.NewGuid(),
                     DocType = "OUTBOUND-TICKET",
                     ImageUrl = outboundTicketUrl,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.UtcNow,
+                    UploadedBy = currentUserId
                 });
             }
         }
