@@ -11,8 +11,8 @@ public class RegisterRequestValidatorTests
     [InlineData("Admin")]
     [InlineData("Dispatcher")]
     [InlineData("Sales")]
-    [InlineData("WarehouseWorker")]
-    [InlineData("warehouseworker")]
+    [InlineData("WarehouseOperator")]
+    [InlineData("warehouseoperator")]
     public void Validate_AllowsSupportedStaffRoles(string role)
     {
         var result = _validator.Validate(CreateRequest(role));
@@ -22,7 +22,7 @@ public class RegisterRequestValidatorTests
 
     [Theory]
     [InlineData("Loader")]
-    [InlineData("WarehouseOperator")]
+    [InlineData("WarehouseWorker")]
     [InlineData("Manager")]
     public void Validate_RejectsLegacyWarehouseRoles(string role)
     {

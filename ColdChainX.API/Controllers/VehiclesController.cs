@@ -43,7 +43,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,Dispatcher,DISPATCHER")]
+        [Authorize(Roles = "Admin,ADMIN,WarehouseOperator,WAREHOUSEOPERATOR,Dispatcher,DISPATCHER")]
         public async Task<IActionResult> Create([FromBody] CreateVehicleRequest request)
         {
             var result = await _fleetService.CreateVehicleAsync(request);
@@ -53,7 +53,7 @@ namespace ColdChainX.API.Controllers
 
         [HttpPost("import")]
         [Consumes("multipart/form-data")]
-        [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,Dispatcher,DISPATCHER")]
+        [Authorize(Roles = "Admin,ADMIN,WarehouseOperator,WAREHOUSEOPERATOR,Dispatcher,DISPATCHER")]
         public async Task<IActionResult> Import([FromForm] ImportExcelRequest request)
         {
             var result = await _fleetService.ImportVehiclesAsync(request.ExcelFile);
@@ -61,7 +61,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("{vehicleId:guid}/documents")]
-        [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,Dispatcher,DISPATCHER")]
+        [Authorize(Roles = "Admin,ADMIN,WarehouseOperator,WAREHOUSEOPERATOR,Dispatcher,DISPATCHER")]
         public async Task<IActionResult> CreateDocument(Guid vehicleId, [FromBody] CreateVehicleDocumentRequest request)
         {
             var result = await _fleetService.CreateVehicleDocumentAsync(vehicleId, request);
@@ -69,7 +69,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("sync-odometer")]
-        [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,Dispatcher,DISPATCHER,Driver,DRIVER")]
+        [Authorize(Roles = "Admin,ADMIN,WarehouseOperator,WAREHOUSEOPERATOR,Dispatcher,DISPATCHER,Driver,DRIVER")]
         public async Task<IActionResult> SyncOdometer([FromForm] SyncOdometerRequest request)
         {
             Guid? userId = null;
@@ -90,7 +90,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("{vehicleId:guid}/maintenance-tickets")]
-        [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,Dispatcher,DISPATCHER")]
+        [Authorize(Roles = "Admin,ADMIN,WarehouseOperator,WAREHOUSEOPERATOR,Dispatcher,DISPATCHER")]
         public async Task<IActionResult> CreateMaintenanceTicket(Guid vehicleId, [FromBody] CreateMaintenanceTicketRequest request)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -104,7 +104,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPut("{id:guid}")]
-        [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,Dispatcher,DISPATCHER")]
+        [Authorize(Roles = "Admin,ADMIN,WarehouseOperator,WAREHOUSEOPERATOR,Dispatcher,DISPATCHER")]
         public async Task<IActionResult> Update(Guid id, [FromBody] VehicleUpdateRequest request)
         {
             var result = await _fleetService.UpdateVehicleAsync(id, request);
@@ -114,7 +114,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpDelete("{id:guid}")]
-        [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,Dispatcher,DISPATCHER")]
+        [Authorize(Roles = "Admin,ADMIN,WarehouseOperator,WAREHOUSEOPERATOR,Dispatcher,DISPATCHER")]
         public async Task<ActionResult<ApiResponse<bool>>> Delete(Guid id)
         {
             var result = await _fleetService.SoftDeleteVehicleAsync(id);
@@ -129,7 +129,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("{id:guid}/mark-unavailable")]
-        [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,Dispatcher,DISPATCHER")]
+        [Authorize(Roles = "Admin,ADMIN,WarehouseOperator,WAREHOUSEOPERATOR,Dispatcher,DISPATCHER")]
         public async Task<IActionResult> MarkUnavailable(Guid id, [FromQuery] string reason = "Manual lock")
         {
             var result = await _fleetService.MarkVehicleUnavailableAsync(id, reason);

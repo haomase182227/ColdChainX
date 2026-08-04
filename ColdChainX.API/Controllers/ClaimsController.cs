@@ -34,7 +34,7 @@ namespace ColdChainX.API.Controllers
         /// Lodge/Create a new customer claim with evidence attachments.
         /// </summary>
         [HttpPost]
-        [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,Customer,CUSTOMER")]
+        [Authorize(Roles = "Admin,ADMIN,WarehouseOperator,WAREHOUSEOPERATOR,Customer,CUSTOMER")]
         [ProducesResponseType(typeof(ApiResponse<ClaimResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
@@ -55,7 +55,7 @@ namespace ColdChainX.API.Controllers
         /// Resolve/Finalize a customer claim (mark as RESOLVED/REJECTED and set fault owner).
         /// </summary>
         [HttpPost("{id:guid}/resolve")]
-        [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,WarehouseWorker,WAREHOUSEWORKER, Dispatcher")]
+        [Authorize(Roles = "Admin,ADMIN,WarehouseOperator,WAREHOUSEOPERATOR,WarehouseOperator,WAREHOUSEOPERATOR, Dispatcher")]
         [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
@@ -110,7 +110,7 @@ namespace ColdChainX.API.Controllers
         [HttpGet("pending-dispatcher")]
         [HttpGet("osd-incidents")]
         [HttpGet("/api/Delivery/osd-incidents")]
-        [Authorize(Roles = "Admin,Dispatcher,Accountant,Manager")]
+        [Authorize(Roles = "Admin,Dispatcher,Accountant,WarehouseOperator")]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetPendingOsdIncidents([FromQuery] string? status = null)
         {
@@ -144,7 +144,7 @@ namespace ColdChainX.API.Controllers
         /// </summary>
         [HttpPost("{id:guid}/dispatcher-approve")]
         [HttpPost("{id:guid}/approve-qa")]
-        [Authorize(Roles = "Admin,Dispatcher,WarehouseWorker")]
+        [Authorize(Roles = "Admin,Dispatcher,WarehouseOperator")]
         public async Task<IActionResult> ApproveByQa([FromRoute] Guid id, [FromBody] ApproveClaimByQaCommand command)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -161,7 +161,7 @@ namespace ColdChainX.API.Controllers
         /// [Bước 2 - Dispatcher & Sale] Dispatcher check biểu đồ IoT Log -> Bấm [Từ chối bồi thường] khép lại hồ sơ.
         /// </summary>
         [HttpPost("{id:guid}/dispatcher-reject")]
-        [Authorize(Roles = "Admin,Dispatcher,WarehouseWorker")]
+        [Authorize(Roles = "Admin,Dispatcher,WarehouseOperator")]
         public async Task<IActionResult> RejectByQa([FromRoute] Guid id, [FromBody] RejectClaimByQaCommand command)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;

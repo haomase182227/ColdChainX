@@ -345,7 +345,7 @@ public class IncidentReportService : IIncidentReportService
             var actor = await _db.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.UserId == userId);
             var isPrivileged = actor?.Role?.RoleName is not null &&
                                (actor.Role.RoleName.Equals("Admin", StringComparison.OrdinalIgnoreCase) ||
-                                actor.Role.RoleName.Equals("WarehouseWorker", StringComparison.OrdinalIgnoreCase));
+                                actor.Role.RoleName.Equals("WarehouseOperator", StringComparison.OrdinalIgnoreCase));
             if (incident.ReportedBy != userId && !isPrivileged)
                 return ApiResponse<IncidentResponse>.Failure("You cannot add evidence to this incident.", 403);
 

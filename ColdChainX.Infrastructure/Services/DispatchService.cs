@@ -1343,7 +1343,7 @@ public class DispatchService : IDispatchService
 
         try
         {
-            await _hubContext.Clients.Group("Group_WarehouseWorker")
+            await _hubContext.Clients.Group("Group_WarehouseOperator")
                 .SendAsync("PickingStarted", new
                 {
                     TripId = tripId,
@@ -1484,7 +1484,7 @@ public class DispatchService : IDispatchService
 
         try
         {
-            await _hubContext.Clients.Groups("Group_WarehouseWorker", "Group_Admin")
+            await _hubContext.Clients.Groups("Group_WarehouseOperator", "Group_Admin")
                 .SendAsync("TripCancelled", new
                 {
                     TripId = tripId,
@@ -2305,11 +2305,11 @@ public class DispatchService : IDispatchService
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    //  Warehouse worker notifications — Gửi thông báo khi LIFO sẵn sàng
+    //  Warehouse operator notifications — Gửi thông báo khi LIFO sẵn sàng
     // ═══════════════════════════════════════════════════════════════════════
 
-    private const string WarehouseWorkerRoleName = "WarehouseWorker";
-    private const string WarehouseWorkerNotificationTemplateId = "DISPATCH_WAREHOUSE_WORKER_READY";
+    private const string WarehouseOperatorRoleName = "WarehouseOperator";
+    private const string WarehouseOperatorNotificationTemplateId = "DISPATCH_WAREHOUSE_OPERATOR_READY";
 
     public async Task NotifyLoadersAsync(Guid tripId)
     {
@@ -2319,11 +2319,11 @@ public class DispatchService : IDispatchService
             .FirstOrDefaultAsync(t => t.TripId == tripId)
             ?? throw new KeyNotFoundException("Không tìm thấy chuyến đi.");
 
-        // Tìm tất cả users có role WarehouseWorker
+        // Tìm tất cả users có role WarehouseOperator
         var loaderUserIds = await _context.Users
             .Include(u => u.Role)
             .Where(u => u.Role != null
-                     && u.Role.RoleName == WarehouseWorkerRoleName
+                     && u.Role.RoleName == WarehouseOperatorRoleName
                      && (u.Status == null || u.Status == "ACTIVE"))
             .Select(u => u.UserId)
             .ToListAsync();
@@ -2332,7 +2332,7 @@ public class DispatchService : IDispatchService
 
         // Tạo template nếu chưa có
         var templateExists = await _context.NotificationTemplates
-            .AnyAsync(t => t.TemplateId == WarehouseWorkerNotificationTemplateId);
+            .AnyAsync(t => t.TemplateId == WarehouseOperatorNotificationTemplateId);
 
         if (!templateExists)
         {
@@ -2342,7 +2342,7 @@ public class DispatchService : IDispatchService
             {
                 _context.NotificationTemplates.Add(new NotificationTemplate
                 {
-                    TemplateId = WarehouseWorkerNotificationTemplateId,
+                    TemplateId = WarehouseOperatorNotificationTemplateId,
                     TypeId = msgType.TypeId,
                     TitleTemplate = "Sơ đồ LIFO sẵn sàng — Xe {vehicle}",
                     BodyTemplate = "Chuyến hàng {tripId} đã có sơ đồ xếp hàng LIFO. " +
@@ -2357,9 +2357,9 @@ public class DispatchService : IDispatchService
 
         // Kiểm tra template tồn tại
         var actualTemplateId = await _context.NotificationTemplates
-            .AnyAsync(t => t.TemplateId == WarehouseWorkerNotificationTemplateId
+            .AnyAsync(t => t.TemplateId == WarehouseOperatorNotificationTemplateId
                         && (t.Status == null || t.Status == "ACTIVE"))
-            ? WarehouseWorkerNotificationTemplateId
+            ? WarehouseOperatorNotificationTemplateId
             : await GetFallbackTemplateIdAsync();
 
         if (actualTemplateId == null) return;
@@ -2392,7 +2392,7 @@ public class DispatchService : IDispatchService
 
         try
         {
-            await _hubContext.Clients.Groups("Group_WarehouseWorker", "Group_Admin")
+            await _hubContext.Clients.Groups("Group_WarehouseOperator", "Group_Admin")
                 .SendAsync("WarehouseOrderApproved", new
                 {
                     TripId = tripId,

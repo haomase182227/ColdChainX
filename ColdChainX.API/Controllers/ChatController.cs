@@ -30,7 +30,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet("customers")]
-        [Authorize(Roles = "Sales,Admin,WarehouseWorker")]
+        [Authorize(Roles = "Sales,Admin,WarehouseOperator")]
         public async Task<IActionResult> GetCustomerConversations(
             [FromQuery] string? search = null,
             [FromQuery] int pageNumber = 1,
@@ -45,7 +45,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet("customers/{customerId:guid}/messages")]
-        [Authorize(Roles = "Sales,Admin,WarehouseWorker")]
+        [Authorize(Roles = "Sales,Admin,WarehouseOperator")]
         public async Task<IActionResult> GetCustomerMessages(
             Guid customerId,
             [FromQuery] int pageNumber = 1,

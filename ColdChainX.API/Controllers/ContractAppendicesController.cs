@@ -23,7 +23,7 @@ namespace ColdChainX.API.Controllers
 
         [HttpGet("preview")]
         [Produces("text/html")]
-        [Authorize(Roles = "Sales,Admin,WarehouseWorker,Dispatcher")]
+        [Authorize(Roles = "Sales,Admin,WarehouseOperator,Dispatcher")]
         public async Task<IActionResult> PreviewAppendix(
             [FromQuery] Guid orderId,
             [FromQuery] decimal adjustedPrice,
@@ -35,7 +35,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet("by-order/{orderId:guid}")]
-        [Authorize(Roles = "Sales,Admin,WarehouseWorker,Dispatcher,Customer")]
+        [Authorize(Roles = "Sales,Admin,WarehouseOperator,Dispatcher,Customer")]
         public async Task<IActionResult> GetAppendixByOrderId(Guid orderId)
         {
             var result = await _appendixService.GetAppendixByOrderIdAsync(orderId);
@@ -45,7 +45,7 @@ namespace ColdChainX.API.Controllers
 
         [HttpPut("{appendixId:guid}")]
         [Consumes("application/json", "text/html", "text/plain")]
-        [Authorize(Roles = "Sales,Admin,WarehouseWorker,Dispatcher")]
+        [Authorize(Roles = "Sales,Admin,WarehouseOperator,Dispatcher")]
         public async Task<IActionResult> UpdateAppendixDraft(Guid appendixId)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -72,7 +72,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("{appendixId:guid}/send")]
-        [Authorize(Roles = "Sales,Admin,WarehouseWorker,Dispatcher")]
+        [Authorize(Roles = "Sales,Admin,WarehouseOperator,Dispatcher")]
         public async Task<IActionResult> SendAppendix(Guid appendixId)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -111,7 +111,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("{appendixId:guid}/execute")]
-        [Authorize(Roles = "Sales,Admin,WarehouseWorker,Dispatcher")]
+        [Authorize(Roles = "Sales,Admin,WarehouseOperator,Dispatcher")]
         public async Task<IActionResult> ExecuteAppendixResolution(Guid appendixId)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;

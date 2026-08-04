@@ -161,7 +161,7 @@ FROM (
         ('Driver', 'Driver account'),
         ('Dispatcher', 'Container dispatcher'),
         ('Sales', 'Sales staff'),
-        ('WarehouseWorker', 'Warehouse worker')
+        ('WarehouseOperator', 'Warehouse operator')
 ) AS v(role_name, description)
 WHERE NOT EXISTS (
     SELECT 1
@@ -175,38 +175,49 @@ WHERE NOT EXISTS (
 
                 var sqlConsolidateWarehouseRoles = @"DO $$
 DECLARE
-    warehouse_worker_role_id uuid;
+    warehouse_operator_role_id uuid;
 BEGIN
     SELECT role_id
-    INTO warehouse_worker_role_id
+    INTO warehouse_operator_role_id
     FROM public.roles
-    WHERE lower(role_name) = 'warehouseworker'
+    WHERE lower(role_name) = 'warehouseoperator'
     LIMIT 1;
 
-    IF warehouse_worker_role_id IS NULL THEN
-        RAISE EXCEPTION 'WarehouseWorker role is required before consolidating legacy roles';
+    IF warehouse_operator_role_id IS NULL THEN
+        RAISE EXCEPTION 'WarehouseOperator role is required before consolidating legacy roles';
     END IF;
 
-    UPDATE public.users
-    SET role_id = warehouse_worker_role_id
-    WHERE role_id IN (
-        SELECT role_id
-        FROM public.roles
-        WHERE lower(role_name) IN ('loader', 'warehouseoperator', 'manager')
-    );
+    IF to_regclass('public.users') IS NOT NULL THEN
+        UPDATE public.users
+        SET role_id = warehouse_operator_role_id
+        WHERE role_id IN (
+            SELECT role_id
+            FROM public.roles
+            WHERE lower(role_name) IN ('warehouseworker', 'loader', 'manager')
+        );
+    END IF;
 
-    DELETE FROM public.role_permissions
-    WHERE role_id IN (
-        SELECT role_id
-        FROM public.roles
-        WHERE lower(role_name) IN ('loader', 'warehouseoperator', 'manager')
-    );
+    IF to_regclass('public.role_permissions') IS NOT NULL THEN
+        INSERT INTO public.role_permissions (role_id, perm_id)
+        SELECT warehouse_operator_role_id, rp.perm_id
+        FROM public.role_permissions rp
+        JOIN public.roles r ON r.role_id = rp.role_id
+        WHERE lower(r.role_name) IN ('warehouseworker', 'loader', 'manager')
+        ON CONFLICT DO NOTHING;
+
+        DELETE FROM public.role_permissions
+        WHERE role_id IN (
+            SELECT role_id
+            FROM public.roles
+            WHERE lower(role_name) IN ('warehouseworker', 'loader', 'manager')
+        );
+    END IF;
 
     DELETE FROM public.roles
-    WHERE lower(role_name) IN ('loader', 'warehouseoperator', 'manager');
+    WHERE lower(role_name) IN ('warehouseworker', 'loader', 'manager');
 END $$;";
 
-                logger.LogInformation("Consolidating legacy warehouse roles into WarehouseWorker...");
+                logger.LogInformation("Consolidating legacy warehouse roles into WarehouseOperator...");
                 await db.Database.ExecuteSqlRawAsync(sqlConsolidateWarehouseRoles);
                 logger.LogInformation("Legacy warehouse roles consolidated.");
 
@@ -290,7 +301,7 @@ END $$;";
                     var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>();
                     
                     var adminRole = await db.Roles.FirstOrDefaultAsync(r => r.RoleName == "Admin");
-                    var warehouseWorkerRole = await db.Roles.FirstOrDefaultAsync(r => r.RoleName == "WarehouseWorker");
+                    var warehouseOperatorRole = await db.Roles.FirstOrDefaultAsync(r => r.RoleName == "WarehouseOperator");
                     var customerRole = await db.Roles.FirstOrDefaultAsync(r => r.RoleName == "Customer");
                     var driverRole = await db.Roles.FirstOrDefaultAsync(r => r.RoleName == "Driver");
 
@@ -310,20 +321,20 @@ END $$;";
                         db.Users.Add(admin);
                     }
 
-                    if (warehouseWorkerRole != null)
+                    if (warehouseOperatorRole != null)
                     {
-                        var warehouseWorker = new User
+                        var warehouseOperator = new User
                         {
                             UserId = Guid.Parse("22222222-2222-2222-2222-222222222222"),
-                            Username = "warehouseworker01",
-                            Email = "warehouseworker01@coldchainx.com",
-                            FullName = "Warehouse Worker",
-                            RoleId = warehouseWorkerRole.RoleId,
+                            Username = "warehouseoperator01",
+                            Email = "warehouseoperator01@coldchainx.com",
+                            FullName = "Warehouse Operator",
+                            RoleId = warehouseOperatorRole.RoleId,
                             Status = "ACTIVE",
                             CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
                         };
-                        warehouseWorker.PasswordHash = passwordHasher.HashPassword(warehouseWorker, "Password@123");
-                        db.Users.Add(warehouseWorker);
+                        warehouseOperator.PasswordHash = passwordHasher.HashPassword(warehouseOperator, "Password@123");
+                        db.Users.Add(warehouseOperator);
                     }
 
                     if (customerRole != null)
