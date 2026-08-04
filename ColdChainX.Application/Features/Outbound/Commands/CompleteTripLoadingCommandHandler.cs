@@ -84,7 +84,7 @@ public class CompleteTripLoadingCommandHandler : IRequestHandler<CompleteTripLoa
             manifestUrl = await _pdfService.GenerateManifestPdfAsync(trip.TripId);
             if (!string.IsNullOrEmpty(manifestUrl))
             {
-                var adminUser = await _context.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.Role != null && (u.Role.RoleName.ToUpper() == "ADMIN" || u.Role.RoleName.ToUpper() == "MANAGER"));
+                var adminUser = await _context.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.Role != null && (u.Role.RoleName.ToUpper() == "ADMIN" || u.Role.RoleName.ToUpper() == "WAREHOUSEOPERATOR"));
                 var currentUserId = adminUser?.UserId ?? Guid.Empty;
 
                 _context.TransportDocuments.Add(new Core.Entities.TransportDocument
@@ -107,7 +107,7 @@ public class CompleteTripLoadingCommandHandler : IRequestHandler<CompleteTripLoa
             outboundTicketUrl = await _pdfService.GenerateOutboundTicketPdfAsync(trip.TripId);
             if (!string.IsNullOrEmpty(outboundTicketUrl))
             {
-                var adminUser = await _context.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.Role != null && (u.Role.RoleName.ToUpper() == "ADMIN" || u.Role.RoleName.ToUpper() == "MANAGER"));
+                var adminUser = await _context.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.Role != null && (u.Role.RoleName.ToUpper() == "ADMIN" || u.Role.RoleName.ToUpper() == "WAREHOUSEOPERATOR"));
                 var currentUserId = adminUser?.UserId ?? Guid.Empty;
 
                 _context.TransportDocuments.Add(new Core.Entities.TransportDocument

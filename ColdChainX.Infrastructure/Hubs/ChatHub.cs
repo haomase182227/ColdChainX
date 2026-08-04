@@ -54,7 +54,7 @@ namespace ColdChainX.Infrastructure.Hubs
         {
             return string.Equals(role, "Sales", StringComparison.OrdinalIgnoreCase)
                    || string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase)
-                   || string.Equals(role, "WarehouseWorker", StringComparison.OrdinalIgnoreCase);
+                   || string.Equals(role, "WarehouseOperator", StringComparison.OrdinalIgnoreCase);
         }
 
         private Guid GetUserId()

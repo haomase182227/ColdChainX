@@ -36,14 +36,14 @@ namespace ColdChainX.API.Swagger
                                 ["role"] = new OpenApiSchema 
                                 { 
                                     Type = "string", 
-                                    Description = "Role (required, allowed values: Admin, Dispatcher, Sales, WarehouseWorker)",
+                                    Description = "Role (required, allowed values: Admin, Dispatcher, Sales, WarehouseOperator)",
                                     Default = new OpenApiString("Dispatcher"),
                                     Enum = new List<IOpenApiAny>
                                     {
                                         new OpenApiString("Admin"),
                                         new OpenApiString("Dispatcher"),
                                         new OpenApiString("Sales"),
-                                        new OpenApiString("WarehouseWorker")
+                                        new OpenApiString("WarehouseOperator")
                                     }
                                 }
                             },

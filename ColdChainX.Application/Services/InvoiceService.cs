@@ -33,7 +33,7 @@ namespace ColdChainX.Application.Services
                 .Include(i => i.InvoiceLines)
                 .AsNoTracking();
 
-            // Filter by CustomerId if specified (forced for Customer role, optional for Admin/WarehouseWorker)
+            // Filter by CustomerId if specified (forced for Customer role, optional for Admin/WarehouseOperator)
             if (customerId.HasValue)
             {
                 query = query.Where(i => i.CustomerId == customerId.Value);
