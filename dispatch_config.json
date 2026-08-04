@@ -161,7 +161,7 @@
   {
     "title": "Update Dispatch Status Sequence Diagram",
     "participants": [
-      {"id": "a", "name": "Warehouse Worker", "type": "actor"},
+      {"id": "a", "name": "Warehouse Operator", "type": "actor"},
       {"id": "ui", "name": "Picking App Screen", "type": "screen"},
       {"id": "c", "name": "DispatchController", "type": "system"},
       {"id": "s", "name": "DispatchService", "type": "system"},

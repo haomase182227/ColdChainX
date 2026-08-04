@@ -249,7 +249,7 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
                     {
                         salesUserId = await _context.Users
                             .Include(u => u.Role)
-                            .Where(u => u.Role != null && (u.Role.RoleName.ToLower() == "admin" || u.Role.RoleName.ToLower() == "manager"))
+                            .Where(u => u.Role != null && (u.Role.RoleName.ToLower() == "admin" || u.Role.RoleName.ToLower() == "warehouseoperator"))
                             .Select(u => u.UserId)
                             .FirstOrDefaultAsync(cancellationToken);
                     }
@@ -291,11 +291,11 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
                     var appendixIdStr = appendixResult.Success ? appendixResult.Data!.AppendixId.ToString() : "";
                     var appendixNumberStr = appendixResult.Success ? appendixResult.Data!.AppendixNumber : "";
 
-                    // Send notification to Sales, Admin, and WarehouseWorker
+                    // Send notification to Sales, Admin, and WarehouseOperator
                     await EnsureNotificationTemplateAsync("NOTI_QC_DISCREPANCY", cancellationToken);
                     var salesUsers = await _context.Users
                         .Include(u => u.Role)
-                        .Where(u => u.Role != null && (u.Role.RoleName.ToLower() == "sales" || u.Role.RoleName.ToLower() == "admin" || u.Role.RoleName.ToLower() == "manager"))
+                        .Where(u => u.Role != null && (u.Role.RoleName.ToLower() == "sales" || u.Role.RoleName.ToLower() == "admin" || u.Role.RoleName.ToLower() == "warehouseoperator"))
                         .ToListAsync(cancellationToken);
 
                     foreach (var user in salesUsers)

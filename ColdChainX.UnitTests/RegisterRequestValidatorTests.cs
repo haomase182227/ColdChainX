@@ -23,7 +23,7 @@ public class RegisterRequestValidatorTests
 
     [Theory]
     [InlineData("Loader")]
-    [InlineData("WarehouseOperator")]
+    [InlineData("WarehouseWorker")]
     [InlineData("Manager")]
     public void Validate_RejectsLegacyWarehouseRoles(string role)
     {

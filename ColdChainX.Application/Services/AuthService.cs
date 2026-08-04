@@ -35,9 +35,9 @@ namespace ColdChainX.Application.Services
             if (!string.Equals(request.Role, "Admin", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(request.Role, "Dispatcher", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(request.Role, "Sales", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(request.Role, "WarehouseWorker", StringComparison.OrdinalIgnoreCase))
+                !string.Equals(request.Role, "WarehouseOperator", StringComparison.OrdinalIgnoreCase))
             {
-                return ApiResponse<AuthResponseDto>.Failure("Only Admin, Dispatcher, Sales, or WarehouseWorker roles can be created through this endpoint");
+                return ApiResponse<AuthResponseDto>.Failure("Only Admin, Dispatcher, Sales, or WarehouseOperator roles can be created through this endpoint");
             }
 
             var email = request.Email.Trim().ToLowerInvariant();
@@ -432,7 +432,7 @@ namespace ColdChainX.Application.Services
         }
 
 
-        public async Task<ApiResponse<AuthResponseDto>> CreateWarehouseWorkerAsync(CreateWarehouseWorkerRequest request)
+        public async Task<ApiResponse<AuthResponseDto>> CreateWarehouseOperatorAsync(CreateWarehouseOperatorRequest request)
         {
             var email = request.Email?.Trim().ToLowerInvariant();
             var username = string.IsNullOrWhiteSpace(request.Username)
@@ -453,9 +453,9 @@ namespace ColdChainX.Application.Services
             if (existingUsername != null)
                 return ApiResponse<AuthResponseDto>.Failure("Username already in use");
 
-            var role = await _userRepository.GetRoleByNameAsync("WarehouseWorker");
+            var role = await _userRepository.GetRoleByNameAsync("WarehouseOperator");
             if (role == null)
-                return ApiResponse<AuthResponseDto>.Failure("WarehouseWorker role not found in the system");
+                return ApiResponse<AuthResponseDto>.Failure("WarehouseOperator role not found in the system");
 
             var user = new User
             {
@@ -488,7 +488,7 @@ namespace ColdChainX.Application.Services
             dto.RefreshToken = refreshToken;
             dto.AccessTokenExpiresAt = accessExpiresAt;
 
-            return ApiResponse<AuthResponseDto>.SuccessResponse(dto, "WarehouseWorker account created successfully");
+            return ApiResponse<AuthResponseDto>.SuccessResponse(dto, "WarehouseOperator account created successfully");
         }
 
         public async Task<ApiResponse<DriverDto>> UpdateDriverAsync(Guid driverId, UpdateDriverInfoRequest request)
