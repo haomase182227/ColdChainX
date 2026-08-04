@@ -161,13 +161,16 @@ FROM (
         ('Driver', 'Driver account'),
         ('Dispatcher', 'Container dispatcher'),
         ('Sales', 'Sales staff'),
-        ('WarehouseWorker', 'Warehouse worker')
+        ('WarehouseWorker', 'Warehouse worker'),
+        ('Accountant', 'Financial accountant')
 ) AS v(role_name, description)
 WHERE NOT EXISTS (
     SELECT 1
     FROM public.roles r
     WHERE lower(r.role_name) = lower(v.role_name)
-);";
+);
+UPDATE public.roles SET description = 'Warehouse worker' WHERE lower(role_name) = 'warehouseworker';
+UPDATE public.roles SET description = 'Financial accountant' WHERE lower(role_name) = 'accountant';";
 
                 logger.LogInformation("Seeding roles (if missing)...");
                 await db.Database.ExecuteSqlRawAsync(sqlSeed);

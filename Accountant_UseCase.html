@@ -1,0 +1,57 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accountant - Use Case Diagram</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f8; display: flex; flex-direction: column; align-items: center; padding: 40px; }
+        h2 { color: #880e4f; margin-bottom: 5px; }
+        p { color: #555; margin-bottom: 30px; }
+        .mermaid-container { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+    </style>
+    <!-- Load Mermaid from CDN -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+</head>
+<body>
+    <h2>Usecase Diagram: Accountant</h2>
+    <p>High-level Use Case Diagram for the ColdChainX System (Finance Module)</p>
+    
+    <div class="mermaid-container">
+        <div class="mermaid">
+flowchart LR
+    %% Actor Definition
+    Actor((Accountant))
+    
+    %% System Boundary
+    subgraph ColdChainX [ColdChainX - Finance & Billing Module]
+        direction TB
+        UC1([1. Manage Invoices<br/>Create & Track Billing])
+        UC2([2. Process Expense Claims<br/>Advances & Receipts])
+        UC3([3. Manage Additional Charges<br/>Penalties & Detentions])
+        UC4([4. Verify Payments<br/>PayOS Integration])
+        UC5([5. Generate Financial Reports<br/>Revenue & Costs])
+    end
+
+    %% Connect Actor to Usecases
+    Actor --- UC1
+    Actor --- UC2
+    Actor --- UC3
+    Actor --- UC4
+    Actor --- UC5
+    
+    %% Styling
+    classDef actorStyle fill:#fce4ec,stroke:#c2185b,stroke-width:2px,color:#880e4f;
+    classDef ucStyle fill:#ffffff,stroke:#f57c00,stroke-width:2px,color:#e65100;
+    classDef systemStyle fill:#fff3e0,stroke:#ffb74d,stroke-width:2px,stroke-dasharray: 5 5;
+    
+    class Actor actorStyle;
+    class UC1,UC2,UC3,UC4,UC5 ucStyle;
+    class ColdChainX systemStyle;
+        </div>
+    </div>
+</body>
+</html>

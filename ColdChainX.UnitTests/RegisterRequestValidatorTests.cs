@@ -13,6 +13,7 @@ public class RegisterRequestValidatorTests
     [InlineData("Sales")]
     [InlineData("WarehouseWorker")]
     [InlineData("warehouseworker")]
+    [InlineData("Accountant")]
     public void Validate_AllowsSupportedStaffRoles(string role)
     {
         var result = _validator.Validate(CreateRequest(role));

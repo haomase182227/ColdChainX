@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ColdChainX - Automated Test Runner Dashboard</title>
+    <style>
+        :root {
+            --primary: #0d6efd;
+            --success: #198754;
+            --danger: #dc3545;
+            --warning: #ffc107;
+            --dark: #212529;
+            --gray: #6c757d;
+            --light-bg: #f8f9fa;
+            --border: #dee2e6;
+        }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; padding: 0; display: flex; height: 100vh; background: #e9ecef; color: var(--dark);
+        }
+        #sidebar { 
+            width: 420px; background: var(--light-bg); border-right: 1px solid var(--border); 
+            padding: 20px; overflow-y: auto; box-shadow: 2px 0 8px rgba(0,0,0,0.08); z-index: 100;
+        }
+        #main-content { 
+            flex-grow: 1; padding: 25px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px;
+        }
+        .card { 
+            background: white; border: 1px solid var(--border); border-radius: 8px; 
+            padding: 18px; margin-bottom: 18px; box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+        }
+        .card:last-child { margin-bottom: 0; }
+        h2, h3 { margin-top: 0; color: #1e293b; display: flex; align-items: center; gap: 8px; }
+        h2 { font-size: 20px; border-bottom: 2px solid var(--primary); padding-bottom: 10px; margin-bottom: 15px; }
+        h3 { font-size: 16px; }
+        
+        label { font-weight: 600; font-size: 13px; color: #475569; display: block; margin-top: 10px; margin-bottom: 5px; }
+        input[type="text"], input[type="number"], select { 
+            width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; 
+            box-sizing: border-box; font-size: 14px; transition: border-color 0.2s;
+        }
+        input:focus, select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(13,110,253,0.15); }
+        
+        button { 
+            background: var(--primary); color: white; border: none; padding: 11px 16px; 
+            border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; 
+            width: 100%; transition: opacity 0.2s, transform 0.1s; display: flex; justify-content: center; align-items: center; gap: 8px;
+        }
+        button:hover { opacity: 0.92; }
+        button:active { transform: scale(0.98); }
+        button:disabled { background: var(--gray); cursor: not-allowed; opacity: 0.6; }
+        
+        .btn-success { background: var(--success); }
+        .btn-danger { background: var(--danger); }
+        .btn-warning { background: var(--warning); color: #000; }
+        .btn-secondary { background: var(--gray); }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--dark); }
+        .btn-outline:hover { background: var(--light-bg); }
+
+        .btn-group { display: flex; gap: 10px; margin-top: 12px; }
+        
+        .badge { 
+            display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 12px; 
+            font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; 
+        }
+        .badge-passed { background: #d1e7dd; color: #0f5132; border: 1px solid #badbcc; }
+        .badge-failed { background: #f8d7da; color: #842029; border: 1px solid #f5c2c7; }
+        .badge-skipped { background: #fff3cd; color: #664d03; border: 1px solid #ffecb5; }
+
+        .stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; }
+        .stat-box { 
+            background: white; padding: 15px; border-radius: 8px; border: 1px solid var(--border); 
+            text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        }
+        .stat-box .number { font-size: 24px; font-weight: bold; margin-top: 5px; }
+        .stat-box.passed .number { color: var(--success); }
+        .stat-box.failed .number { color: var(--danger); }
+        .stat-box.skipped .number { color: #d97706; }
+
+        .progress-wrapper { background: white; padding: 18px; border-radius: 8px; border: 1px solid var(--border); }
+        .progress-bar-container { width: 100%; height: 24px; background: #e9ecef; border-radius: 12px; overflow: hidden; margin-top: 8px; position: relative; }
+        .progress-bar-fill { height: 100%; background: linear-gradient(90deg, #10b981, #059669); width: 0%; transition: width 0.3s ease; }
+        .progress-text { position: absolute; width: 100%; text-align: center; line-height: 24px; font-weight: bold; font-size: 12px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
+        
+        .log-container { flex-grow: 1; background: white; border: 1px solid var(--border); border-radius: 8px; padding: 18px; overflow: hidden; display: flex; flex-direction: column; }
+        .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .filter-pills { display: flex; gap: 8px; }
+        .pill { padding: 6px 14px; border-radius: 16px; font-size: 13px; cursor: pointer; border: 1px solid var(--border); background: #f8f9fa; font-weight: 600; transition: all 0.2s; }
+        .pill.active { background: #3b82f6; color: white; border-color: #3b82f6; }
+        
+        .log-list { overflow-y: auto; flex-grow: 1; display: flex; flex-direction: column; gap: 10px; max-height: calc(100vh - 360px); }
+        .test-item { 
+            border: 1px solid var(--border); border-radius: 6px; padding: 12px 15px; 
+            display: flex; flex-direction: column; gap: 8px; background: #fff; transition: background 0.15s;
+        }
+        .test-item:hover { background: #f8faFC; }
+        .test-item.failed-item { border-left: 5px solid var(--danger); background: #fff8f8; }
+        .test-item.passed-item { border-left: 5px solid var(--success); }
+        .test-item.skipped-item { border-left: 5px solid var(--warning); }
+        
+        .test-title { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 15px; }
+        .test-meta { font-size: 12px; color: var(--gray); display: flex; gap: 15px; align-items: center; }
+        .error-detail { 
+            background: #ffe3e3; color: #991b1b; padding: 10px; border-radius: 4px; font-family: monospace; 
+            font-size: 13px; white-space: pre-wrap; word-break: break-all; margin-top: 5px; border: 1px solid #ffc9c9;
+        }
+        
+        .checkbox-label { display: flex; align-items: center; gap: 8px; font-weight: 600; color: #334155; cursor: pointer; margin-top: 10px; font-size: 14px; }
+        .checkbox-label input { width: 18px; height: 18px; margin: 0; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<!-- SIDEBAR CẤU HÌNH -->
+<div id="sidebar">
+    <h2>❄️ ColdChainX Test Runner</h2>
+
+    <div class="card">
+        <h3>📂 Cấu hình File Spec HTML</h3>
+        <label>Đường dẫn Spec File:</label>
+        <div style="display: flex; gap: 6px;">
+            <input type="text" id="specPathInput" placeholder="Đang tìm kiếm file spec...">
+            <button class="btn-outline" onclick="browseSpecFile()" style="width: auto; padding: 0 12px; font-weight: bold; white-space: nowrap;" title="Mở hộp thoại chọn file trên Windows">🔍 Chọn File</button>
+        </div>
+        <div id="specStatus" style="margin-top: 8px; font-size: 12px; color: var(--gray);">Chưa tải thông tin spec...</div>
+    </div>
+
+    <div class="card">
+        <h3>🎛️ Tùy chọn Kiểm thử</h3>
+        <label>API Base URL (Backend Server):</label>
+        <input type="text" id="baseUrlInput" value="http://localhost:5244">
+
+        <label>Lọc Module cần chạy (Filter):</label>
+        <select id="moduleFilter">
+            <option value="">Tất cả (All Modules - 100 Functions)</option>
+            <option value="AUTH">AUTH - Xác thực & Phân quyền (6 Fns)</option>
+            <option value="USR">USR - Quản lý Tài khoản & Quyền (10 Fns)</option>
+            <option value="CUS">CUS - Hồ sơ Khách hàng & CRM (2 Fns)</option>
+            <option value="CHT">CHT - Nhắn tin Trực tiếp & Chat (5 Fns)</option>
+            <option value="CAT">CAT - Danh mục Dịch vụ ColdChain (6 Fns)</option>
+            <option value="WTR">WTR - Biểu giá & Trọng lượng (7 Fns)</option>
+            <option value="ROU">ROU - Tuyến đường & Chuyến đi (14 Fns)</option>
+            <option value="QOT">QOT - Quá trình Báo giá & AI (9 Fns)</option>
+            <option value="CTR">CTR - Hợp đồng & Phụ lục điện tử (17 Fns)</option>
+            <option value="ORD">ORD - Quản lý Đơn hàng & POD (11 Fns)</option>
+            <option value="INB">INB - Inbound LPN & Kho lạnh (8 Fns)</option>
+            <option value="OUT">OUT - Outbound, Tái cấu hình & Xuất (5 Fns)</option>
+        </select>
+
+        <label class="checkbox-label" style="color: #0284c7;">
+            <input type="checkbox" id="dryRunCheck"> ⚡ Chỉ Parse thử không gọi Backend (Dry Run)
+        </label>
+        <label class="checkbox-label" style="color: #dc2626;">
+            <input type="checkbox" id="stopOnFailCheck"> 🛑 Dừng ngay khi gặp lỗi đầu tiên
+        </label>
+
+        <div style="margin-top: 20px;">
+            <button id="btnStart" class="btn-success" onclick="startTestRun()" style="padding: 14px; font-size: 16px;">🚀 BẮT ĐẦU CHẠY KIỂM THỬ</button>
+            <button id="btnStop" class="btn-danger" onclick="stopTestRun()" style="margin-top: 10px; display: none;">🛑 DỪNG LẠI (ABORT)</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>📑 Trích xuất & Kết quả</h3>
+        <p style="font-size: 13px; color: var(--gray); margin-bottom: 15px;">Sau khi kiểm thử hoàn tất, kết quả sẽ tự động ghi dấu <b>O</b> vào các cột Return/Exception/Log trong file HTML Spec.</p>
+        <button onclick="openResultHtml()" style="background: #3b82f6; margin-bottom: 10px;">🌐 XEM KẾT QUẢ TRÊN TRÌNH DUYỆT</button>
+        <button onclick="openLogsFolder()" class="btn-outline">📂 MỞ THƯ MỤC FILE LOG DEBUG</button>
+    </div>
+</div>
+
+<!-- MÀN HÌNH THEO DÕI BÊN PHẢI -->
+<div id="main-content">
+    <!-- Thống kê Nhanh -->
+    <div class="stats-grid">
+        <div class="stat-box">
+            <div style="font-size: 13px; color: var(--gray); font-weight: bold;">TỔNG SỐ TC</div>
+            <div class="number" id="statTotal">0</div>
+        </div>
+        <div class="stat-box passed">
+            <div style="font-size: 13px; color: var(--gray); font-weight: bold;">PASSED (HỢP LỆ)</div>
+            <div class="number" id="statPassed">0</div>
+        </div>
+        <div class="stat-box failed">
+            <div style="font-size: 13px; color: var(--gray); font-weight: bold;">FAILED (LỖI BE)</div>
+            <div class="number" id="statFailed">0</div>
+        </div>
+        <div class="stat-box skipped">
+            <div style="font-size: 13px; color: var(--gray); font-weight: bold;">SKIPPED / DRY</div>
+            <div class="number" id="statSkipped">0</div>
+        </div>
+        <div class="stat-box">
+            <div style="font-size: 13px; color: var(--gray); font-weight: bold;">TỶ LỆ ĐẠT (%)</div>
+            <div class="number" id="statRate" style="color: #0d6efd;">0%</div>
+        </div>
+    </div>
+
+    <!-- Thanh Tiến Độ -->
+    <div class="progress-wrapper">
+        <div style="display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 14px;">
+            <span id="statusText">Trạng thái: Sẵn sàng</span>
+            <span id="progressPercent">0%</span>
+        </div>
+        <div class="progress-bar-container">
+            <div class="progress-text" id="progressBarText">0 / 0 TC</div>
+            <div class="progress-bar-fill" id="progressBarFill"></div>
+        </div>
+    </div>
+
+    <!-- Danh sách Test Cases & Logs -->
+    <div class="log-container">
+        <div class="log-header">
+            <h3>📋 Nhật ký thực thi kiểm thử thời gian thực</h3>
+            <div class="filter-pills">
+                <span class="pill active" onclick="setFilter('ALL', this)">Tất cả (<span id="countAll">0</span>)</span>
+                <span class="pill" onclick="setFilter('PASSED', this)">Passed (<span id="countPass">0</span>)</span>
+                <span class="pill" onclick="setFilter('FAILED', this)" style="border-color:#ffc2c2;">Failed (<span id="countFail">0</span>)</span>
+            </div>
+        </div>
+        <div class="log-list" id="logList">
+            <div style="text-align: center; color: var(--gray); padding: 40px;">Chưa có dữ liệu kiểm thử. Bấm "BẮT ĐẦU CHẠY KIỂM THỬ" để theo dõi.</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentFilter = 'ALL';
+    let pollInterval = null;
+
+    window.onload = () => {
+        autoDetectSpec();
+        startPolling();
+    };
+
+    async function autoDetectSpec() {
+        try {
+            const res = await fetch('/api/spec/auto-detect');
+            const data = await res.json();
+            document.getElementById('specPathInput').value = data.path;
+            if (data.exists) {
+                parseSpec(data.path);
+            } else {
+                document.getElementById('specStatus').innerHTML = '<span style="color:red;">⚠ Không tìm thấy file. Hãy kiểm tra lại đường dẫn!</span>';
+            }
+        } catch (e) {
+            console.error('Lỗi nhận diện file:', e);
+        }
+    }
+
+    async function browseSpecFile() {
+        try {
+            document.getElementById('specStatus').innerHTML = '<i>Đang mở hộp thoại chọn file trên desktop...</i>';
+            const curr = document.getElementById('specPathInput').value || '';
+            const res = await fetch(`/api/spec/browse?currentPath=${encodeURIComponent(curr)}`);
+            const data = await res.json();
+            if (!data.cancelled && data.path) {
+                document.getElementById('specPathInput').value = data.path;
+                parseSpec(data.path);
+            } else {
+                const current = document.getElementById('specPathInput').value;
+                if (current) parseSpec(current);
+            }
+        } catch (e) {
+            alert('Lỗi khi mở hộp thoại chọn file: ' + e.message);
+        }
+    }
+
+    async function parseSpec(path) {
+        try {
+            document.getElementById('specStatus').innerHTML = 'Đang đọc và phân tích file spec...';
+            const res = await fetch(`/api/spec/parse?path=${encodeURIComponent(path)}`);
+            const data = await res.json();
+            if (data.success) {
+                document.getElementById('specStatus').innerHTML = `<span style="color:green; font-weight:bold;">✓ Đã nhận: ${data.totalFunctions} Functions, ${data.totalTestCases} Test Cases</span>`;
+            } else {
+                document.getElementById('specStatus').innerHTML = `<span style="color:red;">Lỗi parse: ${data.error}</span>`;
+            }
+        } catch (e) {
+            document.getElementById('specStatus').innerHTML = `<span style="color:red;">Lỗi gọi API: ${e.message}</span>`;
+        }
+    }
+
+    async function startTestRun() {
+        const specPath = document.getElementById('specPathInput').value;
+        const baseUrl = document.getElementById('baseUrlInput').value;
+        const filterModule = document.getElementById('moduleFilter').value;
+        const dryRun = document.getElementById('dryRunCheck').checked;
+        const stopOnFail = document.getElementById('stopOnFailCheck').checked;
+
+        if (!specPath) {
+            alert('Vui lòng nhập đường dẫn Spec File!');
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/run/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ specPath, baseUrl, filterModule, dryRun, stopOnFail })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                alert('Lỗi khởi chạy: ' + (data.error || 'Unknown error'));
+                return;
+            }
+            // Switch UI state
+            document.getElementById('btnStart').style.display = 'none';
+            document.getElementById('btnStop').style.display = 'block';
+        } catch (e) {
+            alert('Không gửi được lệnh bắt đầu test: ' + e.message);
+        }
+    }
+
+    async function stopTestRun() {
+        if (confirm('Bạn có chắc chắn muốn dừng đợt kiểm thử hiện tại?')) {
+            await fetch('/api/run/stop', { method: 'POST' });
+            document.getElementById('btnStart').style.display = 'block';
+            document.getElementById('btnStop').style.display = 'none';
+        }
+    }
+
+    async function openResultHtml() {
+        const res = await fetch('/api/actions/open-result', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) alert('Lỗi: ' + data.error);
+    }
+
+    async function openLogsFolder() {
+        const res = await fetch('/api/actions/open-logs', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) alert('Lỗi: ' + data.error);
+    }
+
+    function startPolling() {
+        if (pollInterval) clearInterval(pollInterval);
+        pollInterval = setInterval(async () => {
+            try {
+                const res = await fetch('/api/run/status');
+                const data = await res.json();
+                updateDashboard(data);
+            } catch (e) {
+                console.warn('Polling error:', e);
+            }
+        }, 500);
+    }
+
+    function updateDashboard(data) {
+        // Stats
+        document.getElementById('statTotal').innerText = data.totalTestCases;
+        document.getElementById('statPassed').innerText = data.passedCount;
+        document.getElementById('statFailed').innerText = data.failedCount;
+        document.getElementById('statSkipped').innerText = data.skippedCount;
+        document.getElementById('statRate').innerText = data.passRate + '%';
+
+        document.getElementById('countAll').innerText = data.allResultsCount;
+        document.getElementById('countPass').innerText = data.passedCount;
+        document.getElementById('countFail').innerText = data.failedCount;
+
+        // Progress & Status
+        document.getElementById('statusText').innerText = 'Trạng thái: ' + data.statusText;
+        document.getElementById('progressPercent').innerText = data.progressPercent + '%';
+        document.getElementById('progressBarFill').style.width = data.progressPercent + '%';
+        document.getElementById('progressBarText').innerText = `${data.completedCount} / ${data.totalTestCases} TC`;
+
+        // Button state update
+        if (data.isRunning) {
+            document.getElementById('btnStart').style.display = 'none';
+            document.getElementById('btnStop').style.display = 'block';
+        } else {
+            document.getElementById('btnStart').style.display = 'block';
+            document.getElementById('btnStop').style.display = 'none';
+        }
+
+        // Render Logs Table/List
+        if (data.recentResults && data.recentResults.length > 0) {
+            renderLogs(data.recentResults);
+        }
+    }
+
+    function renderLogs(results) {
+        const listEl = document.getElementById('logList');
+        let filtered = results;
+        if (currentFilter === 'PASSED') filtered = results.filter(r => r.status === 'Passed');
+        if (currentFilter === 'FAILED') filtered = results.filter(r => r.status === 'Failed');
+
+        if (filtered.length === 0) {
+            listEl.innerHTML = `<div style="text-align:center; color: var(--gray); padding: 30px;">Không có Test Case nào trong mục <b>${currentFilter}</b></div>`;
+            return;
+        }
+
+        // We reverse to show newest tests at the top
+        let html = '';
+        filtered.slice().reverse().forEach(r => {
+            let badgeClass = 'badge-passed';
+            let statusText = '✓ PASSED';
+            let itemClass = 'passed-item';
+            if (r.status === 'Failed') {
+                badgeClass = 'badge-failed';
+                statusText = '✗ FAILED';
+                itemClass = 'failed-item';
+            } else if (r.status === 'Skipped') {
+                badgeClass = 'badge-skipped';
+                statusText = '⚠ SKIPPED';
+                itemClass = 'skipped-item';
+            }
+
+            html += `
+            <div class="test-item ${itemClass}">
+                <div class="test-title">
+                    <span><b>[${r.functionCode}.${r.testCaseId}]</b> - ${escapeHtml(r.testCaseDesc)}</span>
+                    <span class="badge ${badgeClass}">${statusText}</span>
+                </div>
+                <div class="test-meta">
+                    <span>Loại: <b>${r.testCaseType}</b></span>
+                    <span>HTTP Code: <b>${r.httpStatusCode || '-'}</b></span>
+                    <span>Thời gian: <b>${r.elapsedMs}ms</b></span>
+                    <span>Thông điệp: <b>${escapeHtml(r.message || '')}</b></span>
+                </div>
+                ${r.status === 'Failed' && r.responseBody ? `<div class="error-detail"><b>[Backend Error Body]:</b><br/>${escapeHtml(r.responseBody)}</div>` : ''}
+            </div>`;
+        });
+
+        listEl.innerHTML = html;
+    }
+
+    function setFilter(filter, el) {
+        currentFilter = filter;
+        document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+        el.classList.add('active');
+        // Immediately fetch and trigger render
+        fetch('/api/run/status').then(r => r.json()).then(data => renderLogs(data.recentResults || []));
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+</script>
+
+</body>
+</html>

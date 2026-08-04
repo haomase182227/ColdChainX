@@ -1,0 +1,57 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Warehouse Worker - Use Case Diagram</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f8; display: flex; flex-direction: column; align-items: center; padding: 40px; }
+        h2 { color: #1a237e; margin-bottom: 5px; }
+        p { color: #555; margin-bottom: 30px; }
+        .mermaid-container { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+    </style>
+    <!-- Load Mermaid from CDN -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+</head>
+<body>
+    <h2>Usecase Diagram: Warehouse Worker</h2>
+    <p>High-level Use Case Diagram for the ColdChainX System</p>
+    
+    <div class="mermaid-container">
+        <div class="mermaid">
+flowchart LR
+    %% Actor Definition
+    Actor((Warehouse<br/>Worker))
+    
+    %% System Boundary
+    subgraph ColdChainX [ColdChainX - Warehouse Module]
+        direction TB
+        UC1([1. Manage Inbound Goods<br/>Receive ASN])
+        UC2([2. Manage Outbound Goods<br/>Dispatch Orders])
+        UC3([3. Manage Inventory<br/>Stocktake LPNs])
+        UC4([4. Process Returned Goods<br/>Inbound Return Slips])
+        UC5([5. Report Incidents<br/>Damages / Temperature])
+    end
+
+    %% Connect Actor to Usecases
+    Actor --- UC1
+    Actor --- UC2
+    Actor --- UC3
+    Actor --- UC4
+    Actor --- UC5
+    
+    %% Styling
+    classDef actorStyle fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
+    classDef ucStyle fill:#ffffff,stroke:#2e7d32,stroke-width:2px,color:#1b5e20;
+    classDef systemStyle fill:#f1f8e9,stroke:#81c784,stroke-width:2px,stroke-dasharray: 5 5;
+    
+    class Actor actorStyle;
+    class UC1,UC2,UC3,UC4,UC5 ucStyle;
+    class ColdChainX systemStyle;
+        </div>
+    </div>
+</body>
+</html>

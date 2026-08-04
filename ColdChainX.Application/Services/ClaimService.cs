@@ -147,7 +147,7 @@ namespace ColdChainX.Application.Services
             }
         }
 
-        public async Task<ApiResponse<PagedResult<ClaimResponse>>> GetPagedClaimsAsync(Guid? orderId, int pageNumber, int pageSize)
+        public async Task<ApiResponse<PagedResult<ClaimResponse>>> GetPagedClaimsAsync(Guid? orderId, string? status, int pageNumber, int pageSize)
         {
             try
             {
@@ -160,6 +160,12 @@ namespace ColdChainX.Application.Services
                 if (orderId.HasValue)
                 {
                     query = query.Where(c => c.OrderId == orderId.Value);
+                }
+
+                // Lọc theo Status từ Dropdown: nếu là "ALL", để trống hoặc null thì lấy tất cả hồ sơ
+                if (!string.IsNullOrWhiteSpace(status) && !status.Equals("ALL", StringComparison.OrdinalIgnoreCase))
+                {
+                    query = query.Where(c => c.Status == status);
                 }
 
                 int totalCount = await query.CountAsync();

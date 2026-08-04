@@ -138,6 +138,7 @@ namespace ColdChainX.API.Extensions
             services.AddScoped<INotificationService, NotificationService>();
             services.AddScoped<IWarehouseReceiptService, WarehouseReceiptService>();
             services.AddScoped<IInvoiceService, InvoiceService>();
+            services.AddScoped<IFinancialReportService, FinancialReportService>();
             services.AddScoped<IInventoryAnalysisService, InventoryAnalysisService>();
             services.AddScoped<IIncidentReportService, IncidentReportService>();
             services.AddScoped<IIncidentRescueService, IncidentRescueService>();

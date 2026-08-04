@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ColdChainX - Không Gian Làm Việc Kế Toán (Accountant Workspace Architecture)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-card: #111827;
+            --bg-card-hover: #172033;
+            --border-color: rgba(255, 255, 255, 0.08);
+            --border-hover: rgba(56, 189, 248, 0.4);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --primary: #38bdf8;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --purple: #8b5cf6;
+            --pink: #ec4899;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-main);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            min-height: 100vh;
+            padding: 24px;
+            display: flex;
+            justify-content: center;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1400px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* HEADER */
+        .header {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.9));
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+        }
+
+        .header-left h1 {
+            font-size: 1.6rem;
+            font-weight: 800;
+            background: linear-gradient(90deg, #38bdf8, #818cf8, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-left p {
+            color: var(--text-muted);
+            font-size: 0.92rem;
+            margin-top: 4px;
+        }
+
+        .role-badge {
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.35);
+            color: #c084fc;
+            padding: 8px 16px;
+            border-radius: 9999px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .role-badge span.dot {
+            width: 8px;
+            height: 8px;
+            background: #10b981;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #10b981;
+        }
+
+        /* TAB NAVIGATION */
+        .tabs {
+            display: flex;
+            gap: 10px;
+            background: rgba(17, 24, 39, 0.7);
+            padding: 8px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            overflow-x: auto;
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-family: inherit;
+            font-size: 0.92rem;
+            font-weight: 700;
+            padding: 12px 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+        }
+
+        .tab-btn:hover {
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .tab-btn.active {
+            background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(99, 102, 241, 0.2));
+            color: #38bdf8;
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            box-shadow: 0 4px 12px rgba(56, 189, 248, 0.15);
+        }
+
+        /* KPI STATS ROW */
+        .kpi-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+        }
+
+        .kpi-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+
+        .kpi-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--border-hover);
+        }
+
+        .kpi-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3.5px;
+        }
+
+        .kpi-card.cyan::before { background: linear-gradient(90deg, #38bdf8, #0ea5e9); }
+        .kpi-card.emerald::before { background: linear-gradient(90deg, #10b981, #059669); }
+        .kpi-card.amber::before { background: linear-gradient(90deg, #f59e0b, #d97706); }
+        .kpi-card.pink::before { background: linear-gradient(90deg, #ec4899, #db2777); }
+
+        .kpi-title {
+            font-size: 0.82rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            font-weight: 700;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .kpi-val {
+            font-size: 1.65rem;
+            font-weight: 800;
+            color: #fff;
+            margin: 10px 0 4px 0;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .kpi-sub {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+        }
+
+        /* MAIN CONTENT AREA */
+        .content-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 28px;
+            display: none;
+            flex-direction: column;
+            gap: 24px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .content-panel.active {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 16px;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 800;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+            gap: 20px;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 20px;
+        }
+
+        /* FEATURE BOX */
+        .feature-card {
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .feature-card:hover {
+            border-color: rgba(56, 189, 248, 0.3);
+            background: rgba(15, 23, 42, 0.9);
+        }
+
+        .card-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .card-icon-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .icon-wrap {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+
+        .icon-wrap.cyan { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
+        .icon-wrap.emerald { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+        .icon-wrap.amber { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+        .icon-wrap.pink { background: rgba(236, 72, 153, 0.15); color: #ec4899; }
+        .icon-wrap.purple { background: rgba(139, 92, 246, 0.15); color: #c084fc; }
+
+        .card-heading {
+            font-size: 1.02rem;
+            font-weight: 700;
+            color: #f1f5f9;
+        }
+
+        .card-desc {
+            font-size: 0.86rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        .api-tag-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 6px;
+            padding-top: 10px;
+            border-top: 1px dashed rgba(255, 255, 255, 0.08);
+        }
+
+        .api-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.76rem;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 5px 10px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            color: #cbd5e1;
+        }
+
+        .method {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.68rem;
+            font-weight: 800;
+        }
+
+        .method.get { background: #0284c7; color: #fff; }
+        .method.post { background: #16a34a; color: #fff; }
+
+        /* ACTION CENTER CALLOUT */
+        .urgent-banner {
+            background: linear-gradient(135deg, rgba(56, 189, 248, 0.1), rgba(16, 185, 129, 0.08));
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            border-radius: 12px;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .urgent-left {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .urgent-icon {
+            font-size: 1.8rem;
+        }
+
+        .btn-action {
+            background: #38bdf8;
+            color: #041727;
+            font-family: inherit;
+            font-weight: 800;
+            font-size: 0.85rem;
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-action:hover {
+            background: #7dd3fc;
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.5);
+        }
+
+        .green-badge {
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 0.72rem;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        /* EXPORT BUTTONS */
+        .btn-export {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.3));
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            color: #34d399;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            margin-top: 6px;
+            align-self: flex-start;
+        }
+
+        .btn-export:hover {
+            background: rgba(16, 185, 129, 0.35);
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+            color: #fff;
+        }
+
+        /* INTERACTIVE DIAGRAM FLOW */
+        .flow-container {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            padding: 10px 0;
+        }
+
+        .flow-step {
+            display: grid;
+            grid-template-columns: 220px 1fr;
+            gap: 16px;
+            align-items: center;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px 20px;
+        }
+
+        .flow-label {
+            font-weight: 800;
+            font-size: 0.88rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .flow-card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 12px;
+        }
+
+        .flow-mini-card {
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px;
+        }
+
+        .flow-mini-title {
+            font-weight: 700;
+            font-size: 0.82rem;
+            margin-bottom: 4px;
+        }
+
+        .flow-mini-desc {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+
+        <!-- HEADER -->
+        <header class="header">
+            <div class="header-left">
+                <h1>💼 ColdChainX Financial & Accounting Workspace</h1>
+                <p>Trung tâm Quản trị Tài chính, Hóa đơn điện tử tức thì & Xuất Báo cáo Thuế Excel</p>
+            </div>
+            <div class="role-badge">
+                <span class="dot"></span>
+                <span>Role: Accountant / Finance Hub</span>
+            </div>
+        </header>
+
+        <!-- KPI SUMMARY CARDS -->
+        <div class="kpi-row">
+            <div class="kpi-card cyan">
+                <div class="kpi-title">
+                    <span>Doanh Thu Hóa Đơn Tức Thì</span>
+                    <span>📈</span>
+                </div>
+                <div class="kpi-val">850.450.000 ₫</div>
+                <div class="kpi-sub">Đã xuất hóa đơn e-Invoice theo từng đơn hoàn tất (+12.5%)</div>
+            </div>
+
+            <div class="kpi-card emerald">
+                <div class="kpi-title">
+                    <span>Hóa Đơn Đã Thanh Toán (PAID)</span>
+                    <span>⚡</span>
+                </div>
+                <div class="kpi-val">94.2%</div>
+                <div class="kpi-sub">Tự động đối soát qua PayOS QR và COD tiền mặt</div>
+            </div>
+
+            <div class="kpi-card amber">
+                <div class="kpi-title">
+                    <span>Dòng Tiền COD Chờ Khớp</span>
+                    <span>💳</span>
+                </div>
+                <div class="kpi-val">46.200.000 ₫</div>
+                <div class="kpi-sub">Tiền mặt tài xế đang giữ chờ nộp về bãi chốt chuyến</div>
+            </div>
+
+            <div class="kpi-card pink">
+                <div class="kpi-title">
+                    <span>Quỹ Bồi Thường & Chi Sự Cố</span>
+                    <span>💰</span>
+                </div>
+                <div class="kpi-val">18.450.000 ₫</div>
+                <div class="kpi-sub">Fast-track 24h Payout + Hoàn tiền sự cố Tài xế</div>
+            </div>
+        </div>
+
+        <!-- URGENT ACTION BANNER -->
+        <div class="urgent-banner">
+            <div class="urgent-left">
+                <div class="urgent-icon">📑</div>
+                <div>
+                    <strong style="color: #38bdf8; font-size: 0.95rem;">Đã Bổ Sung Module Xuất Báo Cáo Tài Chính & Bảng Kê Thuế (Excel / CSV Export):</strong>
+                    <div style="font-size: 0.85rem; color: #cbd5e1; margin-top: 2px;">
+                        Kế toán có thể kết xuất tức thì file Excel/CSV chuẩn UTF-8 (không lỗi font tiếng Việt) cho <strong>Bảng kê Hóa đơn VAT & Doanh thu</strong>, <strong>Bảng đối soát COD Đội xe</strong>, và <strong>Bảng quyết toán chi bồi thường Claim</strong>!
+                    </div>
+                </div>
+            </div>
+            <button class="btn-action" onclick="switchTab('tab-reports')">Xem Xuất Báo Cáo →</button>
+        </div>
+
+        <!-- TABS NAVIGATION -->
+        <nav class="tabs">
+            <button class="tab-btn active" onclick="switchTab('tab-overview')">📊 1. Tổng Quan Dòng Tiền</button>
+            <button class="tab-btn" onclick="switchTab('tab-invoices')">📥 2. Hóa Đơn Điện Tử Tức Thì</button>
+            <button class="tab-btn" onclick="switchTab('tab-reconcile')">💳 3. Đối Soát COD & PayOS QR</button>
+            <button class="tab-btn" onclick="switchTab('tab-payouts')">📤 4. Giải Ngân Bồi Thường & Hoàn Chi</button>
+            <button class="tab-btn" onclick="switchTab('tab-reports')" style="color:#34d399;">📑 5. Xuất Báo Cáo Tài Chính & Thuế</button>
+            <button class="tab-btn" onclick="switchTab('tab-workflow')">🗺️ 6. Bản Đồ Luồng Nghiệp Vụ</button>
+        </nav>
+
+        <!-- PANEL 1: TỔNG QUAN -->
+        <div id="tab-overview" class="content-panel active">
+            <div class="section-header">
+                <div class="section-title">📊 Phân Hệ 1: Bảng Điều Khiển Dòng Tiền & Doanh Thu Real-Time</div>
+                <span class="green-badge">Realtime Tracking</span>
+            </div>
+
+            <div class="grid-2">
+                <div class="feature-card">
+                    <div class="card-top">
+                        <div class="card-icon-title">
+                            <div class="icon-wrap cyan">📈</div>
+                            <div>
+                                <div class="card-heading">Giám Sát Doanh Thu & Giao Dịch Dòng Tiền</div>
+                                <div class="card-desc">Đối chiếu doanh thu vận chuyển xe lạnh, doanh thu lưu kho mát/đông và các loại phụ phí phát sinh theo từng đơn hàng tức thì.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="api-tag-list">
+                        <span class="api-pill"><span class="method get">GET</span>/api/payments/transactions (Lịch sử dòng tiền vào/ra)</span>
+                        <span class="api-pill"><span class="method get">GET</span>/api/v1/invoices (Tra cứu toàn bộ hóa đơn điện tử)</span>
+                    </div>
+                </div>
+
+                <div class="feature-card">
+                    <div class="card-top">
+                        <div class="card-icon-title">
+                            <div class="icon-wrap amber">⚠️</div>
+                            <div>
+                                <div class="card-heading">Theo Dõi Trạng Thái Thanh Toán Hóa Đơn</div>
+                                <div class="card-desc">Phân loại các hóa đơn đã thanh toán (PAID) và các hóa đơn còn chưa thanh toán (UNPAID) để nhắc nợ tự động hoặc xử lý nạp tiền.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="api-tag-list">
+                        <span class="api-pill"><span class="method get">GET</span>/api/v1/invoices?status=UNPAID (Danh sách hóa đơn chưa thanh toán)</span>
+                        <span class="api-pill"><span class="method get">GET</span>/api/v1/invoices?status=PAID (Danh sách hóa đơn đã tất toán)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANEL 2: HÓA ĐƠN ĐIỆN TỬ TỨC THÌ (PER-ORDER) -->
+        <div id="tab-invoices" class="content-panel">
+            <div class="section-header">
+                <div class="section-title">📥 Phân Hệ 2: Quản Lý Hóa Đơn Điện Tử Tức Thì Theo Đơn Hàng (Instant Per-Order Invoices)</div>
+                <span class="green-badge">⚡ Xuất Ngay Khi Giao Hàng & Thanh Toán</span>
+            </div>
+
+            <div class="grid-3">
+                <div class="feature-card" style="border: 1.5px solid rgba(56, 189, 248, 0.4);">
+                    <div class="card-top">
+                        <div class="card-icon-title">
+                            <div class="icon-wrap cyan">🧾</div>
+                            <div>
+                                <div class="card-heading">Phát Hành Hóa Đơn Ngay Theo Đơn</div>
+                                <div class="card-desc">Giao hàng xong $\rightarrow$ Khách thanh toán QR/COD $\rightarrow$ Hệ thống lập tức phát hành Hóa đơn điện tử (e-Invoice) kèm link tải PDF gửi về App cho Khách hàng.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="api-tag-list">
+                        <span class="api-pill"><span class="method get">GET</span>/api/v1/orders/{orderId}/invoices (Hóa đơn gắn liền với Đơn hàng)</span>
+                        <span class="api-pill"><span class="method get">GET</span>/api/payments/invoices/{referenceId} (Tra cứu Hóa đơn / COD Receipt)</span>
+                    </div>
+                </div>
+
+                <div class="feature-card">
+                    <div class="card-top">
+                        <div class="card-icon-title">
+                            <div class="icon-wrap emerald">📋</div>
+                            <div>
+                                <div class="card-heading">Tra Cứu & In Hóa Đơn Điện Tử VAT</div>
+                                <div class="card-desc">Kế toán xem chi tiết từng dòng hóa đơn (InvoiceLines), số hóa đơn GTGT, thuế VAT 8-10%, tải file PDF hóa đơn chính thức để báo cáo thuế.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="api-tag-list">
+                        <span class="api-pill"><span class="method get">GET</span>/api/v1/invoices/{invoiceId} (Chi tiết hóa đơn & link PDF)</span>
+                        <span class="api-pill"><span class="method get">GET</span>/api/v1/invoices?pageNumber=1&pageSize=10</span>
+                    </div>
+                </div>
+
+                <div class="feature-card">
+                    <div class="card-top">
+                        <div class="card-icon-title">
+                            <div class="icon-wrap purple">📜</div>
+                            <div>
+                                <div class="card-heading">Hợp Đồng & Phụ Phí Lưu Ca Dock</div>
+                                <div class="card-desc">Tra cứu điều khoản giá cước lạnh theo Hợp đồng và tự động cộng thêm phí lưu ca Dock (Detention charges) vào hóa đơn đơn hàng khi khách giam xe quá giờ.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="api-tag-list">
+                        <span class="api-pill"><span class="method get">GET</span>/api/contracts/by-order/{orderId}</span>
+                        <span class="api-pill"><span class="method get">GET</span>/api/contracts/{contractId}/html</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANEL 3: ĐỐI SOÁT COD -->
+        <div id="tab-reconcile" class="content-panel">
+            <div class="section-header">
+                <div class="section-title">💳 Phân Hệ 3: Đối Soát Tiền Mặt COD & Cổng Thanh Toán PayOS QR</div>
+                <span style="font-size:0.8rem; color:#10b981;">PaymentController + DeliveryController</span>
+            </div>
+
+            <div class="grid-3">
+                <div class="feature-card">
+                    <div class="card-top">
+                        <div class="card-icon-title">
+                            <div class="icon-wrap emerald">💵</div>
+                            <div>
+                                <div class="card-heading">Khớp Tiền COD Tài Xế Nộp Cuối Chuyến</div>
+                                <div class="card-desc">Tài xế về bãi nộp tiền mặt COD thu hộ hoặc biên nhận nộp tiền. Kế toán xác nhận khớp tiền để hoàn tất đóng chuyến xe an toàn.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="api-tag-list">
+                        <span class="api-pill"><span class="method post">POST</span>/api/trips/{tripId}/cod-handovers</span>
+                    </div>
+                </div>
+
+                <div class="feature-card">
+                    <div class="card-top">
+                        <div class="card-icon-title">
+                            <div class="icon-wrap cyan">🌐</div>
+                            <div>
+                                <div class="card-heading">Đối Soát Cổng PayOS & Webhook Ngân Hàng</div>
+                                <div class="card-desc">Kiểm tra các giao dịch thanh toán chuyển khoản qua mã QR động (PayOS) đã ting ting vào tài khoản công ty hay chưa.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="api-tag-list">
+                        <span class="api-pill"><span class="method post">POST</span>/api/payments/bank-webhook</span>
+                        <span class="api-pill"><span class="method get">GET</span>/api/payments/transactions</span>
+                    </div>
+                </div>
+
+                <div class="feature-card">
+                    <div class="card-top">
+                        <div class="card-icon-title">
+                            <div class="icon-wrap amber">⚖️</div>
+                            <div>
+                                <div class="card-heading">Đối Soát Giảm Trừ Dynamic COD Tại Dock</div>
+                                <div class="card-desc">Ghi nhận các khoản COD đã bị giảm trừ tức thì tại điểm giao hàng do khách từ chối nhận 1 phần kiện hàng bị mất nhiệt/hỏng.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="api-tag-list">
+                        <span class="api-pill"><span class="method get">GET</span>/api/Delivery/orders/{orderId}/epod</span>
+                        <span class="api-pill"><span class="method get">GET</span>/api/payments/invoices/{referenceId}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANEL 4: GIẢI NGÂN & BỒI THƯỜNG -->
+        <div id="tab-payouts" class="content-panel">
+            <div class="section-header">
+                <div class="section-title">📤 Phân Hệ 4: Giải Ngân Bồi Thường Claim Khách Hàng & Hoàn Tiền Tài Xế</div>
+                <span style="font-size:0.8rem; color:#ec4899;">ClaimsController + IncidentReportsController</span>
+            </div>
+
+            <div class="grid-2">
+                <div class="feature-card" style="border: 1.5px solid rgba(236, 72, 153, 0.35);">
+                    <div class="card-top">
+                        <div class="card-icon-title">
+                            <div class="icon-wrap pink">💰</div>
+                            <div>
+                                <div class="card-heading">Chi Bồi Thường Khách Hàng Fast-Track 24h</div>
+                                <div class="card-desc">Sau khi Điều phối viên duyệt lỗi dựa trên biểu đồ nhiệt độ IoT xe lạnh, Kế toán thực hiện lệnh chi chuyển khoản bồi thường cho Khách hàng và khép lại hồ sơ Claim thành RESOLVED_PAID.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="api-tag-list">
+                        <span class="api-pill"><span class="method get">GET</span>/api/v1/claims?status=PENDING_ACCOUNTANT_REVIEW</span>
+                        <span class="api-pill"><span class="method get">GET</span>/api/v1/claims/{id}/osd-investigation (Xem chứng từ & IoT Log)</span>
+                        <span class="api-pill" style="border-color:#ec4899; color:#f472b6;"><span class="method post" style="background:#db2777;">POST</span>/api/v1/claims/{id}/payout-accountant (Chi bồi thường)</span>
+                    </div>
+                </div>
+
+                <div class="feature-card" style="border: 1.5px solid rgba(16, 185, 129, 0.35);">
+                    <div class="card-top">
+                        <div class="card-icon-title">
+                            <div class="icon-wrap emerald">🔧</div>
+                            <div>
+                                <div class="card-heading">Hoàn Chi Sự Cố Dọc Đường Cho Tài Xế</div>
+                                <div class="card-desc">Tài xế gặp sự cố xe (vá vỏ, mua thêm dầu máy lạnh, gọi cứu hộ) tự ứng tiền trước. Kế toán duyệt hóa đơn và bấm hoàn chi trả tiền cho tài xế, tự động gửi thông báo Realtime sang App tài xế.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="api-tag-list">
+                        <span class="api-pill"><span class="method get">GET</span>/api/v1/incidents?tripId=... (Xem danh sách sự cố xe)</span>
+                        <span class="api-pill"><span class="method post">POST</span>/api/v1/incidents/{id}/expenses/approve (Duyệt khoản chi)</span>
+                        <span class="api-pill" style="border-color:#10b981; color:#34d399;"><span class="method post" style="background:#16a34a;">POST</span>/api/v1/incidents/{id}/expenses/reimburse (Hoàn chi tài xế)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANEL 5: XUẤT BÁO CÁO TÀI CHÍNH & THUẾ (MỚI) -->
+        <div id="tab-reports" class="content-panel">
+            <div class="section-header">
+                <div class="section-title">📑 Phân Hệ 5: Xuất Báo Cáo Tài Chính, Bảng Kê Thuế VAT & Đối Soát (Excel / CSV Export)</div>
+                <span class="green-badge">✨ New API Feature</span>
+            </div>
+
+            <div class="grid-2">
+                <!-- BÁO CÁO 1: BẢNG KÊ HÓA ĐƠN VAT -->
+                <div class="feature-card" style="border: 1.5px solid rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.05);">
+                    <div class="card-top">
+                        <div class="card-icon-title">
+                            <div class="icon-wrap emerald">🧾</div>
+                            <div>
+                                <div class="card-heading">Bảng Kê Hóa Đơn VAT & Doanh Thu Vận Chuyển</div>
+                                <div class="card-desc">Xuất file Excel/CSV tổng hợp toàn bộ hóa đơn phát hành tức thì theo đơn: Số HĐ GTGT, Khách hàng, Tiền trước thuế, Thuế suất 8-10%, Tiền VAT, Tổng tiền thanh toán và Trạng thái PAID/UNPAID.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="api-tag-list">
+                        <span class="api-pill"><span class="method get">GET</span>/api/v1/financial-reports/vat-invoices/export?fromDate=...&toDate=...&status=ALL</span>
+                    </div>
+                    <a href="javascript:alert('API: GET /api/v1/financial-reports/vat-invoices/export')" class="btn-export">📥 Tải Bảng Kê Hóa Đơn VAT (.csv / Excel)</a>
+                </div>
+
+                <!-- BÁO CÁO 2: ĐỐI SOÁT COD ĐỘI XE -->
+                <div class="feature-card" style="border: 1.5px solid rgba(56, 189, 248, 0.4); background: rgba(56, 189, 248, 0.05);">
+                    <div class="card-top">
+                        <div class="card-icon-title">
+                            <div class="icon-wrap cyan">💳</div>
+                            <div>
+                                <div class="card-heading">Bảng Kê Đối Soát Tiền Mặt & COD Thu Hộ Đội Xe</div>
+                                <div class="card-desc">Xuất file Excel/CSV quyết toán tiền COD từng chuyến xe: Tên tài xế, Biển số xe tải lạnh, Điểm giao, Số tiền COD thu thực tế, Trạng thái bàn giao nộp tiền về bãi.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="api-tag-list">
+                        <span class="api-pill"><span class="method get">GET</span>/api/v1/financial-reports/cod-settlement/export?fromDate=...&toDate=...</span>
+                    </div>
+                    <a href="javascript:alert('API: GET /api/v1/financial-reports/cod-settlement/export')" class="btn-export">📥 Tải Bảng Đối Soát COD Đội Xe (.csv / Excel)</a>
+                </div>
+
+                <!-- BÁO CÁO 3: QUYẾT TOÁN BỒI THƯỜNG CLAIM -->
+                <div class="feature-card" style="border: 1.5px solid rgba(236, 72, 153, 0.4); background: rgba(236, 72, 153, 0.05);">
+                    <div class="card-top">
+                        <div class="card-icon-title">
+                            <div class="icon-wrap pink">⚖️</div>
+                            <div>
+                                <div class="card-heading">Bảng Quyết Toán Quỹ Chi Bồi Thường & Sự Cố</div>
+                                <div class="card-desc">Xuất file Excel/CSV thống kê các khoản chi bồi thường hàng mất nhiệt cho khách hàng và chi hoàn tiền cứu hộ/sửa xe cho tài xế kèm phân định trách nhiệm.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="api-tag-list">
+                        <span class="api-pill"><span class="method get">GET</span>/api/v1/financial-reports/claims-expenses/export?fromDate=...&toDate=...</span>
+                    </div>
+                    <a href="javascript:alert('API: GET /api/v1/financial-reports/claims-expenses/export')" class="btn-export">📥 Tải Bảng Quyết Toán Bồi Thường (.csv / Excel)</a>
+                </div>
+
+                <!-- BÁO CÁO 4: TỔNG HỢP DÒNG TIỀN -->
+                <div class="feature-card" style="border: 1.5px solid rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.05);">
+                    <div class="card-top">
+                        <div class="card-icon-title">
+                            <div class="icon-wrap amber">📊</div>
+                            <div>
+                                <div class="card-heading">Báo Cáo Tổng Hợp Dòng Tiền & P&L (JSON Summary)</div>
+                                <div class="card-desc">API trả về chỉ số tài chính tổng thể phục vụ vẽ biểu đồ Cash Flow: Tổng doanh thu, Tổng thuế VAT, Tổng COD, Tổng tiền bồi thường và Dòng tiền thuần Net Operating Cash Flow.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="api-tag-list">
+                        <span class="api-pill"><span class="method get">GET</span>/api/v1/financial-reports/summary?fromDate=...&toDate=...</span>
+                    </div>
+                    <a href="javascript:alert('API: GET /api/v1/financial-reports/summary')" class="btn-export" style="color:#f59e0b; border-color:rgba(245,158,11,0.4); background:rgba(245,158,11,0.15);">📊 Lấy Dữ Liệu Tóm Tắt Dòng Tiền (JSON)</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANEL 6: SƠ ĐỒ LUỒNG TƯƠNG TÁC -->
+        <div id="tab-workflow" class="content-panel">
+            <div class="section-header">
+                <div class="section-title">🗺️ Phân Hệ 6: Bản Đồ Luồng Nghiệp Vụ Kế Toán & Dòng Tiền Hội Tụ</div>
+                <span style="font-size:0.8rem; color:#818cf8;">Luồng tức thì theo từng đơn hàng</span>
+            </div>
+
+            <div class="flow-container">
+                <!-- STEP 1 -->
+                <div class="flow-step">
+                    <div class="flow-label" style="color: #38bdf8;">
+                        <span>1. GIAO HÀNG TẠI DOCK</span>
+                        <span>➡️</span>
+                    </div>
+                    <div class="flow-card-grid">
+                        <div class="flow-mini-card">
+                            <div class="flow-mini-title" style="color:#38bdf8;">📦 Hoàn Tất Giao Hàng (ePOD)</div>
+                            <div class="flow-mini-desc">Tài xế giao hàng thành công và ký nhận nghiệm thu điện tử.</div>
+                        </div>
+                        <div class="flow-mini-card">
+                            <div class="flow-mini-title" style="color:#10b981;">💳 Thanh Toán Ngay (QR / COD)</div>
+                            <div class="flow-mini-desc">Khách quét mã PayOS QR động hoặc thanh toán COD tiền mặt.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 2 -->
+                <div class="flow-step" style="border: 1.5px solid rgba(56, 189, 248, 0.4); background: rgba(56, 189, 248, 0.05);">
+                    <div class="flow-label" style="color: #38bdf8;">
+                        <span>2. XUẤT HÓA ĐƠN TỨC THÌ</span>
+                        <span>⚡</span>
+                    </div>
+                    <div class="flow-card-grid">
+                        <div class="flow-mini-card" style="border-top: 3px solid #38bdf8;">
+                            <div class="flow-mini-title" style="color:#38bdf8;">🧾 Tự Động Sinh e-Invoice & PDF</div>
+                            <div class="flow-mini-desc">Hệ thống lập tức phát hành Hóa đơn điện tử theo đơn hàng, cấp mã HĐ và file PDF cho Khách hàng.</div>
+                        </div>
+                        <div class="flow-mini-card" style="border-top: 3px solid #10b981;">
+                            <div class="flow-mini-title" style="color:#10b981;">🌐 PayOS Webhook Xác Nhận</div>
+                            <div class="flow-mini-desc">Tự động cập nhật trạng thái Hóa đơn sang PAID và khớp giao dịch tài khoản công ty.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 3 -->
+                <div class="flow-step" style="border: 1.5px solid #8b5cf6; background: rgba(139, 92, 246, 0.08);">
+                    <div class="flow-label" style="color: #ec4899;">
+                        <span>3. KẾ TOÁN ĐỐI SOÁT & CHI TRẢ</span>
+                        <span>💼</span>
+                    </div>
+                    <div class="flow-card-grid">
+                        <div class="flow-mini-card" style="border-top: 3px solid #10b981;">
+                            <div class="flow-mini-title" style="color:#10b981;">💵 Khớp Tiền COD Cuối Chuyến</div>
+                            <div class="flow-mini-desc">Đối soát tiền mặt tài xế nộp về bãi khi kết thúc ca chạy.</div>
+                        </div>
+                        <div class="flow-mini-card" style="border-top: 3px solid #ec4899;">
+                            <div class="flow-mini-title" style="color:#f472b6;">💰 Chi Bồi Thường Fast-Track 24h</div>
+                            <div class="flow-mini-desc">Chuyển tiền đền bù khách hàng cho các Claim đã được duyệt lỗi mất nhiệt.</div>
+                        </div>
+                        <div class="flow-mini-card" style="border-top: 3px solid #38bdf8;">
+                            <div class="flow-mini-title" style="color:#38bdf8;">🔧 Hoàn Chi Sự Cố Cho Tài Xế</div>
+                            <div class="flow-mini-desc">Chuyển hoàn tiền sửa xe/cứu hộ dọc đường mà tài xế đã ứng trước.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 4 -->
+                <div class="flow-step" style="border: 1.5px solid rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.06);">
+                    <div class="flow-label" style="color: #10b981;">
+                        <span>4. KẾT XUẤT BÁO CÁO & THUẾ</span>
+                        <span>📑</span>
+                    </div>
+                    <div class="flow-card-grid">
+                        <div class="flow-mini-card" style="border-top: 3px solid #10b981;">
+                            <div class="flow-mini-title" style="color:#34d399;">📥 Xuất Bảng Kê VAT & Thuế</div>
+                            <div class="flow-mini-desc">Kết xuất file Excel/CSV bảng kê hóa đơn bán hàng cho cơ quan thuế.</div>
+                        </div>
+                        <div class="flow-mini-card" style="border-top: 3px solid #38bdf8;">
+                            <div class="flow-mini-title" style="color:#38bdf8;">📊 Báo Cáo P&L Cho Ban Giám Đốc</div>
+                            <div class="flow-mini-desc">Báo cáo tổng hợp doanh thu cước lạnh, tỷ lệ thu hồi COD và dòng tiền thuần.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        function switchTab(tabId) {
+            // Remove active from all tabs
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.content-panel').forEach(panel => panel.classList.remove('active'));
+
+            // Set target active
+            const targetPanel = document.getElementById(tabId);
+            if (targetPanel) {
+                targetPanel.classList.add('active');
+            }
+
+            // Highlight button
+            const buttons = document.querySelectorAll('.tab-btn');
+            if (tabId === 'tab-overview') buttons[0].classList.add('active');
+            else if (tabId === 'tab-invoices') buttons[1].classList.add('active');
+            else if (tabId === 'tab-reconcile') buttons[2].classList.add('active');
+            else if (tabId === 'tab-payouts') buttons[3].classList.add('active');
+            else if (tabId === 'tab-reports') buttons[4].classList.add('active');
+            else if (tabId === 'tab-workflow') buttons[5].classList.add('active');
+        }
+    </script>
+</body>
+</html>

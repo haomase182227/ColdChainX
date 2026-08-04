@@ -1,0 +1,602 @@
+{
+  "AUTH001": {
+    "method": "POST",
+    "url": "/api/auth/create-customer",
+    "auth": "Anonymous",
+    "body": "Form"
+  },
+  "AUTH002": {
+    "method": "POST",
+    "url": "/api/auth/create-driver",
+    "auth": "Admin",
+    "body": "Form"
+  },
+  "AUTH003": {
+    "method": "POST",
+    "url": "/api/auth/create-warehouse-worker",
+    "auth": "Admin",
+    "body": "Form"
+  },
+  "AUTH004": {
+    "method": "POST",
+    "url": "/api/auth/login",
+    "auth": "Anonymous",
+    "body": "Json"
+  },
+  "AUTH005": {
+    "method": "POST",
+    "url": "/api/auth/google-login",
+    "auth": "Anonymous",
+    "body": "Json"
+  },
+  "AUTH006": {
+    "method": "PUT",
+    "url": "/api/auth/change-password",
+    "auth": "Any",
+    "body": "Json"
+  },
+  "USR001": {
+    "method": "GET",
+    "url": "/api/v1/users",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "USR002": {
+    "method": "GET",
+    "url": "/api/v1/users/{{userId}}",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "USR003": {
+    "method": "POST",
+    "url": "/api/v1/users",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "USR004": {
+    "method": "PUT",
+    "url": "/api/v1/users/{{userId}}",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "USR005": {
+    "method": "PUT",
+    "url": "/api/v1/users/{{userId}}/role",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "USR006": {
+    "method": "PUT",
+    "url": "/api/v1/users/{{userId}}/status",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "USR007": {
+    "method": "PUT",
+    "url": "/api/v1/users/{{userId}}/warehouse",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "USR008": {
+    "method": "POST",
+    "url": "/api/v1/users/{{userId}}/reset-password",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "USR009": {
+    "method": "DELETE",
+    "url": "/api/v1/users/{{userId}}",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "USR010": {
+    "method": "POST",
+    "url": "/api/v1/users/{{userId}}/restore",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "CUS001": {
+    "method": "GET",
+    "url": "/api/customers",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "CUS002": {
+    "method": "GET",
+    "url": "/api/customers/{{customerId}}",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "CHT001": {
+    "method": "GET",
+    "url": "/api/chat/conversations",
+    "auth": "Any",
+    "body": "None"
+  },
+  "CHT002": {
+    "method": "GET",
+    "url": "/api/chat/conversations/{{conversationId}}/messages",
+    "auth": "Any",
+    "body": "None"
+  },
+  "CHT003": {
+    "method": "GET",
+    "url": "/api/chat/customer/messages",
+    "auth": "Customer",
+    "body": "None"
+  },
+  "CHT004": {
+    "method": "POST",
+    "url": "/api/chat/messages",
+    "auth": "Any",
+    "body": "Json"
+  },
+  "CHT005": {
+    "method": "PUT",
+    "url": "/api/chat/conversations/{{conversationId}}/read",
+    "auth": "Any",
+    "body": "None"
+  },
+  "CAT001": {
+    "method": "GET",
+    "url": "/api/service-catalogs",
+    "auth": "Any",
+    "body": "None"
+  },
+  "CAT002": {
+    "method": "GET",
+    "url": "/api/service-catalogs/active",
+    "auth": "Any",
+    "body": "None"
+  },
+  "CAT003": {
+    "method": "GET",
+    "url": "/api/service-catalogs/{{catalogId}}",
+    "auth": "Any",
+    "body": "None"
+  },
+  "CAT004": {
+    "method": "POST",
+    "url": "/api/service-catalogs",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "CAT005": {
+    "method": "PUT",
+    "url": "/api/service-catalogs/{{catalogId}}",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "CAT006": {
+    "method": "DELETE",
+    "url": "/api/service-catalogs/{{catalogId}}",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "WTR001": {
+    "method": "GET",
+    "url": "/api/weight-tiers",
+    "auth": "Any",
+    "body": "None"
+  },
+  "WTR002": {
+    "method": "GET",
+    "url": "/api/weight-tiers/{{tierId}}",
+    "auth": "Any",
+    "body": "None"
+  },
+  "WTR003": {
+    "method": "GET",
+    "url": "/api/weight-tiers/route/{{routeId}}",
+    "auth": "Any",
+    "body": "None"
+  },
+  "WTR004": {
+    "method": "POST",
+    "url": "/api/weight-tiers",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "WTR005": {
+    "method": "PUT",
+    "url": "/api/weight-tiers/{{tierId}}",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "WTR006": {
+    "method": "DELETE",
+    "url": "/api/weight-tiers/{{tierId}}",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "WTR007": {
+    "method": "POST",
+    "url": "/api/weight-tiers/import",
+    "auth": "Admin",
+    "body": "Form"
+  },
+  "ROU001": {
+    "method": "GET",
+    "url": "/api/routes/options",
+    "auth": "Any",
+    "body": "None"
+  },
+  "ROU002": {
+    "method": "GET",
+    "url": "/api/routes/{{routeId}}",
+    "auth": "Any",
+    "body": "None"
+  },
+  "ROU003": {
+    "method": "POST",
+    "url": "/api/routes",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "ROU004": {
+    "method": "PUT",
+    "url": "/api/routes/{{routeId}}",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "ROU005": {
+    "method": "DELETE",
+    "url": "/api/routes/{{routeId}}",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "ROU006": {
+    "method": "GET",
+    "url": "/api/routes/{{routeId}}/stops",
+    "auth": "Any",
+    "body": "None"
+  },
+  "ROU007": {
+    "method": "POST",
+    "url": "/api/routes/{{routeId}}/stops",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "ROU008": {
+    "method": "PUT",
+    "url": "/api/routes/stops/{{stopId}}",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "ROU009": {
+    "method": "DELETE",
+    "url": "/api/routes/stops/{{stopId}}",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "ROU010": {
+    "method": "GET",
+    "url": "/api/routes/origin-warehouses",
+    "auth": "Any",
+    "body": "None"
+  },
+  "ROU011": {
+    "method": "GET",
+    "url": "/api/routes/{{routeId}}/schedules",
+    "auth": "Any",
+    "body": "None"
+  },
+  "ROU012": {
+    "method": "POST",
+    "url": "/api/routes/{{routeId}}/schedules",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "ROU013": {
+    "method": "PUT",
+    "url": "/api/routes/schedules/{{scheduleId}}",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "ROU014": {
+    "method": "DELETE",
+    "url": "/api/routes/schedules/{{scheduleId}}",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "QOT001": {
+    "method": "POST",
+    "url": "/api/quotations/auto",
+    "auth": "Any",
+    "body": "Json"
+  },
+  "QOT002": {
+    "method": "GET",
+    "url": "/api/quotations",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "QOT003": {
+    "method": "GET",
+    "url": "/api/quotations/{{quotationId}}",
+    "auth": "Any",
+    "body": "None"
+  },
+  "QOT004": {
+    "method": "GET",
+    "url": "/api/quotations/order/{{orderId}}",
+    "auth": "Any",
+    "body": "None"
+  },
+  "QOT005": {
+    "method": "GET",
+    "url": "/api/quotations/customer/{{customerId}}",
+    "auth": "Customer",
+    "body": "None"
+  },
+  "QOT006": {
+    "method": "POST",
+    "url": "/api/quotations",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "QOT007": {
+    "method": "PUT",
+    "url": "/api/quotations/{{quotationId}}",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "QOT008": {
+    "method": "POST",
+    "url": "/api/quotations/{{quotationId}}/send",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "QOT009": {
+    "method": "POST",
+    "url": "/api/quotations/{{quotationId}}/accept",
+    "auth": "Customer",
+    "body": "None"
+  },
+  "CTR001": {
+    "method": "POST",
+    "url": "/api/contracts/generate",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "CTR002": {
+    "method": "GET",
+    "url": "/api/contracts/{{contractId}}",
+    "auth": "Any",
+    "body": "None"
+  },
+  "CTR003": {
+    "method": "GET",
+    "url": "/api/contracts/order/{{orderId}}",
+    "auth": "Any",
+    "body": "None"
+  },
+  "CTR004": {
+    "method": "GET",
+    "url": "/api/contracts/{{contractId}}/preview",
+    "auth": "Any",
+    "body": "None"
+  },
+  "CTR005": {
+    "method": "PUT",
+    "url": "/api/contracts/{{contractId}}/draft",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "CTR006": {
+    "method": "POST",
+    "url": "/api/contracts/{{contractId}}/send",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "CTR007": {
+    "method": "POST",
+    "url": "/api/contracts/{{contractId}}/upload-signed",
+    "auth": "Customer",
+    "body": "Form"
+  },
+  "CTR008": {
+    "method": "POST",
+    "url": "/api/contracts/{{contractId}}/review",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "CTR009": {
+    "method": "POST",
+    "url": "/api/contracts/{{contractId}}/approve",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "CTR010": {
+    "method": "POST",
+    "url": "/api/contract-appendices/generate",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "CTR011": {
+    "method": "GET",
+    "url": "/api/contract-appendices/{{appendixId}}/preview",
+    "auth": "Any",
+    "body": "None"
+  },
+  "CTR012": {
+    "method": "GET",
+    "url": "/api/contract-appendices/{{appendixId}}",
+    "auth": "Any",
+    "body": "None"
+  },
+  "CTR013": {
+    "method": "GET",
+    "url": "/api/contract-appendices/order/{{orderId}}",
+    "auth": "Any",
+    "body": "None"
+  },
+  "CTR014": {
+    "method": "POST",
+    "url": "/api/contract-appendices/{{appendixId}}/send",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "CTR015": {
+    "method": "POST",
+    "url": "/api/contract-appendices/{{appendixId}}/accept",
+    "auth": "Customer",
+    "body": "None"
+  },
+  "CTR016": {
+    "method": "POST",
+    "url": "/api/contract-appendices/{{appendixId}}/reject",
+    "auth": "Customer",
+    "body": "Json"
+  },
+  "CTR017": {
+    "method": "POST",
+    "url": "/api/contract-appendices/{{appendixId}}/execute",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "ORD001": {
+    "method": "POST",
+    "url": "/api/orders",
+    "auth": "Customer",
+    "body": "Json"
+  },
+  "ORD002": {
+    "method": "PUT",
+    "url": "/api/orders/{{orderId}}",
+    "auth": "Customer",
+    "body": "Json"
+  },
+  "ORD003": {
+    "method": "PUT",
+    "url": "/api/orders/{{orderId}}/admin",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "ORD004": {
+    "method": "POST",
+    "url": "/api/orders/{{orderId}}/review",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "ORD005": {
+    "method": "DELETE",
+    "url": "/api/orders/{{orderId}}",
+    "auth": "Customer",
+    "body": "None"
+  },
+  "ORD006": {
+    "method": "GET",
+    "url": "/api/orders",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "ORD007": {
+    "method": "GET",
+    "url": "/api/orders/customer",
+    "auth": "Customer",
+    "body": "None"
+  },
+  "ORD008": {
+    "method": "GET",
+    "url": "/api/orders/{{orderId}}",
+    "auth": "Any",
+    "body": "None"
+  },
+  "ORD009": {
+    "method": "GET",
+    "url": "/api/orders/tracking/{{trackingToken}}",
+    "auth": "Anonymous",
+    "body": "None"
+  },
+  "ORD010": {
+    "method": "GET",
+    "url": "/api/orders/{{orderId}}/temperature-chart",
+    "auth": "Anonymous",
+    "body": "None"
+  },
+  "ORD011": {
+    "method": "POST",
+    "url": "/api/orders/{{orderId}}/upload-pod",
+    "auth": "Admin",
+    "body": "Form"
+  },
+  "INB001": {
+    "method": "POST",
+    "url": "/api/inbound/asn",
+    "auth": "Customer",
+    "body": "Json"
+  },
+  "INB002": {
+    "method": "GET",
+    "url": "/api/inbound/schedule",
+    "auth": "Any",
+    "body": "None"
+  },
+  "INB003": {
+    "method": "GET",
+    "url": "/api/inbound/schedules",
+    "auth": "Any",
+    "body": "None"
+  },
+  "INB004": {
+    "method": "GET",
+    "url": "/api/inbound/asn/customer/{{customerId}}",
+    "auth": "Customer",
+    "body": "None"
+  },
+  "INB005": {
+    "method": "POST",
+    "url": "/api/inbound/receipts/{{receiptId}}/qc",
+    "auth": "WarehouseWorker",
+    "body": "Json"
+  },
+  "INB006": {
+    "method": "PUT",
+    "url": "/api/inbound/receipts/{{receiptId}}/measurements",
+    "auth": "WarehouseWorker",
+    "body": "Json"
+  },
+  "INB007": {
+    "method": "POST",
+    "url": "/api/inbound/receipts/{{receiptId}}/complete",
+    "auth": "WarehouseWorker",
+    "body": "None"
+  },
+  "INB008": {
+    "method": "POST",
+    "url": "/api/inbound/putaway",
+    "auth": "WarehouseWorker",
+    "body": "Json"
+  },
+  "OUT001": {
+    "method": "POST",
+    "url": "/api/outbound/orders",
+    "auth": "Customer",
+    "body": "Json"
+  },
+  "OUT002": {
+    "method": "GET",
+    "url": "/api/outbound/orders",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "OUT003": {
+    "method": "GET",
+    "url": "/api/outbound/orders/{{outboundId}}",
+    "auth": "Any",
+    "body": "None"
+  },
+  "OUT004": {
+    "method": "PUT",
+    "url": "/api/outbound/orders/{{outboundId}}",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "OUT005": {
+    "method": "POST",
+    "url": "/api/outbound/orders/{{outboundId}}/allocate",
+    "auth": "WarehouseWorker",
+    "body": "None"
+  }
+}

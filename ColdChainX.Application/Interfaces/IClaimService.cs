@@ -11,7 +11,7 @@ namespace ColdChainX.Application.Interfaces
         Task<ApiResponse<ClaimResponse>> CreateClaimAsync(CreateClaimRequest request, Guid userId);
         Task<ApiResponse<bool>> ResolveClaimAsync(Guid claimId, ResolveClaimRequest request, Guid userId);
         Task<ApiResponse<ClaimResponse>> GetClaimByIdAsync(Guid claimId);
-        Task<ApiResponse<PagedResult<ClaimResponse>>> GetPagedClaimsAsync(Guid? orderId, int pageNumber, int pageSize);
+        Task<ApiResponse<PagedResult<ClaimResponse>>> GetPagedClaimsAsync(Guid? orderId, string? status, int pageNumber, int pageSize);
         Task<ApiResponse<bool>> CompleteClaimPayoutAsync(Guid claimId, CompleteClaimPayoutRequest request, Guid userId);
     }
 }

@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ColdChainX - Sơ Đồ Quy Trình Sự Cố & Bồi Thường Hội Tụ Kế Toán</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-main: #0b1120;
+            --bg-group: rgba(51, 65, 85, 0.25);
+            --border-group: #475569;
+            --bg-node: #1e293b;
+            --border-node: #64748b;
+            --text-primary: #f8fafc;
+            --text-sub: #cbd5e1;
+            --text-mute: #94a3b8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-main);
+            color: var(--text-primary);
+            padding: 30px;
+            font-size: 13.5px;
+            line-height: 1.45;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 35px;
+            max-width: 1000px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        h1 {
+            font-size: 1.9rem;
+            font-weight: 800;
+            color: #f8fafc;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        p.subtitle {
+            color: var(--text-mute);
+            font-size: 0.95rem;
+        }
+
+        /* DIAGRAM CONTAINER */
+        .diagram-container {
+            max-width: 1500px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
+            position: relative;
+        }
+
+        /* TOP SECTION: TWO DISTINCT WORKFLOWS SIDE-BY-SIDE */
+        .stage-split {
+            display: grid;
+            grid-template-columns: 48% 49.5%;
+            justify-content: space-between;
+            align-items: stretch;
+        }
+
+        @media(max-width: 1200px) {
+            .stage-split { grid-template-columns: 1fr; gap: 28px; }
+        }
+
+        /* OUTER GROUP BOX (LIKE PIC 2) */
+        .group-box {
+            background: var(--bg-group);
+            border: 1px.5 solid var(--border-group);
+            border-radius: 8px;
+            padding: 28px 18px 20px 18px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .group-label {
+            position: absolute;
+            top: -12px;
+            left: 18px;
+            background: #0f172a;
+            border: 1px solid var(--border-group);
+            padding: 2px 12px;
+            border-radius: 4px;
+            font-weight: 800;
+            font-size: 0.82rem;
+            color: #fcd34d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* HORIZONTAL FLEX/GRID FOR NO STACKING! */
+        .horiz-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            width: 100%;
+        }
+
+        .row-2 { grid-template-columns: 1fr 1fr; }
+        .row-3 { grid-template-columns: 1fr 1fr 1fr; }
+
+        @media(max-width: 800px) {
+            .row-2, .row-3 { grid-template-columns: 1fr; }
+        }
+
+        /* NODE RECTANGLE BOX (LIKE PIC 2) */
+        .node {
+            background: var(--bg-node);
+            border: 1px solid var(--border-node);
+            border-radius: 6px;
+            padding: 14px 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            justify-content: center;
+            gap: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+            transition: border-color 0.2s, transform 0.2s;
+            height: 100%;
+        }
+
+        .node:hover {
+            border-color: #cbd5e1;
+            transform: translateY(-2px);
+        }
+
+        .api-title {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .method {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
+            font-weight: 800;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: #059669;
+            color: white;
+        }
+
+        .method.get { background: #2563eb; }
+
+        .api-path {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .sub-text {
+            font-size: 0.78rem;
+            color: var(--text-sub);
+            max-width: 95%;
+        }
+
+        .sub-mute {
+            font-size: 0.75rem;
+            color: var(--text-mute);
+            font-style: italic;
+        }
+
+        .gold-highlight { color: #fbbf24; font-weight: 700; }
+        .pink-highlight { color: #f472b6; font-weight: 700; }
+        .green-highlight { color: #34d399; font-weight: 700; }
+        .red-highlight { color: #f87171; font-weight: 700; }
+        .blue-highlight { color: #38bdf8; font-weight: 700; }
+
+        /* ARROW CONNECTORS WITH LABELS */
+        .arrow-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 6px 0;
+        }
+
+        .line {
+            width: 2px;
+            height: 22px;
+            background: #64748b;
+            position: relative;
+        }
+
+        .line::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: -4px;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 6px solid #64748b;
+        }
+
+        .arrow-label {
+            background: #0f172a;
+            border: 1px solid #475569;
+            color: #fcd34d;
+            font-size: 0.74rem;
+            font-weight: 700;
+            padding: 3px 12px;
+            border-radius: 99px;
+            z-index: 2;
+            margin: -3px 0;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+        }
+
+        /* ACCOUNTING MERGE BOX AT THE BOTTOM */
+        .finance-box {
+            background: linear-gradient(135deg, rgba(63, 19, 60, 0.4) 0%, rgba(30, 41, 59, 0.5) 100%);
+            border: 1.5px solid #ec4899;
+            border-radius: 10px;
+            padding: 30px 22px 22px 22px;
+            position: relative;
+        }
+
+        .finance-label {
+            position: absolute;
+            top: -14px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #ec4899;
+            color: white;
+            font-weight: 800;
+            font-size: 0.9rem;
+            padding: 4px 22px;
+            border-radius: 99px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 4px 15px rgba(236, 72, 153, 0.4);
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Sơ Đồ Lưu Đồ Nghiệp Vụ: Không Xếp Chồng & Hội Tụ Về Kế Toán</h1>
+        <p class="subtitle">Bố cục ngang chuẩn kỹ thuật (Block Flowchart giống Pic 2): Toàn bộ các hộp API được trải ngang song song, dễ dàng đối chiếu luồng Sự Cố Dọc Đường và luồng Bồi Thường trước khi hợp long tại Kế Toán.</p>
+    </header>
+
+    <div class="diagram-container">
+
+        <!-- TOP STAGE: SEPARATED WORKFLOWS (LEFT: INCIDENTS | RIGHT: CLAIMS) -->
+        <div class="stage-split">
+
+            <!-- LEFT WORKFLOW: OPERATIONAL INCIDENTS -->
+            <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%;">
+                
+                <div class="group-box" style="border-color: #ea580c; background: rgba(234, 88, 12, 0.05); height: 100%; gap: 16px;">
+                    <div class="group-label" style="border-color: #f97316; color: #fb923c;">1. SỰ CỐ DỌC ĐƯỜNG (Tài xế / Vận hành & Điều phối)</div>
+                    
+                    <!-- STEP 1: REPORT -->
+                    <div class="node" style="border-left: 4px solid #fb923c; margin-top: 4px;">
+                        <div class="api-title"><span class="method">POST</span><span class="api-path" style="color:#fb923c;">/api/v1/incidents</span></div>
+                        <p class="sub-text">(Báo cáo sự cố xe & tụt nhiệt độ, <span class="gold-highlight">ghi nhận số tiền túi tài xế ứng trước</span>)</p>
+                    </div>
+
+                    <!-- ARROW DOWN -->
+                    <div class="arrow-box">
+                        <div class="line"></div>
+                        <span class="arrow-label" style="border-color: #fb923c;">Phân luồng 3 hành động song song ngang (Không xếp chồng)</span>
+                        <div class="line"></div>
+                    </div>
+
+                    <!-- STEP 2: 3 BOXES SIDE BY SIDE HORIZONTALLY! ZERO STACKING! -->
+                    <div class="horiz-row row-3">
+                        <div class="node" style="border-top: 3px solid #10b981;">
+                            <div class="api-title"><span class="method">POST</span><span class="api-path" style="font-size:0.78rem;">.../continue-trip</span></div>
+                            <p class="sub-text">(Sự cố nhẹ → Tài xế tự xử lý và đi tiếp)</p>
+                        </div>
+
+                        <div class="node" style="border-top: 3px solid #f43f5e;">
+                            <div class="api-title"><span class="method">POST</span><span class="api-path" style="font-size:0.78rem;">.../dispatch-rescue</span></div>
+                            <p class="sub-text">(Nặng → Điều xe cứu hộ, <span style="color:#fcd34d;">tự động tính lại ETA qua Goong Map</span>)</p>
+                        </div>
+
+                        <div class="node" style="border-top: 3px solid #3b82f6;">
+                            <div class="api-title"><span class="method">POST</span><span class="api-path" style="font-size:0.78rem;">.../{id}/resolve</span></div>
+                            <p class="sub-text">(Xác nhận máy lạnh xe online → <span class="green-highlight">Đóng hồ sơ sự cố</span>)</p>
+                        </div>
+                    </div>
+
+                    <!-- LONG ARROW DOWN TO ACCOUNTING TO JOIN WITH THE RIGHT WORKFLOW -->
+                    <div class="arrow-box" style="margin-top: auto; padding-top: 14px;">
+                        <div class="line" style="height: 32px; background: #f472b6;"></div>
+                        <span class="arrow-label" style="background: #831843; color: white; border-color: #ec4899;">Chuyển chứng từ sữa chữa về Kế toán thanh toán ⬇</span>
+                        <div class="line" style="height: 32px; background: #f472b6;"></div>
+                    </div>
+                </div>
+
+            </div>
+
+
+            <!-- RIGHT WORKFLOW: CLAIMS & OS&D -->
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+                
+                <!-- GROUP 2: DOCK & CUSTOMER CLAIMS -->
+                <div class="group-box" style="border-color: #0284c7; background: rgba(2, 132, 199, 0.05);">
+                    <div class="group-label" style="border-color: #38bdf8; color: #38bdf8;">2. GIAO HÀNG TẠI DOCK & KHIẾU NẠI (Kho & Khách hàng)</div>
+
+                    <!-- 3 HỘP THẺ TRẢI NGANG SONG SONG! (SIDE-BY-SIDE) -->
+                    <div class="horiz-row row-3" style="margin-top: 4px;">
+                        
+                        <div class="node" style="border-top: 3.5px solid #38bdf8;">
+                            <div style="font-size: 0.72rem; font-weight:800; color:#38bdf8; text-transform:uppercase; margin-bottom:2px;">Đồng Kiểm Tại Dock</div>
+                            <div class="api-title"><span class="method">POST</span><span class="api-path" style="font-size:0.75rem;">.../dynamic-cod</span></div>
+                            <div class="api-title" style="margin-top:4px;"><span class="method">POST</span><span class="api-path" style="font-size:0.75rem;">.../reject-entire-lpn</span></div>
+                            <p class="sub-text" style="margin-top:4px;">(Từ chối 1 phần giảm COD hoặc từ chối 100% LPN lỗi)</p>
+                            <span class="green-highlight" style="font-size: 0.75rem;">⚡ Tự động sinh 1 CLAIM</span>
+                        </div>
+
+                        <div class="node" style="border-top: 3.5px solid #64748b;">
+                            <div style="font-size: 0.72rem; font-weight:800; color:#cbd5e1; text-transform:uppercase; margin-bottom:2px;">Nhập Kho Tang Vật</div>
+                            <div class="api-title"><span class="method">POST</span><span class="api-path" style="font-size:0.75rem;">/inbound/disposition</span></div>
+                            <p class="sub-text" style="margin-top:4px;">(Nhập kho hàng Reject → Khóa sang chế độ tang vật <code>DISCREPANCY_HOLD</code>)</p>
+                        </div>
+
+                        <div class="node" style="border-top: 3.5px solid #a855f7;">
+                            <div style="font-size: 0.72rem; font-weight:800; color:#c084fc; text-transform:uppercase; margin-bottom:2px;">Khách Hàng Nộp Đơn</div>
+                            <div class="api-title"><span class="method">POST</span><span class="api-path" style="font-size:0.78rem;">/api/v1/claims</span></div>
+                            <p class="sub-text" style="margin-top:4px;">(Khách hàng nộp đơn khiếu nại bồi thường đính kèm ảnh lỗi)</p>
+                            <span class="green-highlight" style="font-size: 0.75rem;">⚡ Khởi tạo 1 CLAIM mới</span>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- ARROW TO DISPATCHER -->
+                <div class="arrow-box" style="margin: -6px 0;">
+                    <div class="line"></div>
+                    <span class="arrow-label" style="border-color: #8b5cf6; color: #c084fc;">Toàn bộ hồ sơ Claim được quy tụ về Điều phối viên</span>
+                    <div class="line"></div>
+                </div>
+
+                <!-- GROUP 3: DISPATCHER REVIEW HUB -->
+                <div class="group-box" style="border-color: #8b5cf6; background: rgba(139, 92, 246, 0.05); gap: 14px;">
+                    <div class="group-label" style="border-color: #8b5cf6; color: #c084fc;">3. RÀ SOÁT & DUYỆT LỖI IOT LOG (Điều Phối Viên / QA)</div>
+
+                    <!-- 2 TOP HUB NODES: LIST + DETAIL INVESTIGATION -->
+                    <div class="horiz-row row-2" style="margin-top: 4px;">
+                        <div class="node" style="border: 1.5px solid #8b5cf6; background: #151c2e; padding: 12px 10px;">
+                            <div class="api-title"><span class="method get">GET</span><span class="api-path" style="color: #c084fc; font-size: 0.78rem;">/api/v1/claims?status=...</span></div>
+                            <p class="sub-text" style="margin-top:4px;">(<strong>1. Lọc bảng danh sách:</strong> Dropdown chọn <code>PENDING_DISPATCHER_REVIEW</code> hoặc <code>ALL</code>)</p>
+                        </div>
+                        <div class="node" style="border: 1.5px solid #ec4899; background: #151c2e; padding: 12px 10px;">
+                            <div class="api-title"><span class="method get" style="background:#db2777;">GET</span><span class="api-path" style="color: #f472b6; font-size: 0.78rem;">.../{id}/osd-investigation</span></div>
+                            <p class="sub-text" style="margin-top:4px;">(<strong>2. Giám định chi tiết:</strong> Tải toàn bộ ảnh Dock + <span style="color:#fcd34d;">Phân tích cảm biến IoT xe lạnh</span>)</p>
+                        </div>
+                    </div>
+
+                    <!-- 2 BOXES SIDE BY SIDE HORIZONTALLY! ZERO STACKING! -->
+                    <div class="horiz-row row-2">
+                        <div class="node" style="border-top: 3.5px solid #10b981; background: rgba(16, 185, 129, 0.05);">
+                            <div class="api-title"><span class="method">POST</span><span class="api-path" style="font-size:0.8rem;">.../{id}/dispatcher-approve</span></div>
+                            <p class="sub-text" style="margin-top:4px;">(Xác nhận lỗi hợp lệ → Đẩy chốt duyệt sang Kế toán!)</p>
+                        </div>
+                        
+                        <div class="node" style="border-top: 3.5px solid #ef4444; background: rgba(239, 68, 68, 0.05);">
+                            <div class="api-title"><span class="method">POST</span><span class="api-path" style="font-size:0.8rem;">.../{id}/dispatcher-reject</span></div>
+                            <p class="sub-text" style="margin-top:4px;">(Từ chối bồi thường & Đóng hồ sơ nếu nhiệt độ xe đạt chuẩn)</p>
+                        </div>
+                    </div>
+
+                    <!-- ARROW DOWN TO ACCOUNTANT -->
+                    <div class="arrow-box" style="margin-top: auto; padding-top: 6px;">
+                        <div class="line" style="height: 32px; background: #f472b6;"></div>
+                        <span class="arrow-label" style="background: #831843; color: white; border-color: #ec4899;">Chuyển quyền thanh toán Bồi Thường về Kế toán ⬇</span>
+                        <div class="line" style="height: 32px; background: #f472b6;"></div>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- FINAL MERGE STAGE: ACCOUNTING & FINANCE (BOTH WORKFLOWS CONVERGE HERE!) -->
+        <div class="finance-box">
+            <div class="finance-label">💰 4. GIẢI NGÂN & BỒI THƯỜNG (KẾ TOÁN / TÀI CHÍNH - NƠI HAI LUỒNG HỘI CHẮP)</div>
+            
+            <div class="stage-split" style="margin-top: 8px;">
+                
+                <!-- LEFT REIMBURSEMENT HORIZONTAL BLOCKS -->
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <div style="font-weight: 800; font-size: 0.9rem; color: #fb923c; border-bottom: 1px solid #334155; padding-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                        <span>🛠️ Tất Toán Sự Cố: Hoàn Tiền Cho Tài Xế</span>
+                    </div>
+                    <!-- 2 BOXES SIDE BY SIDE HORIZONTALLY! -->
+                    <div class="horiz-row row-2" style="margin-top: 4px;">
+                        <div class="node" style="background: #0f172a; padding: 12px 10px;">
+                            <div class="api-title"><span class="method">POST</span><span class="api-path" style="font-size:0.75rem;">.../expenses/approve</span></div>
+                            <p class="sub-text" style="margin-top:4px;">(Quản lý duyệt khoản chi phí tài xế đã ứng trước)</p>
+                        </div>
+                        <div class="node" style="background: #0f172a; border: 1.5px solid #ec4899; padding: 12px 10px;">
+                            <div class="api-title"><span class="method">POST</span><span class="api-path" style="color:#f472b6; font-size:0.75rem;">.../expenses/reimburse</span></div>
+                            <p class="sub-text" style="margin-top:4px;">(<strong>Kế toán hoàn chi:</strong> Chuyển trả tiền lại cho Tài xế, đính kèm ảnh ủy nhiệm chi. <span class="green-highlight">⚡ Bắn tin nhắn Realtime sang app báo tin!</span>)</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RIGHT PAYOUT HORIZONTAL BLOCKS -->
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <div style="font-weight: 800; font-size: 0.9rem; color: #38bdf8; border-bottom: 1px solid #334155; padding-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                        <span>📦 Tất Toán Claim: Chi Bồi Thường Khách Hàng</span>
+                    </div>
+                    <!-- 2 BOXES SIDE BY SIDE HORIZONTALLY! -->
+                    <div class="horiz-row row-2" style="margin-top: 4px;">
+                        <div class="node" style="background: #0f172a; padding: 12px 10px;">
+                            <div class="api-title"><span class="method get">GET</span><span class="api-path" style="font-size:0.8rem;">/api/v1/claims</span></div>
+                            <p class="sub-text" style="margin-top:4px;">(Tra cứu danh sách Claim đã được Điều phối duyệt để chuẩn bị giải ngân)</p>
+                        </div>
+                        <div class="node" style="background: #0f172a; border: 1.5px solid #ec4899; padding: 12px 10px;">
+                            <div class="api-title"><span class="method">POST</span><span class="api-path" style="color:#f472b6; font-size:0.78rem;">.../{id}/payout-accountant</span></div>
+                            <p class="sub-text" style="margin-top:4px;">(<strong>💰 Giải Ngân Khẩn 24h:</strong> Kế toán chi bồi thường vào tài khoản Khách hàng và <span class="green-highlight">✔ Khép lại hồ sơ!</span>)</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+</body>
+</html>

@@ -90,31 +90,39 @@ namespace ColdChainX.API.Controllers
         }
 
         /// <summary>
-        /// Get a paginated list of claims.
+        /// Get a paginated list of claims with dropdown status filtering (ALL, OPEN, PENDING_DISPATCHER_REVIEW, PENDING_ACCOUNTANT_REVIEW, RESOLVED_PAID, REJECTED).
         /// </summary>
+        /// <param name="orderId">Optional Transport Order ID filter</param>
+        /// <param name="status">Filter by claim status (e.g. ALL, OPEN, PENDING_DISPATCHER_REVIEW, PENDING_ACCOUNTANT_REVIEW, RESOLVED_PAID, REJECTED). Leave empty or ALL to get all.</param>
+        /// <param name="pageNumber">Page number (default: 1)</param>
+        /// <param name="pageSize">Page size (default: 10)</param>
         [HttpGet]
         [ProducesResponseType(typeof(ApiResponse<PagedResult<ClaimResponse>>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> GetList(
             [FromQuery] Guid? orderId = null,
+            [FromQuery] string? status = null,
             [FromQuery] int pageNumber = 1,
             [FromQuery] int pageSize = 10)
         {
-            var result = await _claimService.GetPagedClaimsAsync(orderId, pageNumber, pageSize);
+            var result = await _claimService.GetPagedClaimsAsync(orderId, status, pageNumber, pageSize);
             return Ok(result);
         }
 
+
         /// <summary>
-        /// [Bước 2 - Dispatcher & Sale] Lấy danh sách hồ sơ báo lỗi OS&D Dock chờ Dispatcher mở biểu đồ nhiệt độ IoT Log rà soát.
+        /// [Bước 2 - Giám định chi tiết] Lấy toàn bộ ảnh bằng chứng hiện trường Dock và phân tích cảm biến nhiệt độ IoT cho 1 Claim ID cụ thể.
         /// </summary>
-        [HttpGet("pending-dispatcher")]
-        [HttpGet("osd-incidents")]
-        [HttpGet("/api/Delivery/osd-incidents")]
-        [Authorize(Roles = "Admin,Dispatcher,Accountant,Manager")]
+        [HttpGet("{id:guid}/osd-investigation")]
+        [Authorize(Roles = "Admin,ADMIN,Dispatcher,DISPATCHER,Accountant,ACCOUNTANT,Manager,MANAGER,WarehouseWorker,WAREHOUSEWORKER")]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> GetPendingOsdIncidents([FromQuery] string? status = null)
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetClaimOsdInvestigation([FromRoute] Guid id)
         {
-            var result = await _mediator.Send(new ColdChainX.Application.Features.Claims.Queries.GetPendingOsdClaimsQuery { Status = status });
+            var result = await _mediator.Send(new ColdChainX.Application.Features.Claims.Queries.GetClaimOsdInvestigationQuery { ClaimId = id });
+            if (!result.Success)
+                return NotFound(result);
+
             return Ok(result);
         }
 
