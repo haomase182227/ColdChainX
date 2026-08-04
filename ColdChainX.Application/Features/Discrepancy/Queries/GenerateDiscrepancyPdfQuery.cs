@@ -1,6 +1,8 @@
 using ColdChainX.Application.Interfaces;
+using ColdChainX.Application.Helpers;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 
 namespace ColdChainX.Application.Features.Discrepancy.Queries;
 
@@ -59,7 +61,9 @@ public class GenerateDiscrepancyPdfQueryHandler : IRequestHandler<GenerateDiscre
                 var actualQty = item.Quantity;
                 var expectedWeight = item.Order?.OrderDimension?.ExpectedWeightKg ?? 0m;
                 var actualWeight = item.ActualWeightKg;
-                var expectedCbm = item.Order?.OrderDimension?.ExpectedCbm ?? 0m;
+                var expectedCbm = item.Order?.OrderDimension == null
+                    ? 0m
+                    : InboundQcMeasurementCalculator.CalculateExpectedCbm(item.Order.OrderDimension, expectedQty);
                 var actualCbm = item.ActualCbm;
                 var expectedLength = item.Order?.OrderDimension?.LengthCm ?? 0m;
                 var actualLength = item.LengthCm ?? 0m;
@@ -96,8 +100,8 @@ public class GenerateDiscrepancyPdfQueryHandler : IRequestHandler<GenerateDiscre
                     IsWeightDiff = isWeightDiff,
                     WeightDiffPercent = calculateDiff(expectedWeight, actualWeight).ToString("0.##"),
 
-                    ExpectedCbm = expectedCbm.ToString("0.####"),
-                    ActualCbm = actualCbm.ToString("0.####"),
+                    ExpectedCbm = expectedCbm.ToString("0.000#", CultureInfo.InvariantCulture),
+                    ActualCbm = actualCbm.ToString("0.000#", CultureInfo.InvariantCulture),
                     IsCbmDiff = isCbmDiff,
                     CbmDiffPercent = calculateDiff(expectedCbm, actualCbm).ToString("0.##"),
 

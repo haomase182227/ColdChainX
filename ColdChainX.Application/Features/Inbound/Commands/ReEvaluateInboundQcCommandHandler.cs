@@ -1,5 +1,6 @@
 using ColdChainX.Application.Features.Discrepancy.Queries;
 using ColdChainX.Application.Features.Inbound.Queries;
+using ColdChainX.Application.Helpers;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
 using ColdChainX.Core.Enums;
@@ -35,6 +36,12 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
 
     public async Task<ReEvaluateInboundQcResponse> Handle(ReEvaluateInboundQcCommand request, CancellationToken cancellationToken)
     {
+        if (request.LpnId == Guid.Empty)
+            return Failure("LpnId is required.");
+
+        if (request.ActualWeightKg <= 0 || request.LengthCm <= 0 || request.WidthCm <= 0 || request.HeightCm <= 0)
+            return Failure("Actual weight and dimensions must be greater than 0.");
+
         var lpn = await _context.Lpns
             .Include(l => l.Receipt)
             .Include(l => l.Route) // for tracking
@@ -48,10 +55,20 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
             return Failure("LPN is not in DISCREPANCY_HOLD state. Cannot re-evaluate.");
 
         var order = await _context.TransportOrders
+            .Include(o => o.OrderDimension)
             .FirstOrDefaultAsync(o => o.OrderId == lpn.OrderId, cancellationToken);
 
         if (order == null)
             return Failure("Linked order not found.");
+
+        if (order.OrderDimension == null)
+            return Failure("Expected order measurements were not found. QC re-evaluation cannot be calculated.");
+
+        if (order.OrderDimension.ExpectedWeightKg <= 0
+            || order.OrderDimension.LengthCm <= 0
+            || order.OrderDimension.WidthCm <= 0
+            || order.OrderDimension.HeightCm <= 0)
+            return Failure("Expected weight and dimensions must be greater than 0 before QC re-evaluation.");
 
         var asn = await _context.InboundAsns
             .FirstOrDefaultAsync(a => a.OrderId == lpn.OrderId, cancellationToken);
@@ -76,15 +93,35 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
         }
 
         var now = DateTime.UtcNow;
-        var actualCbm = CalculateCbm(request.LengthCm, request.WidthCm, request.HeightCm, order.Quantity);
-        var weightDiff = CalculateDiffPercent(order.OrderDimension?.ExpectedWeightKg ?? 0m, request.ActualWeightKg);
-        var cbmDiff = CalculateDiffPercent(order.OrderDimension?.ExpectedCbm ?? 0m, actualCbm);
+        var storedExpectedCbm = order.OrderDimension.ExpectedCbm;
+        var expectedCbm = InboundQcMeasurementCalculator.CalculateExpectedCbm(order.OrderDimension, order.Quantity);
+        var actualCbm = InboundQcMeasurementCalculator.CalculateCbm(request.LengthCm, request.WidthCm, request.HeightCm, order.Quantity);
+
+#if DEBUG
+        _logger.LogDebug(
+            "Inbound QC re-evaluation CBM trace storedExpectedCbm={StoredExpectedCbm} calculatedExpectedCbmFromDimensions={CalculatedExpectedCbmFromDimensions} actualCbm={ActualCbm} expectedDimensionsCm={ExpectedLengthCm}x{ExpectedWidthCm}x{ExpectedHeightCm} actualDimensionsCm={ActualLengthCm}x{ActualWidthCm}x{ActualHeightCm}",
+            storedExpectedCbm,
+            expectedCbm,
+            actualCbm,
+            order.OrderDimension.LengthCm,
+            order.OrderDimension.WidthCm,
+            order.OrderDimension.HeightCm,
+            request.LengthCm,
+            request.WidthCm,
+            request.HeightCm);
+#endif
+
+        var weightDiff = CalculateDiffPercent(order.OrderDimension.ExpectedWeightKg, request.ActualWeightKg);
+        var cbmDiff = CalculateDiffPercent(expectedCbm, actualCbm);
         var maxDiff = Math.Max(weightDiff, cbmDiff);
         var hasDiscrepancy = maxDiff > DiscrepancyThresholdPercent;
 
         // Update LPN
         lpn.ActualWeightKg = request.ActualWeightKg;
         lpn.ActualCbm = actualCbm;
+        lpn.LengthCm = request.LengthCm;
+        lpn.WidthCm = request.WidthCm;
+        lpn.HeightCm = request.HeightCm;
         lpn.RecordedTemperature = request.Temperature;
         lpn.State = hasDiscrepancy ? LpnState.DISCREPANCY_HOLD : LpnState.RECEIVING;
         lpn.DiscrepancyReason = hasDiscrepancy
@@ -97,13 +134,9 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
         lpn.UpdatedAt = now;
 
         // Update Order
-        if (order.OrderDimension != null)
-        {
-            order.OrderDimension.ActualWeightKg = request.ActualWeightKg;
-            order.OrderDimension.ActualCbm = actualCbm;
-        }
-        // User explicitly said: "Không cần update trạng thái của Order đâu"
-        // order.Status = hasDiscrepancy ? "DISCREPANCY_HOLD" : "RECEIVING";
+        order.OrderDimension.ActualWeightKg = request.ActualWeightKg;
+        order.OrderDimension.ActualCbm = actualCbm;
+        order.Status = hasDiscrepancy ? "DISCREPANCY_HOLD" : "RECEIVING";
 
         // Update ASN
         if (asn != null)
@@ -113,6 +146,7 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
 
         // Update Receipt
         receipt.ReferenceDocNo = hasDiscrepancy ? "DISCREPANCY_HOLD" : "PENDING_PUTAWAY";
+        receipt.Reason = hasDiscrepancy ? "QC discrepancy hold (Re-evaluated)" : null;
         receipt.RecordedTemperature = request.Temperature;
         receipt.Note = hasDiscrepancy ? "QC discrepancy hold. (Re-evaluated)" : "QC passed and waiting putaway. (Re-evaluated)";
 
@@ -191,13 +225,10 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
     private static ReEvaluateInboundQcResponse Failure(string message)
         => new() { Success = false, Message = message };
 
-    private static decimal CalculateCbm(decimal lengthCm, decimal widthCm, decimal heightCm, int quantity)
-        => Math.Round(lengthCm * widthCm * heightCm * Math.Max(quantity, 1) / 1_000_000m, 4);
-
     private static decimal CalculateDiffPercent(decimal expected, decimal actual)
     {
         if (expected <= 0)
-            return actual > 0 ? 100m : 0m;
+            throw new ArgumentOutOfRangeException(nameof(expected), "Expected measurement must be greater than 0.");
 
         return Math.Round(Math.Abs(actual - expected) / expected * 100m, 2);
     }
