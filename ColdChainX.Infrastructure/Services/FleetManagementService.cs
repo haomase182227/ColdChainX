@@ -171,6 +171,7 @@ public class FleetManagementService : IFleetManagementService
         var rows = await SpreadsheetReader.ReadAsync(excelFile);
         var result = new ImportResultResponse();
         var importedVehicles = new Dictionary<string, Vehicle>(StringComparer.OrdinalIgnoreCase);
+        var warehouses = await _db.Warehouses.Where(w => w.Status != "DELETED").ToListAsync();
 
         foreach (var row in rows)
         {
@@ -293,7 +294,25 @@ public class FleetManagementService : IFleetManagementService
                 vehicle.InnerHeightCm = innerHeightCm;
                 vehicle.MinTemp = minTemp;
                 vehicle.MaxTemp = maxTemp;
-                vehicle.CurrentLocation = TrimOrNull(Get(row, "CurrentLocation", "Vi tri")) ?? vehicle.CurrentLocation;
+                
+                var warehouseNameInput = TrimOrNull(Get(row, "WarehouseName", "Kho", "TenKho", "Tên kho", "CurrentLocation", "Vi tri", "Vị trí"));
+                if (!string.IsNullOrWhiteSpace(warehouseNameInput))
+                {
+                    var matchedWarehouse = warehouses.FirstOrDefault(w =>
+                        string.Equals(w.WarehouseName, warehouseNameInput, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(w.WarehouseCode, warehouseNameInput, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(w.WarehouseId.ToString(), warehouseNameInput, StringComparison.OrdinalIgnoreCase));
+
+                    if (matchedWarehouse != null)
+                    {
+                        vehicle.CurrentLocation = matchedWarehouse.WarehouseId.ToString();
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException($"Không tìm thấy kho hàng '{warehouseNameInput}' trong hệ thống (bảng Warehouse) khi gán vị trí cho xe {plate}.");
+                    }
+                }
+
                 vehicle.CurrentOdometer = GetDouble(row, vehicle.CurrentOdometer, "CurrentOdometer", "Odometer");
                 vehicle.NextMaintenanceOdometer = GetDouble(row, vehicle.NextMaintenanceOdometer, "NextMaintenanceOdometer", "MocBaoDuongTiepTheo");
 
@@ -604,6 +623,7 @@ public class FleetManagementService : IFleetManagementService
         var result = new ImportResultResponse();
         var importedDrivers = new Dictionary<string, Driver>(StringComparer.OrdinalIgnoreCase);
         var licenseOwnerByNumber = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var warehouses = await _db.Warehouses.Where(w => w.Status != "DELETED").ToListAsync();
         var rowNumber = 1;
 
         foreach (var row in rows)
@@ -689,6 +709,24 @@ public class FleetManagementService : IFleetManagementService
                 driver.PhoneNumber = NormalizeRequired(Get(row, "PhoneNumber", "So dien thoai"));
                 driver.DateOfBirth = GetDate(row, DateOnly.FromDateTime(DateTime.Today), "DateOfBirth", "Ngay sinh");
                 driver.JoinDate = GetDate(row, DateOnly.FromDateTime(DateTime.Today), "JoinDate", "Ngay vao lam");
+
+                var warehouseNameInput = TrimOrNull(Get(row, "WarehouseName", "Kho", "TenKho", "Tên kho", "CurrentLocation", "Vi tri", "Vị trí"));
+                if (!string.IsNullOrWhiteSpace(warehouseNameInput))
+                {
+                    var matchedWarehouse = warehouses.FirstOrDefault(w =>
+                        string.Equals(w.WarehouseName, warehouseNameInput, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(w.WarehouseCode, warehouseNameInput, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(w.WarehouseId.ToString(), warehouseNameInput, StringComparison.OrdinalIgnoreCase));
+
+                    if (matchedWarehouse != null)
+                    {
+                        driver.CurrentLocation = matchedWarehouse.WarehouseId.ToString();
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException($"Row {rowNumber}: Không tìm thấy kho hàng '{warehouseNameInput}' trong hệ thống (bảng Warehouse) khi gán vị trí cho tài xế {identityNumber}.");
+                    }
+                }
 
                 await UpsertDriverLicenseFromImportAsync(driver, row);
                 await RefreshDriverStatusAsync(driver);

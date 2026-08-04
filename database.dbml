@@ -1,0 +1,590 @@
+Table "Roles" {
+  "Role_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Role_Name" VARCHAR(50) [unique, not null]
+  "Description" VARCHAR(255)
+}
+
+Table "Permissions" {
+  "Perm_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Perm_Code" VARCHAR(50) [unique, not null]
+  "Module" VARCHAR(50) [not null]
+}
+
+Table "MessageType" {
+  "Type_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Type_Name" VARCHAR(50) [not null]
+  "Description" VARCHAR(255)
+}
+
+Table "Locations" {
+  "Location_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Customer_ID" UUID
+  "Address" TEXT [not null]
+  "Latitude" DECIMAL(10,7) [not null]
+  "Longitude" DECIMAL(10,7) [not null]
+  "Status" VARCHAR(20) [default: 'ACTIVE']
+  "Created_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "Warehouses" {
+  "Warehouse_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Warehouse_Name" VARCHAR(100) [not null]
+  "Address" VARCHAR(100)
+  "Max_Pallets" INT [not null]
+  "Current_Pallets" INT [default: 0]
+  "Status" VARCHAR(20) [default: 'ACTIVE']
+  "Created_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "Pricing_Matrix" {
+  "Price_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Origin_City" VARCHAR(50) [not null]
+  "Dest_City" VARCHAR(50) [not null]
+  "Pricing_Unit" VARCHAR(20) [not null]
+  "Unit_Price" DECIMAL(15,2) [not null]
+  "Effective_Date" DATE [not null]
+}
+
+Table "Vehicles" {
+  "Vehicle_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Truck_Plate" VARCHAR(20) [unique, not null]
+  "Brand" VARCHAR(50)
+  "Manufacture_Year" INT
+  "Chassis_Number" VARCHAR(50) [unique]
+  "Engine_Number" VARCHAR(50) [unique]
+  "Standard_Fuel_Liters" DECIMAL(5,2)
+  "Vehicle_Type" VARCHAR(50) [not null]
+  "Max_Weight" DECIMAL(10,2) [not null]
+  "Max_CBM" DECIMAL(8,2) [not null]
+  "Min_Temp" DECIMAL(5,2) [not null]
+  "Max_Temp" DECIMAL(5,2) [not null]
+  "Status" VARCHAR(20) [default: 'ACTIVE']
+  "Created_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "Role_Permissions" {
+  "Role_ID" UUID
+  "Perm_ID" UUID
+
+  Indexes {
+    (Role_ID, Perm_ID) [pk]
+  }
+}
+
+Table "Users" {
+  "User_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Username" VARCHAR(50) [unique, not null]
+  "Password_Hash" VARCHAR(255) [not null]
+  "Email" VARCHAR(255)
+  "Role_ID" UUID
+  "Full_Name" VARCHAR(100) [not null]
+  "Status" VARCHAR(20) [default: 'ACTIVE']
+  "Refresh_Token" VARCHAR(255)
+  "Refresh_Token_Expiry_Time" TIMESTAMP
+  "Created_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+  "Updated_At" TIMESTAMP
+}
+
+Table "Notification_Templates" {
+  "Template_ID" VARCHAR(50) [pk]
+  "Type_ID" UUID [not null]
+  "Title_Template" VARCHAR(100) [not null]
+  "Body_Template" TEXT [not null]
+  "Channel" VARCHAR(20) [not null]
+  "Status" VARCHAR(20) [default: 'ACTIVE']
+}
+
+Table "Notifications" {
+  "Noti_ID" UUID [pk, default: `gen_random_uuid()`]
+  "User_ID" UUID [not null]
+  "Sender_ID" UUID
+  "Template_ID" VARCHAR(50) [not null]
+  "Params" JSON [not null]
+  "Order_ID" UUID
+  "Is_Read" BOOLEAN [default: false]
+  "Created_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "IoT_Devices" {
+  "Device_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Vehicle_ID" UUID
+  "Battery_Level" INT [check: `Battery_Level BETWEEN 0 AND 100`]
+  "Last_Ping_Time" TIMESTAMP
+  "Status" VARCHAR(20) [default: 'ACTIVE']
+  "Created_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "Geo_Fences" {
+  "Fence_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Location_ID" UUID
+  "Status" VARCHAR(20) [default: 'ACTIVE']
+  "Created_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "Customers" {
+  "Customer_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Company_Name" VARCHAR(150) [not null]
+  "Tax_Code" VARCHAR(20) [unique, not null]
+  "Address" VARCHAR(200)
+  "Email" VARCHAR(200)
+  "Payment_Term" INT [default: 30]
+  "Status" VARCHAR(20) [default: 'ACTIVE']
+  "Created_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "Customer_Contracts" {
+  "Contract_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Customer_ID" UUID
+  "Order_ID" UUID
+  "Contract_Number" VARCHAR(50) [unique, not null]
+  "Signed_Date" DATE
+  "Expired_Date" DATE [not null]
+  "File_URL" VARCHAR(500) [not null]
+  "Status" VARCHAR(20) [default: 'ACTIVE']
+  "Created_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "Drivers" {
+  "Driver_ID" UUID [pk, default: `gen_random_uuid()`]
+  "User_ID" UUID
+  "Date_Of_Birth" DATE [not null]
+  "Status" VARCHAR(20) [default: 'AVAILABLE']
+  "Created_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "Driver_Licenses" {
+  "License_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Driver_ID" UUID
+  "License_Number" VARCHAR(20) [unique, not null]
+  "License_Class" VARCHAR(10) [not null]
+  "Issue_Date" DATE [not null]
+  "Expiry_Date" DATE [not null]
+  "Document_URL" VARCHAR(255) [not null]
+  "Status" VARCHAR(20) [default: 'ACTIVE']
+  "Created_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "Vehicle_Documents" {
+  "Doc_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Vehicle_ID" UUID
+  "Document_Number" VARCHAR(50) [not null]
+  "Issuer" VARCHAR(150)
+  "Issue_Date" DATE [not null]
+  "Expire_Date" DATE [not null]
+  "Image_URL" VARCHAR(255) [not null]
+  "Status" VARCHAR(20) [default: 'ACTIVE']
+  "Created_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "Maintenance_Tickets" {
+  "Ticket_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Ticket_Code" VARCHAR(50) [unique, not null]
+  "Vehicle_ID" UUID
+  "Maintenance_Type" VARCHAR(30) [not null]
+  "Garage_Name" VARCHAR(150) [not null]
+  "Description" TEXT [not null]
+  "Cost" DECIMAL(15,2) [default: 0.00]
+  "Issue_Date" DATE [not null]
+  "Completion_Date" DATE
+  "Status" VARCHAR(20) [default: 'OPEN']
+  "Created_By" UUID [not null]
+  "Created_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "Master_Trips" {
+  "Trip_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Vehicle_ID" UUID
+  "Driver_ID" UUID
+  "Origin_Location_ID" UUID [not null]
+  "Destination_Location_ID" UUID [not null]
+  "Total_Distance_Km" DECIMAL(8,2)
+  "Target_Temperature" DECIMAL(5,2) [not null]
+  "Planned_Start_Time" TIMESTAMP [not null]
+  "Planned_End_Time" TIMESTAMP [not null]
+  "Started_At" TIMESTAMP
+  "Completed_At" TIMESTAMP
+  "Status" VARCHAR(20) [default: 'PLANNED']
+  "Created_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "Transport_Orders" {
+  "Order_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Tracking_Code" VARCHAR(50) [unique, not null]
+  "Customer_ID" UUID
+  "Item_Name" VARCHAR(150) [not null]
+  "Category" VARCHAR(50) [not null]
+  "Quantity" INT [not null]
+  "Packing_Type" VARCHAR(50) [not null]
+  "Temp_Condition" VARCHAR(20) [not null]
+  "Expected_Weight_KG" DECIMAL(10,2) [not null]
+  "Actual_Weight_KG" DECIMAL(10,2) [not null]
+  "Expected_CBM" DECIMAL(8,2) [not null]
+  "Actual_CBM" DECIMAL(8,2)
+  "Pickup_Location" UUID
+  "Dest_Location" UUID
+  "Cargo_Value" DECIMAL(15,2) [not null]
+  "Status" VARCHAR(30) [not null]
+  "Master_Trip_ID" UUID
+  "Created_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "Quotations" {
+  "Quote_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Order_ID" UUID
+  "Base_Freight" DECIMAL(15,2) [not null]
+  "Last_Mile_Surcharge" DECIMAL(15,2) [default: 0]
+  "VAS_Amount" DECIMAL(15,2) [default: 0]
+  "VAT_Amount" DECIMAL(15,2) [not null]
+  "Final_Amount" DECIMAL(15,2) [not null]
+  "File_URL" VARCHAR(500)
+  "Status" VARCHAR(20) [not null]
+  "Created_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "Transport_Documents" {
+  "Doc_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Order_ID" UUID
+  "Doc_Type" VARCHAR(50) [not null]
+  "Image_URL" VARCHAR(255) [not null]
+  "Status" VARCHAR(20) [default: 'PENDING']
+  "Verified_By" UUID
+  "Verified_At" TIMESTAMP
+  "Reject_Reason" VARCHAR(255)
+  "Uploaded_By" UUID [not null]
+  "Created_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "Warehouse_Receipts" {
+  "Receipt_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Receipt_Code" VARCHAR(50) [unique, not null]
+  "Reference_Doc_No" VARCHAR(100)
+  "Order_ID" UUID [not null]
+  "Warehouse_ID" UUID [not null]
+  "Receipt_Type" VARCHAR(20) [not null]
+  "Reason" VARCHAR(255)
+  "Total_Expected_Qty" DECIMAL(10,2) [default: 0]
+  "Total_Actual_Qty" DECIMAL(10,2) [default: 0]
+  "Recorded_Temperature" DECIMAL(5,2)
+  "Deliverer_Name" VARCHAR(100) [not null]
+  "Receiver_ID" UUID [not null]
+  "Note" TEXT
+  "PDF_URL" VARCHAR(500)
+  "Created_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "Warehouse_Receipt_Items" {
+  "Item_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Receipt_ID" UUID [not null]
+  "Item_Name" VARCHAR(255) [not null]
+  "Item_Code" VARCHAR(50)
+  "Unit" VARCHAR(20) [not null]
+  "Expected_Qty" DECIMAL(10,2) [not null]
+  "Actual_Qty" DECIMAL(10,2) [not null]
+  "Condition_Status" VARCHAR(50) [default: 'GOOD']
+  "Note" TEXT
+}
+
+Table "Trip_Stops" {
+  "Stop_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Trip_ID" UUID
+  "Location_ID" UUID
+  "Stop_Sequence" INT [not null]
+  "Stop_Type" VARCHAR(30) [not null]
+  "Planned_Arrival_Time" TIMESTAMP [not null]
+  "Planned_Departure_Time" TIMESTAMP [not null]
+  "Actual_Arrival_Time" TIMESTAMP
+  "Actual_Departure_Time" TIMESTAMP
+  "Status" VARCHAR(20) [default: 'PENDING']
+  "Note" TEXT
+  "Created_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "Incident_Reports" {
+  "Incident_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Trip_ID" UUID
+  "Incident_Type" VARCHAR(50) [not null]
+  "Severity" VARCHAR(20) [not null]
+  "Description" TEXT [not null]
+  "Current_Latitude" DECIMAL(10,7)
+  "Current_Longitude" DECIMAL(10,7)
+  "Status" VARCHAR(20) [default: 'REPORTED']
+  "Reported_By" UUID [not null]
+  "Reported_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+  "Resolved_At" TIMESTAMP
+}
+
+Table "Seals" {
+  "Seal_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Trip_ID" UUID
+  "Stop_ID" UUID
+  "Seal_Code" VARCHAR(50) [not null]
+  "Applied_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+  "Applied_Image_URL" VARCHAR(255)
+  "Removed_At" TIMESTAMP
+  "Removed_Image_URL" VARCHAR(255)
+  "Status" VARCHAR(20) [default: 'APPLIED']
+  "Note" TEXT
+  "Created_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "Telemetry_Logs" {
+  "Log_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Device_ID" UUID
+  "Trip_ID" UUID
+  "Temperature" DECIMAL(5,2) [not null]
+  "Latitude" DECIMAL(10,7) [not null]
+  "Longitude" DECIMAL(10,7) [not null]
+  "Timestamp" TIMESTAMP [not null]
+  "Created_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "Alert_Logs" {
+  "Alert_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Trip_ID" UUID
+  "Alert_Type" VARCHAR(50) [not null]
+  "Value" DECIMAL(5,2)
+  "Latitude" DECIMAL(10,7) [not null]
+  "Longitude" DECIMAL(10,7) [not null]
+  "Status" VARCHAR(20) [default: 'NEW']
+  "Resolved_By" UUID
+  "Resolved_At" TIMESTAMP
+  "Resolution_Note" TEXT
+  "Created_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "Delivery_ePODs" {
+  "ePOD_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Order_ID" UUID
+  "CheckIn_Time" TIMESTAMP [not null]
+  "Signed_At" TIMESTAMP
+  "Receiver_Name" VARCHAR(100)
+  "Receiver_Phone" VARCHAR(20)
+  "Sign_Image_URL" VARCHAR(255)
+  "Sign_Latitude" DECIMAL(10,7)
+  "Sign_Longitude" DECIMAL(10,7)
+  "Delivery_Rating" INT [default: 5]
+  "Note" TEXT
+  "PDF_URL" VARCHAR(500)
+  "Status" VARCHAR(30) [default: 'PENDING']
+  "Created_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "Returned_Items" {
+  "Return_ID" UUID [pk, default: `gen_random_uuid()`]
+  "ePOD_ID" UUID
+  "Item_Name" VARCHAR(255) [not null]
+  "Item_Code" VARCHAR(50)
+  "Unit" VARCHAR(20) [not null]
+  "Returned_Qty" DECIMAL(10,2) [not null]
+  "Reason_Type" VARCHAR(50) [not null]
+  "Reason_Note" TEXT
+  "Processing_Status" VARCHAR(30) [default: 'PENDING_INSPECT']
+  "Processed_By" UUID
+  "Processed_At" TIMESTAMP
+  "Returned_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "Claims" {
+  "Claim_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Claim_Code" VARCHAR(50) [unique, not null]
+  "Order_ID" UUID
+  "Claim_Type" VARCHAR(50) [not null]
+  "Description" TEXT [not null]
+  "Fault_Owner" VARCHAR(50)
+  "Status" VARCHAR(20) [default: 'OPEN']
+  "Resolution_Note" TEXT
+  "Created_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+  "Resolved_At" TIMESTAMP
+}
+
+Table "Claim_Evidences" {
+  "Evidence_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Claim_ID" UUID
+  "Evidence_Type" VARCHAR(30) [not null]
+  "Alert_ID" UUID
+  "Doc_ID" UUID
+  "Image_URL" VARCHAR(255)
+  "Uploaded_By" UUID [not null]
+  "Created_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "Expense_Advances" {
+  "Advance_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Advance_Code" VARCHAR(50) [unique, not null]
+  "Trip_ID" UUID [not null]
+  "Driver_ID" UUID [not null]
+  "Amount" DECIMAL(15,2) [not null]
+  "Payment_Method" VARCHAR(20) [default: 'CASH']
+  "Advanced_Date" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+  "Approved_By" UUID [not null]
+  "Cleared_Amount" DECIMAL(15,2) [default: 0.00]
+  "Returned_Amount" DECIMAL(15,2) [default: 0.00]
+  "Status" VARCHAR(20) [default: 'PENDING']
+  "Clearance_Status" VARCHAR(20) [default: 'OPEN']
+  "Note" TEXT
+}
+
+Table "Expense_Receipts" {
+  "Receipt_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Advance_ID" UUID [not null]
+  "Expense_Type" VARCHAR(30) [not null]
+  "Description" VARCHAR(255)
+  "Amount" DECIMAL(15,2) [not null]
+  "Expense_Date" DATE [not null]
+  "Image_URL" VARCHAR(255) [not null]
+  "Status" VARCHAR(20) [default: 'PENDING']
+  "Verified_By" UUID
+  "Verified_At" TIMESTAMP
+  "Reject_Reason" VARCHAR(255)
+  "Uploaded_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "Invoices" {
+  "Invoice_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Invoice_Code" VARCHAR(50) [unique, not null]
+  "Customer_ID" UUID [not null]
+  "VAT_Invoice_No" VARCHAR(50)
+  "PDF_URL" VARCHAR(500)
+  "Sub_Total" DECIMAL(15,2) [not null]
+  "Tax_Rate" DECIMAL(5,2) [default: 8.00]
+  "Tax_Amount" DECIMAL(15,2) [not null]
+  "Deduction_Amount" DECIMAL(15,2) [default: 0.00]
+  "Grand_Total" DECIMAL(15,2) [not null]
+  "Paid_Amount" DECIMAL(15,2) [default: 0.00]
+  "Issued_Date" DATE [not null]
+  "Due_Date" DATE [not null]
+  "Status" VARCHAR(20) [default: 'DRAFT']
+  "Created_At" TIMESTAMP [default: `CURRENT_TIMESTAMP`]
+}
+
+Table "Invoice_Lines" {
+  "Line_ID" UUID [pk, default: `gen_random_uuid()`]
+  "Invoice_ID" UUID [not null]
+  "Order_ID" UUID [not null]
+  "Charge_Type" VARCHAR(50) [not null]
+  "Description" VARCHAR(255) [not null]
+  "Quantity" DECIMAL(10,2) [default: 1.00]
+  "Unit_Price" DECIMAL(15,2) [not null]
+  "Amount" DECIMAL(15,2) [not null]
+  "Tax_Rate" DECIMAL(5,2) [default: 8.00]
+}
+
+Ref "fk_rp_roles":"Roles"."Role_ID" < "Role_Permissions"."Role_ID"
+
+Ref "fk_rp_perms":"Permissions"."Perm_ID" < "Role_Permissions"."Perm_ID"
+
+Ref "fk_users_roles":"Roles"."Role_ID" < "Users"."Role_ID"
+
+Ref "fk_nt_msgtype":"MessageType"."Type_ID" < "Notification_Templates"."Type_ID"
+
+Ref "fk_noti_users":"Users"."User_ID" < "Notifications"."User_ID"
+
+Ref "fk_noti_sender":"Users"."User_ID" < "Notifications"."Sender_ID"
+
+Ref "fk_noti_template":"Notification_Templates"."Template_ID" < "Notifications"."Template_ID"
+
+Ref "fk_noti_order":"Transport_Orders"."Order_ID" < "Notifications"."Order_ID"
+
+Ref "fk_loc_customers":"Customers"."Customer_ID" < "Locations"."Customer_ID"
+
+Ref "fk_geo_locations":"Locations"."Location_ID" < "Geo_Fences"."Location_ID"
+
+Ref "fk_iot_vehicles":"Vehicles"."Vehicle_ID" < "IoT_Devices"."Vehicle_ID"
+
+Ref "fk_cc_customers":"Customers"."Customer_ID" < "Customer_Contracts"."Customer_ID"
+
+Ref "fk_cc_orders":"Transport_Orders"."Order_ID" < "Customer_Contracts"."Order_ID"
+
+Ref "fk_drivers_users":"Users"."User_ID" < "Drivers"."User_ID"
+
+Ref "fk_dl_drivers":"Drivers"."Driver_ID" < "Driver_Licenses"."Driver_ID"
+
+Ref "fk_vd_vehicles":"Vehicles"."Vehicle_ID" < "Vehicle_Documents"."Vehicle_ID"
+
+Ref "fk_mt_vehicles":"Vehicles"."Vehicle_ID" < "Maintenance_Tickets"."Vehicle_ID"
+
+Ref "fk_mt_users":"Users"."User_ID" < "Maintenance_Tickets"."Created_By"
+
+Ref "fk_mtrip_vehicles":"Vehicles"."Vehicle_ID" < "Master_Trips"."Vehicle_ID"
+
+Ref "fk_mtrip_drivers":"Drivers"."Driver_ID" < "Master_Trips"."Driver_ID"
+
+Ref "fk_mtrip_orig":"Locations"."Location_ID" < "Master_Trips"."Origin_Location_ID"
+
+Ref "fk_mtrip_dest":"Locations"."Location_ID" < "Master_Trips"."Destination_Location_ID"
+
+Ref "fk_to_customers":"Customers"."Customer_ID" < "Transport_Orders"."Customer_ID"
+
+Ref "fk_to_pickup":"Locations"."Location_ID" < "Transport_Orders"."Pickup_Location"
+
+Ref "fk_to_dest":"Locations"."Location_ID" < "Transport_Orders"."Dest_Location"
+
+Ref "fk_to_mtrip":"Master_Trips"."Trip_ID" < "Transport_Orders"."Master_Trip_ID"
+
+Ref "fk_quote_to":"Transport_Orders"."Order_ID" < "Quotations"."Order_ID"
+
+Ref "fk_td_to":"Transport_Orders"."Order_ID" < "Transport_Documents"."Order_ID"
+
+Ref "fk_td_verified":"Users"."User_ID" < "Transport_Documents"."Verified_By"
+
+Ref "fk_td_uploaded":"Users"."User_ID" < "Transport_Documents"."Uploaded_By"
+
+Ref "fk_wr_to":"Transport_Orders"."Order_ID" < "Warehouse_Receipts"."Order_ID"
+
+Ref "fk_wr_wh":"Warehouses"."Warehouse_ID" < "Warehouse_Receipts"."Warehouse_ID"
+
+Ref "fk_wr_users":"Users"."User_ID" < "Warehouse_Receipts"."Receiver_ID"
+
+Ref "fk_wri_wr":"Warehouse_Receipts"."Receipt_ID" < "Warehouse_Receipt_Items"."Receipt_ID"
+
+Ref "fk_ts_mtrip":"Master_Trips"."Trip_ID" < "Trip_Stops"."Trip_ID"
+
+Ref "fk_ts_loc":"Locations"."Location_ID" < "Trip_Stops"."Location_ID"
+
+Ref "fk_ir_mtrip":"Master_Trips"."Trip_ID" < "Incident_Reports"."Trip_ID"
+
+Ref "fk_ir_users":"Users"."User_ID" < "Incident_Reports"."Reported_By"
+
+Ref "fk_seals_mtrip":"Master_Trips"."Trip_ID" < "Seals"."Trip_ID"
+
+Ref "fk_seals_ts":"Trip_Stops"."Stop_ID" < "Seals"."Stop_ID"
+
+Ref "fk_tl_iot":"IoT_Devices"."Device_ID" < "Telemetry_Logs"."Device_ID"
+
+Ref "fk_tl_mtrip":"Master_Trips"."Trip_ID" < "Telemetry_Logs"."Trip_ID"
+
+Ref "fk_al_mtrip":"Master_Trips"."Trip_ID" < "Alert_Logs"."Trip_ID"
+
+Ref "fk_al_users":"Users"."User_ID" < "Alert_Logs"."Resolved_By"
+
+Ref "fk_epod_to":"Transport_Orders"."Order_ID" < "Delivery_ePODs"."Order_ID"
+
+Ref "fk_ri_epod":"Delivery_ePODs"."ePOD_ID" < "Returned_Items"."ePOD_ID"
+
+Ref "fk_ri_users":"Users"."User_ID" < "Returned_Items"."Processed_By"
+
+Ref "fk_claims_to":"Transport_Orders"."Order_ID" < "Claims"."Order_ID"
+
+Ref "fk_ce_claims":"Claims"."Claim_ID" < "Claim_Evidences"."Claim_ID"
+
+Ref "fk_ce_alert":"Alert_Logs"."Alert_ID" < "Claim_Evidences"."Alert_ID"
+
+Ref "fk_ce_doc":"Transport_Documents"."Doc_ID" < "Claim_Evidences"."Doc_ID"
+
+Ref "fk_ce_users":"Users"."User_ID" < "Claim_Evidences"."Uploaded_By"
+
+Ref "fk_ea_mtrip":"Master_Trips"."Trip_ID" < "Expense_Advances"."Trip_ID"
+
+Ref "fk_ea_drivers":"Drivers"."Driver_ID" < "Expense_Advances"."Driver_ID"
+
+Ref "fk_ea_users":"Users"."User_ID" < "Expense_Advances"."Approved_By"
+
+Ref "fk_er_ea":"Expense_Advances"."Advance_ID" < "Expense_Receipts"."Advance_ID"
+
+Ref "fk_er_users":"Users"."User_ID" < "Expense_Receipts"."Verified_By"
+
+Ref "fk_inv_customers":"Customers"."Customer_ID" < "Invoices"."Customer_ID"
+
+Ref "fk_il_inv":"Invoices"."Invoice_ID" < "Invoice_Lines"."Invoice_ID"
+
+Ref "fk_il_to":"Transport_Orders"."Order_ID" < "Invoice_Lines"."Order_ID"
