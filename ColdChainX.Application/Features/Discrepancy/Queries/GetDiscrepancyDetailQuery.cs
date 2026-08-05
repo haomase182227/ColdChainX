@@ -1,5 +1,6 @@
 using ColdChainX.Application.DTOs.WarehouseFlow;
 using ColdChainX.Application.Interfaces;
+using ColdChainX.Application.Helpers;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -31,6 +32,7 @@ public class GetDiscrepancyDetailQueryHandler : IRequestHandler<GetDiscrepancyDe
     {
         var lpn = await _context.Lpns
             .Include(l => l.Order)
+                .ThenInclude(o => o.OrderDimension)
             .Include(l => l.Receipt)
                 .ThenInclude(r => r.Warehouse)
             .Include(l => l.Receipt)
@@ -42,6 +44,9 @@ public class GetDiscrepancyDetailQueryHandler : IRequestHandler<GetDiscrepancyDe
 
         var order = lpn.Order;
         var receipt = lpn.Receipt;
+        var expectedCbm = order?.OrderDimension == null
+            ? 0m
+            : InboundQcMeasurementCalculator.CalculateExpectedCbm(order.OrderDimension, order.Quantity);
 
         return new DiscrepancyDetailsResponse
         {
@@ -55,7 +60,7 @@ public class GetDiscrepancyDetailQueryHandler : IRequestHandler<GetDiscrepancyDe
             Quantity = lpn.Quantity,
             ExpectedWeightKg = order?.OrderDimension?.ExpectedWeightKg ?? 0,
             ActualWeightKg = lpn.ActualWeightKg,
-            ExpectedCbm = order?.OrderDimension?.ExpectedCbm ?? 0,
+            ExpectedCbm = expectedCbm,
             ActualCbm = lpn.ActualCbm,
             ExpectedLengthCm = order?.OrderDimension?.LengthCm ?? 0,
             ActualLengthCm = lpn.LengthCm ?? 0,
@@ -65,7 +70,7 @@ public class GetDiscrepancyDetailQueryHandler : IRequestHandler<GetDiscrepancyDe
             ActualHeightCm = lpn.HeightCm ?? 0,
             IsQuantityDifferent = order != null && order.Quantity != lpn.Quantity,
             IsWeightDifferent = order != null && Math.Abs((order.OrderDimension?.ExpectedWeightKg ?? 0m) - lpn.ActualWeightKg) > 0.01m,
-            IsCbmDifferent = order != null && Math.Abs((order.OrderDimension?.ExpectedCbm ?? 0m) - lpn.ActualCbm) > 0.0001m,
+            IsCbmDifferent = Math.Abs(expectedCbm - lpn.ActualCbm) > 0.0001m,
             IsLengthDifferent = order != null && Math.Abs((order.OrderDimension?.LengthCm ?? 0m) - (lpn.LengthCm ?? 0)) > 0.01m,
             IsWidthDifferent = order != null && Math.Abs((order.OrderDimension?.WidthCm ?? 0m) - (lpn.WidthCm ?? 0)) > 0.01m,
             IsHeightDifferent = order != null && Math.Abs((order.OrderDimension?.HeightCm ?? 0m) - (lpn.HeightCm ?? 0)) > 0.01m,

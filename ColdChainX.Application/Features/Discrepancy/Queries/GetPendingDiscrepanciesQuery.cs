@@ -1,5 +1,6 @@
 using ColdChainX.Application.DTOs.WarehouseFlow;
 using ColdChainX.Application.Interfaces;
+using ColdChainX.Application.Helpers;
 using ColdChainX.Core.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -33,6 +34,8 @@ public class GetPendingDiscrepanciesQueryHandler : IRequestHandler<GetPendingDis
         var query = _context.Lpns
             .Include(l => l.Order)
                 .ThenInclude(o => o.InboundAsns)
+            .Include(l => l.Order)
+                .ThenInclude(o => o.OrderDimension)
             .Include(l => l.Customer)
             .Where(l => l.State == LpnState.DISCREPANCY_HOLD)
             .OrderByDescending(l => l.CreatedAt);
@@ -47,8 +50,11 @@ public class GetPendingDiscrepanciesQueryHandler : IRequestHandler<GetPendingDis
         var items = pendingLpns.Select(l =>
         {
             var order = l.Order;
+            var expectedCbm = order.OrderDimension == null
+                ? 0m
+                : InboundQcMeasurementCalculator.CalculateExpectedCbm(order.OrderDimension, order.Quantity);
             var weightDiff = CalculateDiffPercent(order.OrderDimension?.ExpectedWeightKg ?? 0m, l.ActualWeightKg);
-            var cbmDiff = CalculateDiffPercent(order.OrderDimension?.ExpectedCbm ?? 0m, l.ActualCbm);
+            var cbmDiff = CalculateDiffPercent(expectedCbm, l.ActualCbm);
             var diffPercent = Math.Max(weightDiff, cbmDiff);
 
             var asn = order.InboundAsns.OrderByDescending(a => a.CreatedAt).FirstOrDefault();
@@ -63,7 +69,7 @@ public class GetPendingDiscrepanciesQueryHandler : IRequestHandler<GetPendingDis
                 ItemName = order.ItemName,
                 ExpectedWeightKg = order.OrderDimension?.ExpectedWeightKg ?? 0m,
                 ActualWeightKg = l.ActualWeightKg,
-                ExpectedCbm = order.OrderDimension?.ExpectedCbm ?? 0m,
+                ExpectedCbm = expectedCbm,
                 ActualCbm = l.ActualCbm,
                 DiffPercent = diffPercent,
                 DiscrepancyReason = l.DiscrepancyReason,
