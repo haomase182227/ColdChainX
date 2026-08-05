@@ -201,9 +201,9 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>Admin approves the amount paid in advance by the driver.</summary>
+        /// <summary>Admin or Accountant approves the amount paid in advance by the driver.</summary>
         [HttpPost("{id:guid}/expenses/approve")]
-        [Authorize(Roles = "Admin,ADMIN")]
+        [Authorize(Roles = "Admin,ADMIN,Accountant,ACCOUNTANT")]
         [ProducesResponseType(typeof(ApiResponse<IncidentResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ApproveExpense(
             [FromRoute] Guid id,
@@ -221,12 +221,12 @@ namespace ColdChainX.API.Controllers
         }
 
         /// <summary>
-        /// Admin records the reimbursement, uploads its receipt and sends it to
+        /// Admin or Accountant records the reimbursement, uploads its receipt and sends it to
         /// the reporting driver through persistent and realtime notifications.
         /// </summary>
         [HttpPost("{id:guid}/expenses/reimburse")]
         [Consumes("multipart/form-data")]
-        [Authorize(Roles = "Admin,ADMIN")]
+        [Authorize(Roles = "Admin,ADMIN,Accountant,ACCOUNTANT")]
         [ProducesResponseType(typeof(ApiResponse<IncidentResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ReimburseExpense(
             [FromRoute] Guid id,

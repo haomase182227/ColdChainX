@@ -18,9 +18,14 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetQuotations([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+        public async Task<IActionResult> GetQuotations(
+            [FromQuery] string? status = null,
+            [FromQuery] DateTime? fromDate = null,
+            [FromQuery] DateTime? toDate = null,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10)
         {
-            var result = await _quotationService.GetQuotationsAsync(pageNumber, pageSize);
+            var result = await _quotationService.GetQuotationsAsync(pageNumber, pageSize, status, fromDate, toDate);
             return Ok(result);
         }
 

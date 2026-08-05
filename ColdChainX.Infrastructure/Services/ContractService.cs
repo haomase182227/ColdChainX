@@ -44,6 +44,77 @@ namespace ColdChainX.Infrastructure.Services
             _fileService = fileService;
         }
 
+        public async Task<ApiResponse<ContractListResponse>> GetContractsAsync(
+            string? status,
+            Guid? customerId,
+            DateTime? fromDate,
+            DateTime? toDate,
+            int pageNumber,
+            int pageSize)
+        {
+            var query = _db.CustomerContracts
+                .Include(c => c.Order)
+                    .ThenInclude(o => o!.Customer)
+                .Include(c => c.Customer)
+                .AsNoTracking()
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                var normalizedStatus = status.Trim().ToUpperInvariant();
+                query = query.Where(c => c.Status == normalizedStatus);
+            }
+
+            if (customerId.HasValue)
+                query = query.Where(c => c.CustomerId == customerId.Value);
+            if (fromDate.HasValue)
+            {
+                var start = AsDbDateTime(fromDate.Value);
+                query = query.Where(c => c.CreatedAt >= start);
+            }
+            if (toDate.HasValue)
+            {
+                var endExclusive = ToEndExclusive(AsDbDateTime(toDate.Value));
+                query = query.Where(c => c.CreatedAt < endExclusive);
+            }
+
+            var safePageNumber = Math.Max(1, pageNumber);
+            var safePageSize = Math.Clamp(pageSize <= 0 ? 10 : pageSize, 1, 100);
+            var totalCount = await query.CountAsync();
+            var items = await query
+                .OrderByDescending(c => c.CreatedAt)
+                .Skip((safePageNumber - 1) * safePageSize)
+                .Take(safePageSize)
+                .Select(c => new ContractListItemResponse
+                {
+                    ContractId = c.ContractId,
+                    OrderId = c.OrderId,
+                    ContractNumber = c.ContractNumber,
+                    TrackingCode = c.Order != null ? c.Order.TrackingCode : null,
+                    CustomerId = c.CustomerId,
+                    CustomerName = c.Customer != null
+                        ? c.Customer.CompanyName
+                        : c.Order != null && c.Order.Customer != null
+                            ? c.Order.Customer.CompanyName
+                            : null,
+                    Status = c.Status ?? string.Empty,
+                    CreatedAt = c.CreatedAt,
+                    SentAt = c.SentAt,
+                    UploadedSignedAt = c.UploadedSignedAt,
+                    VerifiedAt = c.VerifiedAt
+                })
+                .ToListAsync();
+
+            return ApiResponse<ContractListResponse>.SuccessResponse(new ContractListResponse
+            {
+                Items = items,
+                PageNumber = safePageNumber,
+                PageSize = safePageSize,
+                TotalCount = totalCount,
+                TotalPages = (int)Math.Ceiling(totalCount / (double)safePageSize)
+            }, "Contracts retrieved successfully");
+        }
+
         public async Task<ApiResponse<ContractInfoResponse>> GetContractByIdAsync(Guid contractId)
         {
             var contract = await _db.CustomerContracts
@@ -816,6 +887,12 @@ namespace ColdChainX.Infrastructure.Services
 
         private static DateTime DbNow()
             => DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+
+        private static DateTime ToEndExclusive(DateTime value)
+            => value.TimeOfDay == TimeSpan.Zero ? value.Date.AddDays(1) : value.AddTicks(1);
+
+        private static DateTime AsDbDateTime(DateTime value)
+            => DateTime.SpecifyKind(value, DateTimeKind.Unspecified);
 
         private sealed record ContractData(TransportOrder Order, Customer Customer, Quotation Quotation);
     }

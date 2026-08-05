@@ -43,9 +43,32 @@ namespace ColdChainX.Infrastructure.Services
             _hubContext = hubContext;
         }
 
-        public async Task<ApiResponse<PagedResult<QuotationResponse>>> GetQuotationsAsync(int pageNumber, int pageSize)
+        public async Task<ApiResponse<PagedResult<QuotationResponse>>> GetQuotationsAsync(
+            int pageNumber,
+            int pageSize,
+            string? status = null,
+            DateTime? fromDate = null,
+            DateTime? toDate = null)
         {
-            var query = BuildQuotationQuery().OrderByDescending(q => q.CreatedAt);
+            var query = BuildQuotationQuery();
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                var normalizedStatus = status.Trim().ToUpperInvariant();
+                query = query.Where(q => q.Status == normalizedStatus);
+            }
+
+            if (fromDate.HasValue)
+            {
+                var start = AsDbDateTime(fromDate.Value);
+                query = query.Where(q => q.CreatedAt >= start);
+            }
+            if (toDate.HasValue)
+            {
+                var endExclusive = ToEndExclusive(AsDbDateTime(toDate.Value));
+                query = query.Where(q => q.CreatedAt < endExclusive);
+            }
+
+            query = query.OrderByDescending(q => q.CreatedAt);
             var totalRecords = await query.CountAsync();
             var data = await query
                 .Skip(NormalizeSkip(pageNumber, pageSize))
@@ -246,6 +269,7 @@ namespace ColdChainX.Infrastructure.Services
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
                 quotation.Status = Sent;
+                quotation.SentAt = DbNow();
                 quotation.FileUrl = await GenerateQuotationPdfAsync(quotation.Order, quotation);
                 quotation.Order.Status = Quoting;
 
@@ -299,6 +323,7 @@ namespace ColdChainX.Infrastructure.Services
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
                 quotation.Status = "ACCEPTED";
+                quotation.AcceptedAt = DbNow();
                 quotation.Order.Status = "CONTRACT_PENDING";
 
                 var matchedSelectedServices = new List<OptionalServiceItem>();
@@ -686,7 +711,9 @@ namespace ColdChainX.Infrastructure.Services
                 PricingSource = quotation.PricingSource,
                 FileUrl = quotation.FileUrl,
                 Status = quotation.Status,
-                CreatedAt = quotation.CreatedAt
+                CreatedAt = quotation.CreatedAt,
+                SentAt = quotation.SentAt,
+                AcceptedAt = quotation.AcceptedAt
             };
         }
 
@@ -743,6 +770,12 @@ namespace ColdChainX.Infrastructure.Services
         {
             return DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
         }
+
+        private static DateTime ToEndExclusive(DateTime value)
+            => value.TimeOfDay == TimeSpan.Zero ? value.Date.AddDays(1) : value.AddTicks(1);
+
+        private static DateTime AsDbDateTime(DateTime value)
+            => DateTime.SpecifyKind(value, DateTimeKind.Unspecified);
 
         private static int NormalizePageSize(int pageSize)
             => Math.Clamp(pageSize <= 0 ? 10 : pageSize, 1, 100);

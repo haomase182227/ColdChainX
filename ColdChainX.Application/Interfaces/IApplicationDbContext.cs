@@ -35,6 +35,9 @@ namespace ColdChainX.Application.Interfaces
         DbSet<IncidentReport> IncidentReports { get; }
         DbSet<Claim> Claims { get; }
         DbSet<ClaimEvidence> ClaimEvidences { get; }
+        DbSet<AlertLog> AlertLogs { get; }
+        DbSet<ChatMessage> ChatMessages { get; }
+        DbSet<CustomerContract> CustomerContracts { get; }
         DbSet<Lpn> Lpns { get; }
         DbSet<PenaltyBill> PenaltyBills { get; }
         DbSet<DeliveryEpod> DeliveryEpods { get; }
@@ -53,6 +56,7 @@ namespace ColdChainX.Application.Interfaces
         DbSet<Vehicle> Vehicles { get; }
         DbSet<ReturnedItem> ReturnedItems { get; }
         DbSet<MaintenanceTicket> MaintenanceTickets { get; }
+        DbSet<VehicleDocument> VehicleDocuments { get; }
         DbSet<VehicleOdometerLog> VehicleOdometerLogs { get; }
         DbSet<TripStopEvent> TripStopEvents { get; }
         DbSet<DetentionCharge> DetentionCharges { get; }
@@ -60,6 +64,7 @@ namespace ColdChainX.Application.Interfaces
         DbSet<IncidentEvidence> IncidentEvidences { get; }
         DbSet<ServiceCatalog> ServiceCatalogs { get; }
         DbSet<IotDevice> IotDevices { get; }
+        DbSet<RouteMaster> RouteMasters { get; }
 
         DatabaseFacade Database { get; }
         Microsoft.EntityFrameworkCore.ChangeTracking.ChangeTracker ChangeTracker { get; }

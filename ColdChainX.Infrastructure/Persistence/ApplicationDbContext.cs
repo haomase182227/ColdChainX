@@ -159,6 +159,11 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.HasKey(e => e.TransactionId).HasName("payment_transactions_pkey");
             entity.ToTable("payment_transactions");
 
+            entity.HasIndex(e => e.CreatedAt, "ix_payment_transactions_created_at");
+            entity.HasIndex(
+                e => new { e.Status, e.TransactionType, e.PaymentMethod, e.CreatedAt },
+                "ix_payment_transactions_dashboard_filters");
+
             entity.Property(e => e.TransactionId)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("transaction_id");
@@ -219,6 +224,10 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
         {
             entity.HasKey(e => e.Id).HasName("chat_messages_pkey");
             entity.ToTable("chat_messages", "public");
+            entity.HasIndex(
+                e => new { e.ReceiverId, e.IsRead, e.CreatedAt },
+                "ix_chat_messages_receiver_read_created_at");
+            entity.HasIndex(e => e.ReceiverId, "IX_chat_messages_receiver_id");
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.OrderId).HasColumnName("order_id");
             entity.Property(e => e.SenderId).HasColumnName("sender_id");
@@ -326,6 +335,9 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
 
             entity.ToTable("alert_logs");
 
+            entity.HasIndex(e => new { e.TripId, e.CreatedAt }, "ix_alert_logs_trip_created_at");
+            entity.HasIndex(e => e.TripId, "IX_alert_logs_trip_id");
+
             entity.Property(e => e.AlertId)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("alert_id");
@@ -372,6 +384,7 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.ToTable("claims");
 
             entity.HasIndex(e => e.ClaimCode, "claims_claim_code_key").IsUnique();
+            entity.HasIndex(e => new { e.Status, e.CreatedAt }, "ix_claims_status_created_at");
 
             entity.Property(e => e.ClaimId)
                 .HasDefaultValueSql("gen_random_uuid()")
@@ -490,6 +503,10 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.ToTable("customer_contracts");
 
             entity.HasIndex(e => e.ContractNumber, "customer_contracts_contract_number_key").IsUnique();
+            entity.HasIndex(e => e.CreatedAt, "ix_customer_contracts_created_at");
+            entity.HasIndex(e => new { e.Status, e.CreatedAt }, "ix_customer_contracts_status_created_at");
+            entity.HasIndex(e => new { e.CustomerId, e.CreatedAt }, "ix_customer_contracts_customer_created_at");
+            entity.HasIndex(e => e.CustomerId, "IX_customer_contracts_customer_id");
 
             entity.Property(e => e.ContractId)
                 .HasDefaultValueSql("gen_random_uuid()")
@@ -822,6 +839,9 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
 
             entity.ToTable("incident_reports");
 
+            entity.HasIndex(e => new { e.ReportedAt, e.Status }, "ix_incident_reports_reported_status");
+            entity.HasIndex(e => new { e.ReimbursedAt, e.ExpenseStatus }, "ix_incident_reports_reimbursed_expense_status");
+
             entity.Property(e => e.IncidentId)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("incident_id");
@@ -915,6 +935,7 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.ToTable("invoices");
 
             entity.HasIndex(e => e.InvoiceCode, "invoices_invoice_code_key").IsUnique();
+            entity.HasIndex(e => new { e.IssuedDate, e.Status }, "ix_invoices_issued_status");
 
             entity.Property(e => e.InvoiceId)
                 .HasDefaultValueSql("gen_random_uuid()")
@@ -1133,6 +1154,8 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.HasKey(e => e.TripId).HasName("master_trips_pkey");
 
             entity.ToTable("master_trips");
+
+            entity.HasIndex(e => new { e.PlannedStartTime, e.Status }, "ix_master_trips_planned_start_status");
 
             entity.Property(e => e.TripId)
                 .HasDefaultValueSql("gen_random_uuid()")
@@ -1509,6 +1532,11 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
 
             entity.ToTable("quotations");
 
+            entity.HasIndex(e => e.CreatedAt, "ix_quotations_created_at");
+            entity.HasIndex(e => e.SentAt, "ix_quotations_sent_at");
+            entity.HasIndex(e => e.AcceptedAt, "ix_quotations_accepted_at");
+            entity.HasIndex(e => new { e.Status, e.CreatedAt }, "ix_quotations_status_created_at");
+
             entity.Property(e => e.QuoteId)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("quote_id");
@@ -1525,6 +1553,12 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
+            entity.Property(e => e.SentAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("sent_at");
+            entity.Property(e => e.AcceptedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("accepted_at");
             entity.Property(e => e.DistanceKm)
                 .HasPrecision(10, 2)
                 .HasColumnName("distance_km");
@@ -2207,6 +2241,8 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.HasKey(e => e.DocId).HasName("vehicle_documents_pkey");
 
             entity.ToTable("vehicle_documents");
+
+            entity.HasIndex(e => e.ExpireDate, "ix_vehicle_documents_expire_date");
 
             entity.Property(e => e.DocId)
                 .HasDefaultValueSql("gen_random_uuid()")

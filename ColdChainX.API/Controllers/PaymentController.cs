@@ -67,12 +67,24 @@ public class PaymentController : ControllerBase
     [HttpGet("/api/payments/transactions")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAllPaymentTransactions([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+    public async Task<IActionResult> GetAllPaymentTransactions(
+        [FromQuery] string? status = null,
+        [FromQuery] string? transactionType = null,
+        [FromQuery] string? paymentMethod = null,
+        [FromQuery] DateTime? fromDate = null,
+        [FromQuery] DateTime? toDate = null,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10)
     {
         var result = await _mediator.Send(new ColdChainX.Application.Features.Payment.Queries.GetAllPaymentTransactionsQuery
         {
             PageNumber = pageNumber,
-            PageSize = pageSize
+            PageSize = pageSize,
+            Status = status,
+            TransactionType = transactionType,
+            PaymentMethod = paymentMethod,
+            FromDate = fromDate,
+            ToDate = toDate
         });
         return Ok(result);
     }

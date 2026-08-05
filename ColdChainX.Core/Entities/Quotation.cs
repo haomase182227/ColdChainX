@@ -49,5 +49,9 @@ public partial class Quotation
 
     public DateTime? CreatedAt { get; set; }
 
+    public DateTime? SentAt { get; set; }
+
+    public DateTime? AcceptedAt { get; set; }
+
     public virtual TransportOrder? Order { get; set; }
 }

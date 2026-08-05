@@ -18,6 +18,26 @@ namespace ColdChainX.API.Controllers
             _contractService = contractService;
         }
 
+        [HttpGet]
+        [Authorize(Roles = "Sales,Admin,Dispatcher")]
+        public async Task<IActionResult> GetContracts(
+            [FromQuery] string? status = null,
+            [FromQuery] Guid? customerId = null,
+            [FromQuery] DateTime? fromDate = null,
+            [FromQuery] DateTime? toDate = null,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10)
+        {
+            var result = await _contractService.GetContractsAsync(
+                status,
+                customerId,
+                fromDate,
+                toDate,
+                pageNumber,
+                pageSize);
+            return Ok(result);
+        }
+
         /// <summary>
         /// Lấy thông tin hợp đồng (không bao gồm nội dung HTML).
         /// </summary>
