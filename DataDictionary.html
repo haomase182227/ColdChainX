@@ -1,0 +1,3731 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Attribute Data Dictionary</title>
+<style>
+    body { font-family: 'Times New Roman', Times, serif; margin: 40px; }
+    h2 { text-decoration: underline; margin-bottom: 20px;}
+    table { border-collapse: collapse; width: 100%; font-size: 14px; }
+    th, td { border: 1px solid #000; padding: 10px; text-align: left; vertical-align: middle; }
+    th { background-color: #fce4d6; font-weight: bold; }
+    .pkfk { font-weight: bold; }
+    .table-name { font-weight: bold; }
+</style>
+</head>
+<body>
+<h2>Attribute Data Dictionary</h2>
+<table>
+    <thead>
+        <tr>
+            <th style="width: 5%;">No</th>
+            <th style="width: 20%;">Table Name</th>
+            <th style="width: 25%;">Attribute Name</th>
+            <th style="width: 25%;">Data Type</th>
+            <th style="width: 10%;">Not Null</th>
+            <th style="width: 15%;">PK/FK</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td rowspan='9'><b>1</b></td>
+            <td rowspan='9' class='table-name'>ComplianceZoningRules</td>
+            <td>ruleId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>productCategory</td>
+            <td>int</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>subCategory</td>
+            <td>int</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>requirementLevel</td>
+            <td>int</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>isActive</td>
+            <td>bool</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdBy</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>updatedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>updatedBy</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='8'><b>2</b></td>
+            <td rowspan='8' class='table-name'>Customers</td>
+            <td>customerId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>companyName</td>
+            <td>varchar(150)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>taxCode</td>
+            <td>varchar(20)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>address</td>
+            <td>varchar(200)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>email</td>
+            <td>varchar(200)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>paymentTerm</td>
+            <td>int</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='3'><b>3</b></td>
+            <td rowspan='3' class='table-name'>Messagetype</td>
+            <td>typeId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>typeName</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>description</td>
+            <td>varchar(255)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='3'><b>4</b></td>
+            <td rowspan='3' class='table-name'>Permissions</td>
+            <td>permId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>permCode</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>module</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='9'><b>5</b></td>
+            <td rowspan='9' class='table-name'>PricingMatrix</td>
+            <td>priceId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>originCity</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>destCity</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>pricingUnit</td>
+            <td>varchar(20)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>unitPrice</td>
+            <td>numeric(15,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>minValue</td>
+            <td>numeric(12,4)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>maxValue</td>
+            <td>numeric(12,4)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>minCharge</td>
+            <td>numeric(15,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>effectiveDate</td>
+            <td>date</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='3'><b>6</b></td>
+            <td rowspan='3' class='table-name'>Roles</td>
+            <td>roleId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>roleName</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>description</td>
+            <td>varchar(255)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='8'><b>7</b></td>
+            <td rowspan='8' class='table-name'>RouteMaster</td>
+            <td>routeId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>routeCode</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>originCity</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>destCity</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>transitTime</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>cutOffTime</td>
+            <td>interval</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(20)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='4'><b>8</b></td>
+            <td rowspan='4' class='table-name'>RouteStops</td>
+            <td>stopId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>routeId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>stopName</td>
+            <td>varchar(100)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='8'><b>9</b></td>
+            <td rowspan='8' class='table-name'>RouteSchedules</td>
+            <td>scheduleId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>routeId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>scheduleName</td>
+            <td>varchar(100)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>dayOfWeek</td>
+            <td>int</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>departureTime</td>
+            <td>time</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>cutOffTime</td>
+            <td>time</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='9'><b>10</b></td>
+            <td rowspan='9' class='table-name'>ServiceCatalogs</td>
+            <td>serviceCatalogId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>serviceCode</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>serviceName</td>
+            <td>varchar(150)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>description</td>
+            <td>text</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>defaultPrice</td>
+            <td>numeric(18,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>isMandatory</td>
+            <td>bool</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>isActive</td>
+            <td>bool</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>updatedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='4'><b>11</b></td>
+            <td rowspan='4' class='table-name'>SystemConfigs</td>
+            <td>id</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>key</td>
+            <td>varchar(100)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>value</td>
+            <td>varchar(255)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>description</td>
+            <td>varchar(500)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='17'><b>12</b></td>
+            <td rowspan='17' class='table-name'>Vehicles</td>
+            <td>vehicleId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>truckPlate</td>
+            <td>varchar(20)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>brand</td>
+            <td>varchar(50)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>manufactureYear</td>
+            <td>int</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>chassisNumber</td>
+            <td>varchar(50)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>engineNumber</td>
+            <td>varchar(50)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>standardFuelLiters</td>
+            <td>numeric(5,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>vehicleType</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>maxWeight</td>
+            <td>numeric(10,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>maxCbm</td>
+            <td>numeric(8,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>minTemp</td>
+            <td>numeric(5,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>maxTemp</td>
+            <td>numeric(5,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>currentLocation</td>
+            <td>varchar(255)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>currentOdometer</td>
+            <td>doubleprecision</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>nextMaintenanceOdometer</td>
+            <td>doubleprecision</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='16'><b>13</b></td>
+            <td rowspan='16' class='table-name'>Warehouses</td>
+            <td>warehouseId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>warehouseName</td>
+            <td>varchar(100)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>address</td>
+            <td>varchar(100)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>warehouseCode</td>
+            <td>varchar(20)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>warehouseType</td>
+            <td>varchar(20)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>defaultMinTemp</td>
+            <td>numeric(5,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>defaultMaxTemp</td>
+            <td>numeric(5,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>maxPallets</td>
+            <td>int</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>currentPallets</td>
+            <td>int</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdBy</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>updatedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>updatedBy</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>deletedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>deletedBy</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='15'><b>14</b></td>
+            <td rowspan='15' class='table-name'>Invoices</td>
+            <td>invoiceId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>invoiceCode</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>customerId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>vatInvoiceNo</td>
+            <td>varchar(50)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>pdfUrl</td>
+            <td>varchar(255)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>subTotal</td>
+            <td>numeric(15,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>taxRate</td>
+            <td>numeric(5,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>taxAmount</td>
+            <td>numeric(15,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>deductionAmount</td>
+            <td>numeric(15,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>grandTotal</td>
+            <td>numeric(15,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>paidAmount</td>
+            <td>numeric(15,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>issuedDate</td>
+            <td>date</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>dueDate</td>
+            <td>date</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='7'><b>15</b></td>
+            <td rowspan='7' class='table-name'>Locations</td>
+            <td>locationId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>customerId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>address</td>
+            <td>text</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>latitude</td>
+            <td>numeric(10,7)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>longitude</td>
+            <td>numeric(10,7)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='6'><b>16</b></td>
+            <td rowspan='6' class='table-name'>NotificationTemplates</td>
+            <td>templateId</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>typeId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>titleTemplate</td>
+            <td>varchar(100)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>bodyTemplate</td>
+            <td>text</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>channel</td>
+            <td>varchar(20)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='2'><b>17</b></td>
+            <td rowspan='2' class='table-name'>RolePermissions</td>
+            <td>roleId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>permId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td rowspan='17'><b>18</b></td>
+            <td rowspan='17' class='table-name'>Users</td>
+            <td>userId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>username</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>passwordHash</td>
+            <td>varchar(255)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>email</td>
+            <td>varchar(255)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>roleId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>fullName</td>
+            <td>varchar(100)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>phone</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>warehouseId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>refreshToken</td>
+            <td>text</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>refreshTokenExpiryTime</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdBy</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>updatedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>updatedBy</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>deletedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>deletedBy</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='5'><b>19</b></td>
+            <td rowspan='5' class='table-name'>WeightTiers</td>
+            <td>id</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>routeId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>minWeightKg</td>
+            <td>numeric(10,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>maxWeightKg</td>
+            <td>numeric(10,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>pricePerKg</td>
+            <td>numeric(18,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='8'><b>20</b></td>
+            <td rowspan='8' class='table-name'>IotDevices</td>
+            <td>deviceId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>deviceCode</td>
+            <td>varchar(100)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>vehicleId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>batteryLevel</td>
+            <td>int</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>lastPingTime</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>IsOnline</td>
+            <td>bool</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='9'><b>21</b></td>
+            <td rowspan='9' class='table-name'>VehicleDocuments</td>
+            <td>docId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>vehicleId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>documentType</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>documentNumber</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>issuer</td>
+            <td>varchar(150)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>issueDate</td>
+            <td>date</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>expireDate</td>
+            <td>date</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='4'><b>22</b></td>
+            <td rowspan='4' class='table-name'>GeoFences</td>
+            <td>fenceId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>locationId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='15'><b>23</b></td>
+            <td rowspan='15' class='table-name'>MasterTrips</td>
+            <td>tripId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>vehicleId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>originLocationId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>destinationLocationId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>sealNumber</td>
+            <td>varchar(100)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>totalDistanceKm</td>
+            <td>numeric(8,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>estimatedDurationHours</td>
+            <td>numeric(8,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>targetTemperature</td>
+            <td>numeric(5,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>requiresInspection</td>
+            <td>bool</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>plannedStartTime</td>
+            <td>timestamp</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>plannedEndTime</td>
+            <td>timestamp</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>startedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>completedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='9'><b>24</b></td>
+            <td rowspan='9' class='table-name'>Drivers</td>
+            <td>driverId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>userId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>fullName</td>
+            <td>varchar(150)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>identityNumber</td>
+            <td>varchar(30)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>phoneNumber</td>
+            <td>varchar(20)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>dateOfBirth</td>
+            <td>date</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>joinDate</td>
+            <td>date</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='13'><b>25</b></td>
+            <td rowspan='13' class='table-name'>MaintenanceTickets</td>
+            <td>ticketId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>ticketCode</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>vehicleId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>maintenanceType</td>
+            <td>varchar(30)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>triggeredAtOdometer</td>
+            <td>doubleprecision</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>garageName</td>
+            <td>varchar(150)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>description</td>
+            <td>text</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>cost</td>
+            <td>numeric(15,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>issueDate</td>
+            <td>date</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>completionDate</td>
+            <td>date</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdBy</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='13'><b>26</b></td>
+            <td rowspan='13' class='table-name'>OutboundOrders</td>
+            <td>outboundOrderId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>orderCode</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>customerId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>receiverName</td>
+            <td>varchar(100)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>receiverPhone</td>
+            <td>varchar(20)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>destinationAddress</td>
+            <td>varchar(255)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(30)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>assignedPickerId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>allocatedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdBy</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>updatedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>updatedBy</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='12'><b>27</b></td>
+            <td rowspan='12' class='table-name'>AlertLogs</td>
+            <td>alertId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>tripId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>lpnId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>alertType</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>value</td>
+            <td>numeric(5,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>latitude</td>
+            <td>numeric(10,7)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>longitude</td>
+            <td>numeric(10,7)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>resolvedBy</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>resolvedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>resolutionNote</td>
+            <td>text</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='11'><b>28</b></td>
+            <td rowspan='11' class='table-name'>IncidentReports</td>
+            <td>incidentId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>tripId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>incidentType</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>severity</td>
+            <td>varchar(20)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>description</td>
+            <td>text</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>currentLatitude</td>
+            <td>numeric(10,7)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>currentLongitude</td>
+            <td>numeric(10,7)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>reportedBy</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>reportedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>resolvedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='8'><b>29</b></td>
+            <td rowspan='8' class='table-name'>TelemetryLogs</td>
+            <td>logId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>deviceId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>tripId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>temperature</td>
+            <td>numeric(5,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>latitude</td>
+            <td>numeric(10,7)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>longitude</td>
+            <td>numeric(10,7)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>timestamp</td>
+            <td>timestamp</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='22'><b>30</b></td>
+            <td rowspan='22' class='table-name'>TransportOrders</td>
+            <td>orderId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>trackingCode</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>customerId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>itemName</td>
+            <td>varchar(150)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>category</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>quantity</td>
+            <td>int</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>packingType</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>tempCondition</td>
+            <td>varchar(20)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>expectedWeightKg</td>
+            <td>numeric(10,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>actualWeightKg</td>
+            <td>numeric(10,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>expectedCbm</td>
+            <td>numeric(8,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>actualCbm</td>
+            <td>numeric(8,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>lengthCm</td>
+            <td>numeric(10,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>widthCm</td>
+            <td>numeric(10,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>heightCm</td>
+            <td>numeric(10,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>pickupLocation</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>destLocation</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>cargoValue</td>
+            <td>numeric(15,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(30)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>masterTripId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>routeId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='12'><b>31</b></td>
+            <td rowspan='12' class='table-name'>TripStops</td>
+            <td>stopId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>tripId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>locationId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>stopSequence</td>
+            <td>int</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>stopType</td>
+            <td>varchar(30)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>plannedArrivalTime</td>
+            <td>timestamp</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>plannedDepartureTime</td>
+            <td>timestamp</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>actualArrivalTime</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>actualDepartureTime</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>note</td>
+            <td>text</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='8'><b>32</b></td>
+            <td rowspan='8' class='table-name'>DriverLicenses</td>
+            <td>licenseId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>driverId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>licenseNumber</td>
+            <td>varchar(20)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>licenseClass</td>
+            <td>varchar(10)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>issueDate</td>
+            <td>date</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>expiryDate</td>
+            <td>date</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='6'><b>33</b></td>
+            <td rowspan='6' class='table-name'>DriverWorkLogs</td>
+            <td>workLogId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>driverId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>tripId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>workDate</td>
+            <td>date</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>drivingHours</td>
+            <td>numeric(8,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='13'><b>34</b></td>
+            <td rowspan='13' class='table-name'>ExpenseAdvances</td>
+            <td>advanceId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>advanceCode</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>tripId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>driverId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>amount</td>
+            <td>numeric(15,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>paymentMethod</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>advancedDate</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>approvedBy</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>clearedAmount</td>
+            <td>numeric(15,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>returnedAmount</td>
+            <td>numeric(15,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>clearanceStatus</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>note</td>
+            <td>text</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='6'><b>35</b></td>
+            <td rowspan='6' class='table-name'>TripDrivers</td>
+            <td>tripDriverId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>tripId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>driverId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>driverRole</td>
+            <td>varchar(20)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>assignedDurationHours</td>
+            <td>numeric(8,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='6'><b>36</b></td>
+            <td rowspan='6' class='table-name'>OutboundOrderItems</td>
+            <td>outboundOrderItemId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>outboundOrderId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>itemCode</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>itemName</td>
+            <td>varchar(255)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>unit</td>
+            <td>varchar(20)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>quantity</td>
+            <td>numeric(10,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='7'><b>37</b></td>
+            <td rowspan='7' class='table-name'>ChatMessages</td>
+            <td>id</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>orderId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>senderId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>receiverId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>messageContent</td>
+            <td>text</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>isRead</td>
+            <td>bool</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='11'><b>38</b></td>
+            <td rowspan='11' class='table-name'>Claims</td>
+            <td>claimId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>claimCode</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>orderId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>lpnId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>claimType</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>description</td>
+            <td>text</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>faultOwner</td>
+            <td>varchar(50)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>resolutionNote</td>
+            <td>text</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>resolvedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='15'><b>39</b></td>
+            <td rowspan='15' class='table-name'>CustomerContracts</td>
+            <td>contractId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>customerId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>orderId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>contractNumber</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>signedDate</td>
+            <td>date</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>expiredDate</td>
+            <td>date</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>fileUrl</td>
+            <td>varchar(255)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>draftHtmlContent</td>
+            <td>text</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>signedFileUrl</td>
+            <td>varchar(255)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>sentAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>uploadedSignedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>verifiedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>verifiedBy</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='22'><b>40</b></td>
+            <td rowspan='22' class='table-name'>DeliveryEpods</td>
+            <td>epodId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>orderId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>checkinTime</td>
+            <td>timestamp</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>signedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>receiverName</td>
+            <td>varchar(100)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>receiverPhone</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>signImageUrl</td>
+            <td>varchar(255)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>signLatitude</td>
+            <td>numeric(10,7)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>signLongitude</td>
+            <td>numeric(10,7)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>deliveryRating</td>
+            <td>int</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>note</td>
+            <td>text</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>pdfUrl</td>
+            <td>varchar(255)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(30)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>codAmount</td>
+            <td>numeric(15,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>codAmountPaid</td>
+            <td>numeric(15,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>paymentMethod</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>paymentStatus</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>paymentEvidenceImageUrl</td>
+            <td>varchar(255)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>handoverConfirmedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>handoverPdfUrl</td>
+            <td>varchar(500)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>paymentConfirmedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='11'><b>41</b></td>
+            <td rowspan='11' class='table-name'>InboundAsn</td>
+            <td>asnId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>asnCode</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>orderId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>requestedDropoffTime</td>
+            <td>timestamp</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>qrCodeValue</td>
+            <td>varchar(500)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(30)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>phone</td>
+            <td>varchar(50)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>warehouseId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>customerId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>fileUrl</td>
+            <td>varchar(500)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='9'><b>42</b></td>
+            <td rowspan='9' class='table-name'>InvoiceLines</td>
+            <td>lineId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>invoiceId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>orderId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>chargeType</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>description</td>
+            <td>varchar(255)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>quantity</td>
+            <td>numeric(10,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>unitPrice</td>
+            <td>numeric(15,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>amount</td>
+            <td>numeric(15,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>taxRate</td>
+            <td>numeric(5,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='8'><b>43</b></td>
+            <td rowspan='8' class='table-name'>Notifications</td>
+            <td>notiId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>userId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>senderId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>templateId</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>params</td>
+            <td>json</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>orderId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>isRead</td>
+            <td>bool</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='20'><b>44</b></td>
+            <td rowspan='20' class='table-name'>Quotations</td>
+            <td>quoteId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>orderId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>baseFreight</td>
+            <td>numeric(15,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>lastMileSurcharge</td>
+            <td>numeric(15,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>vasAmount</td>
+            <td>numeric(15,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>vatPercentage</td>
+            <td>numeric(5,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>vatAmount</td>
+            <td>numeric(15,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>finalAmount</td>
+            <td>numeric(15,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>chargeableWeightKg</td>
+            <td>numeric(10,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>volumetricWeightKg</td>
+            <td>numeric(10,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>pricePerKg</td>
+            <td>numeric(15,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>distanceKm</td>
+            <td>numeric(10,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>systemBaseFreight</td>
+            <td>numeric(15,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>manualAdjustment</td>
+            <td>numeric(15,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>additionalCharges</td>
+            <td>jsonb</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>overrideReason</td>
+            <td>varchar(500)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>pricingSource</td>
+            <td>varchar(30)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>fileUrl</td>
+            <td>varchar(255)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(20)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='10'><b>45</b></td>
+            <td rowspan='10' class='table-name'>TransportDocuments</td>
+            <td>docId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>orderId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>docType</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>imageUrl</td>
+            <td>varchar(255)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>verifiedBy</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>verifiedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>rejectReason</td>
+            <td>varchar(255)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>uploadedBy</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='15'><b>46</b></td>
+            <td rowspan='15' class='table-name'>WarehouseReceipts</td>
+            <td>receiptId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>receiptCode</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>referenceDocNo</td>
+            <td>varchar(100)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>orderId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>warehouseId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>receiptType</td>
+            <td>varchar(20)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>reason</td>
+            <td>varchar(255)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>totalExpectedQty</td>
+            <td>numeric(10,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>totalActualQty</td>
+            <td>numeric(10,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>recordedTemperature</td>
+            <td>numeric(5,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>delivererName</td>
+            <td>varchar(100)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>receiverId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>note</td>
+            <td>text</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>pdfUrl</td>
+            <td>varchar(255)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='11'><b>47</b></td>
+            <td rowspan='11' class='table-name'>Seals</td>
+            <td>sealId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>tripId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>stopId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>sealCode</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>appliedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>appliedImageUrl</td>
+            <td>varchar(255)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>removedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>removedImageUrl</td>
+            <td>varchar(255)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>note</td>
+            <td>text</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='13'><b>48</b></td>
+            <td rowspan='13' class='table-name'>ExpenseReceipts</td>
+            <td>receiptId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>advanceId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>tripId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>expenseType</td>
+            <td>varchar(30)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>description</td>
+            <td>varchar(255)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>amount</td>
+            <td>numeric(15,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>expenseDate</td>
+            <td>date</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>imageUrl</td>
+            <td>varchar(255)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>verifiedBy</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>verifiedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>rejectReason</td>
+            <td>varchar(255)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>uploadedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='12'><b>49</b></td>
+            <td rowspan='12' class='table-name'>ContractAppendices</td>
+            <td>appendixId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>contractId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>orderId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>appendixNumber</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>adjustedPrice</td>
+            <td>numeric(18,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>reason</td>
+            <td>text</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(30)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>draftHtmlContent</td>
+            <td>text</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>pdfUrl</td>
+            <td>varchar(255)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>sentAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>resolvedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='12'><b>50</b></td>
+            <td rowspan='12' class='table-name'>ReturnedItems</td>
+            <td>returnId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>epodId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>itemName</td>
+            <td>varchar(255)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>itemCode</td>
+            <td>varchar(50)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>unit</td>
+            <td>varchar(20)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>returnedQty</td>
+            <td>numeric(10,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>reasonType</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>reasonNote</td>
+            <td>text</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>processingStatus</td>
+            <td>varchar(30)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>processedBy</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>processedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>returnedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='8'><b>51</b></td>
+            <td rowspan='8' class='table-name'>ClaimEvidences</td>
+            <td>evidenceId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>claimId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>evidenceType</td>
+            <td>varchar(30)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>alertId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>docId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>imageUrl</td>
+            <td>varchar(255)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>uploadedBy</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='24'><b>52</b></td>
+            <td rowspan='24' class='table-name'>Lpns</td>
+            <td>lpnId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>lpnCode</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>orderId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>customerId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>receiptId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>warehouseId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>routeId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>tripId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>quantity</td>
+            <td>int</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>actualWeightKg</td>
+            <td>numeric(18,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>actualCbm</td>
+            <td>numeric(18,4)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>lengthCm</td>
+            <td>numeric(10,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>widthCm</td>
+            <td>numeric(10,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>heightCm</td>
+            <td>numeric(10,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>requiredTemperature</td>
+            <td>numeric(8,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>recordedTemperature</td>
+            <td>numeric(8,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>storageLocation</td>
+            <td>varchar(200)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>state</td>
+            <td>varchar(30)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>discrepancyReason</td>
+            <td>text</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>evidenceImageUrl</td>
+            <td>varchar(255)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>inboundTime</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>slaDeadline</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>updatedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='10'><b>53</b></td>
+            <td rowspan='10' class='table-name'>InboundReturnSlips</td>
+            <td>returnSlipId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>orderId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>lpnId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>slipCode</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>returnedWeightKg</td>
+            <td>numeric(18,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>returnedCbm</td>
+            <td>numeric(18,4)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>returnedQty</td>
+            <td>int</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>reason</td>
+            <td>text</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>pdfUrl</td>
+            <td>varchar(255)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='22'><b>54</b></td>
+            <td rowspan='22' class='table-name'>LpnDeliveryConfirmations</td>
+            <td>confirmationId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>lpnId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>tripId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>orderId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>outcomeType</td>
+            <td>varchar(20)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>receiverName</td>
+            <td>varchar(200)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>receiverPhone</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>rejectReason</td>
+            <td>varchar(50)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>rejectNote</td>
+            <td>text</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>evidenceImageUrl</td>
+            <td>varchar(500)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>confirmedBy</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>confirmedAt</td>
+            <td>timestamp</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>checkinAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>signatureImageUrl</td>
+            <td>varchar(500)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>codAmount</td>
+            <td>numeric(15,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>codPaymentMethod</td>
+            <td>varchar(20)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>codReceiptImageUrl</td>
+            <td>varchar(500)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>newSealNumber</td>
+            <td>varchar(50)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>recordedTemperature</td>
+            <td>numeric(8,2)</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>isCodVerified</td>
+            <td>bool</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>codVerifiedAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>codVerifiedBy</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td rowspan='13'><b>55</b></td>
+            <td rowspan='13' class='table-name'>PenaltyBills</td>
+            <td>penaltyBillId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>billCode</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>lpnId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>orderId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>customerId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>handlingFee</td>
+            <td>numeric(18,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>storageFee</td>
+            <td>numeric(18,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>totalAmount</td>
+            <td>numeric(18,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>reason</td>
+            <td>text</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>isPaid</td>
+            <td>bool</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>createdAt</td>
+            <td>timestamp</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>paidAt</td>
+            <td>timestamp</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>paidBy</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td rowspan='5'><b>56</b></td>
+            <td rowspan='5' class='table-name'>TripStopEvents</td>
+            <td>eventId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>stopId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>eventType</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>eventTime</td>
+            <td>timestamp</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>metaData</td>
+            <td>text</td>
+            <td>No</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='7'><b>57</b></td>
+            <td rowspan='7' class='table-name'>DetentionCharges</td>
+            <td>chargeId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>stopId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>customerId</td>
+            <td>uuid</td>
+            <td>No</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>freeMinutesAllocated</td>
+            <td>int</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>actualWaitMinutes</td>
+            <td>int</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>amountCharged</td>
+            <td>numeric(15,2)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>status</td>
+            <td>varchar(20)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td rowspan='4'><b>58</b></td>
+            <td rowspan='4' class='table-name'>IncidentEvidences</td>
+            <td>evidenceId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>PK</td>
+        </tr>
+        <tr>
+            <td>incidentId</td>
+            <td>uuid</td>
+            <td>Yes</td>
+            <td class='pkfk'>FK</td>
+        </tr>
+        <tr>
+            <td>evidenceType</td>
+            <td>varchar(50)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+        <tr>
+            <td>fileUrl</td>
+            <td>varchar(500)</td>
+            <td>Yes</td>
+            <td class='pkfk'></td>
+        </tr>
+    </tbody>
+</table>
+</body>
+</html>

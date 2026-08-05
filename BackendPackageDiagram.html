@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ColdChainX - Clean Architecture Package Diagram</title>
+<style>
+    body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f4f6f8;
+        color: #333;
+        padding: 40px;
+        line-height: 1.6;
+    }
+
+    h1 {
+        text-align: center;
+        color: #1a237e;
+        margin-bottom: 10px;
+    }
+    
+    .subtitle {
+        text-align: center;
+        color: #5c6bc0;
+        margin-bottom: 40px;
+        font-weight: 500;
+    }
+
+    .master-container {
+        max-width: 1300px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .main-layout {
+        display: flex;
+        gap: 40px;
+        width: 100%;
+        align-items: flex-start;
+    }
+
+    .system-container {
+        flex: 3;
+        background: #e8eaf6;
+        border: 2px dashed #3949ab;
+        border-radius: 8px;
+        padding: 40px 30px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        position: relative;
+    }
+
+    .external-container {
+        flex: 1;
+        margin-top: 60px; /* Align with Infrastructure */
+    }
+
+    /* Grid Layout for Clean Architecture */
+    .ca-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 40px;
+        margin-bottom: 40px;
+    }
+
+    .full-width {
+        grid-column: 1 / -1;
+    }
+
+    /* UML Package Styling */
+    .uml-package {
+        position: relative;
+        border: 2px solid #3949ab;
+        background: #ffffff;
+        padding: 30px 20px 20px 20px;
+        border-radius: 0 6px 6px 6px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        transition: transform 0.3s;
+    }
+    
+    .uml-package:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(57, 73, 171, 0.2);
+    }
+
+    .uml-package::before {
+        content: attr(data-title);
+        position: absolute;
+        top: -28px;
+        left: -2px;
+        border: 2px solid #3949ab;
+        border-bottom: none;
+        background: #ffffff;
+        padding: 4px 15px;
+        font-weight: bold;
+        font-size: 14px;
+        color: #1a237e;
+        border-radius: 6px 6px 0 0;
+    }
+
+    /* Outer System Box */
+    .system-title {
+        font-size: 20px;
+        font-weight: bold;
+        color: #1a237e;
+        position: absolute;
+        top: -15px;
+        left: 20px;
+        background: #f4f6f8;
+        padding: 0 10px;
+    }
+
+    /* Client Box */
+    .client-box {
+        background: #e0f7fa;
+        border-color: #00838f;
+        margin-bottom: 20px;
+        width: 400px;
+    }
+    .client-box::before {
+        background: #e0f7fa;
+        border-color: #00838f;
+        color: #006064;
+    }
+
+    /* External Package Box */
+    .ext-package {
+        background: #fff3e0;
+        border-color: #e65100;
+    }
+    .ext-package::before {
+        background: #fff3e0;
+        border-color: #e65100;
+        color: #e65100;
+    }
+
+    /* Folders inside Packages */
+    .folder-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        justify-content: center;
+        width: 100%;
+    }
+
+    .folder {
+        position: relative;
+        background: #f8f9fa;
+        border: 1px solid #7986cb;
+        padding: 8px 12px;
+        border-radius: 0 4px 4px 4px;
+        font-size: 13px;
+        font-weight: 500;
+        color: #283593;
+        flex: 1 1 calc(45% - 12px);
+        text-align: center;
+    }
+
+    .folder::before {
+        content: "";
+        position: absolute;
+        top: -8px;
+        left: -1px;
+        width: 35%;
+        height: 8px;
+        background: #f8f9fa;
+        border: 1px solid #7986cb;
+        border-bottom: none;
+        border-radius: 3px 3px 0 0;
+    }
+
+    .folder-client {
+        border-color: #4dd0e1;
+        color: #006064;
+    }
+    .folder-client::before { border-color: #4dd0e1; }
+
+    .folder-ext {
+        border-color: #ffb74d;
+        color: #bf360c;
+        background: #fff;
+    }
+    .folder-ext::before {
+        border-color: #ffb74d;
+        background: #fff;
+    }
+
+    /* Arrows / Relationships */
+    .relationship-down {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin: -20px 0;
+        z-index: 10;
+        position: relative;
+    }
+    
+    .rel-badge {
+        background: white;
+        padding: 4px 12px;
+        border-radius: 20px;
+        border: 2px solid #5c6bc0;
+        color: #1a237e;
+        font-weight: bold;
+        font-size: 12px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    .arrow-down {
+        height: 40px;
+        border-left: 3px solid #5c6bc0;
+        position: relative;
+    }
+    .arrow-down::after {
+        content: "▼";
+        position: absolute;
+        bottom: -15px;
+        left: -10px;
+        font-size: 18px;
+        color: #5c6bc0;
+    }
+    
+    .relationship-right {
+        display: flex;
+        align-items: center;
+        margin-left: -20px;
+        margin-right: -20px;
+        z-index: 10;
+        position: relative;
+    }
+    .arrow-right {
+        width: 60px;
+        border-top: 3px solid #e65100;
+        position: relative;
+    }
+    .arrow-right::after {
+        content: "▶";
+        position: absolute;
+        right: -12px;
+        top: -12px;
+        font-size: 18px;
+        color: #e65100;
+    }
+
+    /* Specific Arrows for the grid */
+    .grid-arrows {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 40px;
+        margin: 20px 0;
+    }
+
+</style>
+</head>
+<body>
+
+    <h1>ColdChainX - System Architecture Map</h1>
+    <div class="subtitle">Proper Clean Architecture (Dependency Inversion)</div>
+
+    <div class="master-container">
+
+        <!-- CLIENT BOX -->
+        <div class="uml-package client-box" data-title="Client Layer">
+            <p style="font-size: 12px; color: #006064; margin-top: -5px; text-align: center;">User Interfaces</p>
+            <div class="folder-grid">
+                <div class="folder folder-client">React Web Portal</div>
+                <div class="folder folder-client">React Native Mobile App</div>
+            </div>
+        </div>
+
+        <div class="relationship-down" style="margin-bottom: 20px;">
+            <div class="rel-badge" style="border-color: #00838f; color: #00838f;">&lt;&lt; HTTP REST / WebSockets &gt;&gt;</div>
+            <div class="arrow-down" style="border-color: #00838f;"></div>
+        </div>
+
+        <!-- MAIN CONTENT: SYSTEM & EXTERNALS -->
+        <div class="main-layout">
+            
+            <!-- SYSTEM BOUNDARY -->
+            <div class="system-container">
+                <div class="system-title">📦 System Boundary: ColdChainX (Monolithic Backend)</div>
+
+                <!-- TOP LEVEL: Presentation & Infrastructure -->
+                <div class="ca-grid">
+                    
+                    <!-- Left: Presentation -->
+                    <div class="uml-package" data-title="Presentation Layer (ColdChainX.API)">
+                        <p style="font-size: 12px; color: #666; margin-top: -5px; text-align: center;">Entry Point. Connects to Client via HTTP/SignalR.</p>
+                        <div class="folder-grid">
+                            <div class="folder">Controllers</div>
+                            <div class="folder">SignalR Hubs</div>
+                            <div class="folder">Middlewares</div>
+                            <div class="folder">Filters</div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Infrastructure -->
+                    <div class="uml-package" data-title="Infrastructure Layer (ColdChainX.Infrastructure)">
+                        <p style="font-size: 12px; color: #666; margin-top: -5px; text-align: center;">Implements technical details (DB, MQTT, API calls).</p>
+                        <div class="folder-grid">
+                            <div class="folder">Persistence (EF)</div>
+                            <div class="folder">Repositories</div>
+                            <div class="folder">External Services</div>
+                            <div class="folder">Workers (MQTT)</div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Arrows pointing INWARDS/DOWNWARDS to Application -->
+                <div class="grid-arrows">
+                    <div class="relationship-down">
+                        <div class="rel-badge">&lt;&lt; calls (MediatR) &gt;&gt;</div>
+                        <div class="arrow-down"></div>
+                    </div>
+                    <div class="relationship-down">
+                        <div class="rel-badge">&lt;&lt; implements interfaces &gt;&gt;</div>
+                        <div class="arrow-down" style="border-left-style: dashed;"></div>
+                    </div>
+                </div>
+
+                <!-- MIDDLE LEVEL: Application -->
+                <div class="ca-grid" style="grid-template-columns: 1fr;">
+                    <div class="uml-package full-width" data-title="Application Layer (ColdChainX.Application)" style="background: #e8eaf6; border-width: 3px;">
+                        <p style="font-size: 12px; color: #666; margin-top: -5px; text-align: center;">Use Cases & Business Logic. Knows NOTHING about Database or HTTP.</p>
+                        <div class="folder-grid" style="justify-content: center; max-width: 800px;">
+                            <div class="folder">Features (CQRS)</div>
+                            <div class="folder">DTOs</div>
+                            <div class="folder">Interfaces (IRepository)</div>
+                            <div class="folder">Validators</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Arrow pointing DOWN to Domain -->
+                <div class="relationship-down" style="margin: 20px 0;">
+                    <div class="rel-badge">&lt;&lt; uses &gt;&gt;</div>
+                    <div class="arrow-down"></div>
+                </div>
+
+                <!-- BOTTOM LEVEL: Domain -->
+                <div class="ca-grid" style="grid-template-columns: 1fr;">
+                    <div class="uml-package full-width" data-title="Domain Layer (ColdChainX.Core)" style="background: #e3f2fd; border-width: 3px; border-color: #0277bd;">
+                        <p style="font-size: 12px; color: #666; margin-top: -5px; text-align: center;">The Core. Pure C#. Independent of everything.</p>
+                        <div class="folder-grid" style="justify-content: center; max-width: 800px;">
+                            <div class="folder">Entities</div>
+                            <div class="folder">Enums</div>
+                            <div class="folder">Domain Exceptions</div>
+                            <div class="folder">Value Objects</div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr style="border: 1px dashed #9fa8da; margin: 40px 0;">
+
+                <div style="text-align: center; color: #5c6bc0; font-weight: bold; margin-bottom: 10px;">
+                    ⏬ Tất cả 4 Layer ở trên đều phụ thuộc vào Shared Layer ⏬
+                </div>
+
+                <!-- BASE LEVEL: Shared -->
+                <div class="ca-grid" style="grid-template-columns: 1fr; margin-bottom: 0;">
+                    <div class="uml-package full-width" data-title="Shared Layer (ColdChainX.Shared)">
+                        <p style="font-size: 12px; color: #666; margin-top: -5px; text-align: center;">Cross-cutting concerns used by all layers above.</p>
+                        <div class="folder-grid" style="justify-content: center; max-width: 600px;">
+                            <div class="folder">Responses (ApiResponse)</div>
+                            <div class="folder">Constants</div>
+                            <div class="folder">Helpers / Utils</div>
+                        </div>
+                    </div>
+                </div>
+
+            </div> <!-- END SYSTEM -->
+
+            <!-- CONNECTION TO EXTERNALS -->
+            <div class="relationship-right" style="margin-top: 100px;">
+                <div class="arrow-right"></div>
+                <div class="rel-badge" style="border-color: #e65100; color: #e65100; margin-left: 10px; z-index: 100;">&lt;&lt; calls &gt;&gt;</div>
+            </div>
+
+            <!-- EXTERNALS -->
+            <div class="external-container">
+                <div class="uml-package ext-package" data-title="External Dependencies">
+                    <p style="font-size: 12px; color: #e65100; margin-top: -5px; text-align: center;">Databases, Brokers & 3rd Party APIs</p>
+                    <div class="folder-grid" style="justify-content: center; display: flex; flex-direction: column;">
+                        <div class="folder folder-ext">PostgreSQL</div>
+                        <div class="folder folder-ext">Redis</div>
+                        <div class="folder folder-ext">Mosquitto (MQTT)</div>
+                        <div class="folder folder-ext">PayOS</div>
+                        <div class="folder folder-ext">Cloudinary</div>
+                        <div class="folder folder-ext">ML.NET</div>
+                    </div>
+                </div>
+            </div>
+
+        </div> <!-- END MAIN LAYOUT -->
+
+    </div>
+
+</body>
+</html>

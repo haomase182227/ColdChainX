@@ -444,12 +444,16 @@ namespace ColdChainX.UnitTests
             _db.TransportOrders.Add(order);
             await _db.SaveChangesAsync();
 
+            var photoBytes = new System.IO.MemoryStream(new byte[] { 1, 2, 3 });
+            var photo1 = new FormFile(photoBytes, 0, photoBytes.Length, "EvidenceImages", "img1.jpg") { Headers = new HeaderDictionary(), ContentType = "image/jpeg" };
+            var photo2 = new FormFile(photoBytes, 0, photoBytes.Length, "EvidenceImages", "img2.jpg") { Headers = new HeaderDictionary(), ContentType = "image/jpeg" };
+
             var request = new CreateClaimRequest
             {
                 OrderId = orderId,
                 ClaimType = ClaimCategory.DAMAGE,
                 Description = "Frozen meat thawed during transport",
-                EvidenceImages = new List<Microsoft.AspNetCore.Http.IFormFile>()
+                EvidenceImages = new List<Microsoft.AspNetCore.Http.IFormFile> { photo1, photo2 }
             };
 
             // Act
@@ -462,7 +466,7 @@ namespace ColdChainX.UnitTests
             Assert.Equal("OPEN", response.Data.Status);
             Assert.Equal("TRK-999", response.Data.OrderTrackingCode);
             Assert.Equal(2, response.Data.Evidences.Count);
-            Assert.Equal("http://cloud.com/img1.jpg", response.Data.Evidences[0].ImageUrl);
+            Assert.Equal(FakeFileService.UploadedUrl, response.Data.Evidences[0].ImageUrl);
             Assert.Equal("cust_jane", response.Data.Evidences[0].UploadedByUsername);
 
             var dbClaim = await _db.Claims.Include(c => c.ClaimEvidences).FirstOrDefaultAsync(c => c.ClaimId == response.Data.ClaimId);
