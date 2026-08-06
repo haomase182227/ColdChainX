@@ -18,6 +18,17 @@ public class DashboardService : IDashboardService
     private static readonly string[] BusyTripStatuses =
         { "PLANNED", "PICKING", "LOADING", "LOADED", "LOADING_COMPLETED", "SEALED", "DISPATCHED", "IN_TRANSIT", "DELAYED" };
 
+    private static readonly LpnState[] TransportReadyLpnStates =
+    {
+        LpnState.IN_STOCK,
+        LpnState.ALLOCATED,
+        LpnState.LOADING,
+        LpnState.LOADING_COMPLETED,
+        LpnState.RELEASED,
+        LpnState.SHIPPING,
+        LpnState.DELIVERED
+    };
+
     private static readonly string[] ClosedClaimStatuses =
         { "RESOLVED", "RESOLVED_PAID", "PAID_CLOSED", "REJECTED" };
 
@@ -49,6 +60,41 @@ public class DashboardService : IDashboardService
             .AsNoTracking()
             .ToListAsync(cancellationToken);
         var periodOrderIds = periodOrders.Select(o => o.OrderId).ToHashSet();
+
+        var discrepancyLpns = await _db.Lpns
+            .Where(l => periodOrderIds.Contains(l.OrderId)
+                        && (l.State == LpnState.DISCREPANCY_HOLD
+                            || (l.DiscrepancyReason != null && l.DiscrepancyReason != "")))
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+        var discrepancyOrderIds = discrepancyLpns
+            .Select(l => l.OrderId)
+            .Distinct()
+            .ToHashSet();
+        var discrepancyAppendices = await _db.ContractAppendices
+            .Where(a => discrepancyOrderIds.Contains(a.OrderId))
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+        var latestAppendixByOrder = discrepancyAppendices
+            .GroupBy(a => a.OrderId)
+            .ToDictionary(
+                group => group.Key,
+                group => group.OrderByDescending(a => a.CreatedAt).First());
+        var discrepancyStatusByOrder = discrepancyOrderIds.ToDictionary(
+            orderId => orderId,
+            orderId => ResolveDiscrepancyDashboardStatus(
+                discrepancyLpns.Where(l => l.OrderId == orderId),
+                latestAppendixByOrder.GetValueOrDefault(orderId)));
+
+        var dashboardDates = DashboardDates(start, endExclusive);
+        var orderCountsByDate = periodOrders
+            .Where(o => o.CreatedAt.HasValue)
+            .GroupBy(o => o.CreatedAt!.Value.Date)
+            .ToDictionary(group => group.Key, group => group.Count());
+        var discrepancyOrdersByDate = periodOrders
+            .Where(o => o.CreatedAt.HasValue && discrepancyStatusByOrder.ContainsKey(o.OrderId))
+            .GroupBy(o => o.CreatedAt!.Value.Date)
+            .ToDictionary(group => group.Key, group => group.ToList());
 
         var quotations = await _db.Quotations
             .Include(q => q.Order)
@@ -269,13 +315,46 @@ public class DashboardService : IDashboardService
             },
             // TransportOrder currently has no persisted review-reason field.
             ReviewReasons = Array.Empty<ReviewReasonCount>(),
-            PriorityWorkItems = priorityWorkItems
+            PriorityWorkItems = priorityWorkItems,
+            WorkDistribution = new[]
+            {
+                new DashboardDistributionItem { Key = "PENDING_REVIEW", Label = "Chờ duyệt đơn", Count = pendingReviewOrders.Count },
+                new DashboardDistributionItem { Key = "NEEDS_UPDATE", Label = "Chờ khách bổ sung", Count = needsUpdateOrders.Count },
+                new DashboardDistributionItem { Key = "DRAFT_QUOTATION", Label = "Chờ gửi báo giá", Count = draftQuotations.Count },
+                new DashboardDistributionItem { Key = "SENT_QUOTATION", Label = "Chờ khách phản hồi báo giá", Count = waitingQuotations.Count },
+                new DashboardDistributionItem { Key = "DRAFT_CONTRACT", Label = "Chờ gửi hợp đồng", Count = draftContracts.Count },
+                new DashboardDistributionItem { Key = "PENDING_CUSTOMER_SIGNATURE", Label = "Chờ khách ký hợp đồng", Count = pendingCustomerSignature.Count },
+                new DashboardDistributionItem { Key = "PENDING_SALES_VERIFICATION", Label = "Chờ xác minh bản ký", Count = pendingSalesVerification.Count }
+            },
+            OrderVolumeSeries = dashboardDates.Select(date => new OrderVolumePeriod
+            {
+                Period = date.ToString("yyyy-MM-dd"),
+                TotalOrders = orderCountsByDate.GetValueOrDefault(date)
+            }).ToList(),
+            DiscrepancySummary = new DiscrepancySummaryResponse
+            {
+                TotalOrders = periodOrders.Count,
+                DiscrepancyOrders = discrepancyOrderIds.Count,
+                DiscrepancyRate = Percentage(discrepancyOrderIds.Count, periodOrders.Count)
+            },
+            DiscrepancySeries = dashboardDates.Select(date =>
+            {
+                var orders = discrepancyOrdersByDate.GetValueOrDefault(date) ?? new List<TransportOrder>();
+                return new DiscrepancyPeriod
+                {
+                    Period = date.ToString("yyyy-MM-dd"),
+                    Pending = orders.Count(o => discrepancyStatusByOrder[o.OrderId] == "PENDING"),
+                    AppendixSent = orders.Count(o => discrepancyStatusByOrder[o.OrderId] == "APPENDIX_SENT"),
+                    Resolved = orders.Count(o => discrepancyStatusByOrder[o.OrderId] == "RESOLVED")
+                };
+            }).ToList()
         }, "Sales dashboard overview retrieved successfully");
     }
 
     public async Task<ApiResponse<DispatcherOverviewResponse>> GetDispatcherOverviewAsync(
         DateOnly? date,
         Guid? warehouseId,
+        string? scheduleRange = "DAY",
         CancellationToken cancellationToken = default)
     {
         var targetDate = date ?? DateOnly.FromDateTime(DateTime.UtcNow);
@@ -283,6 +362,18 @@ public class DashboardService : IDashboardService
         var endExclusive = start.AddDays(1);
         var now = DbNow();
         var warehouseLocation = warehouseId?.ToString();
+        var normalizedScheduleRange = (scheduleRange ?? "DAY").Trim().ToUpperInvariant();
+        if (normalizedScheduleRange is not ("DAY" or "WEEK"))
+            return ApiResponse<DispatcherOverviewResponse>.Failure("scheduleRange must be DAY or WEEK.");
+
+        var scheduleStartDate = normalizedScheduleRange == "WEEK"
+            ? targetDate.AddDays(-(((int)targetDate.DayOfWeek + 6) % 7))
+            : targetDate;
+        var scheduleStart = DbDate(scheduleStartDate);
+        var scheduleEndExclusive = scheduleStart.AddDays(normalizedScheduleRange == "WEEK" ? 7 : 1);
+        var warehouseNames = await _db.Warehouses
+            .AsNoTracking()
+            .ToDictionaryAsync(w => w.WarehouseId, w => w.WarehouseName, cancellationToken);
 
         var lpnQuery = _db.Lpns.AsNoTracking().AsQueryable();
         if (warehouseId.HasValue)
@@ -343,9 +434,12 @@ public class DashboardService : IDashboardService
         var vehicles = await _db.Vehicles
             .Include(v => v.MasterTrips)
             .Include(v => v.MaintenanceTickets)
+            .Include(v => v.IotDevices)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
-        var availableVehicles = vehicles.Count(v => IsVehicleAvailableForDispatch(v, warehouseLocation, start, endExclusive));
+        var availableVehicleItems = vehicles
+            .Where(v => IsVehicleAvailableForDispatch(v, warehouseLocation))
+            .ToList();
 
         var drivers = await _db.Drivers
             .Include(d => d.DriverLicenses)
@@ -353,7 +447,56 @@ public class DashboardService : IDashboardService
                 .ThenInclude(td => td.Trip)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
-        var availableDrivers = drivers.Count(d => IsDriverAvailableForDispatch(d, warehouseLocation, start, endExclusive));
+        var availableDriverItems = drivers
+            .Where(d => IsDriverAvailableForDispatch(d, warehouseLocation))
+            .ToList();
+
+        var scheduleOrders = await _db.TransportOrders
+            .Include(o => o.Schedule)
+                .ThenInclude(schedule => schedule!.Route)
+            .Include(o => o.InboundAsns)
+            .Where(o => o.ScheduleId.HasValue
+                        && o.Schedule != null
+                        && o.Schedule.DepartureDate >= scheduleStart
+                        && o.Schedule.DepartureDate < scheduleEndExclusive)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+        if (warehouseId.HasValue)
+        {
+            var orderIdsAtWarehouse = lpns.Select(l => l.OrderId).ToHashSet();
+            scheduleOrders = scheduleOrders
+                .Where(o => orderIdsAtWarehouse.Contains(o.OrderId)
+                            || o.InboundAsns.Any(a => a.WarehouseId == warehouseId.Value))
+                .ToList();
+        }
+
+        var readyOrderIds = lpns
+            .GroupBy(l => l.OrderId)
+            .Where(group => group.All(l => TransportReadyLpnStates.Contains(l.State)))
+            .Select(group => group.Key)
+            .ToHashSet();
+        var scheduleReadiness = scheduleOrders
+            .GroupBy(o => o.ScheduleId!.Value)
+            .Select(group =>
+            {
+                var schedule = group.First().Schedule!;
+                var totalOrderIds = group.Select(o => o.OrderId).Distinct().ToList();
+                var readyOrders = totalOrderIds.Count(readyOrderIds.Contains);
+                return new ScheduleReadinessItem
+                {
+                    ScheduleId = schedule.ScheduleId,
+                    ScheduleName = schedule.ScheduleName,
+                    RouteId = schedule.RouteId,
+                    RouteName = RouteName(schedule.Route) ?? schedule.ScheduleName,
+                    DepartureAt = schedule.DepartureDate.Date.Add(schedule.DepartureTime),
+                    TotalOrders = totalOrderIds.Count,
+                    ReadyOrders = readyOrders,
+                    NotReadyOrders = totalOrderIds.Count - readyOrders
+                };
+            })
+            .OrderBy(item => item.DepartureAt)
+            .ThenBy(item => item.RouteName)
+            .ToList();
 
         var offlineDeviceQuery = _db.IotDevices
             .Include(d => d.Vehicle)
@@ -495,8 +638,8 @@ public class DashboardService : IDashboardService
                 LateOrRiskTrips = trips.Count(t => t.Status == "DELAYED"
                                                    || (!IsCompletedTrip(t) && t.PlannedEndTime < now)
                                                    || atRiskTripIds.Contains(t.TripId)),
-                AvailableVehicles = availableVehicles,
-                AvailableDrivers = availableDrivers,
+                AvailableVehicles = availableVehicleItems.Count,
+                AvailableDrivers = availableDriverItems.Count,
                 RedeliveryLpns = redeliveryLpns.Count,
                 PendingDispatcherClaims = pendingDispatcherClaims.Count
             },
@@ -527,7 +670,27 @@ public class DashboardService : IDashboardService
                     CreatedAt = a.CreatedAt,
                     ActionType = "VIEW_TRIP"
                 }).ToList(),
-            PriorityWorkItems = workItems
+            PriorityWorkItems = workItems,
+            ReadyLpnsByWarehouse = BuildWarehouseDistribution(
+                readyLpns.Select(l => l.WarehouseId),
+                warehouseNames),
+            AvailableVehiclesByWarehouse = BuildWarehouseDistribution(
+                availableVehicleItems.Select(v => ParseWarehouseLocation(v.CurrentLocation)),
+                warehouseNames),
+            VehicleStatusDistribution = vehicles
+                .GroupBy(ResolveVehicleDashboardStatus)
+                .OrderBy(group => group.Key)
+                .Select(group => new StatusCountResponse { Status = group.Key, Count = group.Count() })
+                .ToList(),
+            AvailableDriversByWarehouse = BuildWarehouseDistribution(
+                availableDriverItems.Select(d => ParseWarehouseLocation(d.CurrentLocation)),
+                warehouseNames),
+            DriverStatusDistribution = drivers
+                .GroupBy(ResolveDriverDashboardStatus)
+                .OrderBy(group => group.Key)
+                .Select(group => new StatusCountResponse { Status = group.Key, Count = group.Count() })
+                .ToList(),
+            ScheduleReadiness = scheduleReadiness
         }, "Dispatcher dashboard overview retrieved successfully");
     }
 
@@ -1349,11 +1512,100 @@ public class DashboardService : IDashboardService
     private static bool IsOverdue(DateTime now, DateTime? waitingSince, decimal overdueAfterHours)
         => waitingSince.HasValue && WaitingHours(now, waitingSince) >= overdueAfterHours;
 
+    private static IReadOnlyCollection<DateTime> DashboardDates(DateTime start, DateTime endExclusive)
+    {
+        var firstDate = start.Date;
+        var lastDate = endExclusive.AddTicks(-1).Date;
+        var days = Math.Max(0, (lastDate - firstDate).Days);
+        return Enumerable.Range(0, days + 1)
+            .Select(offset => firstDate.AddDays(offset))
+            .ToList();
+    }
+
+    private static string ResolveDiscrepancyDashboardStatus(
+        IEnumerable<Lpn> lpns,
+        ContractAppendix? latestAppendix)
+    {
+        if (string.Equals(latestAppendix?.Status, "EXECUTED", StringComparison.OrdinalIgnoreCase))
+            return "RESOLVED";
+
+        var hasPendingLpn = lpns.Any(l => l.State == LpnState.DISCREPANCY_HOLD);
+        if (!hasPendingLpn)
+            return "RESOLVED";
+
+        return latestAppendix?.Status is "SENT" or "ACCEPTED" or "REJECTED"
+            ? "APPENDIX_SENT"
+            : "PENDING";
+    }
+
+    private static Guid? ParseWarehouseLocation(string? location)
+        => Guid.TryParse(location, out var warehouseId) ? warehouseId : null;
+
+    private static IReadOnlyCollection<WarehouseResourceCount> BuildWarehouseDistribution(
+        IEnumerable<Guid?> warehouseIds,
+        IReadOnlyDictionary<Guid, string> warehouseNames)
+    {
+        return warehouseIds
+            .Select(id => id.HasValue && warehouseNames.ContainsKey(id.Value) ? id : null)
+            .GroupBy(id => id)
+            .Select(group => new WarehouseResourceCount
+            {
+                WarehouseId = group.Key,
+                WarehouseName = group.Key.HasValue
+                    ? warehouseNames[group.Key.Value]
+                    : "Chưa xác định kho",
+                Count = group.Count()
+            })
+            .OrderByDescending(item => item.Count)
+            .ThenBy(item => item.WarehouseName)
+            .ToList();
+    }
+
+    private static string ResolveVehicleDashboardStatus(Vehicle vehicle)
+    {
+        if (vehicle.MasterTrips.Any(IsBusyTrip)
+            || vehicle.Status is "ONTRIP" or "ON_TRIP")
+            return "ON_TRIP";
+
+        if (vehicle.Status == "SUSPENDED_DOCS")
+            return "DOCUMENT_ISSUE";
+
+        if (IsVehicleUnderMaintenance(vehicle))
+            return "MAINTENANCE";
+
+        if (vehicle.Status == "ACTIVE" && vehicle.IotDevices.Count == 0)
+            return "IOT_MISSING";
+
+        if (IsVehicleAvailableForDispatch(vehicle, null))
+            return "AVAILABLE";
+
+        if (vehicle.Status == "PLANNING")
+            return "PLANNING";
+
+        return "INACTIVE";
+    }
+
+    private static string ResolveDriverDashboardStatus(Driver driver)
+    {
+        if (driver.TripDrivers.Any(td => td.Trip != null && IsBusyTrip(td.Trip))
+            || driver.Status is "ONTRIP" or "ON_TRIP" or "PLANNING")
+            return "ON_TRIP";
+
+        if (driver.Status == "SUSPENDED_DOCS" || !HasValidDriverLicense(driver))
+            return "DOCUMENT_ISSUE";
+
+        if (driver.Status is "RELAX" or "RELAXING")
+            return "RESTING";
+
+        if (IsDriverAvailableForDispatch(driver, null))
+            return "AVAILABLE";
+
+        return "INACTIVE";
+    }
+
     private static bool IsVehicleAvailableForDispatch(
         Vehicle vehicle,
-        string? warehouseLocation,
-        DateTime start,
-        DateTime endExclusive)
+        string? warehouseLocation)
     {
         if (vehicle.Status != "ACTIVE")
             return false;
@@ -1365,14 +1617,15 @@ public class DashboardService : IDashboardService
         if (IsVehicleUnderMaintenance(vehicle))
             return false;
 
-        return !vehicle.MasterTrips.Any(t => IsBusyTripInRange(t, start, endExclusive));
+        if (vehicle.IotDevices.Count == 0)
+            return false;
+
+        return !vehicle.MasterTrips.Any(IsBusyTrip);
     }
 
     private static bool IsDriverAvailableForDispatch(
         Driver driver,
-        string? warehouseLocation,
-        DateTime start,
-        DateTime endExclusive)
+        string? warehouseLocation)
     {
         if (driver.Status is not ("ACTIVE" or "AVAILABLE"))
             return false;
@@ -1384,14 +1637,12 @@ public class DashboardService : IDashboardService
         if (!HasValidDriverLicense(driver))
             return false;
 
-        return !driver.TripDrivers.Any(td => td.Trip != null && IsBusyTripInRange(td.Trip, start, endExclusive));
+        return !driver.TripDrivers.Any(td => td.Trip != null && IsBusyTrip(td.Trip));
     }
 
-    private static bool IsBusyTripInRange(MasterTrip trip, DateTime start, DateTime endExclusive)
+    private static bool IsBusyTrip(MasterTrip trip)
         => trip.Status != null
-           && BusyTripStatuses.Contains(trip.Status)
-           && trip.PlannedStartTime < endExclusive
-           && trip.PlannedEndTime >= start;
+           && BusyTripStatuses.Contains(trip.Status);
 
     private static bool HasValidDriverLicense(Driver driver)
     {

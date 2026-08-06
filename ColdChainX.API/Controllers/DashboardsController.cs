@@ -35,9 +35,10 @@ public class DashboardsController : ControllerBase
     public async Task<IActionResult> GetDispatcherOverview(
         [FromQuery] DateOnly? date = null,
         [FromQuery] Guid? warehouseId = null,
+        [FromQuery] string? scheduleRange = "DAY",
         CancellationToken cancellationToken = default)
     {
-        var result = await _dashboardService.GetDispatcherOverviewAsync(date, warehouseId, cancellationToken);
+        var result = await _dashboardService.GetDispatcherOverviewAsync(date, warehouseId, scheduleRange, cancellationToken);
         return result.Success ? Ok(result) : StatusCode(result.StatusCode, result);
     }
 

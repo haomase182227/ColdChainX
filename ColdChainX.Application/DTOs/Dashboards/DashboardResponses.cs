@@ -18,6 +18,38 @@ public class SalesOverviewResponse
     public SalesAverageProcessingTimes AverageProcessingTimes { get; set; } = new();
     public IReadOnlyCollection<ReviewReasonCount> ReviewReasons { get; set; } = Array.Empty<ReviewReasonCount>();
     public IReadOnlyCollection<SalesPriorityWorkItem> PriorityWorkItems { get; set; } = Array.Empty<SalesPriorityWorkItem>();
+    public IReadOnlyCollection<DashboardDistributionItem> WorkDistribution { get; set; } = Array.Empty<DashboardDistributionItem>();
+    public IReadOnlyCollection<OrderVolumePeriod> OrderVolumeSeries { get; set; } = Array.Empty<OrderVolumePeriod>();
+    public DiscrepancySummaryResponse DiscrepancySummary { get; set; } = new();
+    public IReadOnlyCollection<DiscrepancyPeriod> DiscrepancySeries { get; set; } = Array.Empty<DiscrepancyPeriod>();
+}
+
+public class DashboardDistributionItem
+{
+    public string Key { get; set; } = string.Empty;
+    public string Label { get; set; } = string.Empty;
+    public int Count { get; set; }
+}
+
+public class OrderVolumePeriod
+{
+    public string Period { get; set; } = string.Empty;
+    public int TotalOrders { get; set; }
+}
+
+public class DiscrepancySummaryResponse
+{
+    public int TotalOrders { get; set; }
+    public int DiscrepancyOrders { get; set; }
+    public decimal DiscrepancyRate { get; set; }
+}
+
+public class DiscrepancyPeriod
+{
+    public string Period { get; set; } = string.Empty;
+    public int Pending { get; set; }
+    public int AppendixSent { get; set; }
+    public int Resolved { get; set; }
 }
 
 public class SalesKpis
@@ -78,6 +110,31 @@ public class DispatcherOverviewResponse
     public DeliveryPerformanceResponse DeliveryPerformance { get; set; } = new();
     public IReadOnlyCollection<DashboardAlertItem> PriorityAlerts { get; set; } = Array.Empty<DashboardAlertItem>();
     public IReadOnlyCollection<DashboardWorkItem> PriorityWorkItems { get; set; } = Array.Empty<DashboardWorkItem>();
+    public IReadOnlyCollection<WarehouseResourceCount> ReadyLpnsByWarehouse { get; set; } = Array.Empty<WarehouseResourceCount>();
+    public IReadOnlyCollection<WarehouseResourceCount> AvailableVehiclesByWarehouse { get; set; } = Array.Empty<WarehouseResourceCount>();
+    public IReadOnlyCollection<StatusCountResponse> VehicleStatusDistribution { get; set; } = Array.Empty<StatusCountResponse>();
+    public IReadOnlyCollection<WarehouseResourceCount> AvailableDriversByWarehouse { get; set; } = Array.Empty<WarehouseResourceCount>();
+    public IReadOnlyCollection<StatusCountResponse> DriverStatusDistribution { get; set; } = Array.Empty<StatusCountResponse>();
+    public IReadOnlyCollection<ScheduleReadinessItem> ScheduleReadiness { get; set; } = Array.Empty<ScheduleReadinessItem>();
+}
+
+public class WarehouseResourceCount
+{
+    public Guid? WarehouseId { get; set; }
+    public string WarehouseName { get; set; } = string.Empty;
+    public int Count { get; set; }
+}
+
+public class ScheduleReadinessItem
+{
+    public Guid ScheduleId { get; set; }
+    public string ScheduleName { get; set; } = string.Empty;
+    public Guid RouteId { get; set; }
+    public string RouteName { get; set; } = string.Empty;
+    public DateTime DepartureAt { get; set; }
+    public int TotalOrders { get; set; }
+    public int ReadyOrders { get; set; }
+    public int NotReadyOrders { get; set; }
 }
 
 public class DispatcherKpis
