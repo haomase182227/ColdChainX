@@ -477,8 +477,8 @@ public class DispatchController : ControllerBase
     {
         var rawItems = await _db.RouteSchedules
             .AsNoTracking()
-            .Where(s => s.Route.Status == "ACTIVE"
-                && (s.Status == "ACTIVE"
+            .Where(s => s.Route.Status.ToUpper() == "ACTIVE"
+                && (s.Status.ToUpper() == "ACTIVE"
                     || _db.Lpns.Any(l => l.Order.ScheduleId == s.ScheduleId
                         && l.State == LpnState.IN_STOCK
                         && l.TripId == null)))

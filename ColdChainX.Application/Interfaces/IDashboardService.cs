@@ -14,6 +14,7 @@ public interface IDashboardService
     Task<ApiResponse<DispatcherOverviewResponse>> GetDispatcherOverviewAsync(
         DateOnly? date,
         Guid? warehouseId,
+        string? scheduleRange = "DAY",
         CancellationToken cancellationToken = default);
 
     Task<ApiResponse<AdminOverviewResponse>> GetAdminOverviewAsync(
