@@ -118,26 +118,36 @@ public class DashboardService : IDashboardService
             .ToList();
 
         var verifiedOrderIds = cohortContracts
-            .Where(c => c.VerifiedAt.HasValue && c.OrderId.HasValue)
+            .Where(c => c.VerifiedAt.HasValue
+                        && c.VerifiedAt < endExclusive
+                        && c.OrderId.HasValue)
             .Select(c => c.OrderId!.Value)
             .ToHashSet();
         var uploadedOrderIds = cohortContracts
-            .Where(c => c.UploadedSignedAt.HasValue && c.OrderId.HasValue)
+            .Where(c => c.UploadedSignedAt.HasValue
+                        && c.UploadedSignedAt < endExclusive
+                        && c.OrderId.HasValue)
             .Select(c => c.OrderId!.Value)
             .Concat(verifiedOrderIds)
             .ToHashSet();
         var contractSentOrderIds = cohortContracts
-            .Where(c => c.SentAt.HasValue && c.OrderId.HasValue)
+            .Where(c => c.SentAt.HasValue
+                        && c.SentAt < endExclusive
+                        && c.OrderId.HasValue)
             .Select(c => c.OrderId!.Value)
             .Concat(uploadedOrderIds)
             .ToHashSet();
         var acceptedQuoteOrderIds = cohortQuotations
-            .Where(q => q.AcceptedAt.HasValue && q.OrderId.HasValue)
+            .Where(q => q.AcceptedAt.HasValue
+                        && q.AcceptedAt < endExclusive
+                        && q.OrderId.HasValue)
             .Select(q => q.OrderId!.Value)
             .Concat(contractSentOrderIds)
             .ToHashSet();
         var sentQuoteOrderIds = cohortQuotations
-            .Where(q => q.SentAt.HasValue && q.OrderId.HasValue)
+            .Where(q => q.SentAt.HasValue
+                        && q.SentAt < endExclusive
+                        && q.OrderId.HasValue)
             .Select(q => q.OrderId!.Value)
             .Concat(acceptedQuoteOrderIds)
             .ToHashSet();
@@ -301,8 +311,9 @@ public class DashboardService : IDashboardService
         var alerts = await _db.AlertLogs
             .Include(a => a.Trip)
                 .ThenInclude(t => t!.Vehicle)
-            .Where(a => a.CreatedAt >= start
-                        && a.CreatedAt < endExclusive
+            .Where(a => ((a.CreatedAt >= start && a.CreatedAt < endExclusive)
+                         || a.Status == "OPEN"
+                         || a.Status == "NEW")
                         && a.TripId.HasValue
                         && tripIds.Contains(a.TripId.Value))
             .AsNoTracking()
@@ -334,7 +345,7 @@ public class DashboardService : IDashboardService
             .Include(v => v.MaintenanceTickets)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
-        var availableVehicles = vehicles.Count(v => IsVehicleAvailableForDispatch(v, warehouseLocation));
+        var availableVehicles = vehicles.Count(v => IsVehicleAvailableForDispatch(v, warehouseLocation, start, endExclusive));
 
         var drivers = await _db.Drivers
             .Include(d => d.DriverLicenses)
@@ -342,7 +353,7 @@ public class DashboardService : IDashboardService
                 .ThenInclude(td => td.Trip)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
-        var availableDrivers = drivers.Count(d => IsDriverAvailableForDispatch(d, warehouseLocation));
+        var availableDrivers = drivers.Count(d => IsDriverAvailableForDispatch(d, warehouseLocation, start, endExclusive));
 
         var offlineDeviceQuery = _db.IotDevices
             .Include(d => d.Vehicle)
@@ -533,6 +544,7 @@ public class DashboardService : IDashboardService
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var now = DbNow();
         var endDateInclusive = DateOnly.FromDateTime(endExclusive.AddTicks(-1));
+        var warehouseLocation = warehouseId?.ToString();
 
         HashSet<Guid>? warehouseTripIds = null;
         if (warehouseId.HasValue)
@@ -558,7 +570,8 @@ public class DashboardService : IDashboardService
         var tripQuery = _db.MasterTrips
             .Include(t => t.Route)
             .Include(t => t.Vehicle)
-            .Where(t => t.PlannedStartTime >= start && t.PlannedStartTime < endExclusive)
+            .Where(t => t.PlannedStartTime < endExclusive
+                        && (t.CompletedAt ?? t.PlannedEndTime) >= start)
             .AsNoTracking()
             .AsQueryable();
         if (routeId.HasValue)
@@ -607,37 +620,49 @@ public class DashboardService : IDashboardService
         var openClaims = await openClaimQuery.ToListAsync(cancellationToken);
         var overdueClaims = openClaims.Where(c => IsClaimOverdue(c, today)).ToList();
 
-        var vehicles = await _db.Vehicles
+        var vehicleQuery = _db.Vehicles
             .Include(v => v.MaintenanceTickets)
             .AsNoTracking()
-            .ToListAsync(cancellationToken);
+            .AsQueryable();
+        if (warehouseId.HasValue)
+            vehicleQuery = vehicleQuery.Where(v => v.CurrentLocation == warehouseLocation);
+        var vehicles = await vehicleQuery.ToListAsync(cancellationToken);
         var vehicleStatusDistribution = vehicles
             .GroupBy(v => v.Status ?? "UNKNOWN")
             .Select(group => new StatusCountResponse { Status = group.Key, Count = group.Count() })
             .OrderBy(item => item.Status)
             .ToList();
 
-        var drivers = await _db.Drivers
+        var driverQuery = _db.Drivers
             .Include(d => d.DriverLicenses)
             .AsNoTracking()
-            .ToListAsync(cancellationToken);
+            .AsQueryable();
+        if (warehouseId.HasValue)
+            driverQuery = driverQuery.Where(d => d.CurrentLocation == warehouseLocation);
+        var drivers = await driverQuery.ToListAsync(cancellationToken);
         var driverStatusDistribution = drivers
             .GroupBy(d => d.Status ?? "UNKNOWN")
             .Select(group => new StatusCountResponse { Status = group.Key, Count = group.Count() })
             .ToList();
 
-        var iotDevices = await _db.IotDevices
+        var iotDeviceQuery = _db.IotDevices
             .Include(d => d.Vehicle)
             .AsNoTracking()
-            .ToListAsync(cancellationToken);
+            .AsQueryable();
+        if (warehouseId.HasValue)
+            iotDeviceQuery = iotDeviceQuery.Where(d => d.Vehicle != null && d.Vehicle.CurrentLocation == warehouseLocation);
+        var iotDevices = await iotDeviceQuery.ToListAsync(cancellationToken);
         var onlineIotDevices = iotDevices.Count(d => d.IsOnline || d.Status == "ONLINE");
         var offlineIotDevices = iotDevices.Count(d => !d.IsOnline && d.Status != "ONLINE");
         var unassignedIotDevices = iotDevices.Count(d => !d.VehicleId.HasValue);
 
-        var vehicleDocuments = await _db.VehicleDocuments
+        var vehicleDocumentQuery = _db.VehicleDocuments
             .Include(d => d.Vehicle)
             .AsNoTracking()
-            .ToListAsync(cancellationToken);
+            .AsQueryable();
+        if (warehouseId.HasValue)
+            vehicleDocumentQuery = vehicleDocumentQuery.Where(d => d.Vehicle != null && d.Vehicle.CurrentLocation == warehouseLocation);
+        var vehicleDocuments = await vehicleDocumentQuery.ToListAsync(cancellationToken);
         var expiringVehicleDocuments = vehicleDocuments.Count(d =>
             d.ExpireDate.HasValue
             && d.ExpireDate.Value >= today
@@ -793,6 +818,17 @@ public class DashboardService : IDashboardService
                 SlaDeadline = ToDateTime(d.ExpireDate),
                 IsOverdue = false
             })
+            .Concat(vehicleDocuments
+                .Where(d => d.ExpireDate.HasValue && d.ExpireDate.Value < today)
+                .Select(d => new DashboardWorkItem
+                {
+                    Type = "VEHICLE_DOCUMENT_EXPIRED",
+                    ReferenceId = d.VehicleId ?? d.DocId,
+                    ReferenceCode = d.DocumentNumber,
+                    Message = $"{d.DocumentType} đã hết hạn",
+                    SlaDeadline = ToDateTime(d.ExpireDate),
+                    IsOverdue = true
+                }))
             .Concat(driverLicenseDocuments
                 .Where(x => x.License.ExpiryDate >= today && x.License.ExpiryDate <= today.AddDays(DocumentExpiryWarningDays))
                 .Select(x => new DashboardWorkItem
@@ -803,6 +839,17 @@ public class DashboardService : IDashboardService
                     Message = $"Bằng lái của {x.Driver.FullName} hết hạn sau {x.License.ExpiryDate.DayNumber - today.DayNumber} ngày",
                     SlaDeadline = ToDateTime(x.License.ExpiryDate),
                     IsOverdue = false
+                }))
+            .Concat(driverLicenseDocuments
+                .Where(x => x.License.ExpiryDate < today)
+                .Select(x => new DashboardWorkItem
+                {
+                    Type = "DRIVER_LICENSE_EXPIRED",
+                    ReferenceId = x.Driver.DriverId,
+                    ReferenceCode = x.License.LicenseNumber,
+                    Message = $"Bằng lái của {x.Driver.FullName} đã hết hạn",
+                    SlaDeadline = ToDateTime(x.License.ExpiryDate),
+                    IsOverdue = true
                 }))
             .Concat(maintenanceDueVehicles.Select(v => new DashboardWorkItem
             {
@@ -951,7 +998,8 @@ public class DashboardService : IDashboardService
 
         var transactions = await _db.PaymentTransactions
             .Include(t => t.Claim)
-            .Where(t => t.CreatedAt >= start && t.CreatedAt < endExclusive)
+            .Where(t => (t.CompletedAt ?? t.CreatedAt) >= start
+                        && (t.CompletedAt ?? t.CreatedAt) < endExclusive)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
@@ -972,6 +1020,19 @@ public class DashboardService : IDashboardService
             .Select(line => line.InvoiceId)
             .Distinct()
             .ToListAsync(cancellationToken)).ToHashSet();
+        var persistedPaymentOrderIds = (await _db.PaymentTransactions
+            .Where(t => t.OrderId.HasValue)
+            .Select(t => t.OrderId!.Value)
+            .Distinct()
+            .ToListAsync(cancellationToken)).ToHashSet();
+        var paidEpodFallbacks = await _db.DeliveryEpods
+            .Where(e => (e.PaymentStatus == "PAID" || e.CodAmountPaid > 0)
+                        && e.OrderId.HasValue
+                        && !persistedPaymentOrderIds.Contains(e.OrderId.Value)
+                        && (e.PaymentConfirmedAt ?? e.CheckinTime) >= start
+                        && (e.PaymentConfirmedAt ?? e.CheckinTime) < endExclusive)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
 
         var incidents = await _db.IncidentReports
             .Where(i => i.ReimbursedAt >= start && i.ReimbursedAt < endExclusive && i.ExpenseStatus == "REIMBURSED")
@@ -1024,18 +1085,46 @@ public class DashboardService : IDashboardService
                         || (t.InvoiceId.HasValue && codInvoiceIds.Contains(t.InvoiceId.Value))
                         || IsCodTransaction(t))
             .ToList();
+        var epodFallbackCashIn = paidEpodFallbacks
+            .Sum(e => e.CodAmountPaid ?? e.CodAmount ?? 0m);
+        var codPaymentRows = codCashIn
+            .Select(t => new
+            {
+                PaymentMethod = t.PaymentMethod,
+                Amount = t.Amount
+            })
+            .Concat(paidEpodFallbacks.Select(e => new
+            {
+                PaymentMethod = e.PaymentMethod ?? "PAYOS_QR",
+                Amount = e.CodAmountPaid ?? e.CodAmount ?? 0m
+            }))
+            .ToList();
         var driverReimbursement = incidents.Sum(i => i.ReimbursedAmount ?? i.ApprovedAmount ?? i.DriverPaidAmount);
         var claimPayout = cashOut.Where(t => t.ClaimId.HasValue).Sum(t => t.Amount);
         var receivables = agingInvoices.Sum(OutstandingAmount);
 
-        var cashFlow = completedTransactions
-            .GroupBy(t => normalizedGroupBy == "MONTH" ? t.CreatedAt.ToString("yyyy-MM") : t.CreatedAt.ToString("yyyy-MM-dd"))
+        var cashFlowMovements = completedTransactions
+            .Select(t => new
+            {
+                OccurredAt = TransactionOccurredAt(t),
+                CashIn = t.TransactionType == "IN" ? t.Amount : 0m,
+                CashOut = t.TransactionType == "OUT" ? t.Amount : 0m
+            })
+            .Concat(paidEpodFallbacks.Select(e => new
+            {
+                OccurredAt = e.PaymentConfirmedAt ?? e.CheckinTime,
+                CashIn = e.CodAmountPaid ?? e.CodAmount ?? 0m,
+                CashOut = 0m
+            }))
+            .ToList();
+        var cashFlow = cashFlowMovements
+            .GroupBy(t => normalizedGroupBy == "MONTH" ? t.OccurredAt.ToString("yyyy-MM") : t.OccurredAt.ToString("yyyy-MM-dd"))
             .OrderBy(g => g.Key)
             .Select(g => new CashFlowPeriod
             {
                 Period = g.Key,
-                CashIn = g.Where(t => t.TransactionType == "IN").Sum(t => t.Amount),
-                CashOut = g.Where(t => t.TransactionType == "OUT").Sum(t => t.Amount)
+                CashIn = g.Sum(t => t.CashIn),
+                CashOut = g.Sum(t => t.CashOut)
             }).ToList();
 
         var agingDefinitions = new[]
@@ -1165,13 +1254,13 @@ public class DashboardService : IDashboardService
             Kpis = new AccountantKpis
             {
                 RecognizedRevenue = invoices.Sum(i => i.GrandTotal),
-                CashCollected = cashIn.Sum(t => t.Amount),
-                CodCollected = codCashIn.Sum(t => t.Amount),
+                CashCollected = cashIn.Sum(t => t.Amount) + epodFallbackCashIn,
+                CodCollected = codPaymentRows.Sum(t => t.Amount),
                 Receivables = receivables,
                 VatAmount = invoices.Sum(i => i.TaxAmount),
                 ClaimPayout = claimPayout,
                 DriverReimbursement = driverReimbursement,
-                NetCashFlow = cashIn.Sum(t => t.Amount) - cashOut.Sum(t => t.Amount),
+                NetCashFlow = cashIn.Sum(t => t.Amount) + epodFallbackCashIn - cashOut.Sum(t => t.Amount),
                 PendingAccountantClaims = pendingAccountantClaimsCount,
                 PendingVerificationTransactions = pendingVerificationTransactionsCount
             },
@@ -1197,7 +1286,7 @@ public class DashboardService : IDashboardService
                     Amount = matches.Sum(OutstandingAmount)
                 };
             }).ToList(),
-            CodByPaymentMethod = codCashIn.GroupBy(t => t.PaymentMethod)
+            CodByPaymentMethod = codPaymentRows.GroupBy(t => t.PaymentMethod)
                 .OrderBy(g => g.Key)
                 .Select(g => new PaymentMethodSummary
                 {
@@ -1260,7 +1349,11 @@ public class DashboardService : IDashboardService
     private static bool IsOverdue(DateTime now, DateTime? waitingSince, decimal overdueAfterHours)
         => waitingSince.HasValue && WaitingHours(now, waitingSince) >= overdueAfterHours;
 
-    private static bool IsVehicleAvailableForDispatch(Vehicle vehicle, string? warehouseLocation)
+    private static bool IsVehicleAvailableForDispatch(
+        Vehicle vehicle,
+        string? warehouseLocation,
+        DateTime start,
+        DateTime endExclusive)
     {
         if (vehicle.Status != "ACTIVE")
             return false;
@@ -1272,10 +1365,14 @@ public class DashboardService : IDashboardService
         if (IsVehicleUnderMaintenance(vehicle))
             return false;
 
-        return !vehicle.MasterTrips.Any(t => t.Status != null && BusyTripStatuses.Contains(t.Status));
+        return !vehicle.MasterTrips.Any(t => IsBusyTripInRange(t, start, endExclusive));
     }
 
-    private static bool IsDriverAvailableForDispatch(Driver driver, string? warehouseLocation)
+    private static bool IsDriverAvailableForDispatch(
+        Driver driver,
+        string? warehouseLocation,
+        DateTime start,
+        DateTime endExclusive)
     {
         if (driver.Status is not ("ACTIVE" or "AVAILABLE"))
             return false;
@@ -1287,8 +1384,14 @@ public class DashboardService : IDashboardService
         if (!HasValidDriverLicense(driver))
             return false;
 
-        return !driver.TripDrivers.Any(td => td.Trip?.Status != null && BusyTripStatuses.Contains(td.Trip.Status));
+        return !driver.TripDrivers.Any(td => td.Trip != null && IsBusyTripInRange(td.Trip, start, endExclusive));
     }
+
+    private static bool IsBusyTripInRange(MasterTrip trip, DateTime start, DateTime endExclusive)
+        => trip.Status != null
+           && BusyTripStatuses.Contains(trip.Status)
+           && trip.PlannedStartTime < endExclusive
+           && trip.PlannedEndTime >= start;
 
     private static bool HasValidDriverLicense(Driver driver)
     {
@@ -1349,6 +1452,9 @@ public class DashboardService : IDashboardService
         => ContainsCod(transaction.TransactionCode)
            || ContainsCod(transaction.ReferenceCode)
            || ContainsCod(transaction.Note);
+
+    private static DateTime TransactionOccurredAt(PaymentTransaction transaction)
+        => transaction.CompletedAt ?? transaction.CreatedAt;
 
     private static bool ContainsCod(string? value)
         => !string.IsNullOrWhiteSpace(value)
