@@ -11,6 +11,7 @@ public class SalesOverviewResponse
     public DateTime FromDate { get; set; }
     public DateTime ToDate { get; set; }
     public SalesKpis Kpis { get; set; } = new();
+    public SalesKpis OverdueKpis { get; set; } = new();
     public IReadOnlyCollection<SalesFunnelItem> Funnel { get; set; } = Array.Empty<SalesFunnelItem>();
     public IReadOnlyCollection<StatusCountResponse> QuotationStatusDistribution { get; set; } = Array.Empty<StatusCountResponse>();
     public IReadOnlyCollection<QuotationValueByMonth> QuotationValuesByMonth { get; set; } = Array.Empty<QuotationValueByMonth>();
@@ -111,12 +112,15 @@ public class DeliveryPerformanceResponse
 public class DashboardAlertItem
 {
     public Guid AlertId { get; set; }
+    public string Severity { get; set; } = string.Empty;
     public string AlertType { get; set; } = string.Empty;
     public Guid? TripId { get; set; }
     public string? TripCode { get; set; }
     public string? VehiclePlate { get; set; }
     public string Message { get; set; } = string.Empty;
+    public string? Status { get; set; }
     public DateTime? CreatedAt { get; set; }
+    public string ActionType { get; set; } = string.Empty;
 }
 
 public class DashboardWorkItem
@@ -125,7 +129,10 @@ public class DashboardWorkItem
     public Guid ReferenceId { get; set; }
     public string? ReferenceCode { get; set; }
     public string? Code { get; set; }
+    public Guid? TripId { get; set; }
     public string Message { get; set; } = string.Empty;
+    public bool IsOverdue { get; set; }
+    public DateTime? SlaDeadline { get; set; }
 }
 
 public class AdminOverviewResponse
@@ -135,6 +142,9 @@ public class AdminOverviewResponse
     public IReadOnlyCollection<StatusCountResponse> IotStatusDistribution { get; set; } = Array.Empty<StatusCountResponse>();
     public IReadOnlyCollection<TripPerformancePeriod> TripPerformanceByPeriod { get; set; } = Array.Empty<TripPerformancePeriod>();
     public IReadOnlyCollection<RouteTemperatureCompliance> TemperatureComplianceByRoute { get; set; } = Array.Empty<RouteTemperatureCompliance>();
+    public IReadOnlyCollection<IncidentDistributionItem> IncidentDistribution { get; set; } = Array.Empty<IncidentDistributionItem>();
+    public IReadOnlyCollection<TripsByWarehouseItem> TripsByWarehouse { get; set; } = Array.Empty<TripsByWarehouseItem>();
+    public IReadOnlyCollection<FleetUtilizationItem> FleetUtilization { get; set; } = Array.Empty<FleetUtilizationItem>();
     public FinancialSnapshotResponse FinancialSnapshot { get; set; } = new();
     public IReadOnlyCollection<DashboardWorkItem> PriorityWorkItems { get; set; } = Array.Empty<DashboardWorkItem>();
 }
@@ -152,10 +162,16 @@ public class AdminKpis
     public int DriversRelaxing { get; set; }
     public int OnlineIotDevices { get; set; }
     public int OfflineIotDevices { get; set; }
+    public int UnassignedIotDevices { get; set; }
     public int ExpiringDocuments { get; set; }
     public int ExpiredDocuments { get; set; }
+    public int ExpiringVehicleDocuments { get; set; }
+    public int ExpiredVehicleDocuments { get; set; }
+    public int ExpiringDriverDocuments { get; set; }
+    public int ExpiredDriverDocuments { get; set; }
     public int OpenIncidents { get; set; }
     public int OpenClaims { get; set; }
+    public int OverdueClaims { get; set; }
     public int ActiveUsers { get; set; }
     public int InactiveUsers { get; set; }
 }
@@ -183,14 +199,39 @@ public class FinancialSnapshotResponse
     public decimal UnpaidInvoiceAmount { get; set; }
 }
 
+public class IncidentDistributionItem
+{
+    public string Type { get; set; } = string.Empty;
+    public int Count { get; set; }
+}
+
+public class TripsByWarehouseItem
+{
+    public Guid? WarehouseId { get; set; }
+    public string WarehouseName { get; set; } = string.Empty;
+    public int TripCount { get; set; }
+    public int OrderCount { get; set; }
+}
+
+public class FleetUtilizationItem
+{
+    public Guid VehicleId { get; set; }
+    public string VehiclePlate { get; set; } = string.Empty;
+    public int TripCount { get; set; }
+    public decimal UtilizationRate { get; set; }
+}
+
 public class AccountantOverviewResponse
 {
     public AccountantKpis Kpis { get; set; } = new();
+    public DateOnly ReceivablesAsOfDate { get; set; }
     public IReadOnlyCollection<CashFlowPeriod> CashFlowSeries { get; set; } = Array.Empty<CashFlowPeriod>();
     public IReadOnlyCollection<InvoiceStatusDistributionItem> InvoiceStatusDistribution { get; set; } = Array.Empty<InvoiceStatusDistributionItem>();
     public IReadOnlyCollection<ReceivablesAgingItem> ReceivablesAging { get; set; } = Array.Empty<ReceivablesAgingItem>();
     public IReadOnlyCollection<PaymentMethodSummary> CodByPaymentMethod { get; set; } = Array.Empty<PaymentMethodSummary>();
     public IReadOnlyCollection<ClaimPayoutTypeSummary> ClaimPayoutByType { get; set; } = Array.Empty<ClaimPayoutTypeSummary>();
+    public IReadOnlyCollection<TopCustomerRevenueItem> TopCustomersByRevenue { get; set; } = Array.Empty<TopCustomerRevenueItem>();
+    public IReadOnlyCollection<TopRouteRevenueItem> TopRoutesByRevenue { get; set; } = Array.Empty<TopRouteRevenueItem>();
     public IReadOnlyCollection<AccountantPriorityWorkItem> PriorityWorkItems { get; set; } = Array.Empty<AccountantPriorityWorkItem>();
 }
 
@@ -244,6 +285,20 @@ public class ClaimPayoutTypeSummary
     public decimal Amount { get; set; }
 }
 
+public class TopCustomerRevenueItem
+{
+    public Guid CustomerId { get; set; }
+    public string CustomerName { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+}
+
+public class TopRouteRevenueItem
+{
+    public Guid RouteId { get; set; }
+    public string RouteName { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+}
+
 public class AccountantPriorityWorkItem
 {
     public string Type { get; set; } = string.Empty;
@@ -251,4 +306,6 @@ public class AccountantPriorityWorkItem
     public string ReferenceCode { get; set; } = string.Empty;
     public decimal? Amount { get; set; }
     public DateTime? CreatedAt { get; set; }
+    public DateOnly? DueDate { get; set; }
+    public bool IsOverdue { get; set; }
 }

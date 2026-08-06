@@ -12,6 +12,19 @@ public class DashboardService : IDashboardService
     private static readonly string[] ActiveTripStatuses =
         { "PLANNED", "PICKING", "LOADING_COMPLETED", "SEALED", "DISPATCHED", "IN_TRANSIT", "DELAYED" };
 
+    private static readonly string[] DispatcherActiveTripStatuses =
+        { "PICKING", "LOADING_COMPLETED", "SEALED", "DISPATCHED", "IN_TRANSIT", "DELAYED" };
+
+    private static readonly string[] BusyTripStatuses =
+        { "PLANNED", "PICKING", "LOADING", "LOADED", "LOADING_COMPLETED", "SEALED", "DISPATCHED", "IN_TRANSIT", "DELAYED" };
+
+    private static readonly string[] ClosedClaimStatuses =
+        { "RESOLVED", "RESOLVED_PAID", "PAID_CLOSED", "REJECTED" };
+
+    private const int DocumentExpiryWarningDays = 15;
+    private const int ClaimSlaDays = 7;
+    private const int NearDepartureHours = 2;
+
     private readonly IApplicationDbContext _db;
 
     public DashboardService(IApplicationDbContext db)
@@ -30,10 +43,12 @@ public class DashboardService : IDashboardService
             return ApiResponse<SalesOverviewResponse>.Failure("fromDate must not be later than toDate.");
         var now = DbNow();
 
-        var orders = await _db.TransportOrders
+        var periodOrders = await _db.TransportOrders
+            .Include(o => o.Customer)
             .Where(o => o.CreatedAt >= start && o.CreatedAt < endExclusive)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
+        var periodOrderIds = periodOrders.Select(o => o.OrderId).ToHashSet();
 
         var quotations = await _db.Quotations
             .Include(q => q.Order)
@@ -41,6 +56,11 @@ public class DashboardService : IDashboardService
             .Where(q => (q.CreatedAt >= start && q.CreatedAt < endExclusive)
                         || (q.SentAt >= start && q.SentAt < endExclusive)
                         || (q.AcceptedAt >= start && q.AcceptedAt < endExclusive))
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+        var cohortQuotations = await _db.Quotations
+            .Where(q => q.OrderId.HasValue && periodOrderIds.Contains(q.OrderId.Value))
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
@@ -54,12 +74,39 @@ public class DashboardService : IDashboardService
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
+        var cohortContracts = await _db.CustomerContracts
+            .Where(c => c.OrderId.HasValue && periodOrderIds.Contains(c.OrderId.Value))
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+        var pendingOrders = await _db.TransportOrders
+            .Include(o => o.Customer)
+            .Where(o => o.Status == "PENDING_REVIEW" || o.Status == "NEEDS_UPDATE")
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+        var openQuotations = await _db.Quotations
+            .Include(q => q.Order)
+                .ThenInclude(o => o!.Customer)
+            .Where(q => q.Status == "DRAFT" || q.Status == "SENT")
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+        var openContracts = await _db.CustomerContracts
+            .Include(c => c.Order)
+                .ThenInclude(o => o!.Customer)
+            .Include(c => c.Customer)
+            .Where(c => c.Status == "DRAFT"
+                        || c.Status == "PENDING_CUSTOMER_SIGNATURE"
+                        || c.Status == "PENDING_SIGNATURE"
+                        || c.Status == "PENDING_SALES_VERIFICATION"
+                        || c.Status == "REQUEST_RESUBMIT")
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
         var unreadMessages = userId.HasValue
             ? await _db.ChatMessages.CountAsync(
-                m => m.ReceiverId == userId.Value
-                     && !m.IsRead
-                     && m.CreatedAt >= start
-                     && m.CreatedAt < endExclusive,
+                m => m.ReceiverId == userId.Value && !m.IsRead,
                 cancellationToken)
             : 0;
 
@@ -70,15 +117,55 @@ public class DashboardService : IDashboardService
             .Where(q => q.AcceptedAt >= start && q.AcceptedAt < endExclusive)
             .ToList();
 
+        var verifiedOrderIds = cohortContracts
+            .Where(c => c.VerifiedAt.HasValue
+                        && c.VerifiedAt < endExclusive
+                        && c.OrderId.HasValue)
+            .Select(c => c.OrderId!.Value)
+            .ToHashSet();
+        var uploadedOrderIds = cohortContracts
+            .Where(c => c.UploadedSignedAt.HasValue
+                        && c.UploadedSignedAt < endExclusive
+                        && c.OrderId.HasValue)
+            .Select(c => c.OrderId!.Value)
+            .Concat(verifiedOrderIds)
+            .ToHashSet();
+        var contractSentOrderIds = cohortContracts
+            .Where(c => c.SentAt.HasValue
+                        && c.SentAt < endExclusive
+                        && c.OrderId.HasValue)
+            .Select(c => c.OrderId!.Value)
+            .Concat(uploadedOrderIds)
+            .ToHashSet();
+        var acceptedQuoteOrderIds = cohortQuotations
+            .Where(q => q.AcceptedAt.HasValue
+                        && q.AcceptedAt < endExclusive
+                        && q.OrderId.HasValue)
+            .Select(q => q.OrderId!.Value)
+            .Concat(contractSentOrderIds)
+            .ToHashSet();
+        var sentQuoteOrderIds = cohortQuotations
+            .Where(q => q.SentAt.HasValue
+                        && q.SentAt < endExclusive
+                        && q.OrderId.HasValue)
+            .Select(q => q.OrderId!.Value)
+            .Concat(acceptedQuoteOrderIds)
+            .ToHashSet();
+        var approvedOrderIds = periodOrders
+            .Where(o => IsSalesOrderApprovedOrBeyond(o.Status))
+            .Select(o => o.OrderId)
+            .Concat(sentQuoteOrderIds)
+            .ToHashSet();
+
         var funnelCounts = new[]
         {
-            orders.Count,
-            orders.Count(o => o.Status == "APPROVED"),
-            sentQuotes.Count,
-            acceptedQuotes.Count,
-            contracts.Count(c => c.SentAt >= start && c.SentAt < endExclusive),
-            contracts.Count(c => c.UploadedSignedAt >= start && c.UploadedSignedAt < endExclusive),
-            contracts.Count(c => c.VerifiedAt >= start && c.VerifiedAt < endExclusive)
+            periodOrders.Count,
+            approvedOrderIds.Count,
+            sentQuoteOrderIds.Count,
+            acceptedQuoteOrderIds.Count,
+            contractSentOrderIds.Count,
+            uploadedOrderIds.Count,
+            verifiedOrderIds.Count
         };
         var funnelMetadata = new[]
         {
@@ -114,32 +201,28 @@ public class DashboardService : IDashboardService
             .Select(c => (decimal)(c.VerifiedAt!.Value - c.UploadedSignedAt!.Value).TotalHours)
             .ToList();
 
-        var priorityContracts = await _db.CustomerContracts
-            .Include(c => c.Order)
-                .ThenInclude(o => o!.Customer)
-            .Include(c => c.Customer)
-            .Where(c => c.UploadedSignedAt.HasValue
-                        && !c.VerifiedAt.HasValue
-                        && (c.Status == "PENDING_SALES_VERIFICATION" || c.Status == "REQUEST_RESUBMIT"))
-            .OrderBy(c => c.UploadedSignedAt)
+        var pendingReviewOrders = pendingOrders.Where(o => o.Status == "PENDING_REVIEW").ToList();
+        var needsUpdateOrders = pendingOrders.Where(o => o.Status == "NEEDS_UPDATE").ToList();
+        var draftQuotations = openQuotations.Where(q => q.Status == "DRAFT").ToList();
+        var waitingQuotations = openQuotations.Where(q => q.Status == "SENT").ToList();
+        var draftContracts = openContracts.Where(c => c.Status == "DRAFT").ToList();
+        var pendingCustomerSignature = openContracts.Where(c => c.Status is "PENDING_CUSTOMER_SIGNATURE" or "PENDING_SIGNATURE").ToList();
+        var pendingSalesVerification = openContracts.Where(c => c.Status == "PENDING_SALES_VERIFICATION").ToList();
+
+        var priorityWorkItems = pendingReviewOrders
+            .Select(o => BuildSalesPriorityWorkItem("PENDING_ORDER_REVIEW", o.OrderId, o.OrderId, o.TrackingCode, o.Customer?.CompanyName, o.CreatedAt, 24m, now))
+            .Concat(needsUpdateOrders.Select(o => BuildSalesPriorityWorkItem("NEEDS_ORDER_UPDATE", o.OrderId, o.OrderId, o.TrackingCode, o.Customer?.CompanyName, o.CreatedAt, 24m, now)))
+            .Concat(draftQuotations.Select(q => BuildSalesPriorityWorkItem("DRAFT_QUOTATION", q.QuoteId, q.OrderId, q.Order?.TrackingCode, q.Order?.Customer?.CompanyName, q.CreatedAt, 24m, now)))
+            .Concat(waitingQuotations.Select(q => BuildSalesPriorityWorkItem("WAITING_QUOTATION_RESPONSE", q.QuoteId, q.OrderId, q.Order?.TrackingCode, q.Order?.Customer?.CompanyName, q.SentAt ?? q.CreatedAt, 48m, now)))
+            .Concat(draftContracts.Select(c => BuildSalesPriorityWorkItem("DRAFT_CONTRACT", c.ContractId, c.OrderId, c.Order?.TrackingCode, c.Customer?.CompanyName ?? c.Order?.Customer?.CompanyName, c.CreatedAt, 24m, now)))
+            .Concat(pendingCustomerSignature.Select(c => BuildSalesPriorityWorkItem("PENDING_CUSTOMER_SIGNATURE", c.ContractId, c.OrderId, c.Order?.TrackingCode, c.Customer?.CompanyName ?? c.Order?.Customer?.CompanyName, c.SentAt ?? c.CreatedAt, 48m, now)))
+            .Concat(pendingSalesVerification.Select(c => BuildSalesPriorityWorkItem("PENDING_SALES_VERIFICATION", c.ContractId, c.OrderId, c.Order?.TrackingCode, c.Customer?.CompanyName ?? c.Order?.Customer?.CompanyName, c.UploadedSignedAt ?? c.CreatedAt, 24m, now)))
+            .Concat(openContracts
+                .Where(c => c.Status == "REQUEST_RESUBMIT")
+                .Select(c => BuildSalesPriorityWorkItem("REQUEST_RESUBMIT", c.ContractId, c.OrderId, c.Order?.TrackingCode, c.Customer?.CompanyName ?? c.Order?.Customer?.CompanyName, c.VerifiedAt ?? c.UploadedSignedAt ?? c.CreatedAt, 24m, now)))
+            .OrderByDescending(x => x.IsOverdue)
+            .ThenByDescending(x => x.WaitingHours)
             .Take(10)
-            .AsNoTracking()
-            .ToListAsync(cancellationToken);
-        var priorityWorkItems = priorityContracts
-            .Select(c =>
-            {
-                var waitingHours = Math.Max(0m, (decimal)(now - c.UploadedSignedAt!.Value).TotalHours);
-                return new SalesPriorityWorkItem
-                {
-                    Type = "PENDING_SALES_VERIFICATION",
-                    ReferenceId = c.ContractId,
-                    OrderId = c.OrderId,
-                    TrackingCode = c.Order?.TrackingCode,
-                    CustomerName = c.Customer?.CompanyName ?? c.Order?.Customer?.CompanyName,
-                    WaitingHours = Math.Round(waitingHours, 2),
-                    IsOverdue = waitingHours >= 24m
-                };
-            })
             .ToList();
 
         return ApiResponse<SalesOverviewResponse>.SuccessResponse(new SalesOverviewResponse
@@ -148,14 +231,24 @@ public class DashboardService : IDashboardService
             ToDate = endExclusive.AddTicks(-1),
             Kpis = new SalesKpis
             {
-                PendingReviewOrders = orders.Count(o => o.Status == "PENDING_REVIEW"),
-                NeedsUpdateOrders = orders.Count(o => o.Status == "NEEDS_UPDATE"),
-                DraftQuotations = quotations.Count(q => q.Status == "DRAFT"),
-                SentQuotations = quotations.Count(q => q.Status == "SENT"),
-                DraftContracts = contracts.Count(c => c.Status == "DRAFT"),
-                PendingCustomerSignature = contracts.Count(c => c.Status is "PENDING_CUSTOMER_SIGNATURE" or "PENDING_SIGNATURE"),
-                PendingSalesVerification = contracts.Count(c => c.Status == "PENDING_SALES_VERIFICATION"),
+                PendingReviewOrders = pendingReviewOrders.Count,
+                NeedsUpdateOrders = needsUpdateOrders.Count,
+                DraftQuotations = draftQuotations.Count,
+                SentQuotations = waitingQuotations.Count,
+                DraftContracts = draftContracts.Count,
+                PendingCustomerSignature = pendingCustomerSignature.Count,
+                PendingSalesVerification = pendingSalesVerification.Count,
                 UnreadMessages = unreadMessages
+            },
+            OverdueKpis = new SalesKpis
+            {
+                PendingReviewOrders = pendingReviewOrders.Count(o => IsOverdue(now, o.CreatedAt, 24m)),
+                NeedsUpdateOrders = needsUpdateOrders.Count(o => IsOverdue(now, o.CreatedAt, 24m)),
+                DraftQuotations = draftQuotations.Count(q => IsOverdue(now, q.CreatedAt, 24m)),
+                SentQuotations = waitingQuotations.Count(q => IsOverdue(now, q.SentAt ?? q.CreatedAt, 48m)),
+                DraftContracts = draftContracts.Count(c => IsOverdue(now, c.CreatedAt, 24m)),
+                PendingCustomerSignature = pendingCustomerSignature.Count(c => IsOverdue(now, c.SentAt ?? c.CreatedAt, 48m)),
+                PendingSalesVerification = pendingSalesVerification.Count(c => IsOverdue(now, c.UploadedSignedAt ?? c.CreatedAt, 24m))
             },
             Funnel = funnel,
             QuotationStatusDistribution = quotations
@@ -189,6 +282,7 @@ public class DashboardService : IDashboardService
         var start = DbDate(targetDate);
         var endExclusive = start.AddDays(1);
         var now = DbNow();
+        var warehouseLocation = warehouseId?.ToString();
 
         var lpnQuery = _db.Lpns.AsNoTracking().AsQueryable();
         if (warehouseId.HasValue)
@@ -198,19 +292,28 @@ public class DashboardService : IDashboardService
         var warehouseTripIds = lpns.Where(l => l.TripId.HasValue).Select(l => l.TripId!.Value).Distinct().ToHashSet();
         var tripQuery = _db.MasterTrips
             .Include(t => t.Vehicle)
-            .Where(t => t.PlannedStartTime >= start && t.PlannedStartTime < endExclusive)
+            .Where(t => (t.PlannedStartTime >= start && t.PlannedStartTime < endExclusive)
+                        || (t.Status != null
+                            && DispatcherActiveTripStatuses.Contains(t.Status)
+                            && t.PlannedStartTime < endExclusive
+                            && (!t.CompletedAt.HasValue || t.CompletedAt >= start)))
             .AsNoTracking()
             .AsQueryable();
         if (warehouseId.HasValue)
             tripQuery = tripQuery.Where(t => warehouseTripIds.Contains(t.TripId));
         var trips = await tripQuery.ToListAsync(cancellationToken);
         var tripIds = trips.Select(t => t.TripId).ToHashSet();
+        var activeTripByVehicle = trips
+            .Where(t => t.VehicleId.HasValue && ActiveTripStatuses.Contains(t.Status ?? string.Empty))
+            .GroupBy(t => t.VehicleId!.Value)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(t => t.PlannedStartTime).First());
 
         var alerts = await _db.AlertLogs
             .Include(a => a.Trip)
                 .ThenInclude(t => t!.Vehicle)
-            .Where(a => a.CreatedAt >= start
-                        && a.CreatedAt < endExclusive
+            .Where(a => ((a.CreatedAt >= start && a.CreatedAt < endExclusive)
+                         || a.Status == "OPEN"
+                         || a.Status == "NEW")
                         && a.TripId.HasValue
                         && tripIds.Contains(a.TripId.Value))
             .AsNoTracking()
@@ -223,7 +326,45 @@ public class DashboardService : IDashboardService
             .AsQueryable();
         if (warehouseId.HasValue)
             claimQuery = claimQuery.Where(c => c.Lpn != null && c.Lpn.WarehouseId == warehouseId.Value);
-        var pendingDispatcherClaims = await claimQuery.CountAsync(cancellationToken);
+        var pendingDispatcherClaims = await claimQuery
+            .OrderBy(c => c.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        var openIncidents = await _db.IncidentReports
+            .Include(i => i.Trip)
+                .ThenInclude(t => t!.Vehicle)
+            .Where(i => i.TripId.HasValue
+                        && tripIds.Contains(i.TripId.Value)
+                        && i.Status != "RESOLVED")
+            .OrderBy(i => i.ReportedAt)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+        var vehicles = await _db.Vehicles
+            .Include(v => v.MasterTrips)
+            .Include(v => v.MaintenanceTickets)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+        var availableVehicles = vehicles.Count(v => IsVehicleAvailableForDispatch(v, warehouseLocation, start, endExclusive));
+
+        var drivers = await _db.Drivers
+            .Include(d => d.DriverLicenses)
+            .Include(d => d.TripDrivers)
+                .ThenInclude(td => td.Trip)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+        var availableDrivers = drivers.Count(d => IsDriverAvailableForDispatch(d, warehouseLocation, start, endExclusive));
+
+        var offlineDeviceQuery = _db.IotDevices
+            .Include(d => d.Vehicle)
+            .Where(d => !d.IsOnline && d.Status != "ONLINE")
+            .AsNoTracking()
+            .AsQueryable();
+        if (warehouseId.HasValue)
+            offlineDeviceQuery = offlineDeviceQuery.Where(d => d.Vehicle != null && d.Vehicle.CurrentLocation == warehouseLocation);
+        var offlineDevices = await offlineDeviceQuery
+            .OrderBy(d => d.LastPingTime)
+            .ToListAsync(cancellationToken);
 
         var completedTrips = trips.Where(IsCompletedTrip).ToList();
         var atRiskTripIds = alerts
@@ -231,6 +372,9 @@ public class DashboardService : IDashboardService
             .Where(a => a.TripId.HasValue)
             .Select(a => a.TripId!.Value)
             .ToHashSet();
+
+        var readyLpns = lpns.Where(l => l.State == LpnState.IN_STOCK && !l.TripId.HasValue).ToList();
+        var redeliveryLpns = lpns.Where(l => l.State == LpnState.PENDING_REDELIVERY).ToList();
 
         var utilization = trips.Select(trip =>
         {
@@ -247,11 +391,103 @@ public class DashboardService : IDashboardService
             };
         }).OrderByDescending(x => Math.Max(x.WeightUtilizationPercent, x.VolumeUtilizationPercent)).Take(10).ToList();
 
+        var workItems = readyLpns.Select(l => new DashboardWorkItem
+            {
+                Type = "UNASSIGNED_LPN",
+                ReferenceId = l.LpnId,
+                ReferenceCode = l.LpnCode,
+                Message = "LPN đã nhập kho và chưa được ghép chuyến",
+                IsOverdue = l.SlaDeadline.HasValue && l.SlaDeadline.Value < now,
+                SlaDeadline = l.SlaDeadline
+            })
+            .Concat(trips
+                .Where(t => t.Status == "PLANNED" && t.PlannedStartTime >= now && t.PlannedStartTime <= now.AddHours(NearDepartureHours))
+                .Select(t => new DashboardWorkItem
+                {
+                    Type = "TRIP_NEAR_DEPARTURE",
+                    ReferenceId = t.TripId,
+                    ReferenceCode = TripCode(t.TripId),
+                    Code = TripCode(t.TripId),
+                    TripId = t.TripId,
+                    Message = "Chuyến sắp đến giờ xuất phát",
+                    SlaDeadline = t.PlannedStartTime
+                }))
+            .Concat(trips
+                .Where(t => t.Status == "LOADING_COMPLETED")
+                .Select(t => new DashboardWorkItem
+                {
+                    Type = "READY_TO_SEAL",
+                    ReferenceId = t.TripId,
+                    ReferenceCode = TripCode(t.TripId),
+                    Code = TripCode(t.TripId),
+                    TripId = t.TripId,
+                    Message = "Chuyến đã bốc hàng xong, chờ kẹp chì",
+                    IsOverdue = t.PlannedEndTime < now,
+                    SlaDeadline = t.PlannedEndTime
+                }))
+            .Concat(offlineDevices.Select(d => new DashboardWorkItem
+            {
+                Type = "IOT_OFFLINE",
+                ReferenceId = d.DeviceId,
+                ReferenceCode = d.DeviceCode,
+                TripId = d.VehicleId.HasValue && activeTripByVehicle.TryGetValue(d.VehicleId.Value, out var trip) ? trip.TripId : null,
+                Message = "Thiết bị IoT mất kết nối",
+                IsOverdue = true,
+                SlaDeadline = d.LastPingTime
+            }))
+            .Concat(trips
+                .Where(t => t.Status == "DELAYED" || (!IsCompletedTrip(t) && t.PlannedEndTime < now))
+                .Select(t => new DashboardWorkItem
+                {
+                    Type = "LATE_TRIP",
+                    ReferenceId = t.TripId,
+                    ReferenceCode = TripCode(t.TripId),
+                    Code = TripCode(t.TripId),
+                    TripId = t.TripId,
+                    Message = "Chuyến đang trễ hoặc có nguy cơ trễ",
+                    IsOverdue = true,
+                    SlaDeadline = t.PlannedEndTime
+                }))
+            .Concat(openIncidents.Select(i => new DashboardWorkItem
+            {
+                Type = "OPEN_INCIDENT",
+                ReferenceId = i.IncidentId,
+                ReferenceCode = i.IncidentType,
+                TripId = i.TripId,
+                Message = i.Description,
+                IsOverdue = IsOverdue(now, i.ReportedAt, 24m),
+                SlaDeadline = i.ReportedAt?.AddHours(24)
+            }))
+            .Concat(pendingDispatcherClaims.Select(c => new DashboardWorkItem
+            {
+                Type = "PENDING_DISPATCHER_CLAIM",
+                ReferenceId = c.ClaimId,
+                ReferenceCode = c.ClaimCode,
+                TripId = c.Lpn?.TripId,
+                Message = c.Description,
+                IsOverdue = IsClaimOverdue(c, DateOnly.FromDateTime(now)),
+                SlaDeadline = c.CreatedAt?.AddDays(ClaimSlaDays)
+            }))
+            .Concat(redeliveryLpns.Select(l => new DashboardWorkItem
+            {
+                Type = "PENDING_REDELIVERY",
+                ReferenceId = l.LpnId,
+                ReferenceCode = l.LpnCode,
+                TripId = l.TripId,
+                Message = "Hàng no-show đã nhập lại kho và chờ tái giao",
+                IsOverdue = l.SlaDeadline.HasValue && l.SlaDeadline.Value < now,
+                SlaDeadline = l.SlaDeadline
+            }))
+            .OrderByDescending(x => x.IsOverdue)
+            .ThenBy(x => x.SlaDeadline ?? DateTime.MaxValue)
+            .Take(10)
+            .ToList();
+
         return ApiResponse<DispatcherOverviewResponse>.SuccessResponse(new DispatcherOverviewResponse
         {
             Kpis = new DispatcherKpis
             {
-                ReadyLpns = lpns.Count(l => l.State == LpnState.IN_STOCK),
+                ReadyLpns = readyLpns.Count,
                 PlannedTrips = trips.Count(t => t.Status == "PLANNED"),
                 PickingTrips = trips.Count(t => t.Status == "PICKING"),
                 ReadyToSealTrips = trips.Count(t => t.Status == "LOADING_COMPLETED"),
@@ -259,10 +495,10 @@ public class DashboardService : IDashboardService
                 LateOrRiskTrips = trips.Count(t => t.Status == "DELAYED"
                                                    || (!IsCompletedTrip(t) && t.PlannedEndTime < now)
                                                    || atRiskTripIds.Contains(t.TripId)),
-                AvailableVehicles = await _db.Vehicles.CountAsync(v => v.Status == "ACTIVE" || v.Status == "AVAILABLE", cancellationToken),
-                AvailableDrivers = await _db.Drivers.CountAsync(d => d.Status == "ACTIVE" || d.Status == "AVAILABLE", cancellationToken),
-                RedeliveryLpns = lpns.Count(l => l.State == LpnState.PENDING_REDELIVERY),
-                PendingDispatcherClaims = pendingDispatcherClaims
+                AvailableVehicles = availableVehicles,
+                AvailableDrivers = availableDrivers,
+                RedeliveryLpns = redeliveryLpns.Count,
+                PendingDispatcherClaims = pendingDispatcherClaims.Count
             },
             TripStatusDistribution = trips.GroupBy(t => t.Status ?? "UNKNOWN")
                 .OrderBy(g => g.Key)
@@ -281,24 +517,17 @@ public class DashboardService : IDashboardService
                 .Select(a => new DashboardAlertItem
                 {
                     AlertId = a.AlertId,
+                    Severity = MapAlertSeverity(a),
                     AlertType = a.AlertType,
                     TripId = a.TripId,
                     TripCode = a.TripId.HasValue ? TripCode(a.TripId.Value) : null,
                     VehiclePlate = a.Trip?.Vehicle?.TruckPlate,
                     Message = BuildAlertMessage(a),
-                    CreatedAt = a.CreatedAt
+                    Status = a.Status,
+                    CreatedAt = a.CreatedAt,
+                    ActionType = "VIEW_TRIP"
                 }).ToList(),
-            PriorityWorkItems = trips
-                .Where(t => t.Status == "LOADING_COMPLETED")
-                .OrderBy(t => t.PlannedEndTime)
-                .Take(10)
-                .Select(t => new DashboardWorkItem
-                {
-                    Type = "READY_TO_SEAL",
-                    ReferenceId = t.TripId,
-                    Code = TripCode(t.TripId),
-                    Message = "Chuyến đã bốc hàng xong, chờ kẹp chì"
-                }).ToList()
+            PriorityWorkItems = workItems
         }, "Dispatcher dashboard overview retrieved successfully");
     }
 
@@ -314,6 +543,8 @@ public class DashboardService : IDashboardService
             return ApiResponse<AdminOverviewResponse>.Failure("fromDate must not be later than toDate.");
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var now = DbNow();
+        var endDateInclusive = DateOnly.FromDateTime(endExclusive.AddTicks(-1));
+        var warehouseLocation = warehouseId?.ToString();
 
         HashSet<Guid>? warehouseTripIds = null;
         if (warehouseId.HasValue)
@@ -325,9 +556,22 @@ public class DashboardService : IDashboardService
                 .ToListAsync(cancellationToken)).ToHashSet();
         }
 
+        HashSet<Guid>? scopedTripIds = null;
+        if (routeId.HasValue || warehouseTripIds != null)
+        {
+            var scopedTripQuery = _db.MasterTrips.AsNoTracking().AsQueryable();
+            if (routeId.HasValue)
+                scopedTripQuery = scopedTripQuery.Where(t => t.RouteId == routeId.Value);
+            if (warehouseTripIds != null)
+                scopedTripQuery = scopedTripQuery.Where(t => warehouseTripIds.Contains(t.TripId));
+            scopedTripIds = (await scopedTripQuery.Select(t => t.TripId).ToListAsync(cancellationToken)).ToHashSet();
+        }
+
         var tripQuery = _db.MasterTrips
             .Include(t => t.Route)
-            .Where(t => t.PlannedStartTime >= start && t.PlannedStartTime < endExclusive)
+            .Include(t => t.Vehicle)
+            .Where(t => t.PlannedStartTime < endExclusive
+                        && (t.CompletedAt ?? t.PlannedEndTime) >= start)
             .AsNoTracking()
             .AsQueryable();
         if (routeId.HasValue)
@@ -350,53 +594,89 @@ public class DashboardService : IDashboardService
             .Where(i => i.ReportedAt >= start && i.ReportedAt < endExclusive)
             .AsNoTracking()
             .AsQueryable();
-        if (routeId.HasValue || warehouseTripIds != null)
-            incidentQuery = incidentQuery.Where(i => i.TripId.HasValue && tripIds.Contains(i.TripId.Value));
+        if (scopedTripIds != null)
+            incidentQuery = incidentQuery.Where(i => i.TripId.HasValue && scopedTripIds.Contains(i.TripId.Value));
         var incidents = await incidentQuery.ToListAsync(cancellationToken);
 
-        var claimQuery = _db.Claims
+        var openIncidentQuery = _db.IncidentReports
+            .Include(i => i.Trip)
+            .Where(i => i.Status == null || i.Status != "RESOLVED")
+            .AsNoTracking()
+            .AsQueryable();
+        if (scopedTripIds != null)
+            openIncidentQuery = openIncidentQuery.Where(i => i.TripId.HasValue && scopedTripIds.Contains(i.TripId.Value));
+        var openIncidents = await openIncidentQuery.ToListAsync(cancellationToken);
+
+        var openClaimQuery = _db.Claims
             .Include(c => c.Order)
             .Include(c => c.Lpn)
-            .Where(c => c.CreatedAt >= start && c.CreatedAt < endExclusive)
+            .Where(c => c.Status == null || !ClosedClaimStatuses.Contains(c.Status))
             .AsNoTracking()
             .AsQueryable();
         if (routeId.HasValue)
-            claimQuery = claimQuery.Where(c => c.Order != null && c.Order.MasterTrip != null && c.Order.MasterTrip.RouteId == routeId.Value);
+            openClaimQuery = openClaimQuery.Where(c => c.Order != null && c.Order.MasterTrip != null && c.Order.MasterTrip.RouteId == routeId.Value);
         if (warehouseId.HasValue)
-            claimQuery = claimQuery.Where(c => c.Lpn != null && c.Lpn.WarehouseId == warehouseId.Value);
-        var claims = await claimQuery.ToListAsync(cancellationToken);
+            openClaimQuery = openClaimQuery.Where(c => c.Lpn != null && c.Lpn.WarehouseId == warehouseId.Value);
+        var openClaims = await openClaimQuery.ToListAsync(cancellationToken);
+        var overdueClaims = openClaims.Where(c => IsClaimOverdue(c, today)).ToList();
 
-        var vehicleStatusDistribution = await _db.Vehicles
+        var vehicleQuery = _db.Vehicles
+            .Include(v => v.MaintenanceTickets)
             .AsNoTracking()
+            .AsQueryable();
+        if (warehouseId.HasValue)
+            vehicleQuery = vehicleQuery.Where(v => v.CurrentLocation == warehouseLocation);
+        var vehicles = await vehicleQuery.ToListAsync(cancellationToken);
+        var vehicleStatusDistribution = vehicles
             .GroupBy(v => v.Status ?? "UNKNOWN")
             .Select(group => new StatusCountResponse { Status = group.Key, Count = group.Count() })
             .OrderBy(item => item.Status)
-            .ToListAsync(cancellationToken);
-        var driverStatusDistribution = await _db.Drivers
+            .ToList();
+
+        var driverQuery = _db.Drivers
+            .Include(d => d.DriverLicenses)
             .AsNoTracking()
+            .AsQueryable();
+        if (warehouseId.HasValue)
+            driverQuery = driverQuery.Where(d => d.CurrentLocation == warehouseLocation);
+        var drivers = await driverQuery.ToListAsync(cancellationToken);
+        var driverStatusDistribution = drivers
             .GroupBy(d => d.Status ?? "UNKNOWN")
             .Select(group => new StatusCountResponse { Status = group.Key, Count = group.Count() })
-            .ToListAsync(cancellationToken);
-        var onlineIotDevices = await _db.IotDevices
-            .CountAsync(d => d.IsOnline || d.Status == "ONLINE", cancellationToken);
-        var offlineIotDevices = await _db.IotDevices
-            .CountAsync(d => !d.IsOnline && d.Status != "ONLINE", cancellationToken);
-        var expiringDocumentCount = await _db.VehicleDocuments.CountAsync(
-            d => d.ExpireDate.HasValue
-                 && d.ExpireDate.Value >= today
-                 && d.ExpireDate.Value <= today.AddDays(30),
-            cancellationToken);
-        var expiredDocumentCount = await _db.VehicleDocuments.CountAsync(
-            d => d.ExpireDate.HasValue && d.ExpireDate.Value < today,
-            cancellationToken);
-        var priorityDocuments = await _db.VehicleDocuments
-            .Where(d => d.ExpireDate.HasValue
-                        && d.ExpireDate.Value >= today
-                        && d.ExpireDate.Value <= today.AddDays(30))
-            .OrderBy(d => d.ExpireDate)
-            .Take(10)
+            .ToList();
+
+        var iotDeviceQuery = _db.IotDevices
+            .Include(d => d.Vehicle)
             .AsNoTracking()
-            .ToListAsync(cancellationToken);
+            .AsQueryable();
+        if (warehouseId.HasValue)
+            iotDeviceQuery = iotDeviceQuery.Where(d => d.Vehicle != null && d.Vehicle.CurrentLocation == warehouseLocation);
+        var iotDevices = await iotDeviceQuery.ToListAsync(cancellationToken);
+        var onlineIotDevices = iotDevices.Count(d => d.IsOnline || d.Status == "ONLINE");
+        var offlineIotDevices = iotDevices.Count(d => !d.IsOnline && d.Status != "ONLINE");
+        var unassignedIotDevices = iotDevices.Count(d => !d.VehicleId.HasValue);
+
+        var vehicleDocumentQuery = _db.VehicleDocuments
+            .Include(d => d.Vehicle)
+            .AsNoTracking()
+            .AsQueryable();
+        if (warehouseId.HasValue)
+            vehicleDocumentQuery = vehicleDocumentQuery.Where(d => d.Vehicle != null && d.Vehicle.CurrentLocation == warehouseLocation);
+        var vehicleDocuments = await vehicleDocumentQuery.ToListAsync(cancellationToken);
+        var expiringVehicleDocuments = vehicleDocuments.Count(d =>
+            d.ExpireDate.HasValue
+            && d.ExpireDate.Value >= today
+            && d.ExpireDate.Value <= today.AddDays(DocumentExpiryWarningDays));
+        var expiredVehicleDocuments = vehicleDocuments.Count(d =>
+            d.ExpireDate.HasValue && d.ExpireDate.Value < today);
+        var driverLicenseDocuments = drivers
+            .SelectMany(d => d.DriverLicenses.Select(l => new { Driver = d, License = l }))
+            .ToList();
+        var expiringDriverDocuments = driverLicenseDocuments.Count(x =>
+            x.License.ExpiryDate >= today
+            && x.License.ExpiryDate <= today.AddDays(DocumentExpiryWarningDays));
+        var expiredDriverDocuments = driverLicenseDocuments.Count(x => x.License.ExpiryDate < today);
+
         var usersQuery = _db.Users.AsNoTracking().AsQueryable();
         if (warehouseId.HasValue)
             usersQuery = usersQuery.Where(u => u.WarehouseId == warehouseId.Value);
@@ -406,6 +686,11 @@ public class DashboardService : IDashboardService
         var inactiveUsers = await usersQuery.CountAsync(
             u => u.DeletedAt != null || u.Status == "INACTIVE",
             cancellationToken);
+        var lockedUsers = await usersQuery
+            .Where(u => u.Status == "LOCKED")
+            .OrderByDescending(u => u.UpdatedAt ?? u.CreatedAt)
+            .Take(10)
+            .ToListAsync(cancellationToken);
 
         HashSet<Guid>? scopedOrderIds = null;
         if (routeId.HasValue || warehouseId.HasValue)
@@ -436,7 +721,7 @@ public class DashboardService : IDashboardService
 
         var invoiceQuery = _db.Invoices
             .Where(i => i.IssuedDate >= DateOnly.FromDateTime(start)
-                        && i.IssuedDate <= DateOnly.FromDateTime(endExclusive.AddTicks(-1)))
+                        && i.IssuedDate <= endDateInclusive)
             .AsNoTracking()
             .AsQueryable();
         if (scopedOrderIds != null)
@@ -450,6 +735,12 @@ public class DashboardService : IDashboardService
         if (scopedOrderIds != null)
             transactionQuery = transactionQuery.Where(t => t.OrderId.HasValue && scopedOrderIds.Contains(t.OrderId.Value));
         var transactions = await transactionQuery.ToListAsync(cancellationToken);
+
+        var tripWarehouseLpns = await _db.Lpns
+            .Include(l => l.Warehouse)
+            .Where(l => l.TripId.HasValue && tripIds.Contains(l.TripId.Value))
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
 
         var tripPerformance = trips
             .GroupBy(t => t.PlannedStartTime.Date)
@@ -465,7 +756,7 @@ public class DashboardService : IDashboardService
         var tempTripIds = tempAlerts.Where(a => a.TripId.HasValue).Select(a => a.TripId!.Value).ToHashSet();
         var routeCompliance = trips
             .Where(t => t.RouteId.HasValue)
-            .GroupBy(t => new { RouteId = t.RouteId!.Value, Name = t.Route == null ? null : t.Route.OriginCity + " - " + t.Route.DestCity })
+            .GroupBy(t => new { RouteId = t.RouteId!.Value, Name = RouteName(t.Route) })
             .Select(g => new RouteTemperatureCompliance
             {
                 RouteId = g.Key.RouteId,
@@ -473,9 +764,153 @@ public class DashboardService : IDashboardService
                 ComplianceRate = Percentage(g.Count(t => !tempTripIds.Contains(t.TripId)), g.Count())
             }).OrderBy(x => x.RouteName).ToList();
 
+        var incidentDistribution = incidents
+            .GroupBy(i => i.IncidentType ?? "UNKNOWN")
+            .OrderBy(g => g.Key)
+            .Select(g => new IncidentDistributionItem { Type = g.Key, Count = g.Count() })
+            .ToList();
+
+        var tripsByWarehouse = tripWarehouseLpns
+            .GroupBy(l => new { l.WarehouseId, Name = l.Warehouse?.WarehouseName })
+            .OrderBy(g => g.Key.Name ?? "UNKNOWN")
+            .Select(g => new TripsByWarehouseItem
+            {
+                WarehouseId = g.Key.WarehouseId,
+                WarehouseName = g.Key.Name ?? "UNKNOWN",
+                TripCount = g.Where(l => l.TripId.HasValue).Select(l => l.TripId!.Value).Distinct().Count(),
+                OrderCount = g.Select(l => l.OrderId).Distinct().Count()
+            })
+            .ToList();
+
+        var periodHours = Math.Max(1m, (decimal)(endExclusive - start).TotalHours);
+        var fleetUtilization = trips
+            .Where(t => t.VehicleId.HasValue)
+            .GroupBy(t => new { VehicleId = t.VehicleId!.Value, Plate = t.Vehicle?.TruckPlate })
+            .OrderByDescending(g => g.Count())
+            .Take(10)
+            .Select(g => new FleetUtilizationItem
+            {
+                VehicleId = g.Key.VehicleId,
+                VehiclePlate = g.Key.Plate ?? g.Key.VehicleId.ToString(),
+                TripCount = g.Count(),
+                UtilizationRate = Percentage(g.Sum(t => TripOverlapHours(t, start, endExclusive)), periodHours)
+            })
+            .ToList();
+
         var completedIn = transactions.Where(t => t.TransactionType == "IN").Sum(t => t.Amount);
         var completedOut = transactions.Where(t => t.TransactionType == "OUT").Sum(t => t.Amount);
         var unpaidAmount = invoices.Sum(i => Math.Max(0m, i.GrandTotal - (i.PaidAmount ?? 0m)));
+
+        var maintenanceDueVehicles = vehicles
+            .Where(v => IsVehicleMaintenanceDue(v, today))
+            .OrderBy(v => v.NextMaintenanceDate ?? DateOnly.MaxValue)
+            .ToList();
+        var priorityWorkItems = vehicleDocuments
+            .Where(d => d.ExpireDate.HasValue
+                        && d.ExpireDate.Value >= today
+                        && d.ExpireDate.Value <= today.AddDays(DocumentExpiryWarningDays))
+            .Select(d => new DashboardWorkItem
+            {
+                Type = "DOCUMENT_EXPIRING",
+                ReferenceId = d.VehicleId ?? d.DocId,
+                ReferenceCode = d.DocumentNumber,
+                Message = $"{d.DocumentType} hết hạn sau {d.ExpireDate!.Value.DayNumber - today.DayNumber} ngày",
+                SlaDeadline = ToDateTime(d.ExpireDate),
+                IsOverdue = false
+            })
+            .Concat(vehicleDocuments
+                .Where(d => d.ExpireDate.HasValue && d.ExpireDate.Value < today)
+                .Select(d => new DashboardWorkItem
+                {
+                    Type = "VEHICLE_DOCUMENT_EXPIRED",
+                    ReferenceId = d.VehicleId ?? d.DocId,
+                    ReferenceCode = d.DocumentNumber,
+                    Message = $"{d.DocumentType} đã hết hạn",
+                    SlaDeadline = ToDateTime(d.ExpireDate),
+                    IsOverdue = true
+                }))
+            .Concat(driverLicenseDocuments
+                .Where(x => x.License.ExpiryDate >= today && x.License.ExpiryDate <= today.AddDays(DocumentExpiryWarningDays))
+                .Select(x => new DashboardWorkItem
+                {
+                    Type = "DRIVER_LICENSE_EXPIRING",
+                    ReferenceId = x.Driver.DriverId,
+                    ReferenceCode = x.License.LicenseNumber,
+                    Message = $"Bằng lái của {x.Driver.FullName} hết hạn sau {x.License.ExpiryDate.DayNumber - today.DayNumber} ngày",
+                    SlaDeadline = ToDateTime(x.License.ExpiryDate),
+                    IsOverdue = false
+                }))
+            .Concat(driverLicenseDocuments
+                .Where(x => x.License.ExpiryDate < today)
+                .Select(x => new DashboardWorkItem
+                {
+                    Type = "DRIVER_LICENSE_EXPIRED",
+                    ReferenceId = x.Driver.DriverId,
+                    ReferenceCode = x.License.LicenseNumber,
+                    Message = $"Bằng lái của {x.Driver.FullName} đã hết hạn",
+                    SlaDeadline = ToDateTime(x.License.ExpiryDate),
+                    IsOverdue = true
+                }))
+            .Concat(maintenanceDueVehicles.Select(v => new DashboardWorkItem
+            {
+                Type = "VEHICLE_MAINTENANCE_DUE",
+                ReferenceId = v.VehicleId,
+                ReferenceCode = v.TruckPlate,
+                Message = "Xe đến hạn hoặc gần đến hạn bảo dưỡng",
+                SlaDeadline = ToDateTime(v.NextMaintenanceDate),
+                IsOverdue = v.NextMaintenanceDate.HasValue && v.NextMaintenanceDate.Value < today
+            }))
+            .Concat(iotDevices.Where(d => !d.IsOnline && d.Status != "ONLINE").Select(d => new DashboardWorkItem
+            {
+                Type = "IOT_OFFLINE",
+                ReferenceId = d.DeviceId,
+                ReferenceCode = d.DeviceCode,
+                Message = "Thiết bị mất kết nối",
+                IsOverdue = true,
+                SlaDeadline = d.LastPingTime
+            }))
+            .Concat(iotDevices.Where(d => !d.VehicleId.HasValue).Select(d => new DashboardWorkItem
+            {
+                Type = "IOT_UNASSIGNED",
+                ReferenceId = d.DeviceId,
+                ReferenceCode = d.DeviceCode,
+                Message = "Thiết bị IoT chưa được gán xe",
+                IsOverdue = true,
+                SlaDeadline = d.CreatedAt
+            }))
+            .Concat(openIncidents.Where(i => i.Severity == "CRITICAL").Select(i => new DashboardWorkItem
+            {
+                Type = "CRITICAL_INCIDENT",
+                ReferenceId = i.IncidentId,
+                ReferenceCode = i.IncidentType,
+                TripId = i.TripId,
+                Message = i.Description,
+                IsOverdue = true,
+                SlaDeadline = i.ReportedAt
+            }))
+            .Concat(overdueClaims.Select(c => new DashboardWorkItem
+            {
+                Type = "OVERDUE_CLAIM",
+                ReferenceId = c.ClaimId,
+                ReferenceCode = c.ClaimCode,
+                TripId = c.Lpn?.TripId,
+                Message = c.Description,
+                IsOverdue = true,
+                SlaDeadline = c.CreatedAt?.AddDays(ClaimSlaDays)
+            }))
+            .Concat(lockedUsers.Select(u => new DashboardWorkItem
+            {
+                Type = "LOCKED_USER",
+                ReferenceId = u.UserId,
+                ReferenceCode = u.Username,
+                Message = $"Tài khoản {u.FullName} đang bị khóa",
+                IsOverdue = true,
+                SlaDeadline = u.UpdatedAt ?? u.CreatedAt
+            }))
+            .OrderByDescending(x => x.IsOverdue)
+            .ThenBy(x => x.SlaDeadline ?? DateTime.MaxValue)
+            .Take(10)
+            .ToList();
 
         return ApiResponse<AdminOverviewResponse>.SuccessResponse(new AdminOverviewResponse
         {
@@ -492,10 +927,16 @@ public class DashboardService : IDashboardService
                 DriversRelaxing = CountStatuses(driverStatusDistribution, "RELAX", "RELAXING"),
                 OnlineIotDevices = onlineIotDevices,
                 OfflineIotDevices = offlineIotDevices,
-                ExpiringDocuments = expiringDocumentCount,
-                ExpiredDocuments = expiredDocumentCount,
-                OpenIncidents = incidents.Count(i => i.Status != "RESOLVED"),
-                OpenClaims = claims.Count(c => c.Status is not ("RESOLVED" or "RESOLVED_PAID" or "PAID_CLOSED" or "REJECTED")),
+                UnassignedIotDevices = unassignedIotDevices,
+                ExpiringDocuments = expiringVehicleDocuments + expiringDriverDocuments,
+                ExpiredDocuments = expiredVehicleDocuments + expiredDriverDocuments,
+                ExpiringVehicleDocuments = expiringVehicleDocuments,
+                ExpiredVehicleDocuments = expiredVehicleDocuments,
+                ExpiringDriverDocuments = expiringDriverDocuments,
+                ExpiredDriverDocuments = expiredDriverDocuments,
+                OpenIncidents = openIncidents.Count,
+                OpenClaims = openClaims.Count,
+                OverdueClaims = overdueClaims.Count,
                 ActiveUsers = activeUsers,
                 InactiveUsers = inactiveUsers
             },
@@ -507,6 +948,9 @@ public class DashboardService : IDashboardService
             },
             TripPerformanceByPeriod = tripPerformance,
             TemperatureComplianceByRoute = routeCompliance,
+            IncidentDistribution = incidentDistribution,
+            TripsByWarehouse = tripsByWarehouse,
+            FleetUtilization = fleetUtilization,
             FinancialSnapshot = new FinancialSnapshotResponse
             {
                 RecognizedRevenue = invoices.Sum(i => i.GrandTotal),
@@ -514,14 +958,7 @@ public class DashboardService : IDashboardService
                 ClaimPayout = transactions.Where(t => t.TransactionType == "OUT" && t.ClaimId.HasValue).Sum(t => t.Amount),
                 UnpaidInvoiceAmount = unpaidAmount
             },
-            PriorityWorkItems = priorityDocuments
-                .Select(d => new DashboardWorkItem
-                {
-                    Type = "DOCUMENT_EXPIRING",
-                    ReferenceId = d.VehicleId ?? d.DocId,
-                    ReferenceCode = d.DocumentNumber,
-                    Message = $"{d.DocumentType} hết hạn sau {d.ExpireDate!.Value.DayNumber - today.DayNumber} ngày"
-                }).ToList()
+            PriorityWorkItems = priorityWorkItems
         }, "Admin dashboard overview retrieved successfully");
     }
 
@@ -538,19 +975,65 @@ public class DashboardService : IDashboardService
         var (start, endExclusive) = ResolveRange(fromDate, toDate);
         if (start >= endExclusive)
             return ApiResponse<AccountantOverviewResponse>.Failure("fromDate must not be later than toDate.");
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var startDate = DateOnly.FromDateTime(start);
         var endDateInclusive = DateOnly.FromDateTime(endExclusive.AddTicks(-1));
+        var receivablesAsOfDate = endDateInclusive;
 
         var invoices = await _db.Invoices
+            .Include(i => i.Customer)
+            .Include(i => i.InvoiceLines)
+                .ThenInclude(line => line.Order)
+                    .ThenInclude(order => order.MasterTrip)
+                        .ThenInclude(trip => trip!.Route)
             .Where(i => i.IssuedDate >= startDate && i.IssuedDate <= endDateInclusive)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
-        var transactions = await _db.PaymentTransactions
-            .Include(t => t.Claim)
-            .Where(t => t.CreatedAt >= start && t.CreatedAt < endExclusive)
+
+        var agingInvoices = await _db.Invoices
+            .Where(i => i.IssuedDate <= receivablesAsOfDate
+                        && (i.Status == null || i.Status != "CANCELLED")
+                        && i.GrandTotal > (i.PaidAmount ?? 0m))
             .AsNoTracking()
             .ToListAsync(cancellationToken);
+
+        var transactions = await _db.PaymentTransactions
+            .Include(t => t.Claim)
+            .Where(t => (t.CompletedAt ?? t.CreatedAt) >= start
+                        && (t.CompletedAt ?? t.CreatedAt) < endExclusive)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+        var codOrderIds = (await _db.LpnDeliveryConfirmations
+                .Where(c => c.CodAmount > 0)
+                .Select(c => c.OrderId)
+                .Distinct()
+                .ToListAsync(cancellationToken))
+            .Concat(await _db.DeliveryEpods
+                .Where(e => e.OrderId.HasValue
+                            && ((e.CodAmount ?? 0m) > 0m || (e.CodAmountPaid ?? 0m) > 0m))
+                .Select(e => e.OrderId!.Value)
+                .Distinct()
+                .ToListAsync(cancellationToken))
+            .ToHashSet();
+        var codInvoiceIds = (await _db.InvoiceLines
+            .Where(line => codOrderIds.Contains(line.OrderId))
+            .Select(line => line.InvoiceId)
+            .Distinct()
+            .ToListAsync(cancellationToken)).ToHashSet();
+        var persistedPaymentOrderIds = (await _db.PaymentTransactions
+            .Where(t => t.OrderId.HasValue)
+            .Select(t => t.OrderId!.Value)
+            .Distinct()
+            .ToListAsync(cancellationToken)).ToHashSet();
+        var paidEpodFallbacks = await _db.DeliveryEpods
+            .Where(e => (e.PaymentStatus == "PAID" || e.CodAmountPaid > 0)
+                        && e.OrderId.HasValue
+                        && !persistedPaymentOrderIds.Contains(e.OrderId.Value)
+                        && (e.PaymentConfirmedAt ?? e.CheckinTime) >= start
+                        && (e.PaymentConfirmedAt ?? e.CheckinTime) < endExclusive)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
         var incidents = await _db.IncidentReports
             .Where(i => i.ReimbursedAt >= start && i.ReimbursedAt < endExclusive && i.ExpenseStatus == "REIMBURSED")
             .AsNoTracking()
@@ -561,14 +1044,35 @@ public class DashboardService : IDashboardService
             .AsQueryable();
         var pendingAccountantClaimsCount = await pendingClaimsQuery.CountAsync(cancellationToken);
         var pendingClaims = await pendingClaimsQuery
-            .OrderByDescending(c => c.CreatedAt)
+            .OrderBy(c => c.CreatedAt)
             .Take(10)
             .ToListAsync(cancellationToken);
         var pendingVerificationTransactionsCount = await _db.PaymentTransactions
             .CountAsync(t => t.Status == "PENDING_VERIFY", cancellationToken);
         var pendingVerificationTransactions = await _db.PaymentTransactions
             .Where(t => t.Status == "PENDING_VERIFY")
-            .OrderByDescending(t => t.CreatedAt)
+            .OrderBy(t => t.CreatedAt)
+            .Take(10)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+        var pendingCodConfirmations = await _db.LpnDeliveryConfirmations
+            .Include(c => c.Lpn)
+            .Where(c => c.CodAmount > 0 && !c.IsCodVerified)
+            .OrderBy(c => c.ConfirmedAt)
+            .Take(10)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+        var pendingCodEpods = await _db.DeliveryEpods
+            .Where(e => e.OrderId.HasValue
+                        && ((e.CodAmount ?? 0m) > 0m || (e.CodAmountPaid ?? 0m) > 0m)
+                        && !e.PaymentConfirmedAt.HasValue)
+            .OrderBy(e => e.CreatedAt)
+            .Take(10)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+        var approvedDriverExpenses = await _db.IncidentReports
+            .Where(i => i.ExpenseStatus == "APPROVED")
+            .OrderBy(i => i.ExpenseApprovedAt ?? i.ReportedAt)
             .Take(10)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
@@ -576,45 +1080,172 @@ public class DashboardService : IDashboardService
         var completedTransactions = transactions.Where(t => t.Status == "COMPLETED").ToList();
         var cashIn = completedTransactions.Where(t => t.TransactionType == "IN").ToList();
         var cashOut = completedTransactions.Where(t => t.TransactionType == "OUT").ToList();
+        var codCashIn = cashIn
+            .Where(t => (t.OrderId.HasValue && codOrderIds.Contains(t.OrderId.Value))
+                        || (t.InvoiceId.HasValue && codInvoiceIds.Contains(t.InvoiceId.Value))
+                        || IsCodTransaction(t))
+            .ToList();
+        var epodFallbackCashIn = paidEpodFallbacks
+            .Sum(e => e.CodAmountPaid ?? e.CodAmount ?? 0m);
+        var codPaymentRows = codCashIn
+            .Select(t => new
+            {
+                PaymentMethod = t.PaymentMethod,
+                Amount = t.Amount
+            })
+            .Concat(paidEpodFallbacks.Select(e => new
+            {
+                PaymentMethod = e.PaymentMethod ?? "PAYOS_QR",
+                Amount = e.CodAmountPaid ?? e.CodAmount ?? 0m
+            }))
+            .ToList();
         var driverReimbursement = incidents.Sum(i => i.ReimbursedAmount ?? i.ApprovedAmount ?? i.DriverPaidAmount);
         var claimPayout = cashOut.Where(t => t.ClaimId.HasValue).Sum(t => t.Amount);
-        var receivables = invoices.Sum(OutstandingAmount);
+        var receivables = agingInvoices.Sum(OutstandingAmount);
 
-        var cashFlow = completedTransactions
-            .GroupBy(t => normalizedGroupBy == "MONTH" ? t.CreatedAt.ToString("yyyy-MM") : t.CreatedAt.ToString("yyyy-MM-dd"))
+        var cashFlowMovements = completedTransactions
+            .Select(t => new
+            {
+                OccurredAt = TransactionOccurredAt(t),
+                CashIn = t.TransactionType == "IN" ? t.Amount : 0m,
+                CashOut = t.TransactionType == "OUT" ? t.Amount : 0m
+            })
+            .Concat(paidEpodFallbacks.Select(e => new
+            {
+                OccurredAt = e.PaymentConfirmedAt ?? e.CheckinTime,
+                CashIn = e.CodAmountPaid ?? e.CodAmount ?? 0m,
+                CashOut = 0m
+            }))
+            .ToList();
+        var cashFlow = cashFlowMovements
+            .GroupBy(t => normalizedGroupBy == "MONTH" ? t.OccurredAt.ToString("yyyy-MM") : t.OccurredAt.ToString("yyyy-MM-dd"))
             .OrderBy(g => g.Key)
             .Select(g => new CashFlowPeriod
             {
                 Period = g.Key,
-                CashIn = g.Where(t => t.TransactionType == "IN").Sum(t => t.Amount),
-                CashOut = g.Where(t => t.TransactionType == "OUT").Sum(t => t.Amount)
+                CashIn = g.Sum(t => t.CashIn),
+                CashOut = g.Sum(t => t.CashOut)
             }).ToList();
 
         var agingDefinitions = new[]
         {
-            (Bucket: "NOT_DUE", Label: "Chưa đến hạn", Predicate: (Func<Invoice, bool>)(i => i.DueDate >= today)),
-            (Bucket: "OVERDUE_1_30", Label: "Quá hạn 1–30 ngày", Predicate: (Func<Invoice, bool>)(i => i.DueDate < today && today.DayNumber - i.DueDate.DayNumber <= 30)),
-            (Bucket: "OVERDUE_OVER_30", Label: "Quá hạn trên 30 ngày", Predicate: (Func<Invoice, bool>)(i => i.DueDate < today && today.DayNumber - i.DueDate.DayNumber > 30))
+            (Bucket: "NOT_DUE", Label: "Chưa đến hạn", Predicate: (Func<Invoice, bool>)(i => i.DueDate >= receivablesAsOfDate)),
+            (Bucket: "OVERDUE_1_30", Label: "Quá hạn 1–30 ngày", Predicate: (Func<Invoice, bool>)(i => i.DueDate < receivablesAsOfDate && receivablesAsOfDate.DayNumber - i.DueDate.DayNumber <= 30)),
+            (Bucket: "OVERDUE_OVER_30", Label: "Quá hạn trên 30 ngày", Predicate: (Func<Invoice, bool>)(i => i.DueDate < receivablesAsOfDate && receivablesAsOfDate.DayNumber - i.DueDate.DayNumber > 30))
         };
-        var unpaidInvoices = invoices.Where(i => OutstandingAmount(i) > 0).ToList();
+        var unpaidInvoices = agingInvoices.Where(i => OutstandingAmount(i) > 0).ToList();
+        var overdueInvoices = unpaidInvoices.Where(i => i.DueDate < receivablesAsOfDate).ToList();
+        var notDueInvoices = unpaidInvoices.Where(i => i.DueDate >= receivablesAsOfDate).ToList();
 
-        var priorityItems = pendingClaims.Select(c => new AccountantPriorityWorkItem
+        var topCustomersByRevenue = invoices
+            .GroupBy(i => new { i.CustomerId, Name = i.Customer.CompanyName })
+            .OrderByDescending(g => g.Sum(i => i.GrandTotal))
+            .Take(5)
+            .Select(g => new TopCustomerRevenueItem
             {
-                Type = "PENDING_ACCOUNTANT_REVIEW",
+                CustomerId = g.Key.CustomerId,
+                CustomerName = g.Key.Name,
+                Amount = g.Sum(i => i.GrandTotal)
+            })
+            .ToList();
+
+        var topRoutesByRevenue = invoices
+            .SelectMany(i => i.InvoiceLines
+                .Where(line => line.Order?.MasterTrip?.RouteId != null)
+                .Select(line => new
+                {
+                    RouteId = line.Order!.MasterTrip!.RouteId!.Value,
+                    Route = line.Order.MasterTrip.Route,
+                    Amount = line.Amount
+                }))
+            .GroupBy(x => new { x.RouteId, Name = RouteName(x.Route) })
+            .OrderByDescending(g => g.Sum(x => x.Amount))
+            .Take(5)
+            .Select(g => new TopRouteRevenueItem
+            {
+                RouteId = g.Key.RouteId,
+                RouteName = g.Key.Name ?? g.Key.RouteId.ToString(),
+                Amount = g.Sum(x => x.Amount)
+            })
+            .ToList();
+
+        var priorityItems = pendingVerificationTransactions
+            .Select(t => new AccountantPriorityWorkItem
+            {
+                Type = "PENDING_TRANSACTION_VERIFICATION",
+                ReferenceId = t.TransactionId,
+                ReferenceCode = t.TransactionCode,
+                Amount = t.Amount,
+                CreatedAt = t.CreatedAt,
+                IsOverdue = IsOverdue(DbNow(), t.CreatedAt, 24m)
+            })
+            .Concat(notDueInvoices
+                .OrderBy(i => i.DueDate)
+                .Take(10)
+                .Select(i => new AccountantPriorityWorkItem
+                {
+                    Type = "UNPAID_INVOICE",
+                    ReferenceId = i.InvoiceId,
+                    ReferenceCode = i.InvoiceCode,
+                    Amount = OutstandingAmount(i),
+                    CreatedAt = i.CreatedAt,
+                    DueDate = i.DueDate,
+                    IsOverdue = false
+                }))
+            .Concat(overdueInvoices
+                .OrderBy(i => i.DueDate)
+                .Take(10)
+                .Select(i => new AccountantPriorityWorkItem
+                {
+                    Type = "OVERDUE_INVOICE",
+                    ReferenceId = i.InvoiceId,
+                    ReferenceCode = i.InvoiceCode,
+                    Amount = OutstandingAmount(i),
+                    CreatedAt = i.CreatedAt,
+                    DueDate = i.DueDate,
+                    IsOverdue = true
+                }))
+            .Concat(pendingCodConfirmations.Select(c => new AccountantPriorityWorkItem
+            {
+                Type = "COD_PENDING_HANDOVER",
+                ReferenceId = c.ConfirmationId,
+                ReferenceCode = c.Lpn.LpnCode,
+                Amount = c.CodAmount,
+                CreatedAt = c.ConfirmedAt,
+                DueDate = DateOnly.FromDateTime(c.ConfirmedAt.AddDays(1)),
+                IsOverdue = c.ConfirmedAt.AddDays(1) < DbNow()
+            }))
+            .Concat(pendingCodEpods.Select(e => new AccountantPriorityWorkItem
+            {
+                Type = "COD_PENDING_HANDOVER",
+                ReferenceId = e.EpodId,
+                ReferenceCode = e.OrderId?.ToString() ?? e.EpodId.ToString(),
+                Amount = e.CodAmountPaid ?? e.CodAmount,
+                CreatedAt = e.CreatedAt,
+                DueDate = e.CreatedAt.HasValue ? DateOnly.FromDateTime(e.CreatedAt.Value.AddDays(1)) : null,
+                IsOverdue = e.CreatedAt.HasValue && e.CreatedAt.Value.AddDays(1) < DbNow()
+            }))
+            .Concat(pendingClaims.Select(c => new AccountantPriorityWorkItem
+            {
+                Type = c.Status == "PENDING_PAYOUT" ? "CLAIM_PAYOUT_NEAR_SLA" : "PENDING_ACCOUNTANT_REVIEW",
                 ReferenceId = c.ClaimId,
                 ReferenceCode = c.ClaimCode,
-                CreatedAt = c.CreatedAt
-            })
-            .Concat(pendingVerificationTransactions
-                .Select(t => new AccountantPriorityWorkItem
-                {
-                    Type = "PENDING_TRANSACTION_VERIFICATION",
-                    ReferenceId = t.TransactionId,
-                    ReferenceCode = t.TransactionCode,
-                    Amount = t.Amount,
-                    CreatedAt = t.CreatedAt
-                }))
-            .OrderByDescending(x => x.CreatedAt)
+                CreatedAt = c.CreatedAt,
+                DueDate = c.CreatedAt.HasValue ? DateOnly.FromDateTime(c.CreatedAt.Value.AddDays(ClaimSlaDays)) : null,
+                IsOverdue = IsClaimOverdue(c, receivablesAsOfDate)
+            }))
+            .Concat(approvedDriverExpenses.Select(i => new AccountantPriorityWorkItem
+            {
+                Type = "APPROVED_DRIVER_EXPENSE",
+                ReferenceId = i.IncidentId,
+                ReferenceCode = i.IncidentType,
+                Amount = i.ApprovedAmount ?? i.DriverPaidAmount,
+                CreatedAt = i.ExpenseApprovedAt ?? i.ReportedAt,
+                IsOverdue = IsOverdue(DbNow(), i.ExpenseApprovedAt ?? i.ReportedAt, 24m)
+            }))
+            .OrderByDescending(x => x.IsOverdue)
+            .ThenBy(x => x.DueDate ?? DateOnly.MaxValue)
+            .ThenBy(x => x.CreatedAt ?? DateTime.MaxValue)
             .Take(10)
             .ToList();
 
@@ -623,16 +1254,17 @@ public class DashboardService : IDashboardService
             Kpis = new AccountantKpis
             {
                 RecognizedRevenue = invoices.Sum(i => i.GrandTotal),
-                CashCollected = cashIn.Sum(t => t.Amount),
-                CodCollected = cashIn.Sum(t => t.Amount),
+                CashCollected = cashIn.Sum(t => t.Amount) + epodFallbackCashIn,
+                CodCollected = codPaymentRows.Sum(t => t.Amount),
                 Receivables = receivables,
                 VatAmount = invoices.Sum(i => i.TaxAmount),
                 ClaimPayout = claimPayout,
                 DriverReimbursement = driverReimbursement,
-                NetCashFlow = cashIn.Sum(t => t.Amount) - cashOut.Sum(t => t.Amount),
+                NetCashFlow = cashIn.Sum(t => t.Amount) + epodFallbackCashIn - cashOut.Sum(t => t.Amount),
                 PendingAccountantClaims = pendingAccountantClaimsCount,
                 PendingVerificationTransactions = pendingVerificationTransactionsCount
             },
+            ReceivablesAsOfDate = receivablesAsOfDate,
             CashFlowSeries = cashFlow,
             InvoiceStatusDistribution = invoices
                 .GroupBy(i => i.Status ?? "UNKNOWN")
@@ -654,7 +1286,7 @@ public class DashboardService : IDashboardService
                     Amount = matches.Sum(OutstandingAmount)
                 };
             }).ToList(),
-            CodByPaymentMethod = cashIn.GroupBy(t => t.PaymentMethod)
+            CodByPaymentMethod = codPaymentRows.GroupBy(t => t.PaymentMethod)
                 .OrderBy(g => g.Key)
                 .Select(g => new PaymentMethodSummary
                 {
@@ -671,9 +1303,162 @@ public class DashboardService : IDashboardService
                     Count = g.Count(),
                     Amount = g.Sum(t => t.Amount)
                 }).ToList(),
+            TopCustomersByRevenue = topCustomersByRevenue,
+            TopRoutesByRevenue = topRoutesByRevenue,
             PriorityWorkItems = priorityItems
         }, "Accountant dashboard overview retrieved successfully");
     }
+
+    private static SalesPriorityWorkItem BuildSalesPriorityWorkItem(
+        string type,
+        Guid referenceId,
+        Guid? orderId,
+        string? trackingCode,
+        string? customerName,
+        DateTime? waitingSince,
+        decimal overdueAfterHours,
+        DateTime now)
+    {
+        var waitingHours = WaitingHours(now, waitingSince);
+        return new SalesPriorityWorkItem
+        {
+            Type = type,
+            ReferenceId = referenceId,
+            OrderId = orderId,
+            TrackingCode = trackingCode,
+            CustomerName = customerName,
+            WaitingHours = waitingHours,
+            IsOverdue = waitingHours >= overdueAfterHours
+        };
+    }
+
+    private static bool IsSalesOrderApprovedOrBeyond(string? status)
+        => status is "APPROVED"
+            or "QUOTATION_SENT"
+            or "QUOTATION_ACCEPTED"
+            or "CONTRACT_PENDING"
+            or "CONTRACT_SENT"
+            or "SIGNED_FILE_UPLOADED"
+            or "CONTRACT_ACTIVE";
+
+    private static decimal WaitingHours(DateTime now, DateTime? waitingSince)
+        => waitingSince.HasValue
+            ? Math.Round(Math.Max(0m, (decimal)(now - waitingSince.Value).TotalHours), 2)
+            : 0m;
+
+    private static bool IsOverdue(DateTime now, DateTime? waitingSince, decimal overdueAfterHours)
+        => waitingSince.HasValue && WaitingHours(now, waitingSince) >= overdueAfterHours;
+
+    private static bool IsVehicleAvailableForDispatch(
+        Vehicle vehicle,
+        string? warehouseLocation,
+        DateTime start,
+        DateTime endExclusive)
+    {
+        if (vehicle.Status != "ACTIVE")
+            return false;
+
+        if (!string.IsNullOrWhiteSpace(warehouseLocation)
+            && !string.Equals(vehicle.CurrentLocation, warehouseLocation, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (IsVehicleUnderMaintenance(vehicle))
+            return false;
+
+        return !vehicle.MasterTrips.Any(t => IsBusyTripInRange(t, start, endExclusive));
+    }
+
+    private static bool IsDriverAvailableForDispatch(
+        Driver driver,
+        string? warehouseLocation,
+        DateTime start,
+        DateTime endExclusive)
+    {
+        if (driver.Status is not ("ACTIVE" or "AVAILABLE"))
+            return false;
+
+        if (!string.IsNullOrWhiteSpace(warehouseLocation)
+            && !string.Equals(driver.CurrentLocation, warehouseLocation, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (!HasValidDriverLicense(driver))
+            return false;
+
+        return !driver.TripDrivers.Any(td => td.Trip != null && IsBusyTripInRange(td.Trip, start, endExclusive));
+    }
+
+    private static bool IsBusyTripInRange(MasterTrip trip, DateTime start, DateTime endExclusive)
+        => trip.Status != null
+           && BusyTripStatuses.Contains(trip.Status)
+           && trip.PlannedStartTime < endExclusive
+           && trip.PlannedEndTime >= start;
+
+    private static bool HasValidDriverLicense(Driver driver)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        return driver.DriverLicenses.Any(l =>
+            l.ExpiryDate >= today
+            && (string.IsNullOrWhiteSpace(l.Status) || l.Status == "ACTIVE"));
+    }
+
+    private static bool IsVehicleUnderMaintenance(Vehicle vehicle)
+        => vehicle.Status is "MAINTENANCE" or "UNDER_MAINTENANCE"
+           || vehicle.MaintenanceTickets.Any(t =>
+               !t.CompletionDate.HasValue
+               && t.Status is null or "OPEN" or "PENDING" or "IN_PROGRESS");
+
+    private static bool IsClaimOverdue(Claim claim, DateOnly asOfDate)
+        => claim.CreatedAt.HasValue
+           && DateOnly.FromDateTime(claim.CreatedAt.Value.AddDays(ClaimSlaDays)) < asOfDate;
+
+    private static string MapAlertSeverity(AlertLog alert)
+    {
+        if (alert.AlertType.Contains("TEMP", StringComparison.OrdinalIgnoreCase)
+            || alert.AlertType.Contains("DOOR", StringComparison.OrdinalIgnoreCase)
+            || alert.AlertType.Contains("SOS", StringComparison.OrdinalIgnoreCase))
+            return "CRITICAL";
+
+        return alert.Status == "OPEN" ? "WARNING" : "INFO";
+    }
+
+    private static string? RouteName(RouteMaster? route)
+        => route == null ? null : $"{route.OriginCity} - {route.DestCity}";
+
+    private static decimal TripOverlapHours(MasterTrip trip, DateTime start, DateTime endExclusive)
+    {
+        var tripStart = trip.StartedAt ?? trip.PlannedStartTime;
+        var tripEnd = trip.CompletedAt ?? trip.PlannedEndTime;
+        var overlapStart = tripStart > start ? tripStart : start;
+        var overlapEnd = tripEnd < endExclusive ? tripEnd : endExclusive;
+        return overlapEnd <= overlapStart ? 0m : (decimal)(overlapEnd - overlapStart).TotalHours;
+    }
+
+    private static DateTime? ToDateTime(DateOnly? value)
+        => value?.ToDateTime(TimeOnly.MinValue);
+
+    private static DateTime ToDateTime(DateOnly value)
+        => value.ToDateTime(TimeOnly.MinValue);
+
+    private static bool IsVehicleMaintenanceDue(Vehicle vehicle, DateOnly today)
+    {
+        var dateDue = vehicle.NextMaintenanceDate.HasValue
+                      && vehicle.NextMaintenanceDate.Value <= today.AddDays(vehicle.WarningDaysBeforeDue);
+        var odometerDue = vehicle.NextMaintenanceOdometer > 0
+                          && vehicle.CurrentOdometer >= vehicle.NextMaintenanceOdometer - vehicle.WarningKmBeforeDue;
+        return dateDue || odometerDue;
+    }
+
+    private static bool IsCodTransaction(PaymentTransaction transaction)
+        => ContainsCod(transaction.TransactionCode)
+           || ContainsCod(transaction.ReferenceCode)
+           || ContainsCod(transaction.Note);
+
+    private static DateTime TransactionOccurredAt(PaymentTransaction transaction)
+        => transaction.CompletedAt ?? transaction.CreatedAt;
+
+    private static bool ContainsCod(string? value)
+        => !string.IsNullOrWhiteSpace(value)
+           && value.Contains("COD", StringComparison.OrdinalIgnoreCase);
 
     private static (DateTime Start, DateTime EndExclusive) ResolveRange(DateTime? fromDate, DateTime? toDate)
     {
