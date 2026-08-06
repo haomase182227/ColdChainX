@@ -74,7 +74,7 @@ namespace ColdChainX.Application.DTOs.WarehouseReceipt
         public string DelivererName { get; set; } = null!;
 
         /// <summary>
-        /// Unique identifier of the warehouse operator who received the cargo.
+        /// Unique identifier of the warehouse worker who received the cargo.
         /// </summary>
         public Guid ReceiverId { get; set; }
 

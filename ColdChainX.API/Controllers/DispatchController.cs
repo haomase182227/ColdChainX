@@ -1136,7 +1136,7 @@ public class DispatchController : ControllerBase
                 var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
                 if (!Guid.TryParse(userIdStr, out var currentUserId))
                 {
-                    var adminUser = await _db.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.Role != null && (u.Role.RoleName.ToUpper() == "ADMIN" || u.Role.RoleName.ToUpper() == "WAREHOUSEOPERATOR"));
+                    var adminUser = await _db.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.Role != null && (u.Role.RoleName.ToUpper() == "ADMIN" || u.Role.RoleName.ToUpper() == "WAREHOUSEWORKER"));
                     currentUserId = adminUser?.UserId ?? Guid.Empty;
                 }
 
@@ -1305,7 +1305,7 @@ public class DispatchController : ControllerBase
     /// toàn bộ dữ liệu vận hành liên quan.
     /// </remarks>
     [HttpGet("trips")]
-    [Authorize(Roles = "Admin,ADMIN,WarehouseOperator,WAREHOUSEOPERATOR,Dispatcher,DISPATCHER")]
+    [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,Dispatcher,DISPATCHER")]
     [ProducesResponseType(typeof(ApiResponse<PagedResult<TripDetailsDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAllTrips(
         [FromQuery] int pageNumber = 1,
@@ -1363,7 +1363,7 @@ public class DispatchController : ControllerBase
     /// đã được sắp theo thứ tự xếp hàng LIFO.
     /// </summary>
     [HttpGet("trips/{id:guid}")]
-    [Authorize(Roles = "Admin,ADMIN,WarehouseOperator,WAREHOUSEOPERATOR,Dispatcher,DISPATCHER")]
+    [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,Dispatcher,DISPATCHER")]
     [ProducesResponseType(typeof(ApiResponse<TripDetailsDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<TripDetailsDto>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetTripById(

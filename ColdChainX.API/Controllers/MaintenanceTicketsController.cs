@@ -10,7 +10,7 @@ namespace ColdChainX.API.Controllers;
 
 [ApiController]
 [Route("api/maintenance-tickets")]
-[Authorize(Roles = "Admin,ADMIN,WarehouseOperator,WAREHOUSEOPERATOR,Dispatcher,DISPATCHER")]
+[Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,Dispatcher,DISPATCHER")]
 public class MaintenanceTicketsController : ControllerBase
 {
     private readonly IFleetManagementService _fleetService;

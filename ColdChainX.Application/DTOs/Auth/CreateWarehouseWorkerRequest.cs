@@ -2,7 +2,7 @@ using System;
 
 namespace ColdChainX.Application.DTOs
 {
-    public class CreateWarehouseOperatorRequest
+    public class CreateWarehouseWorkerRequest
     {
         public string Username { get; set; } = null!;
         public string Password { get; set; } = null!;

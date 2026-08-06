@@ -348,7 +348,7 @@ public class DeliveryController : ControllerBase
     /// Handle driver COD handover at the end of trip.
     /// </summary>
     [HttpPost("/api/trips/{tripId:guid}/cod-handovers")]
-    [Authorize(Roles = "Admin,WarehouseOperator,Dispatcher")]
+    [Authorize(Roles = "Admin,WarehouseWorker,Dispatcher")]
     [ProducesResponseType(typeof(ApiResponse<CodHandoverResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
@@ -378,7 +378,7 @@ public class DeliveryController : ControllerBase
     /// Upload an image to Cloudinary.
     /// </summary>
     [HttpPost("/api/deliveries/upload-image")]
-    [Authorize(Roles = "Driver,Admin,WarehouseOperator")]
+    [Authorize(Roles = "Driver,Admin,WarehouseWorker")]
     [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
@@ -457,7 +457,7 @@ public class DeliveryController : ControllerBase
     /// [Sau khi giao xong xe quy đầu] Lấy danh sách 5 kho/Hub gần nhất theo khoảng cách tính từ tọa độ hiện tại của xe (được trích xuất qua dữ liệu IoT Telemetry dưới DB) từ TripId.
     /// </summary>
     [HttpGet("/api/Delivery/nearest-return-warehouses")]
-    [Authorize(Roles = "Driver,Dispatcher,Admin,WarehouseOperator")]
+    [Authorize(Roles = "Driver,Dispatcher,Admin,WarehouseWorker")]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetNearestReturnWarehouses([FromQuery] Guid tripId)

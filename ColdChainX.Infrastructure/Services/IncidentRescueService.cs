@@ -471,7 +471,7 @@ public class IncidentRescueService : IIncidentRescueService
             try
             {
                 // Lệnh sang xe cho đội bốc xếp + điều phối + admin
-                await _hubContext.Clients.Groups("Group_Dispatcher", "Group_WarehouseOperator", "Group_Admin")
+                await _hubContext.Clients.Groups("Group_Dispatcher", "Group_WarehouseWorker", "Group_Admin")
                     .SendAsync("IncidentRescueDispatched", new
                     {
                         IncidentId = incident.IncidentId,
@@ -719,7 +719,7 @@ public class IncidentRescueService : IIncidentRescueService
                     incident.TransloadNote
                 };
 
-                await _hubContext.Clients.Groups("Group_Dispatcher", "Group_Admin", "Group_WarehouseOperator")
+                await _hubContext.Clients.Groups("Group_Dispatcher", "Group_Admin", "Group_WarehouseWorker")
                     .SendAsync("IncidentTransloadCompleted", payload);
                 foreach (var userId in customerUserIds)
                     await _hubContext.Clients.User(userId.ToString()).SendAsync("TripResumed", payload);

@@ -105,7 +105,7 @@ namespace ColdChainX.API.Controllers
         }
 
         /// <summary>
-        /// Change a warehouse operator's assigned warehouse (Admin only).
+        /// Change a warehouse worker's assigned warehouse (Admin only).
         /// </summary>
         [HttpPatch("{id:guid}/warehouse")]
         public async Task<IActionResult> UpdateWarehouse(Guid id, [FromBody] UpdateUserWarehouseRequest request)

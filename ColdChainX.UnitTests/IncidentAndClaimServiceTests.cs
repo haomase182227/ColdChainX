@@ -121,11 +121,11 @@ namespace ColdChainX.UnitTests
             _db.Users.Add(new User
             {
                 UserId = userId,
-                Username = "warehouse_operator",
+                Username = "warehouse_worker",
                 PasswordHash = "hash",
                 RoleId = Guid.NewGuid(),
                 Email = "warehouse@test.com",
-                FullName = "Warehouse Operator"
+                FullName = "Warehouse Worker"
             });
             await _db.SaveChangesAsync();
 

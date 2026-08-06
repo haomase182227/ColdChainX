@@ -32,10 +32,10 @@ namespace ColdChainX.API.Controllers
         /// </summary>
         /// <remarks>
         /// For Customer role: Only returns invoices belonging to the authenticated customer.
-        /// For Admin/WarehouseOperator roles: Returns all invoices across customers, with optional customerId filter.
+        /// For Admin/WarehouseWorker roles: Returns all invoices across customers, with optional customerId filter.
         /// </remarks>
         /// <param name="status">Optional status filter (e.g. UNPAID, PAID).</param>
-        /// <param name="customerId">Optional customer filter (available only to Admin/WarehouseOperator).</param>
+        /// <param name="customerId">Optional customer filter (available only to Admin/WarehouseWorker).</param>
         /// <param name="pageNumber">Page index (1-based).</param>
         /// <param name="pageSize">Size of each page.</param>
         /// <returns>A paginated list of invoices.</returns>
@@ -62,7 +62,7 @@ namespace ColdChainX.API.Controllers
             }
             else
             {
-                // Admin or WarehouseOperator can optionally filter by customerId
+                // Admin or WarehouseWorker can optionally filter by customerId
                 finalCustomerId = customerId;
             }
 
@@ -148,7 +148,7 @@ namespace ColdChainX.API.Controllers
         /// </summary>
         /// <returns>Result of the operation.</returns>
         [HttpPost("generate-periodic")]
-        [Authorize(Roles = "Accountant,Admin,WarehouseOperator")]
+        [Authorize(Roles = "Accountant,Admin,WarehouseWorker")]
         [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GeneratePeriodicInvoices()
         {

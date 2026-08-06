@@ -9,7 +9,7 @@ public interface IDeliveryEventService
 {
     /// <summary>
     /// Gửi thông báo khi có hàng trả lại sau nghiệm thu.
-    /// Notify: Group_Dispatcher, Group_WarehouseOperator, Group_Admin.
+    /// Notify: Group_Dispatcher, Group_WarehouseWorker, Group_Admin.
     /// </summary>
     Task NotifyHandoverPartialReturnAsync(
         Guid orderId,

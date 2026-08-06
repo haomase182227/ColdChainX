@@ -37,7 +37,7 @@ namespace ColdChainX.API.Controllers
         /// </summary>
         [HttpPost]
         [Consumes("multipart/form-data")]
-        [Authorize(Roles = "Admin,ADMIN,WarehouseOperator,WAREHOUSEOPERATOR,Driver,DRIVER")]
+        [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,Driver,DRIVER")]
         [ProducesResponseType(typeof(ApiResponse<IncidentResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
@@ -57,7 +57,7 @@ namespace ColdChainX.API.Controllers
         /// <summary>Add optional incident photos or driver receipts after reporting.</summary>
         [HttpPost("{id:guid}/evidences")]
         [Consumes("multipart/form-data")]
-        [Authorize(Roles = "Admin,ADMIN,WarehouseOperator,WAREHOUSEOPERATOR,Driver,DRIVER")]
+        [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,Driver,DRIVER")]
         [ProducesResponseType(typeof(ApiResponse<IncidentResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> AddEvidence(
             [FromRoute] Guid id,
@@ -82,7 +82,7 @@ namespace ColdChainX.API.Controllers
         /// Resolve a reported incident (mark as RESOLVED).
         /// </summary>
         [HttpPost("{id:guid}/resolve")]
-        [Authorize(Roles = "Admin,ADMIN,WarehouseOperator,WAREHOUSEOPERATOR")]
+        [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER")]
         [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
@@ -133,7 +133,7 @@ namespace ColdChainX.API.Controllers
         /// Dùng để Điều phối viên chọn ReplacementVehicleId cho POST /dispatch-rescue.
         /// </remarks>
         [HttpGet("{id:guid}/rescue-candidates")]
-        [Authorize(Roles = "Admin,ADMIN,WarehouseOperator,WAREHOUSEOPERATOR,Dispatcher,DISPATCHER")]
+        [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,Dispatcher,DISPATCHER")]
         [ProducesResponseType(typeof(ApiResponse<List<RescueCandidateResponse>>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
@@ -160,7 +160,7 @@ namespace ColdChainX.API.Controllers
         ///   - Incident.Status → RESCUE_DISPATCHED (đóng hẳn bằng POST /{id}/resolve sau khi hoàn tất)
         /// </remarks>
         [HttpPost("{id:guid}/dispatch-rescue")]
-        [Authorize(Roles = "Admin,ADMIN,WarehouseOperator,WAREHOUSEOPERATOR,Dispatcher,DISPATCHER")]
+        [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,Dispatcher,DISPATCHER")]
         [ProducesResponseType(typeof(ApiResponse<IncidentRescueResult>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
@@ -184,7 +184,7 @@ namespace ColdChainX.API.Controllers
         /// published successfully before the trip returns to IN_TRANSIT.
         /// </summary>
         [HttpPost("{id:guid}/confirm-transload")]
-        [Authorize(Roles = "Admin,ADMIN,WarehouseOperator,WAREHOUSEOPERATOR,Dispatcher,DISPATCHER")]
+        [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,Dispatcher,DISPATCHER")]
         [ProducesResponseType(typeof(ApiResponse<IncidentWorkflowResult>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ConfirmTransload(
             [FromRoute] Guid id,

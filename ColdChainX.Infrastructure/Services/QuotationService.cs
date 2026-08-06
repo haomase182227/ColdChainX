@@ -440,7 +440,7 @@ namespace ColdChainX.Infrastructure.Services
                 .Where(u => u.Role != null
                             && (u.Role.RoleName.ToLower() == "sales"
                                 || u.Role.RoleName.ToLower() == "admin"
-                                || u.Role.RoleName.ToLower() == "warehouseoperator"))
+                                || u.Role.RoleName.ToLower() == "warehouseworker"))
                 .Select(u => (Guid?)u.UserId)
                 .FirstOrDefaultAsync();
         }

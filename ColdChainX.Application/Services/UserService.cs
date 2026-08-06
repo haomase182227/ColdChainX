@@ -214,8 +214,8 @@ namespace ColdChainX.Application.Services
             if (user == null)
                 return ApiResponse<bool>.Failure("User not found");
 
-            if (!string.Equals(user.Role?.RoleName, "WarehouseOperator", StringComparison.OrdinalIgnoreCase))
-                return ApiResponse<bool>.Failure("Only WarehouseOperator users can be assigned to a warehouse");
+            if (!string.Equals(user.Role?.RoleName, "WarehouseWorker", StringComparison.OrdinalIgnoreCase))
+                return ApiResponse<bool>.Failure("Only WarehouseWorker users can be assigned to a warehouse");
 
             if (request.WarehouseId == Guid.Empty)
                 return ApiResponse<bool>.Failure("WarehouseId is required");

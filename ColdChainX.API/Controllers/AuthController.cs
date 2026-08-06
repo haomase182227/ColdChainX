@@ -93,14 +93,14 @@ namespace ColdChainX.API.Controllers
         }
 
         /// <summary>
-        /// Tạo tài khoản nhân viên kho với role WarehouseOperator.
+        /// Tạo tài khoản nhân viên kho với role WarehouseWorker.
         /// </summary>
         [AllowAnonymous]
-        [HttpPost("create-warehouse-operator")]
+        [HttpPost("create-warehouse-worker")]
         [Consumes("multipart/form-data")]
-        public async Task<IActionResult> CreateWarehouseOperator([FromForm] CreateWarehouseOperatorRequest request)
+        public async Task<IActionResult> CreateWarehouseWorker([FromForm] CreateWarehouseWorkerRequest request)
         {
-            var result = await _authService.CreateWarehouseOperatorAsync(request);
+            var result = await _authService.CreateWarehouseWorkerAsync(request);
             if (!result.Success) return BadRequest(result);
             return Ok(result);
         }

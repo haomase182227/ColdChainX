@@ -172,7 +172,7 @@ public class InboundController : ControllerBase
     /// Tiếp nhận hàng trả về kho và tự động phân luồng (Inbound Disposition: No-Show -> Redelivery, Reject -> Urgent Claim).
     /// </summary>
     [HttpPost("disposition")]
-    [Authorize(Roles = "Admin,Dispatcher,WarehouseOperator")]
+    [Authorize(Roles = "Admin,Dispatcher,WarehouseWorker")]
     public async Task<IActionResult> ProcessDisposition([FromForm] ColdChainX.Application.Features.Warehouse.Commands.ProcessInboundDispositionCommand command)
     {
         var result = await _mediator.Send(command);
