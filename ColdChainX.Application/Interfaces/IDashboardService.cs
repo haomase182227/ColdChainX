@@ -22,6 +22,8 @@ public interface IDashboardService
         DateTime? toDate,
         Guid? warehouseId,
         Guid? routeId,
+        string? groupBy = "WEEK",
+        int top = 10,
         CancellationToken cancellationToken = default);
 
     Task<ApiResponse<AccountantOverviewResponse>> GetAccountantOverviewAsync(

@@ -220,9 +220,12 @@ public sealed class DashboardRelationalVerificationTests : IDisposable
         var vehicleActive = AddVehicle("51A-100.01", "ACTIVE", 100m, 10m);
         var vehicleOnTrip = AddVehicle("51A-100.02", "ONTRIP", 100m, 10m);
         var vehicleMaintenance = AddVehicle("51A-100.03", "MAINTENANCE", 100m, 10m);
-        AddDriver("Admin Driver Available", "AVAILABLE");
-        AddDriver("Admin Driver OnTrip", "ONTRIP");
-        AddDriver("Admin Driver Relax", "RELAXING");
+        vehicleActive.CurrentLocation = warehouse.WarehouseId.ToString();
+        vehicleOnTrip.CurrentLocation = warehouse.WarehouseId.ToString();
+        vehicleMaintenance.CurrentLocation = warehouse.WarehouseId.ToString();
+        AddDriver("Admin Driver Available", "AVAILABLE", warehouse.WarehouseId);
+        AddDriver("Admin Driver OnTrip", "ONTRIP", warehouse.WarehouseId);
+        AddDriver("Admin Driver Relax", "RELAXING", warehouse.WarehouseId);
 
         var activeTrip = AddTrip("IN_TRANSIT", start.AddHours(1), origin, destination, vehicleOnTrip, route);
         var delayedTrip = AddTrip("DELAYED", start.AddHours(2), origin, destination, vehicleActive, route);
@@ -240,7 +243,7 @@ public sealed class DashboardRelationalVerificationTests : IDisposable
             new IotDevice { DeviceId = Guid.NewGuid(), DeviceCode = "IOT-ON", Vehicle = vehicleActive, VehicleId = vehicleActive.VehicleId, IsOnline = true, Status = "ONLINE" },
             new IotDevice { DeviceId = Guid.NewGuid(), DeviceCode = "IOT-OFF", Vehicle = vehicleMaintenance, VehicleId = vehicleMaintenance.VehicleId, IsOnline = false, Status = "OFFLINE" });
         _database.Db.VehicleDocuments.AddRange(
-            VehicleDocument(vehicleActive, "EXPIRING", today.AddDays(30)),
+            VehicleDocument(vehicleActive, "EXPIRING", today.AddDays(7)),
             VehicleDocument(vehicleActive, "EXPIRED", today.AddDays(-1)));
         _database.Db.IncidentReports.AddRange(
             Incident(user, "OPEN", start.AddHours(4), activeTrip),
@@ -297,7 +300,16 @@ public sealed class DashboardRelationalVerificationTests : IDisposable
         Assert.Equal(1_000m, result.Data.FinancialSnapshot.RecognizedRevenue);
         Assert.Equal(400m, result.Data.FinancialSnapshot.NetCashFlow);
         Assert.Equal(1_000m, result.Data.FinancialSnapshot.UnpaidInvoiceAmount);
-        Assert.Equal("DOCUMENT_EXPIRING", Assert.Single(result.Data.PriorityWorkItems).Type);
+        Assert.Contains(result.Data.PriorityWorkItems, item => item.Type == "DOCUMENT_EXPIRING");
+        Assert.Equal(1, result.Data.OrderOverview.TotalOrders);
+        Assert.Equal(2, result.Data.TripOverview.TotalTrips);
+        Assert.Equal(1, result.Data.TripOverview.TripsWithIncidents);
+        Assert.Equal(50m, result.Data.TripOverview.IncidentRate);
+        Assert.Equal(0, result.Data.TripOverview.CompletedTrips);
+        Assert.Equal(1, result.Data.RouteDemand.Single(x => x.RouteId == route.RouteId).OrderCount);
+        Assert.Equal(2, result.Data.IotOverview.TotalDevices);
+        Assert.Equal(2, result.Data.IotOverview.StatusDistribution.Sum(x => x.Count));
+        Assert.Equal(2, result.Data.FleetOverview.TopUsedVehicles.Sum(x => x.TripCount));
 
         var unknownWarehouse = await Service.GetAdminOverviewAsync(start, start, Guid.NewGuid(), route.RouteId);
         Assert.Equal(0, unknownWarehouse.Data!.Kpis.ActiveTrips);
@@ -408,6 +420,20 @@ public sealed class DashboardRelationalVerificationTests : IDisposable
         Assert.Equal(400, accountant.StatusCode);
     }
 
+    [Fact]
+    public async Task AdminOverview_InvalidGroupingOrTop_ReturnsBusinessValidationFailure()
+    {
+        var start = DbTime(2026, 8, 1);
+
+        var invalidGrouping = await Service.GetAdminOverviewAsync(start, start, null, null, "DAY", 10);
+        var invalidTop = await Service.GetAdminOverviewAsync(start, start, null, null, "WEEK", 20);
+
+        Assert.False(invalidGrouping.Success);
+        Assert.Equal(400, invalidGrouping.StatusCode);
+        Assert.False(invalidTop.Success);
+        Assert.Equal(400, invalidTop.StatusCode);
+    }
+
     private Customer AddCustomer(string suffix)
     {
         var customer = new Customer
@@ -513,13 +539,18 @@ public sealed class DashboardRelationalVerificationTests : IDisposable
         return vehicle;
     }
 
-    private void AddDriver(string name, string status)
-        => _database.Db.Drivers.Add(new Driver
+    private Driver AddDriver(string name, string status, Guid? warehouseId = null)
+    {
+        var driver = new Driver
         {
             DriverId = Guid.NewGuid(), FullName = name, IdentityNumber = Guid.NewGuid().ToString("N")[..12],
             PhoneNumber = "090" + Random.Shared.Next(1000000, 9999999), DateOfBirth = new DateOnly(1990, 1, 1),
-            JoinDate = new DateOnly(2020, 1, 1), Status = status
-        });
+            JoinDate = new DateOnly(2020, 1, 1), Status = status,
+            CurrentLocation = warehouseId?.ToString()
+        };
+        _database.Db.Drivers.Add(driver);
+        return driver;
+    }
 
     private MasterTrip AddTrip(string status, DateTime plannedStart, Location origin, Location destination,
         Vehicle? vehicle = null, RouteMaster? route = null, DateTime? completedAt = null)

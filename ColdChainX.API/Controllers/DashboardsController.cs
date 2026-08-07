@@ -49,6 +49,8 @@ public class DashboardsController : ControllerBase
         [FromQuery] DateTime? toDate = null,
         [FromQuery] Guid? warehouseId = null,
         [FromQuery] Guid? routeId = null,
+        [FromQuery] string? groupBy = "WEEK",
+        [FromQuery] int top = 10,
         CancellationToken cancellationToken = default)
     {
         var result = await _dashboardService.GetAdminOverviewAsync(
@@ -56,6 +58,8 @@ public class DashboardsController : ControllerBase
             toDate,
             warehouseId,
             routeId,
+            groupBy,
+            top,
             cancellationToken);
         return result.Success ? Ok(result) : StatusCode(result.StatusCode, result);
     }

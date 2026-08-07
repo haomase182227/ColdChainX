@@ -240,7 +240,7 @@ public sealed class AuthorizationIntegrationTests : IAsyncLifetime
         public Task<ApiResponse<DispatcherOverviewResponse>> GetDispatcherOverviewAsync(DateOnly? date, Guid? warehouseId, string? scheduleRange = "DAY", CancellationToken cancellationToken = default)
             => Task.FromResult(ApiResponse<DispatcherOverviewResponse>.SuccessResponse(new DispatcherOverviewResponse()));
 
-        public Task<ApiResponse<AdminOverviewResponse>> GetAdminOverviewAsync(DateTime? fromDate, DateTime? toDate, Guid? warehouseId, Guid? routeId, CancellationToken cancellationToken = default)
+        public Task<ApiResponse<AdminOverviewResponse>> GetAdminOverviewAsync(DateTime? fromDate, DateTime? toDate, Guid? warehouseId, Guid? routeId, string? groupBy = "WEEK", int top = 10, CancellationToken cancellationToken = default)
             => Task.FromResult(ApiResponse<AdminOverviewResponse>.SuccessResponse(new AdminOverviewResponse()));
 
         public Task<ApiResponse<AccountantOverviewResponse>> GetAccountantOverviewAsync(DateTime? fromDate, DateTime? toDate, string? groupBy, CancellationToken cancellationToken = default)
