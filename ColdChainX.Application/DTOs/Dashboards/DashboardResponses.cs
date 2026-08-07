@@ -194,6 +194,17 @@ public class DashboardWorkItem
 
 public class AdminOverviewResponse
 {
+    public DateTime FromDate { get; set; }
+    public DateTime ToDate { get; set; }
+    public string GroupBy { get; set; } = "WEEK";
+    public AdminOrderOverview OrderOverview { get; set; } = new();
+    public AdminTripOverview TripOverview { get; set; } = new();
+    public AdminFleetOverview FleetOverview { get; set; } = new();
+    public AdminDriverOverview DriverOverview { get; set; } = new();
+    public IReadOnlyCollection<RouteDemandItem> RouteDemand { get; set; } = Array.Empty<RouteDemandItem>();
+    public IReadOnlyCollection<ServiceUsageItem> ServiceUsage { get; set; } = Array.Empty<ServiceUsageItem>();
+    public IReadOnlyCollection<WarehouseResourceCount> LpnsByWarehouse { get; set; } = Array.Empty<WarehouseResourceCount>();
+    public AdminIotOverview IotOverview { get; set; } = new();
     public AdminKpis Kpis { get; set; } = new();
     public IReadOnlyCollection<StatusCountResponse> VehicleStatusDistribution { get; set; } = Array.Empty<StatusCountResponse>();
     public IReadOnlyCollection<StatusCountResponse> IotStatusDistribution { get; set; } = Array.Empty<StatusCountResponse>();
@@ -204,6 +215,94 @@ public class AdminOverviewResponse
     public IReadOnlyCollection<FleetUtilizationItem> FleetUtilization { get; set; } = Array.Empty<FleetUtilizationItem>();
     public FinancialSnapshotResponse FinancialSnapshot { get; set; } = new();
     public IReadOnlyCollection<DashboardWorkItem> PriorityWorkItems { get; set; } = Array.Empty<DashboardWorkItem>();
+}
+
+public class AdminOrderOverview
+{
+    public int TotalOrders { get; set; }
+    public IReadOnlyCollection<StatusCountResponse> StatusDistribution { get; set; } = Array.Empty<StatusCountResponse>();
+    public IReadOnlyCollection<StatusPeriodItem> ByPeriod { get; set; } = Array.Empty<StatusPeriodItem>();
+}
+
+public class StatusPeriodItem
+{
+    public string Period { get; set; } = string.Empty;
+    public int Total { get; set; }
+    public IReadOnlyCollection<StatusCountResponse> StatusDistribution { get; set; } = Array.Empty<StatusCountResponse>();
+}
+
+public class AdminTripOverview
+{
+    public int TotalTrips { get; set; }
+    public int CompletedTrips { get; set; }
+    public int SuccessfulTrips { get; set; }
+    public int TripsWithIncidents { get; set; }
+    public decimal IncidentRate { get; set; }
+    public decimal DeliverySuccessRate { get; set; }
+    public IReadOnlyCollection<StatusCountResponse> StatusDistribution { get; set; } = Array.Empty<StatusCountResponse>();
+    public IReadOnlyCollection<TripOperationPeriod> ByPeriod { get; set; } = Array.Empty<TripOperationPeriod>();
+}
+
+public class TripOperationPeriod
+{
+    public string Period { get; set; } = string.Empty;
+    public int TotalTrips { get; set; }
+    public int CompletedTrips { get; set; }
+    public int SuccessfulTrips { get; set; }
+    public int TripsWithIncidents { get; set; }
+    public decimal IncidentRate { get; set; }
+    public decimal DeliverySuccessRate { get; set; }
+    public IReadOnlyCollection<StatusCountResponse> StatusDistribution { get; set; } = Array.Empty<StatusCountResponse>();
+}
+
+public class AdminFleetOverview
+{
+    public int TotalVehicles { get; set; }
+    public int AvailableVehicles { get; set; }
+    public IReadOnlyCollection<StatusCountResponse> StatusDistribution { get; set; } = Array.Empty<StatusCountResponse>();
+    public IReadOnlyCollection<WarehouseResourceCount> AvailableByWarehouse { get; set; } = Array.Empty<WarehouseResourceCount>();
+    public IReadOnlyCollection<FleetUtilizationItem> TopUsedVehicles { get; set; } = Array.Empty<FleetUtilizationItem>();
+}
+
+public class AdminDriverOverview
+{
+    public int TotalDrivers { get; set; }
+    public int AvailableDrivers { get; set; }
+    public IReadOnlyCollection<StatusCountResponse> StatusDistribution { get; set; } = Array.Empty<StatusCountResponse>();
+    public IReadOnlyCollection<WarehouseResourceCount> AvailableByWarehouse { get; set; } = Array.Empty<WarehouseResourceCount>();
+    public IReadOnlyCollection<DriverUtilizationItem> TopUsedDrivers { get; set; } = Array.Empty<DriverUtilizationItem>();
+}
+
+public class DriverUtilizationItem
+{
+    public Guid DriverId { get; set; }
+    public string DriverName { get; set; } = string.Empty;
+    public int TripCount { get; set; }
+}
+
+public class RouteDemandItem
+{
+    public Guid RouteId { get; set; }
+    public string RouteCode { get; set; } = string.Empty;
+    public string RouteName { get; set; } = string.Empty;
+    public int OrderCount { get; set; }
+    public decimal Percentage { get; set; }
+}
+
+public class ServiceUsageItem
+{
+    public Guid? ServiceCatalogId { get; set; }
+    public string ServiceCode { get; set; } = string.Empty;
+    public string ServiceName { get; set; } = string.Empty;
+    public bool IsMandatory { get; set; }
+    public int UsageCount { get; set; }
+    public decimal Percentage { get; set; }
+}
+
+public class AdminIotOverview
+{
+    public int TotalDevices { get; set; }
+    public IReadOnlyCollection<StatusCountResponse> StatusDistribution { get; set; } = Array.Empty<StatusCountResponse>();
 }
 
 public class AdminKpis

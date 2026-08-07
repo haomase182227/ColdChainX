@@ -4,6 +4,7 @@ using ColdChainX.Core.Entities;
 using ColdChainX.Core.Enums;
 using ColdChainX.Shared.Responses;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace ColdChainX.Application.Services;
 
@@ -27,6 +28,19 @@ public class DashboardService : IDashboardService
         LpnState.RELEASED,
         LpnState.SHIPPING,
         LpnState.DELIVERED
+    };
+
+    private static readonly LpnState[] WarehouseOccupyingLpnStates =
+    {
+        LpnState.RECEIVING,
+        LpnState.DISCREPANCY_HOLD,
+        LpnState.RETURN_PENDING,
+        LpnState.IN_STOCK,
+        LpnState.ALLOCATED,
+        LpnState.LOADING,
+        LpnState.LOADING_COMPLETED,
+        LpnState.RECEIVED_AT_HUB,
+        LpnState.PENDING_REDELIVERY
     };
 
     private static readonly string[] ClosedClaimStatuses =
@@ -699,8 +713,19 @@ public class DashboardService : IDashboardService
         DateTime? toDate,
         Guid? warehouseId,
         Guid? routeId,
+        string? groupBy = "WEEK",
+        int top = 10,
         CancellationToken cancellationToken = default)
     {
+        var normalizedGroupBy = string.IsNullOrWhiteSpace(groupBy)
+            ? "WEEK"
+            : groupBy.Trim().ToUpperInvariant();
+        if (normalizedGroupBy is not ("WEEK" or "MONTH"))
+            return ApiResponse<AdminOverviewResponse>.Failure("groupBy must be WEEK or MONTH.");
+
+        if (top is not (5 or 10 or 15))
+            return ApiResponse<AdminOverviewResponse>.Failure("top must be 5, 10 or 15.");
+
         var (start, endExclusive) = ResolveRange(fromDate, toDate);
         if (start >= endExclusive)
             return ApiResponse<AdminOverviewResponse>.Failure("fromDate must not be later than toDate.");
@@ -708,6 +733,9 @@ public class DashboardService : IDashboardService
         var now = DbNow();
         var endDateInclusive = DateOnly.FromDateTime(endExclusive.AddTicks(-1));
         var warehouseLocation = warehouseId?.ToString();
+        var warehouseNames = await _db.Warehouses
+            .AsNoTracking()
+            .ToDictionaryAsync(w => w.WarehouseId, w => w.WarehouseName, cancellationToken);
 
         HashSet<Guid>? warehouseTripIds = null;
         if (warehouseId.HasValue)
@@ -733,6 +761,9 @@ public class DashboardService : IDashboardService
         var tripQuery = _db.MasterTrips
             .Include(t => t.Route)
             .Include(t => t.Vehicle)
+            .Include(t => t.TransportOrders)
+            .Include(t => t.TripDrivers)
+                .ThenInclude(td => td.Driver)
             .Where(t => t.PlannedStartTime < endExclusive
                         && (t.CompletedAt ?? t.PlannedEndTime) >= start)
             .AsNoTracking()
@@ -785,6 +816,8 @@ public class DashboardService : IDashboardService
 
         var vehicleQuery = _db.Vehicles
             .Include(v => v.MaintenanceTickets)
+            .Include(v => v.MasterTrips)
+            .Include(v => v.IotDevices)
             .AsNoTracking()
             .AsQueryable();
         if (warehouseId.HasValue)
@@ -798,6 +831,8 @@ public class DashboardService : IDashboardService
 
         var driverQuery = _db.Drivers
             .Include(d => d.DriverLicenses)
+            .Include(d => d.TripDrivers)
+                .ThenInclude(td => td.Trip)
             .AsNoTracking()
             .AsQueryable();
         if (warehouseId.HasValue)
@@ -882,6 +917,166 @@ public class DashboardService : IDashboardService
                 : (routeOrderIds ?? warehouseOrderIds ?? Array.Empty<Guid>()).ToHashSet();
         }
 
+        HashSet<Guid>? dashboardWarehouseOrderIds = null;
+        if (warehouseId.HasValue)
+        {
+            dashboardWarehouseOrderIds = (await _db.Lpns
+                .Where(l => l.WarehouseId == warehouseId.Value)
+                .Select(l => l.OrderId)
+                .Distinct()
+                .ToListAsync(cancellationToken)).ToHashSet();
+        }
+
+        var dashboardOrdersQuery = _db.TransportOrders
+            .Include(o => o.Schedule)
+            .Include(o => o.MasterTrip)
+            .Where(o => o.CreatedAt.HasValue
+                        && o.CreatedAt.Value >= start
+                        && o.CreatedAt.Value < endExclusive)
+            .AsNoTracking()
+            .AsQueryable();
+        if (dashboardWarehouseOrderIds != null)
+            dashboardOrdersQuery = dashboardOrdersQuery.Where(o => dashboardWarehouseOrderIds.Contains(o.OrderId));
+        var dashboardOrdersForAllRoutes = await dashboardOrdersQuery.ToListAsync(cancellationToken);
+        var dashboardOrders = routeId.HasValue
+            ? dashboardOrdersForAllRoutes
+                .Where(o => ResolveOrderRouteId(o) == routeId.Value)
+                .ToList()
+            : dashboardOrdersForAllRoutes;
+
+        var orderStatusDistribution = BuildStatusDistribution(dashboardOrders.Select(o => o.Status));
+        var orderPeriods = dashboardOrders
+            .GroupBy(o => DashboardPeriod(o.CreatedAt!.Value, normalizedGroupBy))
+            .OrderBy(group => group.Key)
+            .Select(group => new StatusPeriodItem
+            {
+                Period = group.Key,
+                Total = group.Count(),
+                StatusDistribution = BuildStatusDistribution(group.Select(o => o.Status))
+            })
+            .ToList();
+
+        var allRoutes = await _db.RouteMasters
+            .AsNoTracking()
+            .OrderBy(r => r.RouteCode)
+            .ToListAsync(cancellationToken);
+        var routedOrders = dashboardOrdersForAllRoutes
+            .Select(order => ResolveOrderRouteId(order))
+            .Where(id => id.HasValue)
+            .Select(id => id!.Value)
+            .ToList();
+        var routeOrderCounts = routedOrders
+            .GroupBy(id => id)
+            .ToDictionary(group => group.Key, group => group.Count());
+        var routeDemand = allRoutes.Select(route =>
+        {
+            var count = routeOrderCounts.GetValueOrDefault(route.RouteId);
+            return new RouteDemandItem
+            {
+                RouteId = route.RouteId,
+                RouteCode = route.RouteCode,
+                RouteName = RouteName(route) ?? route.RouteCode,
+                OrderCount = count,
+                Percentage = Percentage(count, routedOrders.Count)
+            };
+        }).OrderByDescending(item => item.OrderCount)
+            .ThenBy(item => item.RouteCode)
+            .ToList();
+
+        var overviewTrips = trips
+            .Where(t => t.PlannedStartTime >= start && t.PlannedStartTime < endExclusive)
+            .ToList();
+        var overviewTripIds = overviewTrips.Select(t => t.TripId).ToHashSet();
+        var incidentTripIds = incidents
+            .Where(i => i.TripId.HasValue && overviewTripIds.Contains(i.TripId.Value))
+            .Select(i => i.TripId!.Value)
+            .Distinct()
+            .ToHashSet();
+        var completedOverviewTrips = overviewTrips.Where(IsCompletedTrip).ToList();
+        var successfulOverviewTrips = completedOverviewTrips.Where(IsSuccessfulTrip).ToList();
+        var tripPeriods = overviewTrips
+            .GroupBy(t => DashboardPeriod(t.PlannedStartTime, normalizedGroupBy))
+            .OrderBy(group => group.Key)
+            .Select(group =>
+            {
+                var periodTrips = group.ToList();
+                var periodCompleted = periodTrips.Where(IsCompletedTrip).ToList();
+                var periodSuccessful = periodCompleted.Count(IsSuccessfulTrip);
+                var periodIncidentTrips = periodTrips.Count(t => incidentTripIds.Contains(t.TripId));
+                return new TripOperationPeriod
+                {
+                    Period = group.Key,
+                    TotalTrips = periodTrips.Count,
+                    CompletedTrips = periodCompleted.Count,
+                    SuccessfulTrips = periodSuccessful,
+                    TripsWithIncidents = periodIncidentTrips,
+                    IncidentRate = Percentage(periodIncidentTrips, periodTrips.Count),
+                    DeliverySuccessRate = Percentage(periodSuccessful, periodCompleted.Count),
+                    StatusDistribution = BuildStatusDistribution(periodTrips.Select(t => t.Status))
+                };
+            })
+            .ToList();
+
+        var acceptedQuotationQuery = _db.Quotations
+            .Include(q => q.Order)
+                .ThenInclude(o => o!.Schedule)
+            .Include(q => q.Order)
+                .ThenInclude(o => o!.MasterTrip)
+            .Where(q => q.Status == "ACCEPTED"
+                        && q.AcceptedAt.HasValue
+                        && q.AcceptedAt.Value >= start
+                        && q.AcceptedAt.Value < endExclusive)
+            .AsNoTracking()
+            .AsQueryable();
+        if (dashboardWarehouseOrderIds != null)
+            acceptedQuotationQuery = acceptedQuotationQuery.Where(q => q.OrderId.HasValue && dashboardWarehouseOrderIds.Contains(q.OrderId.Value));
+        var acceptedQuotations = await acceptedQuotationQuery.ToListAsync(cancellationToken);
+        if (routeId.HasValue)
+            acceptedQuotations = acceptedQuotations
+                .Where(q => q.Order != null && ResolveOrderRouteId(q.Order) == routeId.Value)
+                .ToList();
+
+        var catalogs = await _db.ServiceCatalogs
+            .AsNoTracking()
+            .ToDictionaryAsync(c => c.ServiceCatalogId, cancellationToken);
+        var serviceSelections = acceptedQuotations
+            .SelectMany(quotation => ParseDashboardServiceCharges(quotation.AdditionalCharges)
+                .GroupBy(charge => charge.ServiceCatalogId ?? Guid.Empty)
+                .Select(group => group.First()))
+            .ToList();
+        var totalServiceSelections = serviceSelections.Count;
+        var serviceUsage = serviceSelections
+            .GroupBy(charge => new { charge.ServiceCatalogId, charge.Name })
+            .Select(group =>
+            {
+                var catalog = group.Key.ServiceCatalogId.HasValue
+                    ? catalogs.GetValueOrDefault(group.Key.ServiceCatalogId.Value)
+                    : null;
+                return new ServiceUsageItem
+                {
+                    ServiceCatalogId = group.Key.ServiceCatalogId,
+                    ServiceCode = catalog?.ServiceCode ?? "OTHER",
+                    ServiceName = catalog?.ServiceName ?? group.Key.Name ?? "Dịch vụ khác",
+                    IsMandatory = catalog?.IsMandatory ?? false,
+                    UsageCount = group.Count(),
+                    Percentage = Percentage(group.Count(), totalServiceSelections)
+                };
+            })
+            .OrderByDescending(item => item.UsageCount)
+            .ThenBy(item => item.ServiceName)
+            .ToList();
+
+        var warehouseLpnQuery = _db.Lpns
+            .Where(l => l.WarehouseId.HasValue && WarehouseOccupyingLpnStates.Contains(l.State))
+            .AsNoTracking()
+            .AsQueryable();
+        if (warehouseId.HasValue)
+            warehouseLpnQuery = warehouseLpnQuery.Where(l => l.WarehouseId == warehouseId.Value);
+        var warehouseLpnIds = await warehouseLpnQuery
+            .Select(l => l.WarehouseId)
+            .ToListAsync(cancellationToken);
+        var lpnsByWarehouse = BuildWarehouseDistribution(warehouseLpnIds, warehouseNames);
+
         var invoiceQuery = _db.Invoices
             .Where(i => i.IssuedDate >= DateOnly.FromDateTime(start)
                         && i.IssuedDate <= endDateInclusive)
@@ -950,7 +1145,7 @@ public class DashboardService : IDashboardService
             .Where(t => t.VehicleId.HasValue)
             .GroupBy(t => new { VehicleId = t.VehicleId!.Value, Plate = t.Vehicle?.TruckPlate })
             .OrderByDescending(g => g.Count())
-            .Take(10)
+            .Take(top)
             .Select(g => new FleetUtilizationItem
             {
                 VehicleId = g.Key.VehicleId,
@@ -958,6 +1153,81 @@ public class DashboardService : IDashboardService
                 TripCount = g.Count(),
                 UtilizationRate = Percentage(g.Sum(t => TripOverlapHours(t, start, endExclusive)), periodHours)
             })
+            .ToList();
+
+        var overviewTripsByVehicle = overviewTrips
+            .Where(t => t.VehicleId.HasValue)
+            .ToLookup(t => t.VehicleId!.Value);
+        var vehicleUsageRanking = vehicles
+            .Select(vehicle =>
+            {
+                var assignedTrips = overviewTripsByVehicle[vehicle.VehicleId].ToList();
+                return new FleetUtilizationItem
+                {
+                    VehicleId = vehicle.VehicleId,
+                    VehiclePlate = vehicle.TruckPlate,
+                    TripCount = assignedTrips.Count,
+                    UtilizationRate = Percentage(
+                        assignedTrips.Sum(t => TripOverlapHours(t, start, endExclusive)),
+                        periodHours)
+                };
+            })
+            .OrderByDescending(item => item.TripCount)
+            .ThenBy(item => item.VehiclePlate)
+            .Take(top)
+            .ToList();
+
+        var normalizedVehicleStatuses = vehicles
+            .GroupBy(ResolveVehicleDashboardStatus)
+            .OrderBy(group => group.Key)
+            .Select(group => new StatusCountResponse { Status = group.Key, Count = group.Count() })
+            .ToList();
+        var availableVehicles = vehicles
+            .Where(v => ParseWarehouseLocation(v.CurrentLocation).HasValue)
+            .Where(v => IsVehicleAvailableForDispatch(v, null))
+            .ToList();
+        var availableVehiclesByWarehouse = BuildWarehouseDistribution(
+            availableVehicles.Select(v => ParseWarehouseLocation(v.CurrentLocation)),
+            warehouseNames);
+
+        var normalizedDriverStatuses = drivers
+            .GroupBy(ResolveDriverDashboardStatus)
+            .OrderBy(group => group.Key)
+            .Select(group => new StatusCountResponse { Status = group.Key, Count = group.Count() })
+            .ToList();
+        var availableDrivers = drivers
+            .Where(d => ParseWarehouseLocation(d.CurrentLocation).HasValue)
+            .Where(d => IsDriverAvailableForDispatch(d, null))
+            .ToList();
+        var availableDriversByWarehouse = BuildWarehouseDistribution(
+            availableDrivers.Select(d => ParseWarehouseLocation(d.CurrentLocation)),
+            warehouseNames);
+        var tripCountByDriver = overviewTrips
+            .SelectMany(t => t.TripDrivers)
+            .GroupBy(td => td.DriverId)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(td => td.TripId).Distinct().Count());
+        var driverUtilization = drivers
+            .Select(driver => new DriverUtilizationItem
+            {
+                DriverId = driver.DriverId,
+                DriverName = driver.FullName,
+                TripCount = tripCountByDriver.GetValueOrDefault(driver.DriverId)
+            })
+            .OrderByDescending(item => item.TripCount)
+            .ThenBy(item => item.DriverName)
+            .Take(top)
+            .ToList();
+
+        var exclusiveIotDistribution = iotDevices
+            .GroupBy(device => !device.VehicleId.HasValue
+                ? "UNASSIGNED"
+                : device.IsOnline || device.Status == "ONLINE"
+                    ? "ONLINE"
+                    : "OFFLINE")
+            .OrderBy(group => group.Key)
+            .Select(group => new StatusCountResponse { Status = group.Key, Count = group.Count() })
             .ToList();
 
         var completedIn = transactions.Where(t => t.TransactionType == "IN").Sum(t => t.Amount);
@@ -1077,6 +1347,50 @@ public class DashboardService : IDashboardService
 
         return ApiResponse<AdminOverviewResponse>.SuccessResponse(new AdminOverviewResponse
         {
+            FromDate = start,
+            ToDate = endExclusive.AddTicks(-1),
+            GroupBy = normalizedGroupBy,
+            OrderOverview = new AdminOrderOverview
+            {
+                TotalOrders = dashboardOrders.Count,
+                StatusDistribution = orderStatusDistribution,
+                ByPeriod = orderPeriods
+            },
+            TripOverview = new AdminTripOverview
+            {
+                TotalTrips = overviewTrips.Count,
+                CompletedTrips = completedOverviewTrips.Count,
+                SuccessfulTrips = successfulOverviewTrips.Count,
+                TripsWithIncidents = incidentTripIds.Count,
+                IncidentRate = Percentage(incidentTripIds.Count, overviewTrips.Count),
+                DeliverySuccessRate = Percentage(successfulOverviewTrips.Count, completedOverviewTrips.Count),
+                StatusDistribution = BuildStatusDistribution(overviewTrips.Select(t => t.Status)),
+                ByPeriod = tripPeriods
+            },
+            FleetOverview = new AdminFleetOverview
+            {
+                TotalVehicles = vehicles.Count,
+                AvailableVehicles = availableVehicles.Count,
+                StatusDistribution = normalizedVehicleStatuses,
+                AvailableByWarehouse = availableVehiclesByWarehouse,
+                TopUsedVehicles = vehicleUsageRanking
+            },
+            DriverOverview = new AdminDriverOverview
+            {
+                TotalDrivers = drivers.Count,
+                AvailableDrivers = availableDrivers.Count,
+                StatusDistribution = normalizedDriverStatuses,
+                AvailableByWarehouse = availableDriversByWarehouse,
+                TopUsedDrivers = driverUtilization
+            },
+            RouteDemand = routeDemand,
+            ServiceUsage = serviceUsage,
+            LpnsByWarehouse = lpnsByWarehouse,
+            IotOverview = new AdminIotOverview
+            {
+                TotalDevices = iotDevices.Count,
+                StatusDistribution = exclusiveIotDistribution
+            },
             Kpis = new AdminKpis
             {
                 ActiveTrips = trips.Count(t => ActiveTripStatuses.Contains(t.Status ?? string.Empty)),
@@ -1522,6 +1836,58 @@ public class DashboardService : IDashboardService
             .ToList();
     }
 
+    private static IReadOnlyCollection<StatusCountResponse> BuildStatusDistribution(
+        IEnumerable<string?> statuses)
+    {
+        return statuses
+            .Select(status => string.IsNullOrWhiteSpace(status) ? "UNKNOWN" : status.Trim().ToUpperInvariant())
+            .GroupBy(status => status)
+            .OrderBy(group => group.Key)
+            .Select(group => new StatusCountResponse
+            {
+                Status = group.Key,
+                Count = group.Count()
+            })
+            .ToList();
+    }
+
+    private static string DashboardPeriod(DateTime value, string groupBy)
+    {
+        if (groupBy == "MONTH")
+            return new DateTime(value.Year, value.Month, 1).ToString("yyyy-MM-dd");
+
+        var daysSinceMonday = ((int)value.DayOfWeek + 6) % 7;
+        return value.Date.AddDays(-daysSinceMonday).ToString("yyyy-MM-dd");
+    }
+
+    private static Guid? ResolveOrderRouteId(TransportOrder order)
+        => order.Schedule?.RouteId ?? order.MasterTrip?.RouteId;
+
+    private static bool IsSuccessfulTrip(MasterTrip trip)
+    {
+        return IsCompletedTrip(trip)
+               && trip.TransportOrders.Count > 0
+               && trip.TransportOrders.All(order => order.Status == "DELIVERED");
+    }
+
+    private static IReadOnlyCollection<DashboardServiceCharge> ParseDashboardServiceCharges(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return Array.Empty<DashboardServiceCharge>();
+
+        try
+        {
+            var charges = JsonSerializer.Deserialize<List<DashboardServiceCharge>>(
+                value,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            return charges ?? new List<DashboardServiceCharge>();
+        }
+        catch (JsonException)
+        {
+            return Array.Empty<DashboardServiceCharge>();
+        }
+    }
+
     private static string ResolveDiscrepancyDashboardStatus(
         IEnumerable<Lpn> lpns,
         ContractAppendix? latestAppendix)
@@ -1757,4 +2123,10 @@ public class DashboardService : IDashboardService
 
     private static decimal OutstandingAmount(Invoice invoice)
         => Math.Max(0m, invoice.GrandTotal - (invoice.PaidAmount ?? 0m));
+
+    private sealed class DashboardServiceCharge
+    {
+        public Guid? ServiceCatalogId { get; set; }
+        public string? Name { get; set; }
+    }
 }
