@@ -17,7 +17,6 @@ app.UseCors("AllowAll");
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-// In-memory state for multiple vehicles
 var FleetState = new ConcurrentDictionary<string, VehicleSimulationState>();
 var StandaloneDevices = new ConcurrentDictionary<string, StandaloneIotState>();
 var factory = new MqttFactory();
@@ -28,7 +27,6 @@ app.MapGet("/api/iot/devices", async (IConfiguration config) =>
     {
         var connStr = config.GetConnectionString("LocalConnection");
         using var conn = new NpgsqlConnection(connStr);
-        // Xóa sạch các thiết bị SIM-TRUCK giả rác trong CSDL nếu trước đó từng tạo
         try { await conn.ExecuteAsync("DELETE FROM iot_devices WHERE device_code LIKE 'SIM-TRUCK-%'"); } catch { }
 
         var sql = @"
@@ -102,8 +100,6 @@ app.MapPost("/api/iot/activate", async (ActivateIotRequest req, ILoggerFactory l
         existingState.CancellationTokenSource?.Cancel();
     }
 
-    // Theo BRD/Hệ thống thực tế: Khi bật online thì chỉ set IsOnline = true, để ở trạng thái STREAM OFF
-    // Khi gọi API iot-check (hoặc nhận lệnh START_STREAMING qua MQTT) mới bật STREAM ON và bắt đầu gửi tín hiệu
     var state = new StandaloneIotState
     {
         DeviceCode = req.DeviceCode,
@@ -235,7 +231,6 @@ app.MapGet("/api/fleet/trip/{tripId}/polyline", async (string tripId, IConfigura
             return Results.Ok(new { polyline = poly, deviceCode = deviceCode });
         }
         
-        // Sometimes JSON serialization uses PascalCase or camelCase
         if (doc.RootElement.TryGetProperty("Data", out var dataCap) &&
             dataCap.TryGetProperty("OverviewPolyline", out var polylineElementCap))
         {
@@ -261,7 +256,6 @@ app.MapPost("/api/fleet/start", async (SimulationRequest req, ILoggerFactory log
         return Results.BadRequest(new { error = "Vui lòng chỉ định Mã thiết bị IoT trong hệ thống cho chuyến đi này." });
     }
 
-    // Bổ sung yêu cầu: Chỉ chạy giả lập nếu thiết bị IoT thực tế (trong DB) đang ONLINE
     try
     {
         var connStr = config.GetConnectionString("LocalConnection");
@@ -314,7 +308,6 @@ app.MapPost("/api/fleet/start", async (SimulationRequest req, ILoggerFactory log
         return Results.BadRequest(new { error = "Lỗi khi kiểm tra trạng thái thiết bị IoT: " + ex.Message });
     }
 
-    // Luôn luôn gửi lệnh tắt GPS 3 lớp khi bắt đầu mô phỏng (vì Simulator sẽ phát tọa độ)
     _ = SendMqttCommandAsync(deviceId, "DISABLE_GPS", logger);
 
 
@@ -345,7 +338,6 @@ app.MapPost("/api/fleet/start", async (SimulationRequest req, ILoggerFactory log
     
     FleetState[deviceId] = state;
     
-    // Fire and forget background task for this vehicle
     _ = Task.Run(() => RunVehicleSimulation(state, logger, config), state.CancellationTokenSource.Token);
     
     return Results.Ok(new { deviceId = deviceId, points = state.Path.Count });
@@ -405,7 +397,6 @@ app.MapPost("/api/fleet/{deviceId}/gps-source", (string deviceId, AnomalyRequest
         bool wasReal = state.UseRealGps;
         state.UseRealGps = req.Value > 0;
         
-        // Khi chuyển từ mạch thật về lại mô phỏng, ép nó nhảy về vị trí ảo trên lộ trình
         if (wasReal && !state.UseRealGps && state.Path != null && state.CurrentPointIndex < state.Path.Count)
         {
             state.CurrentLat = state.Path[state.CurrentPointIndex].Lat;
@@ -440,9 +431,6 @@ app.MapPost("/api/fleet/{deviceId}/speed", (string deviceId, AnomalyRequest req)
 
 app.Run("http://*:5500");
 
-// ==========================================
-// BACKGROUND SIMULATION LOGIC
-// ==========================================
 
 static double CalculateDistanceKm(double lat1, double lon1, double lat2, double lon2)
 {
@@ -546,7 +534,6 @@ async Task RunVehicleSimulation(VehicleSimulationState state, ILogger logger, IC
                         using var doc = System.Text.Json.JsonDocument.Parse(payloadStr);
                         var root = doc.RootElement;
                         
-                        // Chống lặp vô hạn: Dùng cờ IsSimulated
                         if (root.TryGetProperty("IsSimulated", out var simEl) && simEl.GetBoolean() == true)
                         {
                             return; // Bỏ qua message do chính Simulator vừa gửi
@@ -558,8 +545,6 @@ async Task RunVehicleSimulation(VehicleSimulationState state, ILogger logger, IC
                             if (root.TryGetProperty("TempC", out var tempEl)) state.CurrentTemperature = tempEl.GetDouble();
                         }
                         
-                        // XÓA: Bỏ ghi đè DoorOpen từ mạch IoT thật, để Simulator toàn quyền điều khiển cửa!
-                        // if (root.TryGetProperty("DoorOpen", out var doorEl)) state.IsDoorOpen = doorEl.GetBoolean();
                         
                         if (state.UseRealGps) {
                             if (root.TryGetProperty("Lat", out var latEl)) state.CurrentLat = latEl.GetDouble();
@@ -713,9 +698,6 @@ async Task RunVehicleSimulation(VehicleSimulationState state, ILogger logger, IC
     }
 }
 
-// ==========================================
-// POLYLINE DECODER ALGORITHM
-// ==========================================
 static List<Coordinate> DecodePolyline(string encodedPoints)
 {
     if (string.IsNullOrEmpty(encodedPoints))
@@ -843,7 +825,6 @@ async Task RunStandaloneIotSimulation(StandaloneIotState state, ILogger logger, 
         await mqttClient.PublishAsync(onlineMsg, state.CancellationTokenSource.Token);
         logger.LogInformation($"[{state.DeviceCode}] Published MQTT Status ONLINE to backend worker.");
 
-        // Đăng ký nghe topic command từ backend (ví dụ khi gọi API vehicle-iot-check)
         string commandTopic = $"command/coldchain/{state.DeviceCode}";
         mqttClient.ApplicationMessageReceivedAsync += e =>
         {
@@ -879,7 +860,6 @@ async Task RunStandaloneIotSimulation(StandaloneIotState state, ILogger logger, 
 
         while (!state.CancellationTokenSource.Token.IsCancellationRequested && state.IsOnline)
         {
-            // Cập nhật last_ping_time để giữ kết nối trong DB (heartbeat)
             try
             {
                 using var conn = new NpgsqlConnection(connStr);
@@ -887,31 +867,22 @@ async Task RunStandaloneIotSimulation(StandaloneIotState state, ILogger logger, 
             }
             catch { }
 
-            // Khi Stream ON: gửi telemetry
-            // - Nếu có chuyến xe fleet đang chạy: đồng bộ GPS từ FleetState (xe chạy trên polyline)
-            // - Nếu ở chế độ Hybrid: gửi vào topic RAW để xe fleet nối tọa độ GPS
-            // - Nếu standalone thuần (không có fleet chạy): dùng tọa độ riêng của IoT
             if (state.IsStreaming)
             {
                 var runningTrip = FleetState.Values.FirstOrDefault(f => f.DeviceId == state.DeviceCode && f.IsRunning);
 
-                // Đồng bộ GPS: Khi có xe fleet đang chạy, IoT tự động kế thừa tọa độ GPS real-time từ xe
                 double sendLat = state.CurrentLat;
                 double sendLon = state.CurrentLon;
                 if (runningTrip != null)
                 {
                     sendLat = runningTrip.CurrentLat;
                     sendLon = runningTrip.CurrentLon;
-                    // Cập nhật ngược lại vào state để đồng bộ 2 chiều
                     state.CurrentLat = sendLat;
                     state.CurrentLon = sendLon;
                 }
 
                 bool isForHybridTrip = (runningTrip != null && runningTrip.IsHybridMode);
 
-                // Chế độ bình thường (fleet non-Hybrid): xe fleet đã tự gửi telemetry rồi, 
-                // IoT chỉ cần cập nhật GPS vào state (đã làm ở trên) mà không gửi trùng.
-                // Chế độ Hybrid hoặc Standalone: IoT phải tự gửi telemetry.
                 if (runningTrip == null || isForHybridTrip)
                 {
                     double temp = state.Temperature + (rnd.NextDouble() * 0.6 - 0.3);
@@ -983,9 +954,6 @@ async Task RunStandaloneIotSimulation(StandaloneIotState state, ILogger logger, 
     }
 }
 
-// ==========================================
-// MODELS
-// ==========================================
 public class SimulationRequest
 {
     public string? Polyline { get; set; }

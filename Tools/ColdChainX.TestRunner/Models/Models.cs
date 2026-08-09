@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 namespace ColdChainX.TestRunner.Models;
 
 public class TestSpec
@@ -31,10 +32,19 @@ public class TestCaseSpec
 
 public class EndpointInfo
 {
+    [JsonPropertyName("method")]
     public string Method { get; set; } = "GET";           // GET, POST, PUT, DELETE
+
+    [JsonPropertyName("url")]
     public string Url { get; set; } = "";                 // /api/auth/login
+
+    [JsonPropertyName("auth")]
     public string AuthRole { get; set; } = "Anonymous";   // Anonymous, Admin, Customer, etc.
+
+    [JsonPropertyName("body")]
     public string BodyType { get; set; } = "None";        // None, Json, Form
+
+    [JsonPropertyName("notes")]
     public string? Notes { get; set; }
 
     public EndpointInfo() { }
@@ -58,8 +68,8 @@ public class TestResult
     public int HttpStatusCode { get; set; }
     public string? ResponseBody { get; set; }
     public long ElapsedMs { get; set; }
+    public string ExpectedResult { get; set; } = "";
 
-    // ── Matched indices for HTML export (which Return/Exception/Log rows were hit) ──
     public List<int> MatchedReturnIndices { get; set; } = new();
     public int MatchedExceptionIndex { get; set; } = -1;
     public List<int> MatchedLogIndices { get; set; } = new();

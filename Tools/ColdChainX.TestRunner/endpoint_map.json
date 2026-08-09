@@ -60,19 +60,19 @@
     "body": "Json"
   },
   "USR005": {
-    "method": "PUT",
+    "method": "PATCH",
     "url": "/api/v1/users/{{userId}}/role",
     "auth": "Admin",
     "body": "Json"
   },
   "USR006": {
-    "method": "PUT",
+    "method": "PATCH",
     "url": "/api/v1/users/{{userId}}/status",
     "auth": "Admin",
     "body": "Json"
   },
   "USR007": {
-    "method": "PUT",
+    "method": "PATCH",
     "url": "/api/v1/users/{{userId}}/warehouse",
     "auth": "Admin",
     "body": "Json"
@@ -109,50 +109,50 @@
   },
   "CHT001": {
     "method": "GET",
-    "url": "/api/chat/conversations",
+    "url": "/api/chat/customers",
     "auth": "Any",
     "body": "None"
   },
   "CHT002": {
     "method": "GET",
-    "url": "/api/chat/conversations/{{conversationId}}/messages",
+    "url": "/api/chat/{{orderId}}/messages",
     "auth": "Any",
     "body": "None"
   },
   "CHT003": {
     "method": "GET",
-    "url": "/api/chat/customer/messages",
-    "auth": "Customer",
+    "url": "/api/chat/customers/{{customerId}}/messages",
+    "auth": "Admin",
     "body": "None"
   },
   "CHT004": {
     "method": "POST",
-    "url": "/api/chat/messages",
+    "url": "/api/chat/{{orderId}}/messages",
     "auth": "Any",
     "body": "Json"
   },
   "CHT005": {
-    "method": "PUT",
-    "url": "/api/chat/conversations/{{conversationId}}/read",
+    "method": "PATCH",
+    "url": "/api/chat/{{orderId}}/messages/read",
     "auth": "Any",
     "body": "None"
   },
   "CAT001": {
     "method": "GET",
     "url": "/api/service-catalogs",
-    "auth": "Any",
+    "auth": "Admin",
     "body": "None"
   },
   "CAT002": {
     "method": "GET",
     "url": "/api/service-catalogs/active",
-    "auth": "Any",
+    "auth": "Admin",
     "body": "None"
   },
   "CAT003": {
     "method": "GET",
     "url": "/api/service-catalogs/{{catalogId}}",
-    "auth": "Any",
+    "auth": "Admin",
     "body": "None"
   },
   "CAT004": {
@@ -176,19 +176,19 @@
   "WTR001": {
     "method": "GET",
     "url": "/api/weight-tiers",
-    "auth": "Any",
+    "auth": "Admin",
     "body": "None"
   },
   "WTR002": {
     "method": "GET",
     "url": "/api/weight-tiers/{{tierId}}",
-    "auth": "Any",
+    "auth": "Admin",
     "body": "None"
   },
   "WTR003": {
     "method": "GET",
-    "url": "/api/weight-tiers/route/{{routeId}}",
-    "auth": "Any",
+    "url": "/api/routes/{{routeId}}/weight-tiers",
+    "auth": "Admin",
     "body": "None"
   },
   "WTR004": {
@@ -223,7 +223,7 @@
   },
   "ROU002": {
     "method": "GET",
-    "url": "/api/routes/{{routeId}}",
+    "url": "/api/routes/{{routeId}}/detail",
     "auth": "Any",
     "body": "None"
   },
@@ -259,19 +259,19 @@
   },
   "ROU008": {
     "method": "PUT",
-    "url": "/api/routes/stops/{{stopId}}",
+    "url": "/api/routes/{{routeId}}/stops/{{stopId}}",
     "auth": "Admin",
     "body": "Json"
   },
   "ROU009": {
     "method": "DELETE",
-    "url": "/api/routes/stops/{{stopId}}",
+    "url": "/api/routes/{{routeId}}/stops/{{stopId}}",
     "auth": "Admin",
     "body": "None"
   },
   "ROU010": {
     "method": "GET",
-    "url": "/api/routes/origin-warehouses",
+    "url": "/api/routes/{{routeId}}/origin-warehouses",
     "auth": "Any",
     "body": "None"
   },
@@ -289,26 +289,26 @@
   },
   "ROU013": {
     "method": "PUT",
-    "url": "/api/routes/schedules/{{scheduleId}}",
+    "url": "/api/routes/{{routeId}}/schedules/{{scheduleId}}",
     "auth": "Admin",
     "body": "Json"
   },
   "ROU014": {
     "method": "DELETE",
-    "url": "/api/routes/schedules/{{scheduleId}}",
+    "url": "/api/routes/{{routeId}}/schedules/{{scheduleId}}",
     "auth": "Admin",
     "body": "None"
   },
   "QOT001": {
     "method": "POST",
-    "url": "/api/quotations/auto",
+    "url": "/api/quotations",
     "auth": "Any",
     "body": "Json"
   },
   "QOT002": {
     "method": "GET",
     "url": "/api/quotations",
-    "auth": "Admin",
+    "auth": "Sales",
     "body": "None"
   },
   "QOT003": {
@@ -319,44 +319,44 @@
   },
   "QOT004": {
     "method": "GET",
-    "url": "/api/quotations/order/{{orderId}}",
+    "url": "/api/orders/{{orderId}}/quotations",
     "auth": "Any",
     "body": "None"
   },
   "QOT005": {
     "method": "GET",
-    "url": "/api/quotations/customer/{{customerId}}",
+    "url": "/api/customers/{{customerId}}/quotations",
     "auth": "Customer",
     "body": "None"
   },
   "QOT006": {
     "method": "POST",
     "url": "/api/quotations",
-    "auth": "Admin",
+    "auth": "Sales",
     "body": "Json"
   },
   "QOT007": {
     "method": "PUT",
     "url": "/api/quotations/{{quotationId}}",
-    "auth": "Admin",
+    "auth": "Sales",
     "body": "Json"
   },
   "QOT008": {
     "method": "POST",
     "url": "/api/quotations/{{quotationId}}/send",
-    "auth": "Admin",
+    "auth": "Sales",
     "body": "None"
   },
   "QOT009": {
     "method": "POST",
     "url": "/api/quotations/{{quotationId}}/accept",
     "auth": "Customer",
-    "body": "None"
+    "body": "Json"
   },
   "CTR001": {
     "method": "POST",
     "url": "/api/contracts/generate",
-    "auth": "Admin",
+    "auth": "Sales",
     "body": "Json"
   },
   "CTR002": {
@@ -367,26 +367,26 @@
   },
   "CTR003": {
     "method": "GET",
-    "url": "/api/contracts/order/{{orderId}}",
+    "url": "/api/contracts/by-order/{{orderId}}",
     "auth": "Any",
     "body": "None"
   },
   "CTR004": {
     "method": "GET",
-    "url": "/api/contracts/{{contractId}}/preview",
+    "url": "/api/contracts/preview/{{orderId}}",
     "auth": "Any",
     "body": "None"
   },
   "CTR005": {
     "method": "PUT",
-    "url": "/api/contracts/{{contractId}}/draft",
-    "auth": "Admin",
+    "url": "/api/contracts/{{contractId}}",
+    "auth": "Sales",
     "body": "Json"
   },
   "CTR006": {
     "method": "POST",
     "url": "/api/contracts/{{contractId}}/send",
-    "auth": "Admin",
+    "auth": "Sales",
     "body": "None"
   },
   "CTR007": {
@@ -398,102 +398,96 @@
   "CTR008": {
     "method": "POST",
     "url": "/api/contracts/{{contractId}}/review",
-    "auth": "Admin",
+    "auth": "Sales",
     "body": "Json"
   },
   "CTR009": {
     "method": "POST",
     "url": "/api/contracts/{{contractId}}/approve",
-    "auth": "Admin",
+    "auth": "Customer",
     "body": "Json"
   },
   "CTR010": {
     "method": "POST",
-    "url": "/api/contract-appendices/generate",
-    "auth": "Admin",
+    "url": "/api/contracts/appendices/generate",
+    "auth": "Sales",
     "body": "Json"
   },
   "CTR011": {
     "method": "GET",
-    "url": "/api/contract-appendices/{{appendixId}}/preview",
-    "auth": "Any",
+    "url": "/api/contracts/appendices/preview?orderId={{orderId}}&adjustedPrice={{adjustedPrice}}&reason={{reason}}",
+    "auth": "Sales",
     "body": "None"
   },
   "CTR012": {
     "method": "GET",
-    "url": "/api/contract-appendices/{{appendixId}}",
+    "url": "/api/contracts/appendices/{{appendixId}}",
     "auth": "Any",
     "body": "None"
   },
   "CTR013": {
     "method": "GET",
-    "url": "/api/contract-appendices/order/{{orderId}}",
+    "url": "/api/contracts/appendices/by-order/{{orderId}}",
     "auth": "Any",
     "body": "None"
   },
   "CTR014": {
     "method": "POST",
-    "url": "/api/contract-appendices/{{appendixId}}/send",
-    "auth": "Admin",
+    "url": "/api/contracts/appendices/{{appendixId}}/send",
+    "auth": "Sales",
     "body": "None"
   },
   "CTR015": {
     "method": "POST",
-    "url": "/api/contract-appendices/{{appendixId}}/accept",
+    "url": "/api/contracts/appendices/{{appendixId}}/accept",
     "auth": "Customer",
     "body": "None"
   },
   "CTR016": {
     "method": "POST",
-    "url": "/api/contract-appendices/{{appendixId}}/reject",
+    "url": "/api/contracts/appendices/{{appendixId}}/reject",
     "auth": "Customer",
     "body": "Json"
   },
   "CTR017": {
     "method": "POST",
-    "url": "/api/contract-appendices/{{appendixId}}/execute",
-    "auth": "Admin",
+    "url": "/api/contracts/appendices/{{appendixId}}/execute",
+    "auth": "Sales",
     "body": "None"
   },
   "ORD001": {
     "method": "POST",
     "url": "/api/orders",
     "auth": "Customer",
-    "body": "Json"
+    "body": "Form"
   },
   "ORD002": {
     "method": "PUT",
     "url": "/api/orders/{{orderId}}",
     "auth": "Customer",
-    "body": "Json"
+    "body": "Form"
   },
   "ORD003": {
     "method": "PUT",
     "url": "/api/orders/{{orderId}}/admin",
-    "auth": "Admin",
-    "body": "Json"
+    "auth": "Sales",
+    "body": "Form"
   },
   "ORD004": {
     "method": "POST",
     "url": "/api/orders/{{orderId}}/review",
-    "auth": "Admin",
+    "auth": "Sales",
     "body": "Json"
-  },
-  "ORD005": {
-    "method": "DELETE",
-    "url": "/api/orders/{{orderId}}",
-    "auth": "Customer",
-    "body": "None"
   },
   "ORD006": {
     "method": "GET",
     "url": "/api/orders",
-    "auth": "Admin",
+    "auth": "Sales",
     "body": "None"
   },
   "ORD007": {
     "method": "GET",
-    "url": "/api/orders/customer",
+    "url": "/api/orders/my-orders",
     "auth": "Customer",
     "body": "None"
   },
@@ -505,63 +499,63 @@
   },
   "ORD009": {
     "method": "GET",
-    "url": "/api/orders/tracking/{{trackingToken}}",
+    "url": "/api/orders/public-tracking/{{trackingToken}}",
     "auth": "Anonymous",
     "body": "None"
   },
   "ORD010": {
     "method": "GET",
-    "url": "/api/orders/{{orderId}}/temperature-chart",
+    "url": "/api/orders/public-tracking/{{trackingToken}}/temperature-chart",
     "auth": "Anonymous",
     "body": "None"
   },
   "ORD011": {
     "method": "POST",
-    "url": "/api/orders/{{orderId}}/upload-pod",
-    "auth": "Admin",
-    "body": "Form"
+    "url": "/api/orders/{{orderId}}/physical-pod",
+    "auth": "Sales",
+    "body": "Json"
   },
   "INB001": {
     "method": "POST",
-    "url": "/api/inbound/asn",
+    "url": "/api/v1/asns",
     "auth": "Customer",
     "body": "Json"
   },
   "INB002": {
     "method": "GET",
-    "url": "/api/inbound/schedule",
+    "url": "/api/v1/asns/schedule",
     "auth": "Any",
     "body": "None"
   },
   "INB003": {
     "method": "GET",
-    "url": "/api/inbound/schedules",
+    "url": "/api/v1/asns",
     "auth": "Any",
     "body": "None"
   },
   "INB004": {
     "method": "GET",
-    "url": "/api/inbound/asn/customer/{{customerId}}",
+    "url": "/api/v1/asns/customer/{{customerId}}",
     "auth": "Customer",
     "body": "None"
   },
   "INB005": {
     "method": "POST",
-    "url": "/api/inbound/receipts/{{receiptId}}/qc",
+    "url": "/api/inbound/qc",
     "auth": "WarehouseWorker",
-    "body": "Json"
+    "body": "Form"
   },
   "INB006": {
     "method": "PUT",
-    "url": "/api/inbound/receipts/{{receiptId}}/measurements",
+    "url": "/api/inbound/qc/re-evaluate",
     "auth": "WarehouseWorker",
-    "body": "Json"
+    "body": "Form"
   },
   "INB007": {
     "method": "POST",
-    "url": "/api/inbound/receipts/{{receiptId}}/complete",
+    "url": "/api/inbound/receipts/generate",
     "auth": "WarehouseWorker",
-    "body": "None"
+    "body": "Json"
   },
   "INB008": {
     "method": "POST",
@@ -571,8 +565,8 @@
   },
   "OUT001": {
     "method": "POST",
-    "url": "/api/outbound/orders",
-    "auth": "Customer",
+    "url": "/api/outbound/pick",
+    "auth": "WarehouseWorker",
     "body": "Json"
   },
   "OUT002": {
@@ -583,19 +577,661 @@
   },
   "OUT003": {
     "method": "GET",
-    "url": "/api/outbound/orders/{{outboundId}}",
+    "url": "/api/outbound/available-trips",
     "auth": "Any",
     "body": "None"
   },
   "OUT004": {
-    "method": "PUT",
-    "url": "/api/outbound/orders/{{outboundId}}",
-    "auth": "Admin",
+    "method": "POST",
+    "url": "/api/outbound/load-trip",
+    "auth": "WarehouseWorker",
     "body": "Json"
   },
   "OUT005": {
+    "method": "GET",
+    "url": "/api/outbound/available-lpns",
+    "auth": "WarehouseWorker",
+    "body": "None"
+  },
+  "OUT007": {
     "method": "POST",
-    "url": "/api/outbound/orders/{{outboundId}}/allocate",
+    "url": "/api/Dispatch/trip/{{tripId}}/start-picking",
+    "auth": "WarehouseOperator",
+    "body": "None"
+  },
+  "OUT008": {
+    "method": "POST",
+    "url": "/api/Outbound/pick",
+    "auth": "WarehouseOperator",
+    "body": "Json"
+  },
+  "OUT009": {
+    "method": "POST",
+    "url": "/api/Outbound/load-trip",
+    "auth": "WarehouseOperator",
+    "body": "Json"
+  },
+  "OUT010": {
+    "method": "POST",
+    "url": "/api/Dispatch/seal-and-dispatch/{{tripId}}",
+    "auth": "Dispatcher",
+    "body": "Form"
+  },
+  "WH001": {
+    "method": "POST",
+    "url": "/api/v1/warehouses",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "WH002": {
+    "method": "PUT",
+    "url": "/api/v1/warehouses/{{warehouseId}}",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "WH003": {
+    "method": "DELETE",
+    "url": "/api/v1/warehouses/{{warehouseId}}",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "WH004": {
+    "method": "GET",
+    "url": "/api/v1/warehouses",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "WH005": {
+    "method": "GET",
+    "url": "/api/v1/warehouses/{{warehouseId}}",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "WH006": {
+    "method": "GET",
+    "url": "/api/v1/warehouses/{{warehouseId}}/lpns",
+    "auth": "WarehouseOperator",
+    "body": "None"
+  },
+  "INV001": {
+    "method": "GET",
+    "url": "/api/v1/warehouses/{{warehouseId}}/utilization",
+    "auth": "WarehouseOperator",
+    "body": "None"
+  },
+  "INV002": {
+    "method": "GET",
+    "url": "/api/v1/inventory/aging-report",
+    "auth": "WarehouseOperator",
+    "body": "None"
+  },
+  "INV003": {
+    "method": "GET",
+    "url": "/api/v1/inventory/expiry-alerts",
+    "auth": "WarehouseOperator",
+    "body": "None"
+  },
+  "INV004": {
+    "method": "GET",
+    "url": "/api/v1/inventory/temperature-audits",
+    "auth": "WarehouseOperator",
+    "body": "None"
+  },
+  "DSP001": {
+    "method": "POST",
+    "url": "/api/Dispatch/manual-dispatch",
+    "auth": "Dispatcher",
+    "body": "Form"
+  },
+  "DSP002": {
+    "method": "POST",
+    "url": "/api/Dispatch/trip/{{tripId}}/start-picking",
+    "auth": "Dispatcher",
+    "body": "None"
+  },
+  "DSP003": {
+    "method": "POST",
+    "url": "/api/Dispatch/vehicle-iot-check/{{tripId}}",
+    "auth": "Dispatcher",
+    "body": "None"
+  },
+  "DSP004": {
+    "method": "POST",
+    "url": "/api/Dispatch/seal-and-dispatch/{{tripId}}",
+    "auth": "Dispatcher",
+    "body": "Form"
+  },
+  "DSP005": {
+    "method": "POST",
+    "url": "/api/Dispatch/trip/{{tripId}}/cancel",
+    "auth": "Dispatcher",
+    "body": "Json"
+  },
+  "MON001": {
+    "method": "GET",
+    "url": "/api/tracking/trips",
+    "auth": "Dispatcher",
+    "body": "None"
+  },
+  "MON002": {
+    "method": "GET",
+    "url": "/api/tracking/{{tripId}}",
+    "auth": "Dispatcher",
+    "body": "None"
+  },
+  "MON003": {
+    "method": "GET",
+    "url": "/api/trip/{{tripId}}/chart/temperature",
+    "auth": "Dispatcher",
+    "body": "None"
+  },
+  "MON004": {
+    "method": "GET",
+    "url": "/api/stops/{{stopId}}/chart/temperature",
+    "auth": "Dispatcher",
+    "body": "None"
+  },
+  "MON005": {
+    "method": "GET",
+    "url": "/api/trip/{{tripId}}/alerts/risk",
+    "auth": "Dispatcher",
+    "body": "None"
+  },
+  "MON006": {
+    "method": "GET",
+    "url": "/api/trip/{{tripId}}/alerts/smart",
+    "auth": "Dispatcher",
+    "body": "None"
+  },
+  "MON007": {
+    "method": "POST",
+    "url": "/api/fleet/assign-device",
+    "auth": "Dispatcher",
+    "body": "Json"
+  },
+  "IOT001": {
+    "method": "GET",
+    "url": "/api/iot-devices",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "IOT002": {
+    "method": "GET",
+    "url": "/api/iot-devices/{{deviceId}}",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "IOT003": {
+    "method": "POST",
+    "url": "/api/iot-devices",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "IOT004": {
+    "method": "PUT",
+    "url": "/api/iot-devices/{{deviceId}}",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "IOT005": {
+    "method": "DELETE",
+    "url": "/api/iot-devices/{{deviceId}}",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "DEL001": {
+    "method": "POST",
+    "url": "/api/Delivery/depart",
+    "auth": "Driver",
+    "body": "Json"
+  },
+  "DEL002": {
+    "method": "POST",
+    "url": "/api/stops/{{stopId}}/check-ins",
+    "auth": "Driver",
+    "body": "Form"
+  },
+  "DEL003": {
+    "method": "POST",
+    "url": "/api/Delivery/trips/{{tripId}}/seals/cut",
+    "auth": "Driver",
+    "body": "Json"
+  },
+  "DEL004": {
+    "method": "POST",
+    "url": "/api/Delivery/trips/{{tripId}}/seals/apply",
+    "auth": "Driver",
+    "body": "Json"
+  },
+  "DEL005": {
+    "method": "POST",
+    "url": "/api/Delivery/stops/{{stopId}}/confirm-handover",
+    "auth": "Driver",
+    "body": "Form"
+  },
+  "DEL006": {
+    "method": "GET",
+    "url": "/api/Delivery/orders/{{orderId}}/epod",
+    "auth": "Driver",
+    "body": "None"
+  },
+  "DEL007": {
+    "method": "GET",
+    "url": "/api/Delivery/epods/{{epodId}}/payment-qr",
+    "auth": "Driver",
+    "body": "None"
+  },
+  "DEL008": {
+    "method": "POST",
+    "url": "/api/Delivery/stops/{{stopId}}/dynamic-cod",
+    "auth": "Driver",
+    "body": "Form"
+  },
+  "DEL009": {
+    "method": "POST",
+    "url": "/api/epods/{{epodId}}/verify-qr-payment",
+    "auth": "Driver",
+    "body": "Form"
+  },
+  "DEL010": {
+    "method": "POST",
+    "url": "/api/trips/{{tripId}}/cod-handovers",
+    "auth": "Dispatcher",
+    "body": "Json"
+  },
+  "DEL011": {
+    "method": "POST",
+    "url": "/api/Delivery/{{stopId}}/report-no-show",
+    "auth": "Driver",
+    "body": "Form"
+  },
+  "DEL012": {
+    "method": "GET",
+    "url": "/api/Delivery/trips/{{tripId}}/lpns",
+    "auth": "Driver",
+    "body": "None"
+  },
+  "DEL013": {
+    "method": "GET",
+    "url": "/api/Delivery/trips/{{tripId}}/customer-orders",
+    "auth": "Driver",
+    "body": "None"
+  },
+  "DEL014": {
+    "method": "GET",
+    "url": "/api/Delivery/trips/{{tripId}}/documents",
+    "auth": "Driver",
+    "body": "None"
+  },
+  "DEL015": {
+    "method": "GET",
+    "url": "/api/Delivery/trips/{{tripId}}/lpns/{{lpnId}}",
+    "auth": "Driver",
+    "body": "None"
+  },
+  "RET001": {
+    "method": "POST",
+    "url": "/api/Delivery/stops/{{stopId}}/reject-entire-lpn",
+    "auth": "Driver",
+    "body": "Form"
+  },
+  "RET002": {
+    "method": "GET",
+    "url": "/api/Delivery/nearest-return-warehouses?tripId={{tripId}}",
+    "auth": "Driver",
+    "body": "None"
+  },
+  "RET003": {
+    "method": "POST",
+    "url": "/api/Inbound/reverse",
+    "auth": "WarehouseOperator",
+    "body": "Json"
+  },
+  "RET004": {
+    "method": "GET",
+    "url": "/api/Inbound/lookup/return-slips",
+    "auth": "WarehouseOperator",
+    "body": "None"
+  },
+  "RET005": {
+    "method": "GET",
+    "url": "/api/discrepancy/pending",
+    "auth": "WarehouseOperator",
+    "body": "None"
+  },
+  "RET006": {
+    "method": "GET",
+    "url": "/api/discrepancy/{{lpnId}}",
+    "auth": "WarehouseOperator",
+    "body": "None"
+  },
+  "RET007": {
+    "method": "POST",
+    "url": "/api/discrepancy/resolve",
+    "auth": "WarehouseOperator",
+    "body": "Json"
+  },
+  "RET008": {
+    "method": "GET",
+    "url": "/api/discrepancy/{{receiptId}}/pdf",
+    "auth": "WarehouseOperator",
+    "body": "None"
+  },
+  "CLM001": {
+    "method": "POST",
+    "url": "/api/v1/claims",
+    "auth": "Customer",
+    "body": "Form"
+  },
+  "CLM002": {
+    "method": "GET",
+    "url": "/api/v1/claims",
+    "auth": "Dispatcher",
+    "body": "None"
+  },
+  "CLM003": {
+    "method": "GET",
+    "url": "/api/v1/claims/{{claimId}}",
+    "auth": "Dispatcher",
+    "body": "None"
+  },
+  "CLM004": {
+    "method": "POST",
+    "url": "/api/v1/claims/{{claimId}}/dispatcher-approve",
+    "auth": "Dispatcher",
+    "body": "Json"
+  },
+  "CLM005": {
+    "method": "POST",
+    "url": "/api/v1/claims/{{claimId}}/payout-accountant",
+    "auth": "Accountant",
+    "body": "Json"
+  },
+  "ACC001": {
+    "method": "GET",
+    "url": "/api/v1/invoices/{{invoiceId}}",
+    "auth": "Accountant",
+    "body": "None"
+  },
+  "ACC002": {
+    "method": "GET",
+    "url": "/api/v1/invoices",
+    "auth": "Accountant",
+    "body": "None"
+  },
+  "ACC003": {
+    "method": "GET",
+    "url": "/api/v1/orders/{{orderId}}/invoices",
+    "auth": "Accountant",
+    "body": "None"
+  },
+  "ACC004": {
+    "method": "POST",
+    "url": "/api/v1/invoices/generate-periodic",
+    "auth": "Accountant",
+    "body": "None"
+  },
+  "ACC005": {
+    "method": "GET",
+    "url": "/api/v1/financial-reports/summary",
+    "auth": "Accountant",
+    "body": "None"
+  },
+  "ACC006": {
+    "method": "GET",
+    "url": "/api/v1/financial-reports/vat-invoices/export",
+    "auth": "Accountant",
+    "body": "None"
+  },
+  "ACC007": {
+    "method": "GET",
+    "url": "/api/v1/financial-reports/cod-settlement/export",
+    "auth": "Accountant",
+    "body": "None"
+  },
+  "ACC008": {
+    "method": "GET",
+    "url": "/api/v1/financial-reports/claims-expenses/export",
+    "auth": "Accountant",
+    "body": "None"
+  },
+  "ACC009": {
+    "method": "GET",
+    "url": "/api/payments/transactions",
+    "auth": "Accountant",
+    "body": "None"
+  },
+  "ACC010": {
+    "method": "GET",
+    "url": "/api/payments/transactions/customer/me",
+    "auth": "Customer",
+    "body": "None"
+  },
+  "ACC011": {
+    "method": "GET",
+    "url": "/api/payments/invoices/{{invoiceId}}",
+    "auth": "Customer",
+    "body": "None"
+  },
+  "INC001": {
+    "method": "GET",
+    "url": "/api/v1/incidents",
+    "auth": "Dispatcher",
+    "body": "None"
+  },
+  "INC002": {
+    "method": "GET",
+    "url": "/api/v1/incidents/{{incidentId}}",
+    "auth": "Dispatcher",
+    "body": "None"
+  },
+  "INC003": {
+    "method": "POST",
+    "url": "/api/v1/incidents",
+    "auth": "Driver",
+    "body": "Form"
+  },
+  "INC004": {
+    "method": "POST",
+    "url": "/api/v1/incidents/{{incidentId}}/evidences",
+    "auth": "Driver",
+    "body": "Form"
+  },
+  "INC005": {
+    "method": "POST",
+    "url": "/api/v1/incidents/{{incidentId}}/expenses/approve",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "INC006": {
+    "method": "POST",
+    "url": "/api/v1/incidents/{{incidentId}}/expenses/reimburse",
+    "auth": "Admin",
+    "body": "Form"
+  },
+  "INC007": {
+    "method": "POST",
+    "url": "/api/v1/incidents/{{incidentId}}/continue-trip",
+    "auth": "Driver",
+    "body": "Json"
+  },
+  "INC008": {
+    "method": "POST",
+    "url": "/api/v1/incidents/{{incidentId}}/resolve",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "INC009": {
+    "method": "GET",
+    "url": "/api/v1/incidents/{{incidentId}}/rescue-candidates",
+    "auth": "Dispatcher",
+    "body": "None"
+  },
+  "INC010": {
+    "method": "POST",
+    "url": "/api/v1/incidents/{{incidentId}}/dispatch-rescue",
+    "auth": "Dispatcher",
+    "body": "Json"
+  },
+  "INC011": {
+    "method": "POST",
+    "url": "/api/v1/incidents/{{incidentId}}/confirm-transload",
+    "auth": "Dispatcher",
+    "body": "Json"
+  },
+  "FLT001": {
+    "method": "POST",
+    "url": "/api/vehicles",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "FLT002": {
+    "method": "PUT",
+    "url": "/api/vehicles/{{vehicleId}}",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "FLT003": {
+    "method": "DELETE",
+    "url": "/api/vehicles/{{vehicleId}}",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "FLT004": {
+    "method": "GET",
+    "url": "/api/vehicles/{{vehicleId}}",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "FLT005": {
+    "method": "GET",
+    "url": "/api/vehicles",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "FLT006": {
+    "method": "POST",
+    "url": "/api/vehicles/{{vehicleId}}/maintenance-tickets",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "FLT007": {
+    "method": "PUT",
+    "url": "/api/maintenance-tickets/{{ticketId}}/complete",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "FLT008": {
+    "method": "GET",
+    "url": "/api/maintenance-tickets",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "FLT009": {
+    "method": "GET",
+    "url": "/api/maintenance-tickets/{{ticketId}}",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "DRV001": {
+    "method": "GET",
+    "url": "/api/drivers",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "DRV002": {
+    "method": "GET",
+    "url": "/api/drivers/{{driverId}}",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "DRV003": {
+    "method": "POST",
+    "url": "/api/drivers",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "DRV004": {
+    "method": "PUT",
+    "url": "/api/drivers/{{driverId}}",
+    "auth": "Admin",
+    "body": "Json"
+  },
+  "DRV005": {
+    "method": "DELETE",
+    "url": "/api/drivers/{{driverId}}",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "DRV006": {
+    "method": "GET",
+    "url": "/api/drivers/{{driverId}}/trips",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "DRV007": {
+    "method": "GET",
+    "url": "/api/drivers/me/trips",
+    "auth": "Driver",
+    "body": "None"
+  },
+  "NTF001": {
+    "method": "GET",
+    "url": "/api/notifications",
+    "auth": "Any",
+    "body": "None"
+  },
+  "NTF002": {
+    "method": "GET",
+    "url": "/api/notifications/unread-count",
+    "auth": "Any",
+    "body": "None"
+  },
+  "NTF003": {
+    "method": "PUT",
+    "url": "/api/notifications/{{notificationId}}/read",
+    "auth": "Any",
+    "body": "None"
+  },
+  "NTF004": {
+    "method": "PUT",
+    "url": "/api/notifications/read-all",
+    "auth": "Any",
+    "body": "None"
+  },
+  "WRK001": {
+    "method": "GET",
+    "url": "/api/work-assignments",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "WRK002": {
+    "method": "GET",
+    "url": "/api/work-assignments/{{assignmentId}}",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "WRK003": {
+    "method": "POST",
+    "url": "/api/auth/create-warehouse-worker",
+    "auth": "Admin",
+    "body": "Form"
+  },
+  "WRK004": {
+    "method": "PUT",
+    "url": "/api/work-assignments/{{assignmentId}}/start",
+    "auth": "WarehouseWorker",
+    "body": "None"
+  },
+  "WRK005": {
+    "method": "PUT",
+    "url": "/api/work-assignments/{{assignmentId}}/cancel",
+    "auth": "Admin",
+    "body": "None"
+  },
+  "WRK006": {
+    "method": "PUT",
+    "url": "/api/work-assignments/{{assignmentId}}/complete",
     "auth": "WarehouseWorker",
     "body": "None"
   }

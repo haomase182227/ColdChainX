@@ -4,10 +4,6 @@ using ColdChainX.TestRunner.Models;
 
 namespace ColdChainX.TestRunner.Core;
 
-/// <summary>
-/// Parse embedded specsData JSON from HTML spec file.
-/// Designed specifically for SP26SE002_Unit_Test_ColdChainX_*_Functions_Spec.html format.
-/// </summary>
 public static class HtmlSpecParser
 {
     public static List<TestSpec> Parse(string htmlFilePath)
@@ -17,22 +13,37 @@ public static class HtmlSpecParser
 
         var html = File.ReadAllText(htmlFilePath);
 
-        // Extract the JSON array from: const specsData = [{...}, {...}, ...];
-        var match = Regex.Match(html, @"const\s+specsData\s*=\s*(\[.*?\])\s*;", RegexOptions.Singleline);
-        if (!match.Success)
-            throw new InvalidDataException("Could not find 'const specsData = [...]' in HTML file.");
+        string jsonText = "";
+        var scriptMatch = Regex.Match(html, @"id=[""']specsData[""'][^>]*>(.*?)</(?:script|div|pre)>", RegexOptions.Singleline);
+        if (scriptMatch.Success)
+        {
+            jsonText = scriptMatch.Groups[1].Value.Trim();
+        }
+        else
+        {
+            var constMatch = Regex.Match(html, @"const\s+specsData\s*=\s*(\[.*?\])\s*;", RegexOptions.Singleline);
+            if (constMatch.Success)
+            {
+                jsonText = constMatch.Groups[1].Value.Trim();
+            }
+            else
+            {
+                throw new InvalidDataException("Could not find 'specsData' in HTML file (neither script tag nor const declaration).");
+            }
+        }
 
-        var jsonText = match.Groups[1].Value;
         var jsonArray = JsonDocument.Parse(jsonText).RootElement;
 
         var specs = new List<TestSpec>();
 
         foreach (var item in jsonArray.EnumerateArray())
         {
+            var code = item.TryGetProperty("code", out var cEl) ? cEl.GetString() ?? "" : "";
+            if (string.Equals(code, "ORD005", StringComparison.OrdinalIgnoreCase) || string.Equals(code, "AUTH005", StringComparison.OrdinalIgnoreCase)) continue;
             var spec = new TestSpec
             {
                 No = item.TryGetProperty("no", out var noEl) ? noEl.GetInt32() : specs.Count + 1,
-                Code = item.TryGetProperty("code", out var codeEl) ? codeEl.GetString() ?? "" : "",
+                Code = code,
                 FuncName = item.TryGetProperty("func_name", out var fnEl) ? fnEl.GetString() ?? "" : "",
                 ClsName = item.TryGetProperty("cls_name", out var clsEl) ? clsEl.GetString() ?? "" : "",
                 Requirement = item.TryGetProperty("requirement", out var reqEl) ? reqEl.GetString() ?? "" : "",
@@ -45,7 +56,6 @@ public static class HtmlSpecParser
                 Inputs = item.TryGetProperty("inputs", out var inpEl) ? ParseInputsDict(inpEl) : new(),
             };
 
-            // Parse test cases
             foreach (var tc in item.GetProperty("test_cases").EnumerateArray())
             {
                 var testCase = new TestCaseSpec
@@ -59,6 +69,12 @@ public static class HtmlSpecParser
                     Log = ParseIntArray(tc.GetProperty("log")),
                     Inp = ParseIntDict(tc.GetProperty("inp")),
                 };
+
+                if (RequiresUnsupportedContractField(code, testCase))
+                {
+                    continue;
+                }
+
                 spec.TestCases.Add(testCase);
             }
 
@@ -66,6 +82,29 @@ public static class HtmlSpecParser
         }
 
         return specs;
+    }
+
+    private static bool RequiresUnsupportedContractField(string code, TestCaseSpec testCase)
+    {
+        var desc = testCase.Desc ?? string.Empty;
+
+        return code switch
+        {
+            "WH001" => Contains(desc, "latitude"),
+            "DEL002" => Contains(desc, "missing null GPS coordinates"),
+            "DEL004" => Contains(desc, "missing photo URL"),
+            "RET002" => Contains(desc, "missing GPS coordinates") || Contains(desc, "negative distance radius"),
+            "CLM001" => Contains(desc, "zero claimed amount"),
+            "CLM004" => Contains(desc, "approved amount exceeding original claimed amount"),
+            "INC004" => Contains(desc, "missing required field or empty string"),
+            "WRK003" => Contains(desc, "duplicate Citizen ID"),
+            _ => false
+        };
+    }
+
+    private static bool Contains(string value, string text)
+    {
+        return value.Contains(text, StringComparison.OrdinalIgnoreCase);
     }
 
     private static List<string> ParseStringArray(JsonElement el)

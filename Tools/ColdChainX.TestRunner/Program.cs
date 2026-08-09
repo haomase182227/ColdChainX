@@ -10,20 +10,15 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
-// ═══════════════════════════════════════════════════════════════
-// ColdChainX API Test Runner — Dual Mode (Web UI Dashboard + CLI)
-// ═══════════════════════════════════════════════════════════════
 
-// 1. Kiểm tra chế độ CLI: nếu có truyền file spec .html hoặc cờ --dry-run, --filter, --quiet... -> chạy CLI
-bool isCliMode = args.Any(a => a.EndsWith(".html", StringComparison.OrdinalIgnoreCase) || 
-                               a == "--dry-run" || a == "--stop-on-fail" || a == "--filter" || a == "--quiet");
+bool isCliMode = args.Length > 0 && args.Any(a => a.EndsWith(".html", StringComparison.OrdinalIgnoreCase) || 
+                               a == "--dry-run" || a == "--stop-on-fail" || a == "--filter" || a == "-f" || a == "--base-url" || a == "--quiet" || a == "-v" || a == "--verbose");
 
 if (isCliMode)
 {
     return await RunCliModeAsync(args);
 }
 
-// 2. Chế độ mặc định (F5 / nháy đúp / dotnet run không tham số): Khởi chạy Web Application UI Dashboard!
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 Console.ForegroundColor = ConsoleColor.Cyan;
 Console.WriteLine(@"
@@ -36,6 +31,16 @@ Console.ResetColor();
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddCors(options => { options.AddPolicy("AllowAll", p => p.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()); });
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 128 * 1024 * 1024;
+    options.ValueLengthLimit = 128 * 1024 * 1024;
+    options.MultipartHeadersLengthLimit = 128 * 1024 * 1024;
+});
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 128 * 1024 * 1024;
+});
 builder.Services.AddSingleton<TestRunState>();
 
 var app = builder.Build();
@@ -43,28 +48,64 @@ app.UseCors("AllowAll");
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-// ── API Endpoints cho Web UI ──
 
 app.MapGet("/api/spec/auto-detect", () =>
 {
-    var candidates = new List<string>
-    {
-        @"C:\Users\ASUS\Music\CN 9\ĐA\SP26SE002_Unit_Test_ColdChainX_100_Functions_Spec.html",
-        Path.Combine(Directory.GetCurrentDirectory(), "SP26SE002_Unit_Test_ColdChainX_100_Functions_Spec.html"),
-        Path.Combine(AppContext.BaseDirectory, "SP26SE002_Unit_Test_ColdChainX_100_Functions_Spec.html")
-    };
+    var found = ProgramHelpers.FindCandidateSpecFiles();
+    var best = found.FirstOrDefault(f => f.Contains("101_to_212", StringComparison.OrdinalIgnoreCase))
+            ?? found.FirstOrDefault()
+            ?? @"C:\Users\ASUS\Music\CN 9\ĐA\SP26SE002_Unit_Test_ColdChainX_101_to_212_Functions_Spec.html";
+    return Results.Ok(new { path = best, exists = File.Exists(best), candidates = found });
+});
 
-    // Tìm ngược lên các thư mục cha
-    var curr = new DirectoryInfo(Directory.GetCurrentDirectory());
-    while (curr != null)
+app.MapGet("/api/spec/candidates", () =>
+{
+    var list = ProgramHelpers.FindCandidateSpecFiles().Select(p => new
     {
-        var p = Path.Combine(curr.FullName, "SP26SE002_Unit_Test_ColdChainX_100_Functions_Spec.html");
-        if (!candidates.Contains(p)) candidates.Add(p);
-        curr = curr.Parent;
+        path = p,
+        name = Path.GetFileName(p),
+        dir = Path.GetDirectoryName(p),
+        size = new FileInfo(p).Length,
+        lastModified = new FileInfo(p).LastWriteTime.ToString("yyyy-MM-dd HH:mm")
+    }).ToList();
+
+    return Results.Ok(list);
+});
+
+app.MapPost("/api/spec/upload", async (HttpRequest request) =>
+{
+    if (!request.HasFormContentType || request.Form.Files.Count == 0)
+        return Results.BadRequest(new { error = "Không có file nào được tải lên." });
+
+    var file = request.Form.Files[0];
+    if (!file.FileName.EndsWith(".html", StringComparison.OrdinalIgnoreCase))
+        return Results.BadRequest(new { error = "Vui lòng chọn file có định dạng .html" });
+
+    var uploadDir = Path.Combine(Directory.GetCurrentDirectory(), "UploadedSpecs");
+    if (!Directory.Exists(uploadDir)) Directory.CreateDirectory(uploadDir);
+
+    var savePath = Path.Combine(uploadDir, file.FileName);
+    using (var stream = new FileStream(savePath, FileMode.Create))
+    {
+        await file.CopyToAsync(stream);
     }
 
-    var found = candidates.FirstOrDefault(File.Exists);
-    return Results.Ok(new { path = found ?? candidates.First(), exists = found != null });
+    try
+    {
+        var specs = HtmlSpecParser.Parse(savePath);
+        return Results.Ok(new
+        {
+            success = true,
+            path = savePath,
+            name = file.FileName,
+            totalFunctions = specs.Count,
+            totalTestCases = specs.Sum(s => s.TestCases.Count)
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { error = "File tải lên thành công nhưng không phân tích được dữ liệu kiểm thử: " + ex.Message, path = savePath });
+    }
 });
 
 app.MapGet("/api/spec/browse", (string? currentPath) =>
@@ -74,25 +115,46 @@ app.MapGet("/api/spec/browse", (string? currentPath) =>
 
     var thread = new Thread(() =>
     {
-        using var dlg = new System.Windows.Forms.OpenFileDialog
+        try
         {
-            Title = "Chọn file Đặc tả Kiểm thử (ColdChainX HTML Spec)",
-            Filter = "HTML Spec Files (*.html)|*.html|All Files (*.*)|*.*",
-            InitialDirectory = !string.IsNullOrEmpty(currentPath) && Directory.Exists(Path.GetDirectoryName(currentPath))
-                ? Path.GetDirectoryName(currentPath)!
-                : @"C:\Users\ASUS\Music\CN 9\ĐA"
-        };
+            using var dlg = new System.Windows.Forms.OpenFileDialog
+            {
+                Title = "Chọn file Đặc tả Kiểm thử (ColdChainX HTML Spec)",
+                Filter = "HTML Spec Files (*.html)|*.html|All Files (*.*)|*.*",
+                InitialDirectory = !string.IsNullOrEmpty(currentPath) && Directory.Exists(Path.GetDirectoryName(currentPath))
+                    ? Path.GetDirectoryName(currentPath)!
+                    : @"C:\Users\ASUS\Music\CN 9\ĐA"
+            };
 
-        if (dlg.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            using var form = new System.Windows.Forms.Form
+            {
+                TopMost = true,
+                TopLevel = true,
+                ShowInTaskbar = false,
+                WindowState = System.Windows.Forms.FormWindowState.Minimized
+            };
+            form.Show();
+            form.BringToFront();
+            form.Activate();
+
+            if (dlg.ShowDialog(form) == System.Windows.Forms.DialogResult.OK)
+            {
+                selectedPath = dlg.FileName;
+                cancelled = false;
+            }
+        }
+        catch (Exception ex)
         {
-            selectedPath = dlg.FileName;
-            cancelled = false;
+            Console.WriteLine($"[BrowseDialog Error] {ex.Message}");
         }
     });
 
     thread.SetApartmentState(ApartmentState.STA);
     thread.Start();
-    thread.Join();
+    if (!thread.Join(60000))
+    {
+        try { thread.Interrupt(); } catch { }
+    }
 
     if (cancelled || selectedPath == null)
         return Results.Ok(new { cancelled = true, path = currentPath ?? "" });
@@ -186,7 +248,6 @@ app.MapPost("/api/run/start", (StartRunRequest req, TestRunState state, IConfigu
     if (string.IsNullOrEmpty(req.SpecPath) || !File.Exists(req.SpecPath))
         return Results.BadRequest(new { error = "File Spec HTML không tồn tại!" });
 
-    // Kích hoạt chạy ngầm (Background Task)
     _ = Task.Run(async () =>
     {
         try
@@ -251,7 +312,7 @@ app.MapPost("/api/run/start", (StartRunRequest req, TestRunState state, IConfigu
                 credentials[child.Key] = new LoginCredential { Email = child["Email"] ?? "", Password = child["Password"] ?? "" };
             }
             if (credentials.Count == 0)
-                credentials["Admin"] = new LoginCredential { Email = "admin@coldchain.vn", Password = "Admin@2026" };
+                credentials["Admin"] = new LoginCredential { Email = "admin01@coldchainx.com", Password = "Password@123" };
 
             await runner.BootstrapAsync(credentials);
 
@@ -268,8 +329,10 @@ app.MapPost("/api/run/start", (StartRunRequest req, TestRunState state, IConfigu
             try
             {
                 var resultPath = HtmlResultExporter.Export(req.SpecPath, specs, state.GetAllResults());
+                var jsonPath = JsonResultExporter.Export(req.SpecPath, state.GetAllResults());
                 state.LastResultHtmlPath = resultPath;
                 logger.LogInfo($"Exported HTML: {resultPath}");
+                logger.LogInfo($"Exported JSON Report: {jsonPath}");
                 state.CompleteRun();
             }
             catch (Exception ex)
@@ -292,9 +355,6 @@ app.Run();
 return 0;
 
 
-// ═══════════════════════════════════════════════════════════════
-// HÀM CHẠY CLI TRUYỀN THỐNG (Khi được truyền tham số trong terminal)
-// ═══════════════════════════════════════════════════════════════
 static async Task<int> RunCliModeAsync(string[] cliArgs)
 {
     Console.OutputEncoding = System.Text.Encoding.UTF8;
@@ -308,30 +368,36 @@ static async Task<int> RunCliModeAsync(string[] cliArgs)
 
     string? htmlPath = null;
     string? filterModule = null;
+    string? baseUrlOverride = null;
     bool verbose = true;
     bool stopOnFail = false;
     bool dryRun = false;
 
     for (int i = 0; i < cliArgs.Length; i++)
     {
-        if (cliArgs[i] == "--filter" && i + 1 < cliArgs.Length)
+        if ((cliArgs[i] == "--filter" || cliArgs[i] == "-f") && i + 1 < cliArgs.Length)
             filterModule = cliArgs[++i];
-        else if (cliArgs[i] == "--quiet")
+        else if (cliArgs[i] == "--base-url" && i + 1 < cliArgs.Length)
+            baseUrlOverride = cliArgs[++i];
+        else if (cliArgs[i] == "--quiet" || cliArgs[i] == "-q")
             verbose = false;
+        else if (cliArgs[i] == "--verbose" || cliArgs[i] == "-v")
+            verbose = true;
         else if (cliArgs[i] == "--stop-on-fail")
             stopOnFail = true;
         else if (cliArgs[i] == "--dry-run")
             dryRun = true;
-        else if (!cliArgs[i].StartsWith("--"))
+        else if (!cliArgs[i].StartsWith("-"))
             htmlPath = cliArgs[i];
     }
 
-    if (string.IsNullOrEmpty(htmlPath))
+    if (string.IsNullOrEmpty(htmlPath) || !File.Exists(htmlPath))
     {
-        Console.WriteLine("Usage: dotnet run -- \"path/to/spec.html\" [--filter AUTH] [--dry-run] [--stop-on-fail]");
-        return 1;
+        var candidates = ProgramHelpers.FindCandidateSpecFiles();
+        htmlPath = candidates.FirstOrDefault() ?? @"C:\Users\ASUS\Music\CN 9\ĐA\SP26SE002_Unit_Test_ColdChainX_100_Functions_Spec.html";
     }
 
+    htmlPath = Path.GetFullPath(htmlPath);
     var logDir = Path.Combine(Path.GetDirectoryName(htmlPath) ?? ".", "TestRunner_Results");
     using var logger = new TestLogger(logDir);
 
@@ -339,7 +405,7 @@ static async Task<int> RunCliModeAsync(string[] cliArgs)
     if (!File.Exists(configPath)) configPath = Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json");
 
     var config = new ConfigurationBuilder().SetBasePath(Path.GetDirectoryName(configPath) ?? Directory.GetCurrentDirectory()).AddJsonFile("appsettings.json", optional: true).Build();
-    var baseUrl = config["BaseUrl"] ?? "http://localhost:5244";
+    var baseUrl = baseUrlOverride ?? config["BaseUrl"] ?? "http://localhost:5244";
     Console.WriteLine($"🌐 API Base URL: {baseUrl}");
 
     Console.Write($"📄 Parsing HTML spec: {Path.GetFileName(htmlPath)}... ");
@@ -384,7 +450,7 @@ static async Task<int> RunCliModeAsync(string[] cliArgs)
     {
         credentials[child.Key] = new LoginCredential { Email = child["Email"] ?? "", Password = child["Password"] ?? "" };
     }
-    if (credentials.Count == 0) credentials["Admin"] = new LoginCredential { Email = "admin@coldchain.vn", Password = "Admin@2026" };
+    if (credentials.Count == 0) credentials["Admin"] = new LoginCredential { Email = "admin01@coldchainx.com", Password = "Password@123" };
 
     await runner.BootstrapAsync(credentials);
     var results = await runner.RunAllAsync(specs, filterModule);
@@ -396,7 +462,9 @@ static async Task<int> RunCliModeAsync(string[] cliArgs)
     try
     {
         var resPath = HtmlResultExporter.Export(htmlPath, specs, results);
-        Console.WriteLine($"   📂 Result file: {resPath}");
+        var jsonPath = JsonResultExporter.Export(htmlPath, results);
+        Console.WriteLine($"   📂 Result HTML file: {resPath}");
+        Console.WriteLine($"   📊 Result JSON report: {jsonPath}");
     }
     catch (Exception ex) { Console.WriteLine($"FAILED export: {ex.Message}"); }
 
@@ -410,4 +478,53 @@ public class StartRunRequest
     public string? FilterModule { get; set; }
     public bool StopOnFail { get; set; }
     public bool DryRun { get; set; }
+}
+
+public static partial class ProgramHelpers
+{
+    public static List<string> FindCandidateSpecFiles()
+    {
+        var candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            @"C:\Users\ASUS\Music\CN 9\ĐA\SP26SE002_Unit_Test_ColdChainX_101_to_212_Functions_Spec.html",
+            @"C:\Users\ASUS\Music\CN 9\ĐA\SP26SE002_Unit_Test_ColdChainX_212_Functions_Spec.html",
+            @"C:\Users\ASUS\Music\CN 9\ĐA\SP26SE002_Unit_Test_ColdChainX_100_Functions_Spec.html",
+            @"C:\Users\ASUS\Music\CN 9\ĐA\Unit test\SP26SE002_Unit_Test_ColdChainX_101_to_212_Functions_Spec.html",
+            @"C:\Users\ASUS\Music\CN 9\ĐA\Unit test\SP26SE002_Unit_Test_ColdChainX_100_Functions_Spec.html",
+            Path.Combine(Directory.GetCurrentDirectory(), "SP26SE002_Unit_Test_ColdChainX_101_to_212_Functions_Spec.html"),
+            Path.Combine(AppContext.BaseDirectory, "SP26SE002_Unit_Test_ColdChainX_101_to_212_Functions_Spec.html")
+        };
+
+        var curr = new DirectoryInfo(Directory.GetCurrentDirectory());
+        int levels = 0;
+        while (curr != null && levels < 6)
+        {
+            try
+            {
+                foreach (var f in curr.GetFiles("*Spec*.html", SearchOption.TopDirectoryOnly))
+                {
+                    candidates.Add(f.FullName);
+                }
+                foreach (var f in curr.GetFiles("SP26SE002*.html", SearchOption.TopDirectoryOnly))
+                {
+                    candidates.Add(f.FullName);
+                }
+
+                var unitTestDir = Path.Combine(curr.FullName, "Unit test");
+                if (Directory.Exists(unitTestDir))
+                {
+                    foreach (var f in Directory.GetFiles(unitTestDir, "*.html"))
+                    {
+                        candidates.Add(f);
+                    }
+                }
+            }
+            catch { }
+
+            curr = curr.Parent;
+            levels++;
+        }
+
+        return candidates.Where(File.Exists).ToList();
+    }
 }

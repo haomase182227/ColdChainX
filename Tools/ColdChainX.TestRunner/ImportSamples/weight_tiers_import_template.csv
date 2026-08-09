@@ -1,0 +1,3 @@
+RouteCode,MinWeightKg,MaxWeightKg,PricePerKg
+"ROUTE-001",0,50,15000
+"ROUTE-001",50,,12000
