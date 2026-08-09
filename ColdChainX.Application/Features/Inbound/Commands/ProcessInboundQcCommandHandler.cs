@@ -1,4 +1,5 @@
 using ColdChainX.Application.Interfaces;
+using ColdChainX.Application.Helpers;
 using ColdChainX.Core.Entities;
 using ColdChainX.Core.Enums;
 using MediatR;
@@ -84,11 +85,39 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
         }
         var evidenceImageUrl = uploadedUrls.Any() ? string.Join(",", uploadedUrls) : null;
 
+        var asn = await _context.InboundAsns
+            .Include(a => a.Order)
+                .ThenInclude(o => o.OrderDimension)
+            .FirstOrDefaultAsync(a => a.AsnId == request.AsnId, cancellationToken);
+
+        if (asn?.Order == null)
+            return Failure("ASN or linked order was not found.");
+
+        if (asn.WarehouseId.HasValue && asn.WarehouseId.Value != warehouseId.Value)
+            return Failure("ASN does not belong to current receiver warehouse.");
+
         var order = asn.Order;
         var now = DbNow();
-        var actualCbm = CalculateCbm(request.LengthCm, request.WidthCm, request.HeightCm, order.Quantity);
-        var weightDiff = CalculateDiffPercent(order.OrderDimension?.ExpectedWeightKg ?? 0m, request.ActualWeightKg);
-        var cbmDiff = CalculateDiffPercent(order.OrderDimension?.ExpectedCbm ?? 0m, actualCbm);
+        var storedExpectedCbm = order.OrderDimension.ExpectedCbm;
+        var expectedCbm = InboundQcMeasurementCalculator.CalculateExpectedCbm(order.OrderDimension, order.Quantity);
+        var actualCbm = InboundQcMeasurementCalculator.CalculateCbm(request.LengthCm, request.WidthCm, request.HeightCm, order.Quantity);
+
+#if DEBUG
+        _logger.LogDebug(
+            "Inbound QC CBM trace storedExpectedCbm={StoredExpectedCbm} calculatedExpectedCbmFromDimensions={CalculatedExpectedCbmFromDimensions} actualCbm={ActualCbm} expectedDimensionsCm={ExpectedLengthCm}x{ExpectedWidthCm}x{ExpectedHeightCm} actualDimensionsCm={ActualLengthCm}x{ActualWidthCm}x{ActualHeightCm}",
+            storedExpectedCbm,
+            expectedCbm,
+            actualCbm,
+            order.OrderDimension.LengthCm,
+            order.OrderDimension.WidthCm,
+            order.OrderDimension.HeightCm,
+            request.LengthCm,
+            request.WidthCm,
+            request.HeightCm);
+#endif
+
+        var weightDiff = CalculateDiffPercent(order.OrderDimension.ExpectedWeightKg, request.ActualWeightKg);
+        var cbmDiff = CalculateDiffPercent(expectedCbm, actualCbm);
         var maxDiff = Math.Max(weightDiff, cbmDiff);
         var hasDiscrepancy = maxDiff > DiscrepancyThresholdPercent;
 
@@ -255,7 +284,7 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
                     }
 
             var isWeightHigher = request.ActualWeightKg > (order.OrderDimension?.ExpectedWeightKg ?? 0m);
-            var isCbmHigher = actualCbm > (order.OrderDimension?.ExpectedCbm ?? 0m);
+            var isCbmHigher = actualCbm > expectedCbm;
             var weightSign = isWeightHigher ? "+" : "-";
             var cbmSign = isCbmHigher ? "+" : "-";
 
@@ -286,6 +315,7 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
                     var appendixIdStr = appendixResult.Success ? appendixResult.Data!.AppendixId.ToString() : "";
                     var appendixNumberStr = appendixResult.Success ? appendixResult.Data!.AppendixNumber : "";
 
+                    // Send notification to Sales, Admin, and WarehouseOperator
                     await EnsureNotificationTemplateAsync("NOTI_QC_DISCREPANCY", cancellationToken);
                     var salesUsers = await _context.Users
                         .Include(u => u.Role)
@@ -406,13 +436,10 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
     private static ProcessInboundQcResponse Failure(string message)
         => new() { Success = false, Message = message };
 
-    private static decimal CalculateCbm(decimal lengthCm, decimal widthCm, decimal heightCm, int quantity)
-        => Math.Round(lengthCm * widthCm * heightCm * Math.Max(quantity, 1) / 1_000_000m, 4);
-
     private static decimal CalculateDiffPercent(decimal expected, decimal actual)
     {
         if (expected <= 0)
-            return actual > 0 ? 100m : 0m;
+            throw new ArgumentOutOfRangeException(nameof(expected), "Expected measurement must be greater than 0.");
 
         return Math.Round(Math.Abs(actual - expected) / expected * 100m, 2);
     }

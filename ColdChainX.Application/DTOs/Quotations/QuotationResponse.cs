@@ -25,6 +25,8 @@ namespace ColdChainX.Application.DTOs.Quotations
         public string? FileUrl { get; set; }
         public string Status { get; set; } = null!;
         public DateTime? CreatedAt { get; set; }
+        public DateTime? SentAt { get; set; }
+        public DateTime? AcceptedAt { get; set; }
     }
 
     public class QuotationAdditionalChargeResponse

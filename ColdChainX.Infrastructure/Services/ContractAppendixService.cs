@@ -1038,7 +1038,7 @@ namespace ColdChainX.Infrastructure.Services
         {
             return await _db.Users
                 .Include(u => u.Role)
-                .Where(u => u.Role != null && (u.Role.RoleName.ToLower() == "sales" || u.Role.RoleName.ToLower() == "admin" || u.Role.RoleName.ToLower() == "warehouseoperator"))
+                .Where(u => u.Role != null && (u.Role.RoleName.ToLower() == "sales" || u.Role.RoleName.ToLower() == "admin" || u.Role.RoleName.ToLower() == "warehouseworker"))
                 .Select(u => (Guid?)u.UserId)
                 .FirstOrDefaultAsync();
         }

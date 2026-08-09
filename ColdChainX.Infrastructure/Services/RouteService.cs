@@ -25,7 +25,8 @@ namespace ColdChainX.Infrastructure.Services
 
             if (!string.IsNullOrWhiteSpace(status))
             {
-                query = query.Where(r => r.Status == status.ToUpper());
+                var normalizedStatus = status.Trim().ToUpperInvariant();
+                query = query.Where(r => r.Status.ToUpper() == normalizedStatus);
             }
 
             var routes = await query
@@ -64,7 +65,7 @@ namespace ColdChainX.Infrastructure.Services
             var schedules = await _db.RouteSchedules
                 .AsNoTracking()
                 .Where(s => s.RouteId == routeId
-                    && s.Status == "ACTIVE"
+                    && s.Status.ToUpper() == "ACTIVE"
                     && (s.DepartureDate > today
                         || (s.DepartureDate == today && s.CutOffTime > currentTime)))
                 .OrderBy(s => s.DepartureDate).ThenBy(s => s.DepartureTime)
@@ -195,7 +196,7 @@ namespace ColdChainX.Infrastructure.Services
                     DepartureDate = DateOnly.FromDateTime(s.DepartureDate),
                     DepartureTime = TimeOnly.FromTimeSpan(s.DepartureTime),
                     CutOffTime = TimeOnly.FromTimeSpan(s.CutOffTime),
-                    Status = s.Status,
+                    Status = s.Status.ToUpper(),
                     CreatedAt = s.CreatedAt
                 })
                 .ToListAsync();
@@ -378,7 +379,7 @@ namespace ColdChainX.Infrastructure.Services
                 OriginCity = route.OriginCity,
                 DestCity = route.DestCity,
                 TransitTime = route.TransitTime,
-                Status = route.Status,
+                Status = route.Status.Trim().ToUpperInvariant(),
                 CreatedAt = route.CreatedAt
             };
         }

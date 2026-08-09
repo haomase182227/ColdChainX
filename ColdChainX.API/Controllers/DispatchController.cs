@@ -446,8 +446,8 @@ public class DispatchController : ControllerBase
     {
         var rawItems = await _db.RouteSchedules
             .AsNoTracking()
-            .Where(s => s.Route.Status == "ACTIVE"
-                && (s.Status == "ACTIVE"
+            .Where(s => s.Route.Status.ToUpper() == "ACTIVE"
+                && (s.Status.ToUpper() == "ACTIVE"
                     || _db.Lpns.Any(l => l.Order.ScheduleId == s.ScheduleId
                         && l.State == LpnState.IN_STOCK
                         && l.TripId == null)))
@@ -1056,7 +1056,7 @@ public class DispatchController : ControllerBase
                 var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
                 if (!Guid.TryParse(userIdStr, out var currentUserId))
                 {
-                    var adminUser = await _db.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.Role != null && (u.Role.RoleName.ToUpper() == "ADMIN" || u.Role.RoleName.ToUpper() == "WAREHOUSEOPERATOR"));
+                    var adminUser = await _db.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.Role != null && (u.Role.RoleName.ToUpper() == "ADMIN" || u.Role.RoleName.ToUpper() == "WAREHOUSEWORKER"));
                     currentUserId = adminUser?.UserId ?? Guid.Empty;
                 }
 

@@ -6,7 +6,12 @@ namespace ColdChainX.Application.Interfaces
 {
     public interface IQuotationService
     {
-        Task<ApiResponse<PagedResult<QuotationResponse>>> GetQuotationsAsync(int pageNumber, int pageSize);
+        Task<ApiResponse<PagedResult<QuotationResponse>>> GetQuotationsAsync(
+            int pageNumber,
+            int pageSize,
+            string? status = null,
+            DateTime? fromDate = null,
+            DateTime? toDate = null);
         Task<ApiResponse<QuotationResponse>> GetQuotationByIdAsync(Guid quoteId);
         Task<ApiResponse<PagedResult<QuotationResponse>>> GetQuotationsByOrderAsync(Guid orderId, int pageNumber, int pageSize);
         Task<ApiResponse<PagedResult<QuotationResponse>>> GetQuotationsByCustomerAsync(Guid customerId, int pageNumber, int pageSize);

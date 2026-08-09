@@ -5,6 +5,13 @@ namespace ColdChainX.Application.Interfaces
 {
     public interface IContractService
     {
+        Task<ApiResponse<ContractListResponse>> GetContractsAsync(
+            string? status,
+            Guid? customerId,
+            DateTime? fromDate,
+            DateTime? toDate,
+            int pageNumber,
+            int pageSize);
         Task<ApiResponse<ContractInfoResponse>> GetContractByIdAsync(Guid contractId);
         Task<ApiResponse<ContractInfoResponse>> GetContractByOrderIdAsync(Guid orderId);
         Task<ApiResponse<string>> GetContractHtmlAsync(Guid contractId);
