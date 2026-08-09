@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using MediatR;
@@ -26,7 +26,6 @@ public class PaymentController : ControllerBase
 
     [HttpPost("/api/payments/bank-webhook")]
     [AllowAnonymous]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ReceivePaymentWebhook([FromBody] PaymentWebhookRequest request)
     {
         string? rawBody = null;
@@ -52,7 +51,6 @@ public class PaymentController : ControllerBase
 
     [HttpGet("/api/payments/transactions")]
     [AllowAnonymous]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAllPaymentTransactions(
         [FromQuery] string? status = null,
         [FromQuery] string? transactionType = null,
@@ -81,7 +79,6 @@ public class PaymentController : ControllerBase
     [HttpGet("/api/payments/transactions/customer/me")]
     [HttpGet("/api/payments/transactions/customer/{customerId:guid}")]
     [Authorize]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetCustomerPaymentTransactions([FromRoute] Guid? customerId = null)
     {
         var targetId = customerId;
@@ -90,7 +87,7 @@ public class PaymentController : ControllerBase
             var customerIdClaim = User.FindFirst("CustomerId")?.Value ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(customerIdClaim) || !Guid.TryParse(customerIdClaim, out var parsedId))
             {
-                return Unauthorized(ApiResponse<object>.Failure("Không thể xác thực danh tính khách hàng từ token."));
+                return Unauthorized(ApiResponse<object>.Failure("KhÃ´ng thá»ƒ xÃ¡c thá»±c danh tÃ­nh khÃ¡ch hÃ ng tá»« token."));
             }
             targetId = parsedId;
         }
@@ -105,7 +102,6 @@ public class PaymentController : ControllerBase
 
     [HttpGet("/api/payments/invoices/{referenceId:guid}")]
     [AllowAnonymous]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPaymentInvoiceById(Guid referenceId)
     {
         var result = await _mediator.Send(new ColdChainX.Application.Features.Payment.Queries.GetPaymentInvoiceQuery { ReferenceId = referenceId });

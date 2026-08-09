@@ -30,7 +30,11 @@ public class GetAllPaymentTransactionsQueryHandler : IRequestHandler<GetAllPayme
         CancellationToken cancellationToken)
     {
         // 1. Lấy danh sách giao dịch chính thức trong bảng PaymentTransactions
-        var dbTransactions = await _context.PaymentTransactions
+        var status = Normalize(request.Status);
+        var transactionType = Normalize(request.TransactionType);
+        var paymentMethod = Normalize(request.PaymentMethod);
+
+        var transactionQuery = _context.PaymentTransactions
             .Include(t => t.Order)
                 .ThenInclude(o => o!.Customer)
             .Include(t => t.Customer)
@@ -159,9 +163,9 @@ public class GetAllPaymentTransactionsQueryHandler : IRequestHandler<GetAllPayme
         {
             Summary = summary,
             TotalCount = sortedResults.Count,
-            PageNumber = pageNumber,
-            PageSize = pageSize,
-            TotalPages = (int)Math.Ceiling(sortedResults.Count / (double)pageSize),
+            PageNumber = request.PageNumber,
+            PageSize = request.PageSize,
+            TotalPages = (int)Math.Ceiling(sortedResults.Count / (double)request.PageSize),
             Transactions = paginatedResults
         }, "Lấy tất cả lịch sử giao dịch thanh toán thành công.");
     }

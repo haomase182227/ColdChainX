@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -22,7 +22,6 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet("summary")]
-        [ProducesResponseType(typeof(ApiResponse<FinancialSummaryResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetSummary(
             [FromQuery] DateTime? fromDate,
             [FromQuery] DateTime? toDate,
@@ -49,7 +48,6 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet("vat-invoices/export")]
-        [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
         public async Task<IActionResult> ExportVatInvoices([FromQuery] DateTime? fromDate, [FromQuery] DateTime? toDate, [FromQuery] string? status)
         {
             if (fromDate.HasValue && toDate.HasValue && fromDate.Value > toDate.Value)
@@ -63,7 +61,6 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet("cod-settlement/export")]
-        [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
         public async Task<IActionResult> ExportCodSettlement([FromQuery] DateTime? fromDate, [FromQuery] DateTime? toDate, [FromQuery] Guid? driverId)
         {
             if (fromDate.HasValue && toDate.HasValue && fromDate.Value > toDate.Value)
@@ -77,7 +74,6 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet("claims-expenses/export")]
-        [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
         public async Task<IActionResult> ExportClaimsExpenses([FromQuery] DateTime? fromDate, [FromQuery] DateTime? toDate)
         {
             if (fromDate.HasValue && toDate.HasValue && fromDate.Value > toDate.Value)

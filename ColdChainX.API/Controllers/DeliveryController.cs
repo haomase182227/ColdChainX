@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using MediatR;
@@ -28,7 +28,6 @@ public class DeliveryController : ControllerBase
     }
 
     [HttpGet("trips/{tripId:guid}/lpns")]
-    [ProducesResponseType(typeof(ApiResponse<TripDeliveryProgressResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetTripDeliveryProgress(Guid tripId)
     {
         var query = new GetTripDeliveryProgressQuery { TripId = tripId };
@@ -38,7 +37,6 @@ public class DeliveryController : ControllerBase
 
     [HttpGet("trips/{tripId:guid}/customer-orders")]
     [AllowAnonymous]
-    [ProducesResponseType(typeof(ApiResponse<TripOrderCustomersResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetTripOrderCustomers(Guid tripId)
     {
         var query = new GetTripOrderCustomersQuery { TripId = tripId };
@@ -49,7 +47,6 @@ public class DeliveryController : ControllerBase
 
     [HttpGet("trips/{tripId:guid}/documents")]
     [AllowAnonymous]
-    [ProducesResponseType(typeof(ApiResponse<TripDocumentsResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetTripDocuments(Guid tripId, [FromQuery] Guid? customerId = null)
     {
         Guid? targetCustomerId = customerId;
@@ -74,7 +71,6 @@ public class DeliveryController : ControllerBase
     }
 
     [HttpGet("trips/{tripId:guid}/my-documents")]
-    [ProducesResponseType(typeof(ApiResponse<TripDocumentsResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetMyTripDocuments(Guid tripId)
     {
         var cidClaim = User.FindFirst("CustomerId")?.Value ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
@@ -95,7 +91,6 @@ public class DeliveryController : ControllerBase
     }
 
     [HttpPost("trips/{tripId:guid}/seals/cut")]
-    [ProducesResponseType(typeof(ApiResponse<CutSealResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> CutSeal(Guid tripId, [FromBody] CutSealRequest request)
     {
         var command = new CutSealCommand
@@ -109,7 +104,6 @@ public class DeliveryController : ControllerBase
     }
 
     [HttpPost("trips/{tripId:guid}/seals/apply")]
-    [ProducesResponseType(typeof(ApiResponse<ApplySealResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ApplySeal(Guid tripId, [FromBody] ApplySealRequest request)
     {
         var command = new ApplySealCommand
@@ -123,7 +117,6 @@ public class DeliveryController : ControllerBase
     }
 
     [HttpGet("trips/{tripId:guid}/lpns/{lpnId:guid}")]
-    [ProducesResponseType(typeof(ApiResponse<LpnDeliveryStatusResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetLpnDeliveryDetail(Guid tripId, Guid lpnId)
     {
         var query = new GetLpnDeliveryDetailQuery { TripId = tripId, LpnId = lpnId };
@@ -135,7 +128,6 @@ public class DeliveryController : ControllerBase
     [HttpPost("/api/stops/{stopId:guid}/check-ins")]
     [Authorize(Roles = "Driver")]
     [Consumes("multipart/form-data")]
-    [ProducesResponseType(typeof(ApiResponse<CheckinDriverResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> CheckinDriver(Guid stopId, [FromForm] CheckinDriverRequest request)
     {
         var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -157,7 +149,6 @@ public class DeliveryController : ControllerBase
     }
 
     [HttpPost("/api/Delivery/depart")]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     public async Task<IActionResult> CloseShift([FromBody] CloseShiftCommand command)
     {
         var result = await _mediator.Send(command);
@@ -168,7 +159,6 @@ public class DeliveryController : ControllerBase
     [HttpPost("/api/Delivery/stops/{stopId:guid}/confirm-handover")]
     [Authorize(Roles = "Driver")]
     [Consumes("multipart/form-data")]
-    [ProducesResponseType(typeof(ApiResponse<HandoverConfirmResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ConfirmHandover(Guid stopId, [FromForm] HandoverConfirmRequest request)
     {
         var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -187,7 +177,6 @@ public class DeliveryController : ControllerBase
     }
 
     [HttpGet("/api/Delivery/orders/{orderId:guid}/epod")]
-    [ProducesResponseType(typeof(ApiResponse<EpodDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetEpodByOrderId(Guid orderId)
     {
         var query = new GetEpodByOrderIdQuery { OrderId = orderId };
@@ -197,7 +186,6 @@ public class DeliveryController : ControllerBase
     }
 
     [HttpGet("/api/Delivery/epods/{epodId:guid}/payment-qr")]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetEpodPaymentQr(Guid epodId)
     {
         var query = new GetEpodPaymentQrQuery { EpodId = epodId };
@@ -209,7 +197,6 @@ public class DeliveryController : ControllerBase
     [HttpPost("/api/Delivery/stops/{stopId:guid}/dynamic-cod")]
     [Authorize(Roles = "Driver,Dispatcher,Admin")]
     [Consumes("multipart/form-data")]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ProcessDynamicCod(Guid stopId, [FromForm] ColdChainX.Application.DTOs.Delivery.ProcessDynamicCodRequest request)
     {
         var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -236,7 +223,6 @@ public class DeliveryController : ControllerBase
     [HttpPost("/api/Delivery/stops/{stopId:guid}/reject-entire-lpn")]
     [Authorize(Roles = "Driver,Dispatcher,Admin")]
     [Consumes("multipart/form-data")]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     public async Task<IActionResult> RejectEntireLpn(Guid stopId, [FromForm] ColdChainX.Application.DTOs.Delivery.RejectEntireLpnRequest request)
     {
         var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -263,7 +249,6 @@ public class DeliveryController : ControllerBase
     [HttpPost("/api/epods/{epodId:guid}/verify-qr-payment")]
     [Authorize(Roles = "Driver,Dispatcher,Admin,Customer")]
     [Consumes("multipart/form-data")]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     public async Task<IActionResult> VerifyQrPayment([FromRoute] Guid epodId, [FromForm] ColdChainX.Application.DTOs.Delivery.VerifyQrPaymentRequest request)
     {
         var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -286,7 +271,6 @@ public class DeliveryController : ControllerBase
 
     [HttpPost("/api/trips/{tripId:guid}/cod-handovers")]
     [Authorize(Roles = "Admin,WarehouseWorker,Dispatcher")]
-    [ProducesResponseType(typeof(ApiResponse<CodHandoverResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> HandoverCod(Guid tripId, [FromBody] CodHandoverRequest request)
     {
         var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -311,7 +295,6 @@ public class DeliveryController : ControllerBase
 
     [HttpPost("/api/deliveries/upload-image")]
     [Authorize(Roles = "Driver,Admin,WarehouseWorker")]
-    [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status200OK)]
     public async Task<IActionResult> UploadImage(IFormFile file)
     {
         if (file == null || file.Length == 0)
@@ -332,7 +315,6 @@ public class DeliveryController : ControllerBase
 
     [HttpPost("trips/{tripId:guid}/location")]
     [Authorize(Roles = "Driver")]
-    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateLocation(Guid tripId, [FromBody] UpdateLocationRequest request)
     {
         var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -356,7 +338,6 @@ public class DeliveryController : ControllerBase
     [HttpPost("{stopId:guid}/report-no-show")]
     [Authorize(Roles = "Driver,Admin,Dispatcher")]
     [Consumes("multipart/form-data")]
-    [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ReportNoShow(Guid stopId, [FromForm] ReportNoShowRequest request)
     {
         var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -377,7 +358,6 @@ public class DeliveryController : ControllerBase
 
     [HttpGet("/api/Delivery/nearest-return-warehouses")]
     [Authorize(Roles = "Driver,Dispatcher,Admin,WarehouseWorker")]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetNearestReturnWarehouses([FromQuery] Guid tripId)
     {
         if (tripId == Guid.Empty)

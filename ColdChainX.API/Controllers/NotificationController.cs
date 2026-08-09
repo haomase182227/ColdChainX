@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using ColdChainX.Application.DTOs.Common;
 using ColdChainX.Application.DTOs.Notifications;
 using ColdChainX.Application.Interfaces;
@@ -25,9 +25,6 @@ public class NotificationController : ControllerBase
     }
 
     [HttpPost("register-token")]
-    [ProducesResponseType(
-        typeof(ApiResponse<DeviceTokenRegistrationResponse>),
-        StatusCodes.Status200OK)]
     public async Task<IActionResult> RegisterToken(
         [FromBody] RegisterDeviceTokenRequest request,
         CancellationToken cancellationToken)
@@ -43,7 +40,6 @@ public class NotificationController : ControllerBase
     }
 
     [HttpDelete("unregister-token")]
-    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
     public async Task<IActionResult> UnregisterToken(
         [FromBody] UnregisterDeviceTokenRequest request,
         CancellationToken cancellationToken)
@@ -59,9 +55,6 @@ public class NotificationController : ControllerBase
     }
 
     [HttpGet]
-    [ProducesResponseType(
-        typeof(ApiResponse<PagedResult<NotificationResponse>>),
-        StatusCodes.Status200OK)]
     public async Task<IActionResult> GetNotifications(
         [FromQuery] int pageNumber = 1,
         [FromQuery] int pageSize = 10,
@@ -86,9 +79,6 @@ public class NotificationController : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
-    [ProducesResponseType(
-        typeof(ApiResponse<NotificationResponse>),
-        StatusCodes.Status200OK)]
     public async Task<IActionResult> GetNotification(
         [FromRoute] Guid id,
         CancellationToken cancellationToken)
@@ -104,9 +94,6 @@ public class NotificationController : ControllerBase
     }
 
     [HttpGet("unread-count")]
-    [ProducesResponseType(
-        typeof(ApiResponse<UnreadCountResponse>),
-        StatusCodes.Status200OK)]
     public async Task<IActionResult> GetUnreadCount(CancellationToken cancellationToken)
     {
         if (!TryGetCurrentUserId(out var userId))
@@ -127,7 +114,6 @@ public class NotificationController : ControllerBase
     }
 
     [HttpPut("{id:guid}/read")]
-    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
     public async Task<IActionResult> MarkAsRead(
         [FromRoute] Guid id,
         CancellationToken cancellationToken)
@@ -143,7 +129,6 @@ public class NotificationController : ControllerBase
     }
 
     [HttpPut("read-all")]
-    [ProducesResponseType(typeof(ApiResponse<int>), StatusCodes.Status200OK)]
     public async Task<IActionResult> MarkAllAsRead(CancellationToken cancellationToken)
     {
         if (!TryGetCurrentUserId(out var userId))
@@ -156,9 +141,6 @@ public class NotificationController : ControllerBase
     }
 
     [HttpPost("test")]
-    [ProducesResponseType(
-        typeof(ApiResponse<NotificationTestResponse>),
-        StatusCodes.Status200OK)]
     public async Task<IActionResult> SendTest(
         [FromBody] NotificationTestRequest request,
         CancellationToken cancellationToken)

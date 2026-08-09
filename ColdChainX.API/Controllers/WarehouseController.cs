@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -26,7 +26,6 @@ namespace ColdChainX.API.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin,WarehouseWorker")]
-        [ProducesResponseType(typeof(ApiResponse<WarehouseResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> Create([FromBody] CreateWarehouseRequest request)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -42,7 +41,6 @@ namespace ColdChainX.API.Controllers
 
         [HttpPut("{id:guid}")]
         [Authorize(Roles = "Admin,WarehouseWorker")]
-        [ProducesResponseType(typeof(ApiResponse<WarehouseResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> Update([FromRoute] Guid id, [FromBody] UpdateWarehouseRequest request)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -58,7 +56,6 @@ namespace ColdChainX.API.Controllers
 
         [HttpDelete("{id:guid}")]
         [Authorize(Roles = "Admin")]
-        [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
         public async Task<IActionResult> Delete([FromRoute] Guid id)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -73,7 +70,6 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet("{id:guid}")]
-        [ProducesResponseType(typeof(ApiResponse<WarehouseResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetById([FromRoute] Guid id)
         {
             var result = await _warehouseService.GetByIdAsync(id);
@@ -84,7 +80,6 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet]
-        [ProducesResponseType(typeof(ApiResponse<PagedResult<WarehouseResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetList(
             [FromQuery] int pageNumber = 1,
             [FromQuery] int pageSize = 10,

@@ -1,4 +1,4 @@
-using ColdChainX.API.Authorization;
+﻿using ColdChainX.API.Authorization;
 using ColdChainX.Application.Features.Outbound.Commands;
 using ColdChainX.Shared.Constants;
 using MediatR;
@@ -19,8 +19,6 @@ public class OutboundController : ControllerBase
 
     [HttpPost("pick")]
     [HasPermission(PermissionCodes.WarehouseLoadingConfirm)]
-    [ProducesResponseType(typeof(PickLpnResponse), 200)]
-    [ProducesResponseType(typeof(PickLpnResponse), 400)]
     public async Task<IActionResult> Pick([FromBody] PickLpnCommand command)
     {
         var result = await _mediator.Send(command);
@@ -32,8 +30,6 @@ public class OutboundController : ControllerBase
 
     [HttpPost("load-trip")]
     [HasPermission(PermissionCodes.WarehouseLoadingConfirm)]
-    [ProducesResponseType(typeof(CompleteTripLoadingResponse), 200)]
-    [ProducesResponseType(typeof(CompleteTripLoadingResponse), 400)]
     public async Task<IActionResult> LoadTrip([FromBody] CompleteTripLoadingCommand command)
     {
         var result = await _mediator.Send(command);
@@ -45,7 +41,6 @@ public class OutboundController : ControllerBase
 
     [HttpGet("available-lpns")]
     [HasPermission(PermissionCodes.WarehouseTaskView)]
-    [ProducesResponseType(typeof(List<ColdChainX.Application.Features.Outbound.DTOs.AvailableLpnDto>), 200)]
     public async Task<IActionResult> GetAvailableLpns([FromQuery] Guid? tripId)
     {
         var result = await _mediator.Send(new ColdChainX.Application.Features.Outbound.Queries.GetAvailableLpnsQuery(tripId));
@@ -54,7 +49,6 @@ public class OutboundController : ControllerBase
 
     [HttpGet("available-trips")]
     [HasPermission(PermissionCodes.WarehouseTaskView)]
-    [ProducesResponseType(typeof(List<ColdChainX.Application.Features.Outbound.DTOs.AvailableTripDto>), 200)]
     public async Task<IActionResult> GetAvailableTrips([FromQuery] Guid? tripId)
     {
         var result = await _mediator.Send(new ColdChainX.Application.Features.Outbound.Queries.GetAvailableTripsQuery(tripId));

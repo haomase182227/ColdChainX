@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -31,7 +31,6 @@ namespace ColdChainX.API.Controllers
         [HttpPost]
         [Consumes("multipart/form-data")]
         [Authorize(Roles = "Admin,WarehouseWorker,Driver")]
-        [ProducesResponseType(typeof(ApiResponse<IncidentResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ReportIncident([FromForm] CreateIncidentRequest request)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -48,7 +47,6 @@ namespace ColdChainX.API.Controllers
         [HttpPost("{id:guid}/evidences")]
         [Consumes("multipart/form-data")]
         [Authorize(Roles = "Admin,WarehouseWorker,Driver")]
-        [ProducesResponseType(typeof(ApiResponse<IncidentResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> AddEvidence(
             [FromRoute] Guid id,
             [FromForm] UploadIncidentEvidenceRequest request)
@@ -70,7 +68,6 @@ namespace ColdChainX.API.Controllers
 
         [HttpPost("{id:guid}/resolve")]
         [Authorize(Roles = "Admin,WarehouseWorker")]
-        [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ResolveIncident([FromRoute] Guid id, [FromBody] ResolveIncidentRequest request)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -86,7 +83,6 @@ namespace ColdChainX.API.Controllers
 
         [HttpPost("{id:guid}/continue-trip")]
         [Authorize(Roles = "Driver")]
-        [ProducesResponseType(typeof(ApiResponse<IncidentWorkflowResult>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ContinueTrip(
             [FromRoute] Guid id,
             [FromBody] ContinueTripAfterIncidentRequest request)
@@ -104,7 +100,6 @@ namespace ColdChainX.API.Controllers
 
         [HttpGet("{id:guid}/rescue-candidates")]
         [Authorize(Roles = "Admin,WarehouseWorker,Dispatcher")]
-        [ProducesResponseType(typeof(ApiResponse<List<RescueCandidateResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetRescueCandidates([FromRoute] Guid id)
         {
             var result = await _rescueService.GetRescueCandidatesAsync(id);
@@ -116,7 +111,6 @@ namespace ColdChainX.API.Controllers
 
         [HttpPost("{id:guid}/dispatch-rescue")]
         [Authorize(Roles = "Admin,WarehouseWorker,Dispatcher")]
-        [ProducesResponseType(typeof(ApiResponse<IncidentRescueResult>), StatusCodes.Status200OK)]
         public async Task<IActionResult> DispatchRescue([FromRoute] Guid id, [FromBody] DispatchRescueRequest request)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -132,7 +126,6 @@ namespace ColdChainX.API.Controllers
 
         [HttpPost("{id:guid}/confirm-transload")]
         [Authorize(Roles = "Admin,WarehouseWorker,Dispatcher")]
-        [ProducesResponseType(typeof(ApiResponse<IncidentWorkflowResult>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ConfirmTransload(
             [FromRoute] Guid id,
             [FromBody] ConfirmTransloadRequest request)
@@ -150,7 +143,6 @@ namespace ColdChainX.API.Controllers
 
         [HttpPost("{id:guid}/expenses/approve")]
         [Authorize(Roles = "Admin,Accountant")]
-        [ProducesResponseType(typeof(ApiResponse<IncidentResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ApproveExpense(
             [FromRoute] Guid id,
             [FromBody] ApproveIncidentExpenseRequest request)
@@ -173,7 +165,6 @@ namespace ColdChainX.API.Controllers
         [HttpPost("{id:guid}/expenses/reimburse")]
         [Consumes("multipart/form-data")]
         [Authorize(Roles = "Admin,Accountant")]
-        [ProducesResponseType(typeof(ApiResponse<IncidentResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ReimburseExpense(
             [FromRoute] Guid id,
             [FromForm] ReimburseIncidentExpenseRequest request)
@@ -190,7 +181,6 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet("{id:guid}")]
-        [ProducesResponseType(typeof(ApiResponse<IncidentResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetById([FromRoute] Guid id)
         {
             var result = await _incidentService.GetIncidentByIdAsync(id);
@@ -201,7 +191,6 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet]
-        [ProducesResponseType(typeof(ApiResponse<PagedResult<IncidentResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetList(
             [FromQuery] Guid? tripId = null,
             [FromQuery] int pageNumber = 1,

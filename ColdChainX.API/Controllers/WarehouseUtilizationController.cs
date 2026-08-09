@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -22,7 +22,6 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet("{id:guid}/utilization")]
-        [ProducesResponseType(typeof(ApiResponse<WarehouseUtilizationResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetWarehouseUtilization([FromRoute] Guid id)
         {
             var result = await _analysisService.GetWarehouseUtilizationAsync(id);

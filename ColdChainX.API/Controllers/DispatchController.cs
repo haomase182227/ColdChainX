@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
@@ -108,7 +108,6 @@ public class DispatchController : ControllerBase
 
 
     [HttpGet("available-lpns")]
-    [ProducesResponseType(typeof(PagedResponse<List<FilterLpnResponse>>), 200)]
     public async Task<IActionResult> GetAvailableLpns([FromQuery] Guid warehouseId, [FromQuery] int pageIndex = 1, [FromQuery] int pageSize = 20)
     {
         var query = _db.Lpns
@@ -150,7 +149,6 @@ public class DispatchController : ControllerBase
     }
 
     [HttpGet("filter-lpns")]
-    [ProducesResponseType(typeof(PagedResponse<List<FilterLpnResponse>>), 200)]
     public async Task<IActionResult> FilterLpns([FromQuery] Guid pivotLpnId, [FromQuery] int pageIndex = 1, [FromQuery] int pageSize = 20)
     {
         var pivotLpn = await _db.Lpns
@@ -233,7 +231,6 @@ public class DispatchController : ControllerBase
 
 
     [HttpGet("lookup/vehicles/by-warehouse/{warehouseId}")]
-    [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> LookupVehiclesByWarehouse(Guid warehouseId)
     {
         var warehouseName = await _db.Warehouses
@@ -284,7 +281,6 @@ public class DispatchController : ControllerBase
     }
 
     [HttpGet("lookup/drivers/by-warehouse/{warehouseId}")]
-    [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> LookupDriversByWarehouse(Guid warehouseId)
     {
         var warehouseName = await _db.Warehouses
@@ -342,7 +338,6 @@ public class DispatchController : ControllerBase
     }
 
     [HttpGet("lookup/vehicles")]
-    [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> LookupVehicles()
     {
         var busyVehicleIds = await _db.MasterTrips
@@ -380,7 +375,6 @@ public class DispatchController : ControllerBase
     }
 
     [HttpGet("lookup/drivers")]
-    [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> LookupDrivers()
     {
         var candidates = await _db.Drivers
@@ -421,7 +415,6 @@ public class DispatchController : ControllerBase
     }
 
     [HttpGet("lookup/locations")]
-    [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> LookupLocations()
     {
         var locations = await _db.Locations
@@ -441,7 +434,6 @@ public class DispatchController : ControllerBase
     }
 
     [HttpGet("lookup/Schedule")]
-    [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> LookupSchedules()
     {
         var rawItems = await _db.RouteSchedules
@@ -488,7 +480,6 @@ public class DispatchController : ControllerBase
     }
 
     [HttpGet("lookup/warehouses")]
-    [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> LookupWarehouses()
     {
         var items = await _db.Warehouses
@@ -507,7 +498,6 @@ public class DispatchController : ControllerBase
     }
 
     [HttpGet("lookup/lpns-ready")]
-    [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> LookupLpnsReady(
         [FromQuery] Guid? warehouseId,
         [FromQuery] Guid? scheduleId,
@@ -572,7 +562,7 @@ public class DispatchController : ControllerBase
         var items = rawLpns.Select(x => new DispatchLpnReadyDto
         {
             LpnId = x.LpnId,
-            Label = $"{x.LpnCode} ({x.TrackingCode}) — {x.ItemName} | Qty: {x.Quantity} | {x.ActualWeightKg}kg / {x.ActualCbm}m³ ({x.TempCondition}) | Khách: {x.CustomerName} | Kho: {x.WarehouseName}",
+            Label = $"{x.LpnCode} ({x.TrackingCode}) â€” {x.ItemName} | Qty: {x.Quantity} | {x.ActualWeightKg}kg / {x.ActualCbm}mÂ³ ({x.TempCondition}) | KhÃ¡ch: {x.CustomerName} | Kho: {x.WarehouseName}",
             LpnCode = x.LpnCode,
             OrderId = x.OrderId,
             TrackingCode = x.TrackingCode,
@@ -602,7 +592,6 @@ public class DispatchController : ControllerBase
     }
 
     [HttpPost("compatible-lpns/search")]
-    [ProducesResponseType(typeof(ApiResponse<CompatibleLpnsSearchResponse>), 200)]
     public async Task<IActionResult> SearchCompatibleLpns(
         [FromBody] CompatibleLpnsSearchRequest? request,
         [FromQuery] int pageNumber = 1,
@@ -933,16 +922,15 @@ public class DispatchController : ControllerBase
 
     [HttpPost("manual-dispatch")]
     [Consumes("multipart/form-data")]
-    [ProducesResponseType(typeof(ManualDispatchResult), 200)]
     public async Task<IActionResult> ManualDispatch(
         [FromQuery] List<string> lpnIds,
         [FromForm] ManualDispatchFormRequest form)
     {
         if (lpnIds == null || !lpnIds.Any())
-            return BadRequest(ApiResponse<object>.Failure("Vui lòng chọn ít nhất một LPN."));
+            return BadRequest(ApiResponse<object>.Failure("Vui lÃ²ng chá»n Ã­t nháº¥t má»™t LPN."));
 
         if (form.PlannedStartTime >= form.PlannedEndTime)
-            return BadRequest(ApiResponse<object>.Failure("PlannedStartTime phải nhỏ hơn PlannedEndTime."));
+            return BadRequest(ApiResponse<object>.Failure("PlannedStartTime pháº£i nhá» hÆ¡n PlannedEndTime."));
 
         if (string.IsNullOrWhiteSpace(form.ScheduleId)
             || !Guid.TryParse(ExtractGuid(form.ScheduleId), out var selectedScheduleId)
@@ -960,7 +948,7 @@ public class DispatchController : ControllerBase
             .ToList();
 
         if (driverIds.Count < 1 || driverIds.Count > 2)
-            return BadRequest(ApiResponse<object>.Failure("Vui lòng chọn 1 hoặc 2 tài xế cho chuyến."));
+            return BadRequest(ApiResponse<object>.Failure("Vui lÃ²ng chá»n 1 hoáº·c 2 tÃ i xáº¿ cho chuyáº¿n."));
 
         var parsedLpnIds = new List<Guid>();
         foreach (var lpnId in lpnIds)
@@ -1025,7 +1013,7 @@ public class DispatchController : ControllerBase
 
         var hasIot = await _db.IotDevices.AnyAsync(d => d.VehicleId == parsedVehicleId);
         if (!hasIot)
-            return BadRequest(ApiResponse<object>.Failure("Xe chưa được gắn thiết bị IoT. Vui lòng gắn thiết bị IoT cho xe này trước khi ghép chuyến."));
+            return BadRequest(ApiResponse<object>.Failure("Xe chÆ°a Ä‘Æ°á»£c gáº¯n thiáº¿t bá»‹ IoT. Vui lÃ²ng gáº¯n thiáº¿t bá»‹ IoT cho xe nÃ y trÆ°á»›c khi ghÃ©p chuyáº¿n."));
 
         var request = new ManualDispatchRequest
         {
@@ -1107,7 +1095,6 @@ public class DispatchController : ControllerBase
     }
 
     [HttpGet("trip/{tripId}/lifo-url")]
-    [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> GetLifoUrl(string tripId)
     {
         var rawId = ExtractGuid(tripId);
@@ -1120,7 +1107,6 @@ public class DispatchController : ControllerBase
 
 
     [HttpGet("trip/{tripId}/waybill-url")]
-    [ProducesResponseType(typeof(object), 200)]
     public IActionResult GetWaybillUrl(string tripId)
     {
         var rawId = ExtractGuid(tripId);
@@ -1134,7 +1120,6 @@ public class DispatchController : ControllerBase
 
     [HttpGet("trip/{tripId}/route")]
     [AllowAnonymous]
-    [ProducesResponseType(typeof(TripRouteResponse), 200)]
     public async Task<IActionResult> GetTripRoute(string tripId)
     {
         var rawId = ExtractGuid(tripId);
@@ -1189,14 +1174,13 @@ public class DispatchController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { Success = false, Error = "Lỗi khi gọi Goong API tối ưu lộ trình.", Detail = ex.Message });
+            return StatusCode(500, new { Success = false, Error = "Lá»—i khi gá»i Goong API tá»‘i Æ°u lá»™ trÃ¬nh.", Detail = ex.Message });
         }
     }
 
 
     [HttpGet("trips")]
     [Authorize(Roles = "Sales,Dispatcher,Admin")]
-    [ProducesResponseType(typeof(ApiResponse<PagedResult<TripDetailsDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAllTrips(
         [FromQuery] int pageNumber = 1,
         [FromQuery] int pageSize = 20,
@@ -1250,8 +1234,6 @@ public class DispatchController : ControllerBase
 
     [HttpGet("trips/{id:guid}")]
     [Authorize(Roles = "Sales,Dispatcher,Admin")]
-    [ProducesResponseType(typeof(ApiResponse<TripDetailsDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ApiResponse<TripDetailsDto>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetTripById(
         [FromRoute] Guid id,
         CancellationToken cancellationToken = default)
@@ -1272,7 +1254,6 @@ public class DispatchController : ControllerBase
     }
 
     [HttpGet("trips/can-start-picking")]
-    [ProducesResponseType(typeof(PagedResult<ColdChainX.Application.DTOs.Dispatch.TripDispatchDto>), 200)]
     public async Task<IActionResult> GetTripsCanStartPicking([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
     {
         var query = _db.MasterTrips
@@ -1307,7 +1288,6 @@ public class DispatchController : ControllerBase
     }
 
     [HttpPost("trip/{tripId}/start-picking")]
-    [ProducesResponseType(typeof(StartPickingResult), 200)]
     public async Task<IActionResult> StartPicking(string tripId)
     {
         var rawId = ExtractGuid(tripId);
@@ -1325,13 +1305,12 @@ public class DispatchController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { Success = false, Error = "Lỗi hệ thống khi bắt đầu picking.", Detail = ex.Message });
+            return StatusCode(500, new { Success = false, Error = "Lá»—i há»‡ thá»‘ng khi báº¯t Ä‘áº§u picking.", Detail = ex.Message });
         }
     }
 
 
     [HttpPost("trip/{tripId}/cancel")]
-    [ProducesResponseType(typeof(CancelTripResult), 200)]
     public async Task<IActionResult> CancelTrip(string tripId)
     {
         var rawId = ExtractGuid(tripId);
@@ -1353,13 +1332,12 @@ public class DispatchController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { Success = false, Error = "Lỗi hệ thống khi hủy chuyến.", Detail = ex.Message });
+            return StatusCode(500, new { Success = false, Error = "Lá»—i há»‡ thá»‘ng khi há»§y chuyáº¿n.", Detail = ex.Message });
         }
     }
 
 
     [HttpPost("vehicle-iot-check/{tripId}")]
-    [ProducesResponseType(typeof(VehicleIoTStatus), 200)]
     public async Task<IActionResult> CheckVehicleIoT(string tripId)
     {
         var rawTripId = ExtractGuid(tripId);
@@ -1392,7 +1370,6 @@ public class DispatchController : ControllerBase
 
 
     [HttpGet("trips/ready-to-seal")]
-    [ProducesResponseType(typeof(PagedResult<ColdChainX.Application.DTOs.Dispatch.TripDispatchDto>), 200)]
     public async Task<IActionResult> GetTripsReadyToSeal([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
     {
         var query = _db.MasterTrips
@@ -1431,7 +1408,6 @@ public class DispatchController : ControllerBase
 
     [HttpPost("seal-and-dispatch/{tripId}")]
     [Consumes("multipart/form-data")]
-    [ProducesResponseType(typeof(SealAndDispatchResult), 200)]
     public async Task<IActionResult> SealAndDispatch(string tripId, [FromForm] SealAndDispatchRequest request)
     {
         var rawId = ExtractGuid(tripId);
@@ -1455,7 +1431,7 @@ public class DispatchController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { Success = false, Error = "Lỗi hệ thống khi kẹp chì.", Detail = ex.Message });
+            return StatusCode(500, new { Success = false, Error = "Lá»—i há»‡ thá»‘ng khi káº¹p chÃ¬.", Detail = ex.Message });
         }
     }
 
@@ -1814,11 +1790,11 @@ public class DispatchController : ControllerBase
         }
         else if (stopSequence == 1)
         {
-            parts.Add("Điểm giao đầu tiên - xếp gần cửa xe");
+            parts.Add("Äiá»ƒm giao Ä‘áº§u tiÃªn - xáº¿p gáº§n cá»­a xe");
         }
         else
         {
-            parts.Add($"Giao tại điểm #{stopSequence}/{totalStops}");
+            parts.Add($"Giao táº¡i Ä‘iá»ƒm #{stopSequence}/{totalStops}");
         }
 
         parts.Add(zone switch
@@ -1827,7 +1803,7 @@ public class DispatchController : ControllerBase
             "MID" => "Hang mat - ngan MID",
             _ => "Hang nhiet do thuong - ngan FRONT"
         });
-        parts.Add($"Khối lượng {weightKg:F1}kg - hàng nặng xếp dưới");
+        parts.Add($"Khá»‘i lÆ°á»£ng {weightKg:F1}kg - hÃ ng náº·ng xáº¿p dÆ°á»›i");
 
         return string.Join("; ", parts);
     }

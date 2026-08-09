@@ -1,4 +1,4 @@
-using ColdChainX.API.Authorization;
+﻿using ColdChainX.API.Authorization;
 using ColdChainX.Application.Features.Inventory.Queries;
 using ColdChainX.Shared.Constants;
 using MediatR;
@@ -70,8 +70,6 @@ public class InventoryController : ControllerBase
 
     [HttpDelete("lpns/{id}")]
     [HasPermission(PermissionCodes.WarehouseInventoryAdjust)]
-    [ProducesResponseType(typeof(ColdChainX.Application.Features.Inventory.Commands.DeleteLpnResponse), 200)]
-    [ProducesResponseType(typeof(ColdChainX.Application.Features.Inventory.Commands.DeleteLpnResponse), 400)]
     public async Task<IActionResult> DeleteLpn(Guid id)
     {
         var result = await _mediator.Send(new ColdChainX.Application.Features.Inventory.Commands.DeleteLpnCommand(id));
