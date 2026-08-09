@@ -41,7 +41,6 @@ namespace ColdChainX.UnitTests
                 new FakeFileService()
             );
 
-            // Seed reference entities
             _db.Users.Add(new User
             {
                 UserId = _userId,
@@ -93,7 +92,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task CreateMaintenanceTicket_LocksVehicle_WithoutOdometerShift()
         {
-            // Arrange
             var request = new CreateMaintenanceTicketRequest
             {
                 MaintenanceType = "Routine inspection",
@@ -101,10 +99,8 @@ namespace ColdChainX.UnitTests
                 Description = "Engine oil change and cooling unit PTI"
             };
 
-            // Act
             var result = await _service.CreateMaintenanceTicketAsync(_vehicleId, request, _userId);
 
-            // Assert
             Assert.True(result.Success);
             Assert.NotNull(result.Data);
             Assert.Equal("OPEN", result.Data.Status);
@@ -117,7 +113,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task CompleteMaintenanceTicket_ShiftsOdometerAndDate_RestoresActive()
         {
-            // Arrange
             _db.SystemConfigs.AddRange(
                 new SystemConfig { Id = Guid.NewGuid(), Key = "MaintenanceIntervalOdometer", Value = "12000.0" },
                 new SystemConfig { Id = Guid.NewGuid(), Key = "MaintenanceIntervalDays", Value = "180" }
@@ -139,10 +134,8 @@ namespace ColdChainX.UnitTests
                 CompletionDate = DateOnly.FromDateTime(DateTime.Today)
             };
 
-            // Act
             var result = await _service.CompleteMaintenanceTicketAsync(ticketId, completeRequest);
 
-            // Assert
             Assert.True(result.Success);
             Assert.Equal("RESOLVED", result.Data!.Status);
             Assert.Equal(350.00m, result.Data.Cost);
@@ -156,7 +149,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task CompleteMaintenanceTicket_KeepsStatusMaintenance_IfOtherActiveTicketsExist()
         {
-            // Arrange
             var createReq1 = new CreateMaintenanceTicketRequest { MaintenanceType = "Engine", GarageName = "Shop", Description = "Repair" };
             var createReq2 = new CreateMaintenanceTicketRequest { MaintenanceType = "Reefer", GarageName = "Shop", Description = "Reefer Repair" };
 
@@ -169,10 +161,8 @@ namespace ColdChainX.UnitTests
                 CompletionDate = DateOnly.FromDateTime(DateTime.Today)
             };
 
-            // Act - Complete only the first ticket
             var result = await _service.CompleteMaintenanceTicketAsync(t1.Data!.TicketId, completeReq);
 
-            // Assert
             Assert.True(result.Success);
             var vehicle = await _db.Vehicles.FindAsync(_vehicleId);
             Assert.Equal("MAINTENANCE", vehicle!.Status); // Must NOT return to ACTIVE since t2 is still OPEN
@@ -181,15 +171,12 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task UpdateTicketStatus_ToCancelled_RestoresActiveVehicleStatus()
         {
-            // Arrange
             var createReq = new CreateMaintenanceTicketRequest { MaintenanceType = "Engine", GarageName = "Shop", Description = "Repair" };
             var t = await _service.CreateMaintenanceTicketAsync(_vehicleId, createReq, _userId);
             var ticketId = t.Data!.TicketId;
 
-            // Act
             var result = await _service.UpdateMaintenanceTicketStatusAsync(ticketId, "CANCELLED");
 
-            // Assert
             Assert.True(result.Success);
             Assert.Equal("CANCELLED", result.Data!.Status);
 
@@ -200,7 +187,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task GetVehicleMaintenanceForecast_CalculatesOverdueAndOverruns()
         {
-            // Arrange
             var tripId = Guid.NewGuid();
             _db.MasterTrips.Add(new MasterTrip
             {
@@ -212,10 +198,8 @@ namespace ColdChainX.UnitTests
             });
             await _db.SaveChangesAsync();
 
-            // Act - Headroom is 10000 - 5000 = 5000 km. Trip (6000 km) exceeds headroom.
             var result = await _service.GetVehicleMaintenanceForecastAsync(_vehicleId, tripId);
 
-            // Assert
             Assert.True(result.Success);
             Assert.NotNull(result.Data);
             Assert.True(result.Data.IsOverrunForecast);
@@ -226,7 +210,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task SyncOdometer_CreatesVehicleOdometerLog()
         {
-            // Arrange
             var request = new SyncOdometerRequest
             {
                 TruckPlate = "29C-12345",
@@ -237,18 +220,14 @@ namespace ColdChainX.UnitTests
             };
             var updaterId = Guid.NewGuid();
 
-            // Act
             var result = await _service.SyncOdometerAsync(request, updaterId, "http://test.image/odo.png");
 
-            // Assert
             Assert.True(result.Success);
             
-            // Check vehicle was updated
             var vehicle = await _db.Vehicles.FindAsync(_vehicleId);
             Assert.Equal(6500.5, vehicle!.CurrentOdometer);
             Assert.Equal("Test Location", vehicle.CurrentLocation);
 
-            // Check log was created
             var log = await _db.VehicleOdometerLogs.FirstOrDefaultAsync(l => l.VehicleId == _vehicleId);
             Assert.NotNull(log);
             Assert.Equal(6500.5, log.OdometerValue);
@@ -262,7 +241,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task CompleteMaintenanceTicket_WithExpiredDocs_SetsVehicleStatusToSuspendedDocs()
         {
-            // Arrange
             var vehicleId = Guid.NewGuid();
             var vehicle = new Vehicle
             {
@@ -301,7 +279,6 @@ namespace ColdChainX.UnitTests
             _db.MaintenanceTickets.Add(ticket);
             await _db.SaveChangesAsync();
 
-            // Act
             var request = new CompleteMaintenanceTicketRequest
             {
                 Cost = 1500000,
@@ -309,7 +286,6 @@ namespace ColdChainX.UnitTests
             };
             var result = await _service.CompleteMaintenanceTicketAsync(ticketId, request);
 
-            // Assert
             Assert.True(result.Success);
             var updatedVehicle = await _db.Vehicles.FindAsync(vehicleId);
             Assert.Equal("SUSPENDED_DOCS", updatedVehicle!.Status);
@@ -318,7 +294,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task CancelMaintenanceTicket_WithExpiredDocs_SetsVehicleStatusToSuspendedDocs()
         {
-            // Arrange
             var vehicleId = Guid.NewGuid();
             var vehicle = new Vehicle
             {
@@ -357,10 +332,8 @@ namespace ColdChainX.UnitTests
             _db.MaintenanceTickets.Add(ticket);
             await _db.SaveChangesAsync();
 
-            // Act
             var result = await _service.UpdateMaintenanceTicketStatusAsync(ticketId, "CANCELLED");
 
-            // Assert
             Assert.True(result.Success);
             var updatedVehicle = await _db.Vehicles.FindAsync(vehicleId);
             Assert.Equal("SUSPENDED_DOCS", updatedVehicle!.Status);
@@ -369,7 +342,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task UpdateVehicle_WithExpiredDocs_EnforcesSuspendedDocs()
         {
-            // Arrange
             var vehicleId = Guid.NewGuid();
             var vehicle = new Vehicle
             {
@@ -401,10 +373,8 @@ namespace ColdChainX.UnitTests
                 Status = "ACTIVE" // Try to manually force ACTIVE
             };
 
-            // Act
             var result = await _service.UpdateVehicleAsync(vehicleId, updateRequest);
 
-            // Assert
             Assert.True(result.Success);
             Assert.Equal("SUSPENDED_DOCS", result.Data.Status);
             var updatedVehicle = await _db.Vehicles.FindAsync(vehicleId);
@@ -413,7 +383,6 @@ namespace ColdChainX.UnitTests
         }
     }
 
-    // Hand-made mock/fake dependencies to keep unit tests fast and dependency-free
 
     public class FakeHubContext : IHubContext<NotificationHub>
     {

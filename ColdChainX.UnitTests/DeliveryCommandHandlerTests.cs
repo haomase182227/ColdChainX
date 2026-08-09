@@ -47,7 +47,6 @@ namespace ColdChainX.UnitTests
             };
             _configuration = new FakeConfiguration(settings);
 
-            // Seed Role & User
             var driverRole = new Role
             {
                 RoleId = Guid.NewGuid(),
@@ -130,7 +129,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task Confirm_ValidRequest_ShouldSucceed()
         {
-            // Arrange
             var handler = new ConfirmLpnDeliveryCommandHandler(_db, _fileService, _configuration);
             var image = new FakeFormFile(new byte[] { 1, 2, 3, 4 }, "image/jpeg", "evidence.jpg");
             var command = new ConfirmLpnDeliveryCommand
@@ -143,22 +141,18 @@ namespace ColdChainX.UnitTests
                 UserId = _userId
             };
 
-            // Act
             var result = await handler.Handle(command, CancellationToken.None);
 
-            // Assert
             Assert.True(result.Success);
             Assert.NotNull(result.Data);
             Assert.Equal("DELIVERED", result.Data.OutcomeType);
             Assert.Equal("Nguyen Van A", result.Data.ReceiverName);
 
-            // Verify LPN state updated to DELIVERED
             var lpn = await _db.Lpns.FindAsync(_lpnId);
             Assert.NotNull(lpn);
             Assert.Equal(LpnState.DELIVERED, lpn.State);
             Assert.Equal("https://res.cloudinary.com/test/image.jpg", lpn.EvidenceImageUrl);
 
-            // Verify confirmation record created
             var confirmation = await _db.LpnDeliveryConfirmations.FirstOrDefaultAsync(c => c.LpnId == _lpnId);
             Assert.NotNull(confirmation);
             Assert.Equal("DELIVERED", confirmation.OutcomeType);
@@ -169,7 +163,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task Confirm_BankTransferWithoutReceipt_ShouldThrowValidationException()
         {
-            // Arrange
             var handler = new ConfirmLpnDeliveryCommandHandler(_db, _fileService, _configuration);
             var image = new FakeFormFile(new byte[] { 1, 2, 3, 4 }, "image/jpeg", "evidence.jpg");
             var command = new ConfirmLpnDeliveryCommand
@@ -185,7 +178,6 @@ namespace ColdChainX.UnitTests
                 CodReceiptImage = null // Missing receipt image
             };
 
-            // Act & Assert
             var ex = await Assert.ThrowsAsync<ValidationException>(() => handler.Handle(command, CancellationToken.None));
             Assert.Equal("Cod receipt image is required for BANK_TRANSFER payment method.", ex.Message);
         }
@@ -193,7 +185,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task Confirm_BankTransferWithReceipt_ShouldSucceed()
         {
-            // Arrange
             var handler = new ConfirmLpnDeliveryCommandHandler(_db, _fileService, _configuration);
             var image = new FakeFormFile(new byte[] { 1, 2, 3, 4 }, "image/jpeg", "evidence.jpg");
             var receiptImage = new FakeFormFile(new byte[] { 5, 6, 7, 8 }, "image/png", "receipt.png");
@@ -210,10 +201,8 @@ namespace ColdChainX.UnitTests
                 CodReceiptImage = receiptImage
             };
 
-            // Act
             var result = await handler.Handle(command, CancellationToken.None);
 
-            // Assert
             Assert.True(result.Success);
             Assert.NotNull(result.Data);
             Assert.Equal("DELIVERED", result.Data.OutcomeType);
@@ -227,7 +216,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task Confirm_WithNewSeal_ShouldUpdateTripSeal()
         {
-            // Arrange
             var handler = new ConfirmLpnDeliveryCommandHandler(_db, _fileService, _configuration);
             var image = new FakeFormFile(new byte[] { 1, 2, 3, 4 }, "image/jpeg", "evidence.jpg");
             var command = new ConfirmLpnDeliveryCommand
@@ -241,15 +229,12 @@ namespace ColdChainX.UnitTests
                 NewSealNumber = "SEAL-NEW-1234"
             };
 
-            // Act
             var result = await handler.Handle(command, CancellationToken.None);
 
-            // Assert
             Assert.True(result.Success);
             Assert.NotNull(result.Data);
             Assert.Equal("SEAL-NEW-1234", result.Data.NewSealNumber);
 
-            // Verify Trip seal code updated
             var trip = await _db.MasterTrips.Include(t => t.Seals).FirstOrDefaultAsync(t => t.TripId == _tripId);
             Assert.NotNull(trip);
             Assert.Equal("SEAL-NEW-1234", trip.SealNumber);
@@ -259,7 +244,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task Confirm_DriverNotAssigned_ShouldThrowForbidden()
         {
-            // Arrange
             var otherUserId = Guid.NewGuid();
             var otherDriverId = Guid.NewGuid();
 
@@ -298,14 +282,12 @@ namespace ColdChainX.UnitTests
                 UserId = otherUserId // Not assigned to trip
             };
 
-            // Act & Assert
             await Assert.ThrowsAsync<ForbiddenException>(() => handler.Handle(command, CancellationToken.None));
         }
 
         [Fact]
         public async Task Confirm_LpnNotInShippingState_ShouldThrowInvalidOperation()
         {
-            // Arrange
             var lpn = await _db.Lpns.FindAsync(_lpnId);
             lpn!.State = LpnState.DELIVERED;
             await _db.SaveChangesAsync();
@@ -321,14 +303,12 @@ namespace ColdChainX.UnitTests
                 UserId = _userId
             };
 
-            // Act & Assert
             await Assert.ThrowsAsync<InvalidOperationException>(() => handler.Handle(command, CancellationToken.None));
         }
 
         [Fact]
         public async Task Reject_ValidRequest_ShouldSucceed()
         {
-            // Arrange
             var handler = new RejectLpnDeliveryCommandHandler(_db, _fileService);
             var image = new FakeFormFile(new byte[] { 1, 2, 3, 4 }, "image/jpeg", "evidence.jpg");
             var command = new RejectLpnDeliveryCommand
@@ -341,21 +321,17 @@ namespace ColdChainX.UnitTests
                 UserId = _userId
             };
 
-            // Act
             var result = await handler.Handle(command, CancellationToken.None);
 
-            // Assert
             Assert.True(result.Success);
             Assert.NotNull(result.Data);
             Assert.Equal("REJECTED", result.Data.OutcomeType);
             Assert.Equal("DAMAGED", result.Data.RejectReason);
 
-            // Verify LPN state updated to DELIVERY_RETURNED
             var lpn = await _db.Lpns.FindAsync(_lpnId);
             Assert.NotNull(lpn);
             Assert.Equal(LpnState.DELIVERY_RETURNED, lpn.State);
 
-            // Verify confirmation record created
             var confirmation = await _db.LpnDeliveryConfirmations.FirstOrDefaultAsync(c => c.LpnId == _lpnId);
             Assert.NotNull(confirmation);
             Assert.Equal("REJECTED", confirmation.OutcomeType);
@@ -366,7 +342,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task Reject_ReasonOtherWithoutNote_ShouldThrowValidationException()
         {
-            // Arrange
             var handler = new RejectLpnDeliveryCommandHandler(_db, _fileService);
             var image = new FakeFormFile(new byte[] { 1, 2, 3, 4 }, "image/jpeg", "evidence.jpg");
             var command = new RejectLpnDeliveryCommand
@@ -379,14 +354,12 @@ namespace ColdChainX.UnitTests
                 UserId = _userId
             };
 
-            // Act & Assert
             await Assert.ThrowsAsync<ValidationException>(() => handler.Handle(command, CancellationToken.None));
         }
 
         [Fact]
         public async Task VerifyCod_ValidRequest_ShouldSucceedAndSyncOrderStatus()
         {
-            // Arrange: We need the LPN to be DELIVERED, and have a delivery confirmation with CodAmount > 0 and IsCodVerified = false
             var lpn = await _db.Lpns.FindAsync(_lpnId);
             lpn!.State = LpnState.DELIVERED;
 
@@ -416,15 +389,12 @@ namespace ColdChainX.UnitTests
                 UserId = _userId
             };
 
-            // Act
             var result = await handler.Handle(command, CancellationToken.None);
 
-            // Assert
             Assert.True(result.Success);
             Assert.True(result.Data.IsCodVerified);
             Assert.NotNull(result.Data.CodVerifiedAt);
 
-            // Check Order status is synced to DELIVERED now because all LPNs are DELIVERED and COD is verified
             var order = await _db.TransportOrders.FindAsync(_orderId);
             Assert.Equal("DELIVERED", order!.Status);
         }
@@ -432,7 +402,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task VerifyCod_AlreadyVerified_ShouldThrowConflict()
         {
-            // Arrange: Create a verified confirmation
             var lpnId2 = Guid.NewGuid();
             var lpn2 = new Lpn
             {
@@ -471,14 +440,12 @@ namespace ColdChainX.UnitTests
                 UserId = _userId
             };
 
-            // Act & Assert
             await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(command, CancellationToken.None));
         }
 
         [Fact]
         public async Task VerifyCod_OutcomeNotDelivered_ShouldThrowInvalidOperation()
         {
-            // Arrange: Create a REJECTED confirmation
             var lpnId3 = Guid.NewGuid();
             var lpn3 = new Lpn
             {
@@ -514,14 +481,12 @@ namespace ColdChainX.UnitTests
                 UserId = _userId
             };
 
-            // Act & Assert
             await Assert.ThrowsAsync<InvalidOperationException>(() => handler.Handle(command, CancellationToken.None));
         }
 
         [Fact]
         public async Task ConfirmLpnDelivery_ShouldUse4_5TemperatureFallback_WhenNoTelemetryLogsExist()
         {
-            // Arrange
             var handler = new ConfirmLpnDeliveryCommandHandler(_db, _fileService, _configuration);
             var command = new ConfirmLpnDeliveryCommand
             {
@@ -533,10 +498,8 @@ namespace ColdChainX.UnitTests
                 UserId = _userId
             };
 
-            // Act
             var result = await handler.Handle(command, CancellationToken.None);
 
-            // Assert
             Assert.True(result.Success);
             Assert.Equal(4.5m, result.Data.RecordedTemperature);
 
@@ -552,7 +515,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task ConfirmLpnDelivery_ShouldUseLatestTelemetryLogTemperature_WhenTelemetryLogsExist()
         {
-            // Arrange
             var lpnIdForTelemetry = Guid.NewGuid();
             _db.Lpns.Add(new Lpn
             {
@@ -592,10 +554,8 @@ namespace ColdChainX.UnitTests
                 UserId = _userId
             };
 
-            // Act
             var result = await handler.Handle(command, CancellationToken.None);
 
-            // Assert
             Assert.True(result.Success);
             Assert.Equal(2.5m, result.Data.RecordedTemperature);
 
@@ -611,7 +571,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task Checkin_WithProofImage_ShouldSucceed()
         {
-            // Arrange
             var stopId = Guid.NewGuid();
             var locationId = Guid.NewGuid();
             _db.Locations.Add(new Location
@@ -644,10 +603,8 @@ namespace ColdChainX.UnitTests
                 UserId = _userId
             };
 
-            // Act
             var result = await handler.Handle(command, CancellationToken.None);
 
-            // Assert
             Assert.True(result.Success);
             Assert.NotNull(result.Data);
             Assert.Equal(stopId, result.Data.StopId);
@@ -662,7 +619,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task Checkin_WithoutProofImage_ShouldThrowValidationException()
         {
-            // Arrange
             var stopId = Guid.NewGuid();
             var locationId = Guid.NewGuid();
             _db.Locations.Add(new Location
@@ -695,14 +651,12 @@ namespace ColdChainX.UnitTests
                 UserId = _userId
             };
 
-            // Act & Assert
             await Assert.ThrowsAsync<ValidationException>(() => handler.Handle(command, CancellationToken.None));
         }
 
         [Fact]
         public async Task Checkin_TooFar700m_ShouldThrowValidationException()
         {
-            // Arrange
             var stopId = Guid.NewGuid();
             var locationId = Guid.NewGuid();
             _db.Locations.Add(new Location
@@ -735,14 +689,12 @@ namespace ColdChainX.UnitTests
                 UserId = _userId
             };
 
-            // Act & Assert
             await Assert.ThrowsAsync<ValidationException>(() => handler.Handle(command, CancellationToken.None));
         }
 
         [Fact]
         public async Task Confirm_WithoutCheckin_ShouldThrowValidationException()
         {
-            // Arrange
             var locationId = Guid.NewGuid();
             var lpnId = Guid.NewGuid();
             var orderId = Guid.NewGuid();
@@ -796,7 +748,6 @@ namespace ColdChainX.UnitTests
                 UserId = _userId
             };
 
-            // Act & Assert
             var ex = await Assert.ThrowsAsync<ValidationException>(() => handler.Handle(command, CancellationToken.None));
             Assert.Contains("must check in", ex.Message);
         }
@@ -804,7 +755,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task ReportNoShow_WithEvidence_ShouldSucceedWithoutSlaWait()
         {
-            // Arrange: Trạm đã Check-In chỉ mới 1 phút trước (không cần đợi 30 phút)
             var stopId = Guid.NewGuid();
             var locationId = Guid.NewGuid();
             var orderId = Guid.NewGuid();
@@ -856,29 +806,23 @@ namespace ColdChainX.UnitTests
                 EvidenceImageUrl = "https://example.com/proofs/no-show-evidence.jpg"
             };
 
-            // Act
             var result = await handler.Handle(command, CancellationToken.None);
 
-            // Assert
             Assert.True(result.Success);
 
-            // 1. Trạng thái trạm lập tức chuyển SKIPPED_NOSHOW và có mốc giờ đi để di chuyển điểm kế tiếp
             var dbStop = await _db.TripStops.FindAsync(stopId);
             Assert.NotNull(dbStop);
             Assert.Equal("SKIPPED_NOSHOW", dbStop.Status);
             Assert.NotNull(dbStop.ActualDepartureTime);
             Assert.Contains("No-Show Evidence: https://example.com/proofs/no-show-evidence.jpg", dbStop.Note);
 
-            // 2. Kiểm tra Nhật Ký Biến Cố Bãi (TripStopEvents) lưu Bằng chứng như cơ chế Check-in
             var stopEvent = await _db.TripStopEvents.FirstOrDefaultAsync(e => e.StopId == stopId && e.EventType == "NO_SHOW_REPORT");
             Assert.NotNull(stopEvent);
             Assert.Contains("ProofImageUrl: https://example.com/proofs/no-show-evidence.jpg", stopEvent.MetaData);
 
-            // 3. Không ghi vào TransportDocuments vì đã lưu đầy đủ trong TripStopEvents
             var docCount = await _db.TransportDocuments.CountAsync(d => d.OrderId == orderId && d.DocType == "NO_SHOW_EVIDENCE");
             Assert.Equal(0, docCount);
 
-            // 4. Tuyệt đối không sinh hóa đơn phạt PenaltyBill
             var penaltyCount = await _db.PenaltyBills.CountAsync();
             Assert.Equal(0, penaltyCount);
         }
@@ -886,7 +830,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task ReportNoShow_WithoutEvidence_ShouldThrowValidationException()
         {
-            // Arrange
             var stopId = Guid.NewGuid();
             var handler = new ReportNoShowCommandHandler(_db, new FakeGoongService());
             var command = new ReportNoShowCommand
@@ -896,7 +839,6 @@ namespace ColdChainX.UnitTests
                 EvidenceImageUrl = "" // Thiếu ảnh bằng chứng
             };
 
-            // Act & Assert
             await Assert.ThrowsAsync<ValidationException>(() => handler.Handle(command, CancellationToken.None));
         }
     }

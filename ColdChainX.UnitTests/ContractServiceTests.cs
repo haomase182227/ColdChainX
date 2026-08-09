@@ -56,7 +56,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task GetContractByOrderId_ExistingContract_ReturnsContractInfo()
         {
-            // Arrange
             var orderId = Guid.NewGuid();
             var customerId = Guid.NewGuid();
             var contractId = Guid.NewGuid();
@@ -78,10 +77,8 @@ namespace ColdChainX.UnitTests
             _db.CustomerContracts.Add(contract);
             await _db.SaveChangesAsync();
 
-            // Act
             var result = await _service.GetContractByOrderIdAsync(orderId);
 
-            // Assert
             Assert.True(result.Success, result.Message);
             Assert.Equal("Contract retrieved successfully", result.Message);
             Assert.NotNull(result.Data);
@@ -94,10 +91,8 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task GetContractByOrderId_NonExistentContract_ReturnsFailure()
         {
-            // Act
             var result = await _service.GetContractByOrderIdAsync(Guid.NewGuid());
 
-            // Assert
             Assert.False(result.Success);
             Assert.Equal("Contract not found", result.Message);
         }
@@ -105,7 +100,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task ReviewContract_RequestResubmit_AllowsCustomerToUploadAgainAndSalesToVerify()
         {
-            // Arrange
             var customerId = Guid.NewGuid();
             var orderId = Guid.NewGuid();
             var contractId = Guid.NewGuid();
@@ -139,7 +133,6 @@ namespace ColdChainX.UnitTests
             _db.CustomerContracts.Add(contract);
             await _db.SaveChangesAsync();
 
-            // Sales requests a corrected signed contract.
             var reviewResult = await _service.ReviewContractAsync(
                 contractId,
                 new ReviewContractRequest
@@ -155,7 +148,6 @@ namespace ColdChainX.UnitTests
             Assert.Equal("http://test.com/rejected-contract.pdf", reviewResult.Data.SignedFileUrl);
             Assert.NotNull(reviewResult.Data.UploadedSignedAt);
 
-            // Customer uploads the corrected contract.
             await using var stream = new MemoryStream(new byte[] { 1, 2, 3 });
             var signedFile = new FormFile(stream, 0, stream.Length, "SignedFile", "signed-contract.pdf");
             var uploadResult = await _service.UploadSignedContractAsync(
@@ -168,7 +160,6 @@ namespace ColdChainX.UnitTests
             Assert.NotNull(uploadResult.Data);
             Assert.Equal("PENDING_SALES_VERIFICATION", uploadResult.Data.Status);
 
-            // Sales verifies the corrected contract.
             var verifyResult = await _service.VerifyContractAsync(contractId, salesUserId);
 
             Assert.True(verifyResult.Success, verifyResult.Message);
@@ -180,13 +171,11 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task ReviewContract_RequestResubmit_RequiresCustomerNote()
         {
-            // Act
             var result = await _service.ReviewContractAsync(
                 Guid.NewGuid(),
                 new ReviewContractRequest { Action = "REQUEST_RESUBMIT" },
                 Guid.NewGuid());
 
-            // Assert
             Assert.False(result.Success);
             Assert.Equal(
                 "CustomerNote is required when action is REQUEST_RESUBMIT",

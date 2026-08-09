@@ -54,7 +54,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task ReportIncident_SavesIncidentSuccessfully()
         {
-            // Arrange
             var userId = Guid.NewGuid();
             var user = new User { UserId = userId, Username = "driver_john", PasswordHash = "hash", RoleId = Guid.NewGuid(), Email = "john@test.com", FullName = "John Doe" };
             _db.Users.Add(user);
@@ -84,7 +83,6 @@ namespace ColdChainX.UnitTests
                 DriverPaidAmount = 1_250_000m
             };
 
-            // Act
             var photoBytes = new MemoryStream(new byte[] { 1, 2, 3 });
             var photo = new FormFile(photoBytes, 0, photoBytes.Length, "EvidenceFiles", "breakdown.jpg")
             {
@@ -95,7 +93,6 @@ namespace ColdChainX.UnitTests
 
             var response = await _incidentService.ReportIncidentAsync(request, userId);
 
-            // Assert
             Assert.True(response.Success);
             Assert.NotNull(response.Data);
             Assert.Equal("DAMAGE_CARGO", response.Data.IncidentType);
@@ -147,7 +144,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task ResolveIncident_UpdatesStatusToResolved()
         {
-            // Arrange
             var userId = Guid.NewGuid();
             var incidentId = Guid.NewGuid();
             _db.Users.Add(new User
@@ -176,7 +172,6 @@ namespace ColdChainX.UnitTests
             _db.IncidentReports.Add(incident);
             await _db.SaveChangesAsync();
 
-            // Act
             var response = await _incidentService.ResolveIncidentAsync(
                 incidentId,
                 new ResolveIncidentRequest
@@ -185,7 +180,6 @@ namespace ColdChainX.UnitTests
                 },
                 userId);
 
-            // Assert
             Assert.True(response.Success);
             
             var dbIncident = await _db.IncidentReports
@@ -418,7 +412,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task CreateClaim_SavesClaimAndEvidences()
         {
-            // Arrange
             var userId = Guid.NewGuid();
             var user = new User { UserId = userId, Username = "cust_jane", PasswordHash = "hash", RoleId = Guid.NewGuid(), Email = "jane@test.com", FullName = "Jane Doe" };
             _db.Users.Add(user);
@@ -456,10 +449,8 @@ namespace ColdChainX.UnitTests
                 EvidenceImages = new List<Microsoft.AspNetCore.Http.IFormFile> { photo1, photo2 }
             };
 
-            // Act
             var response = await _claimService.CreateClaimAsync(request, userId);
 
-            // Assert
             Assert.True(response.Success);
             Assert.NotNull(response.Data);
             Assert.Equal("DAMAGE", response.Data.ClaimType);
@@ -477,7 +468,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task ResolveClaim_UpdatesStatusAndFaultOwner()
         {
-            // Arrange
             var userId = Guid.NewGuid();
             var claimId = Guid.NewGuid();
             var claim = new Claim
@@ -499,10 +489,8 @@ namespace ColdChainX.UnitTests
                 ResolutionNote = "Compensated customer $200"
             };
 
-            // Act
             var response = await _claimService.ResolveClaimAsync(claimId, request, userId);
 
-            // Assert
             Assert.True(response.Success);
 
             var dbClaim = await _db.Claims.FindAsync(claimId);

@@ -80,14 +80,12 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task CheckAsync_BlocksWhenExceedsWeeklyLimit()
         {
-            // Mon–Sun week containing 2026-06-24 is 2026-06-22 .. 2026-06-28.
             await LogHoursAsync(9m, new DateOnly(2026, 6, 22));
             await LogHoursAsync(9m, new DateOnly(2026, 6, 23));
             await LogHoursAsync(9m, new DateOnly(2026, 6, 25));
             await LogHoursAsync(9m, new DateOnly(2026, 6, 26));
             await LogHoursAsync(9m, new DateOnly(2026, 6, 27)); // week total = 45h
 
-            // Same-day addition stays under daily limit but pushes the week over 48.
             var result = await _service.CheckAsync(_driverId, 5m, new DateOnly(2026, 6, 24)); // week 45 + 5 = 50 > 48
 
             Assert.False(result.CanAssign);
@@ -109,7 +107,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task ReconcileStatusAsync_ClearsRelaxWhenWindowExpired()
         {
-            // Hours only in a previous calendar period → current day/week is clear.
             await LogHoursAsync(10m, DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-30));
 
             var driver = await _db.Drivers.FindAsync(_driverId);

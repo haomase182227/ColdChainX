@@ -37,7 +37,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task GetExpiryAlerts_FiltersAndReturnsUpcomingExpiryStock()
         {
-            // Arrange
             var customerId = Guid.NewGuid();
             var warehouseId = Guid.NewGuid();
             var wh = new Warehouse { WarehouseId = warehouseId, WarehouseCode = "WH-EXP", WarehouseName = "Expiry WH", WarehouseType = "COLD", Address = "123 Cold St", Status = "ACTIVE", MaxPallets = 100 };
@@ -80,10 +79,8 @@ namespace ColdChainX.UnitTests
             _db.Lpns.AddRange(lpnNear, lpnFar);
             await _db.SaveChangesAsync();
 
-            // Act
             var response = await _analysisService.GetExpiryAlertsAsync(warehouseId, warningDays: 30, pageNumber: 1, pageSize: 10);
 
-            // Assert
             Assert.True(response.Success);
             Assert.NotNull(response.Data);
             Assert.Single(response.Data.Data);
@@ -98,7 +95,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task GetAgingInventory_CalculatesCorrectStorageDays()
         {
-            // Arrange
             var customerId = Guid.NewGuid();
             var warehouseId = Guid.NewGuid();
             var wh = new Warehouse { WarehouseId = warehouseId, WarehouseCode = "WH-AGE", WarehouseName = "Aging WH", WarehouseType = "COLD", Address = "123 Cold St", Status = "ACTIVE", MaxPallets = 100 };
@@ -141,10 +137,8 @@ namespace ColdChainX.UnitTests
             _db.Lpns.AddRange(lpnOld, lpnNew);
             await _db.SaveChangesAsync();
 
-            // Act
             var response = await _analysisService.GetAgingInventoryAsync(warehouseId, thresholdDays: 30, pageNumber: 1, pageSize: 10);
 
-            // Assert
             Assert.True(response.Success);
             Assert.NotNull(response.Data);
             Assert.Single(response.Data.Data);
@@ -159,7 +153,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task GetTemperatureAudits_FlagsIncompatibleStocks()
         {
-            // Arrange
             var customerId = Guid.NewGuid();
             var warehouseId = Guid.NewGuid();
             var wh = new Warehouse { WarehouseId = warehouseId, WarehouseCode = "WH-TEMP", WarehouseName = "Temp WH", WarehouseType = "COLD", Address = "123 Cold St", Status = "ACTIVE", MaxPallets = 100, DefaultMinTemp = 10m, DefaultMaxTemp = 15m };
@@ -178,7 +171,6 @@ namespace ColdChainX.UnitTests
             var receipt3 = new WarehouseReceipt { ReceiptId = Guid.NewGuid(), ReceiptCode = "REC-3", OrderId = order3.OrderId, WarehouseId = freezerWh.WarehouseId, ReceiptType = "INBOUND", DelivererName = "Del3", CreatedAt = DateTime.UtcNow };
             _db.WarehouseReceipts.AddRange(receipt1, receipt2, receipt3);
 
-            // Lpn 1: Requires 5 (RequiredTemperature = 5), stored in LOC-HOT -> Should be flagged (Too hot)
             var lpnTooHot = new Lpn
             {
                 LpnId = Guid.NewGuid(),
@@ -192,7 +184,6 @@ namespace ColdChainX.UnitTests
                 CreatedAt = DateTime.UtcNow
             };
 
-            // Lpn 2: Requires 5, stored in LOC-FREEZER -> Should be flagged (Too cold)
             var lpnTooCold = new Lpn
             {
                 LpnId = Guid.NewGuid(),
@@ -206,7 +197,6 @@ namespace ColdChainX.UnitTests
                 CreatedAt = DateTime.UtcNow
             };
 
-            // Lpn 3: Requires -18, stored in LOC-FREEZER -> Compatible, should NOT be flagged
             var lpnCompatible = new Lpn
             {
                 LpnId = Guid.NewGuid(),
@@ -223,10 +213,8 @@ namespace ColdChainX.UnitTests
             _db.Lpns.AddRange(lpnTooHot, lpnTooCold, lpnCompatible);
             await _db.SaveChangesAsync();
 
-            // Act
             var response = await _analysisService.GetTemperatureAuditsAsync(warehouseId, pageNumber: 1, pageSize: 10);
 
-            // Assert
             Assert.True(response.Success);
             Assert.NotNull(response.Data);
             Assert.Equal(2, response.Data.Data.Count);
@@ -240,16 +228,13 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task GetWarehouseUtilizationAsync_ShouldReturnCorrectMetrics_WhenZonesExist()
         {
-            // Arrange
             var warehouseId = Guid.NewGuid();
             var wh = new Warehouse { WarehouseId = warehouseId, WarehouseCode = "WH-UTIL", WarehouseName = "Util WH", WarehouseType = "COLD", Address = "123 Util St", Status = "ACTIVE", MaxPallets = 80, CurrentPallets = 25 };
             _db.Warehouses.Add(wh);
             await _db.SaveChangesAsync();
 
-            // Act
             var response = await _analysisService.GetWarehouseUtilizationAsync(warehouseId);
 
-            // Assert
             Assert.True(response.Success);
             Assert.NotNull(response.Data);
             Assert.Equal(80, response.Data.MaxPallets);
