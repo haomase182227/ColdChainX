@@ -28,20 +28,23 @@ namespace ColdChainX.Application.Services
         public async Task<ApiResponse<ClaimResponse>> CreateClaimAsync(CreateClaimRequest request, Guid userId)
         {
             if (request == null)
-                return ApiResponse<ClaimResponse>.Failure("Request is null");
+                return ApiResponse<ClaimResponse>.Failure("Request is null", 400);
+
+            if (!request.OrderId.HasValue || request.OrderId.Value == Guid.Empty)
+                return ApiResponse<ClaimResponse>.Failure("OrderId is required.", 400);
+
+            if (string.IsNullOrWhiteSpace(request.Description))
+                return ApiResponse<ClaimResponse>.Failure("Claim description is required.", 400);
 
             try
             {
                 var userExists = await _db.Users.AnyAsync(u => u.UserId == userId);
                 if (!userExists)
-                    return ApiResponse<ClaimResponse>.Failure("Reporter user not found.");
+                    return ApiResponse<ClaimResponse>.Failure("Reporter user not found.", 404);
 
-                if (request.OrderId.HasValue)
-                {
-                    var orderExists = await _db.TransportOrders.AnyAsync(o => o.OrderId == request.OrderId.Value);
-                    if (!orderExists)
-                        return ApiResponse<ClaimResponse>.Failure("Order not found.");
-                }
+                var orderExists = await _db.TransportOrders.AnyAsync(o => o.OrderId == request.OrderId.Value);
+                if (!orderExists)
+                    return ApiResponse<ClaimResponse>.Failure("Order not found.", 404);
 
                 var claimCode = $"CLM-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}";
 
@@ -78,7 +81,6 @@ namespace ColdChainX.Application.Services
 
                 await _db.SaveChangesAsync();
 
-                // Reload claim details
                 var savedClaim = await _db.Claims
                     .Include(c => c.Order)
                     .Include(c => c.ClaimEvidences)
@@ -162,7 +164,6 @@ namespace ColdChainX.Application.Services
                     query = query.Where(c => c.OrderId == orderId.Value);
                 }
 
-                // Lọc theo Status từ Dropdown: nếu là "ALL", để trống hoặc null thì lấy tất cả hồ sơ
                 if (!string.IsNullOrWhiteSpace(status) && !status.Equals("ALL", StringComparison.OrdinalIgnoreCase))
                 {
                     query = query.Where(c => c.Status == status);
@@ -227,7 +228,6 @@ namespace ColdChainX.Application.Services
             using var transaction = await _db.Database.BeginTransactionAsync();
             try
             {
-                // Find or create PaymentTransaction (Bút toán OUT cho bồi thường OS&D)
                 var paymentTx = await _db.PaymentTransactions
                     .FirstOrDefaultAsync(pt => pt.ClaimId == claimId);
 

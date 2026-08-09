@@ -10,9 +10,6 @@ using ColdChainX.Shared.Responses;
 
 namespace ColdChainX.Application.Features.Payment.Queries;
 
-/// <summary>
-/// Lấy toàn bộ lịch sử giao dịch thanh toán COD, chuyển khoản PayOS và chi phí bồi thường OS&D trong hệ thống.
-/// </summary>
 public class GetAllPaymentTransactionsQuery : IRequest<ApiResponse<object>>
 {
     public int PageNumber { get; set; } = 1;
@@ -30,7 +27,6 @@ public class GetAllPaymentTransactionsQueryHandler : IRequestHandler<GetAllPayme
 
     public async Task<ApiResponse<object>> Handle(GetAllPaymentTransactionsQuery request, CancellationToken cancellationToken)
     {
-        // 1. Lấy danh sách giao dịch chính thức trong bảng PaymentTransactions
         var dbTransactions = await _context.PaymentTransactions
             .Include(t => t.Order)
                 .ThenInclude(o => o!.Customer)
@@ -65,7 +61,6 @@ public class GetAllPaymentTransactionsQueryHandler : IRequestHandler<GetAllPayme
             });
         }
 
-        // 2. Tự động hợp nhất thêm các giao dịch thu COD qua ePOD đã hoàn tất (CASH / QR) mà chưa có record trong bảng PaymentTransactions
         var existingOrderIds = dbTransactions.Where(x => x.OrderId.HasValue).Select(x => x.OrderId!.Value).ToHashSet();
 
         var paidEpods = await _context.DeliveryEpods
@@ -100,7 +95,6 @@ public class GetAllPaymentTransactionsQueryHandler : IRequestHandler<GetAllPayme
             });
         }
 
-        // 3. Sắp xếp mới nhất trước
         var sortedResults = results.OrderByDescending(r => ((dynamic)r).CreatedAt).ToList();
 
         decimal totalInFlow = sortedResults.Where(r => ((dynamic)r).TransactionType == "IN").Sum(r => (decimal)((dynamic)r).Amount);

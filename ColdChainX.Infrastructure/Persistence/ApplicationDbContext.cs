@@ -143,10 +143,8 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // Set default schema to public for PostgreSQL
         modelBuilder.HasDefaultSchema("public");
 
-        // PostgreSQL Enums Configuration
         modelBuilder.HasPostgresEnum<AttachmentFormat>();
         modelBuilder.HasPostgresEnum<AttachmentCategory>();
         modelBuilder.HasPostgresEnum<AttachmentSubCategory>();
@@ -840,7 +838,6 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasPrecision(15, 2)
                 .HasDefaultValue(0m)
                 .HasColumnName("driver_paid_amount");
-            // Reuse the incident expense columns already present on the server.
             entity.Property(e => e.ExpenseApprovalNote).HasColumnName("approval_note");
             entity.Property(e => e.ExpenseApprovedAt)
                 .HasColumnType("timestamp without time zone")
@@ -2915,7 +2912,6 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("updated_at");
 
-            // Seed Data
             entity.HasData(
                 new ServiceCatalog
                 {

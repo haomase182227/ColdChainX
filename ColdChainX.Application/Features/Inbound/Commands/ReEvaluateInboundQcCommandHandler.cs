@@ -56,7 +56,7 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
         var asn = await _context.InboundAsns
             .FirstOrDefaultAsync(a => a.OrderId == lpn.OrderId, cancellationToken);
 
-        if (asn != null && asn.WarehouseId.HasValue && asn.WarehouseId.Value != request.WarehouseId)
+        if (asn != null && asn.WarehouseId.HasValue && request.WarehouseId != Guid.Empty && asn.WarehouseId.Value != request.WarehouseId)
             return Failure("ASN does not belong to current warehouse.");
 
         var receipt = lpn.Receipt;
@@ -82,7 +82,6 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
         var maxDiff = Math.Max(weightDiff, cbmDiff);
         var hasDiscrepancy = maxDiff > DiscrepancyThresholdPercent;
 
-        // Update LPN
         lpn.ActualWeightKg = request.ActualWeightKg;
         lpn.ActualCbm = actualCbm;
         lpn.RecordedTemperature = request.Temperature;
@@ -96,29 +95,23 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
         }
         lpn.UpdatedAt = now;
 
-        // Update Order
         if (order.OrderDimension != null)
         {
             order.OrderDimension.ActualWeightKg = request.ActualWeightKg;
             order.OrderDimension.ActualCbm = actualCbm;
         }
-        // User explicitly said: "Không cần update trạng thái của Order đâu"
-        // order.Status = hasDiscrepancy ? "DISCREPANCY_HOLD" : "RECEIVING";
 
-        // Update ASN
         if (asn != null)
         {
             asn.Status = hasDiscrepancy ? "DISCREPANCY_HOLD" : "QC_PASSED";
         }
 
-        // Update Receipt
         receipt.ReferenceDocNo = hasDiscrepancy ? "DISCREPANCY_HOLD" : "PENDING_PUTAWAY";
         receipt.RecordedTemperature = request.Temperature;
         receipt.Note = hasDiscrepancy ? "QC discrepancy hold. (Re-evaluated)" : "QC passed and waiting putaway. (Re-evaluated)";
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        // Re-generate PDF
         var pdfBytes = hasDiscrepancy
             ? await _mediator.Send(new GenerateDiscrepancyPdfQuery(receipt.ReceiptId), cancellationToken)
             : await _mediator.Send(new GenerateReceiptPdfQuery(receipt.ReceiptId), cancellationToken);
@@ -131,7 +124,6 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
         
         receipt.PdfUrl = pdfUrl;
 
-        // Create, update, or resolve TransportDocument for discrepancy report depending on hasDiscrepancy
         var existingDoc = await _context.TransportDocuments
             .FirstOrDefaultAsync(d => d.OrderId == order.OrderId && d.DocType == "DISCREPANCY_REPORT", cancellationToken);
 
@@ -159,7 +151,6 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
         {
             if (existingDoc != null)
             {
-                // Status mapping removed
             }
         }
 

@@ -4,9 +4,6 @@ using Swashbuckle.AspNetCore.SwaggerGen;
 
 namespace ColdChainX.API.Swagger
 {
-    /// <summary>
-    /// Removes Swagger's global bearer requirement from anonymous endpoints.
-    /// </summary>
     public class RemoveAuthFromCreateAccountsFilter : IOperationFilter
     {
         public void Apply(OpenApiOperation operation, OperationFilterContext context)

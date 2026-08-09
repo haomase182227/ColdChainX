@@ -58,7 +58,6 @@ public class TripDriverSummaryItem
 
 public class TripOrderCustomerItem
 {
-    // Thông tin cơ bản của Order
     public Guid OrderId { get; set; }
     public string TrackingCode { get; set; } = string.Empty;
     public string OrderStatus { get; set; } = string.Empty;
@@ -66,7 +65,6 @@ public class TripOrderCustomerItem
     public string PickupAddress { get; set; } = string.Empty;
     public string DestAddress { get; set; } = string.Empty;
 
-    // Thông tin chi tiết của Customer
     public Guid? CustomerId { get; set; }
     public string CompanyName { get; set; } = string.Empty;
     public string TaxCode { get; set; } = string.Empty;

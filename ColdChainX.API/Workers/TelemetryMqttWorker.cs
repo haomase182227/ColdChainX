@@ -23,7 +23,6 @@ public sealed class TelemetryMqttWorker : BackgroundService
 
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _activeConnections = new();
 
-    // Track when a device last sent a simulated message
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime> _simulatedDevices = new();
 
     private readonly Channel<TelemetryData> _telemetryChannel;
@@ -147,7 +146,6 @@ public sealed class TelemetryMqttWorker : BackgroundService
                     incomingClientId = clientProp.GetString();
                 }
 
-                // Extract device code from topic, e.g. telemetry/coldchain/{deviceCode}/status
                 var parts = topic.Split('/');
                 if (parts.Length >= 2)
                 {
@@ -199,9 +197,6 @@ public sealed class TelemetryMqttWorker : BackgroundService
                 return;
             }
 
-            // DEDUPLICATION LOGIC FOR HYBRID MODE
-            // The Simulator forwards the message with IsSimulated = true.
-            // The real ESP32 sends without IsSimulated.
             bool isSimulated = false;
             try 
             {
@@ -215,20 +210,16 @@ public sealed class TelemetryMqttWorker : BackgroundService
 
             if (isSimulated)
             {
-                // Mark this device as currently being simulated
                 _simulatedDevices[telemetry.DeviceId] = DateTime.UtcNow;
             }
             else
             {
-                // Debounce: Wait 2 seconds to allow Simulator (Hybrid Mode) to intercept and send simulated=True
                 await Task.Delay(2000);
 
-                // If it's a real message, check if the simulator is active (sent a message in the last 5 seconds)
                 if (_simulatedDevices.TryGetValue(telemetry.DeviceId, out var lastSimTime))
                 {
                     if ((DateTime.UtcNow - lastSimTime).TotalSeconds < 5)
                     {
-                        // Drop the real message because the simulator is overriding it right now
                         return;
                     }
                 }

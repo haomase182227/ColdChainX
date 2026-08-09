@@ -14,11 +14,6 @@ using ColdChainX.Shared.Responses;
 
 namespace ColdChainX.Application.Features.Delivery.Commands;
 
-/// <summary>
-/// Bước 2 — Nghiệm thu hàng + Ký nhận tại điểm dừng (Handover Confirmation).
-/// Xử lý: upload chữ ký khách + ảnh bằng chứng, cập nhật trạng thái LPN/Order,
-/// sinh Biên bản Giao nhận PDF (handover receipt) và gửi thông báo SignalR.
-/// </summary>
 public class ConfirmHandoverCommand : IRequest<ApiResponse<HandoverConfirmResponse>>
 {
     public Guid StopId { get; set; }
@@ -50,7 +45,6 @@ public class ConfirmHandoverCommandHandler : IRequestHandler<ConfirmHandoverComm
     {
         var request = command.Request;
 
-        // 1. Load TripStop with navigation properties and validate driver has checked in
         var stop = await _context.TripStops
             .Include(ts => ts.Location)
             .Include(ts => ts.Trip)
@@ -63,7 +57,6 @@ public class ConfirmHandoverCommandHandler : IRequestHandler<ConfirmHandoverComm
         if (stop.ActualArrivalTime == null)
             throw new ValidationException("Cannot confirm handover. Driver must check in at this stop first (POST /api/stops/{stopId}/check-ins).");
 
-        // 2. Load Order and validate it belongs to this stop's location
         var order = await _context.TransportOrders
             .Include(o => o.Customer)
             .Include(o => o.Quotations)
@@ -76,7 +69,6 @@ public class ConfirmHandoverCommandHandler : IRequestHandler<ConfirmHandoverComm
         if (trip == null)
             throw new NotFoundException("Trip data not found for this stop.");
 
-        // 3. Validate driver is assigned to this trip
         var driver = await _context.Drivers
             .FirstOrDefaultAsync(d => d.UserId == command.UserId, cancellationToken);
         if (driver == null)
@@ -87,13 +79,11 @@ public class ConfirmHandoverCommandHandler : IRequestHandler<ConfirmHandoverComm
         if (!isAssigned)
             throw new ForbiddenException("You are not authorized to confirm handover for this trip.");
 
-        // 4. Idempotency guard — prevent duplicate handover confirmations
         var existingEpod = await _context.DeliveryEpods
             .FirstOrDefaultAsync(e => e.OrderId == order.OrderId && e.HandoverConfirmedAt != null, cancellationToken);
         if (existingEpod != null)
             throw new ConflictException($"Handover for order '{order.TrackingCode}' has already been confirmed at {existingEpod.HandoverConfirmedAt:O} (ePOD: {existingEpod.EpodId}). Cannot confirm again.");
 
-        // 5. Fetch LPNs for this order on this trip
         var lpns = await _context.Lpns
             .Where(l => l.OrderId == order.OrderId && l.TripId == trip.TripId)
             .ToListAsync(cancellationToken);
@@ -101,7 +91,6 @@ public class ConfirmHandoverCommandHandler : IRequestHandler<ConfirmHandoverComm
         if (lpns.Count == 0)
             throw new ValidationException("No LPNs found for this order on this trip. Ensure dispatch was completed.");
 
-        // 6. Upload signature (required) and optional handover photo — in parallel
         var signatureTask = _fileService.UploadFileAsync(request.SignatureFile);
         var handoverPhotoTask = request.HandoverPhotoFile != null
             ? _fileService.UploadFileAsync(request.HandoverPhotoFile)
@@ -111,30 +100,25 @@ public class ConfirmHandoverCommandHandler : IRequestHandler<ConfirmHandoverComm
         var signatureUrl = signatureTask.Result;
         var handoverPhotoUrl = handoverPhotoTask.Result;
 
-        // 7. Get latest IoT temperature for this trip (cold chain standard fallback: 4.5°C)
         var latestTelemetry = await _context.TelemetryLogs
             .Where(t => t.TripId == trip.TripId)
             .OrderByDescending(t => t.Timestamp)
             .FirstOrDefaultAsync(cancellationToken);
         var recordedTemp = latestTelemetry?.Temperature ?? 4.5m;
 
-        // 8. Calculate expected COD
         var expectedCod = CalculateExpectedCod(order, lpns);
 
         var epodId = Guid.NewGuid();
         var now = DateTime.UtcNow;
 
-        // 9. All DB writes inside a transaction (Handover stage)
         var strategy = _context.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync(async () =>
         {
             using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
             try
             {
-                // Update LPN states (Auto-accept all)
                 UpdateLpnStates(order, lpns, recordedTemp);
 
-                // Create ePOD record (handover stage — payment step pending)
                 var epod = new DeliveryEpod
                 {
                     EpodId = epodId,
@@ -153,7 +137,6 @@ public class ConfirmHandoverCommandHandler : IRequestHandler<ConfirmHandoverComm
                 _context.DeliveryEpods.Add(epod);
                 await _context.SaveChangesAsync(cancellationToken);
 
-                // Generate Handover Receipt PDF
                 var pdfData = BuildHandoverPdfData(
                     order, trip, driver, stop.Location, lpns,
                     request, signatureUrl, handoverPhotoUrl, recordedTemp, now);
@@ -184,7 +167,6 @@ public class ConfirmHandoverCommandHandler : IRequestHandler<ConfirmHandoverComm
         });
     }
 
-    // ── Private Helpers ──────────────────────────────────────────────────────
 
     private static decimal CalculateExpectedCod(TransportOrder order, List<Lpn> lpns)
     {

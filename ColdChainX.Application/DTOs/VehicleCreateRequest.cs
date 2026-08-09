@@ -12,7 +12,6 @@ namespace ColdChainX.Application.DTOs
         public string? EngineNumber { get; set; }
         public decimal? StandardFuelLiters { get; set; }
 
-        /// <summary>Loại xe: Truck, Van, Refrigerated, Flatbed, Container, Tanker</summary>
         public VehicleType VehicleType { get; set; }
 
         public decimal MaxWeight { get; set; }
@@ -20,10 +19,8 @@ namespace ColdChainX.Application.DTOs
         public decimal MinTemp { get; set; }
         public decimal MaxTemp { get; set; }
 
-        /// <summary>Trạng thái: Active, Inactive, UnderMaintenance, OnTrip</summary>
         public VehicleStatus Status { get; set; } = VehicleStatus.Active;
 
-        /// <summary>Ảnh / tài liệu đính kèm (tuỳ chọn)</summary>
         public IFormFile? VehicleImage { get; set; }
     }
-}
+}

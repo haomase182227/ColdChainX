@@ -16,8 +16,6 @@ public class InventoryAgingWorker : BackgroundService
     private readonly IServiceProvider _serviceProvider;
     private readonly TimeSpan _checkInterval = TimeSpan.FromMinutes(5); // Run every 5 minutes
 
-    // In-memory set to prevent spamming notifications for the same LPN over and over.
-    // In a real production system, you'd store a boolean "IsAgingNotified" in the DB.
     private readonly HashSet<Guid> _notifiedLpns = new();
 
     public InventoryAgingWorker(ILogger<InventoryAgingWorker> logger, IServiceProvider serviceProvider)
@@ -53,7 +51,6 @@ public class InventoryAgingWorker : BackgroundService
 
         var now = DateTime.UtcNow;
 
-        // Find LPNs that are in the warehouse (IN_STOCK) and not yet assigned to a trip
         var agingLpns = await db.Lpns
             .Include(l => l.Receipt)
             .Where(l => l.State == LpnState.IN_STOCK && l.TripId == null && l.InboundTime != null)
@@ -92,7 +89,6 @@ public class InventoryAgingWorker : BackgroundService
             {
                 _logger.LogWarning("LPN {LpnCode} is in RED alert: {Reason}", lpn.LpnCode, alertReason);
 
-                // Ensure template exists
                 var template = await db.NotificationTemplates.FirstOrDefaultAsync(t => t.TemplateId == "NOTI_AGING_ALERT", stoppingToken);
                 if (template == null)
                 {
@@ -109,7 +105,6 @@ public class InventoryAgingWorker : BackgroundService
                     await db.SaveChangesAsync(stoppingToken);
                 }
 
-                // Find dispatchers for this warehouse (or global dispatchers)
                 var targetDispatchers = dispatchers
                     .Where(u => u.WarehouseId == null || (lpn.Receipt != null && u.WarehouseId == lpn.Receipt.WarehouseId))
                     .ToList();
@@ -137,7 +132,6 @@ public class InventoryAgingWorker : BackgroundService
         {
             await db.SaveChangesAsync(stoppingToken);
             
-            // Push real-time signalR event to all dispatchers & admins
             await hubContext.Clients.Groups("Group_Dispatcher", "Group_Admin")
                 .SendAsync("ReceiveNotification", new 
                 { 

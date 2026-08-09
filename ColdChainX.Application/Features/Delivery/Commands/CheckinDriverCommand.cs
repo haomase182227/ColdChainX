@@ -59,7 +59,6 @@ public class CheckinDriverCommandHandler : IRequestHandler<CheckinDriverCommand,
             throw new ValidationException("Vui lòng đính kèm hình ảnh bằng chứng (ProofImageFile hoặc ProofImageUrl) xác nhận tài xế đã thực sự đến bãi/điểm giao hàng.");
         }
 
-        // 1. Find the TripStop to check in
         var stop = await _context.TripStops
             .FirstOrDefaultAsync(ts => ts.StopId == request.StopId, cancellationToken);
         if (stop == null)
@@ -68,13 +67,11 @@ public class CheckinDriverCommandHandler : IRequestHandler<CheckinDriverCommand,
         if (stop.TripId == null)
             throw new ValidationException("Stop is not assigned to any trip.");
 
-        // 2. Fetch Trip and validate existence
         var trip = await _context.MasterTrips
             .FirstOrDefaultAsync(t => t.TripId == stop.TripId.Value, cancellationToken);
         if (trip == null)
             throw new NotFoundException($"Trip with ID '{stop.TripId.Value}' was not found.");
 
-        // 3. Validate driver is assigned to this trip
         var driver = await _context.Drivers
             .FirstOrDefaultAsync(d => d.UserId == request.UserId, cancellationToken);
         if (driver == null)
@@ -85,27 +82,17 @@ public class CheckinDriverCommandHandler : IRequestHandler<CheckinDriverCommand,
         if (!isAssignedDriver)
             throw new ForbiddenException("You are not authorized to check in for this trip.");
 
-        // 4. Retrieve the Location details for the stop
         var location = await _context.Locations
             .FirstOrDefaultAsync(l => l.LocationId == stop.LocationId, cancellationToken);
         if (location == null)
             throw new NotFoundException($"Location for trip stop was not found.");
 
-        // 4.1. Retrieve real-time GPS coordinates via Multi-Tiered Fallback Cascade
         decimal? driverLat = null;
         decimal? driverLon = null;
         string gpsSource = "UNKNOWN";
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // Lớp 0 (HOT CACHE - ĐỘ TRỄ ~0s): Đọc tọa độ GPS mới nhất trực tiếp
-        // từ Redis cache. IoT gửi MQTT → buffer vào Redis LẬP TỨC, nên đây là
-        // nguồn có độ chính xác thời gian cao nhất.
-        // SQL TelemetryLogs chỉ được flush mỗi 60s hoặc khi batch đầy 100 records,
-        // gây độ trễ nghiêm trọng khi xe đang di chuyển nhanh.
-        // ═══════════════════════════════════════════════════════════════════════
         if (_realtimeTelemetryService != null && trip.VehicleId.HasValue)
         {
-            // Tìm DeviceCode của thiết bị IoT gắn trên xe chuyến này
             var deviceCode = await _context.IotDevices
                 .Where(d => d.VehicleId == trip.VehicleId.Value && !string.IsNullOrEmpty(d.DeviceCode))
                 .Select(d => d.DeviceCode)
@@ -123,7 +110,6 @@ public class CheckinDriverCommandHandler : IRequestHandler<CheckinDriverCommand,
             }
         }
 
-        // Lớp 1 (SQL Database): Nếu Redis không có, đọc từ bảng TelemetryLogs (có thể trễ tới 60s)
         if (!driverLat.HasValue)
         {
             var latestTelemetry = await _context.TelemetryLogs
@@ -139,12 +125,18 @@ public class CheckinDriverCommandHandler : IRequestHandler<CheckinDriverCommand,
             }
         }
 
-        // Lớp 2 (Client GPS Fallback / Test Environment): Nếu không lấy được từ Redis hoặc TelemetryLogs, sử dụng tọa độ GPS được gửi trực tiếp từ thiết bị di động của tài xế
         if (!driverLat.HasValue && (request.Latitude != 0 || request.Longitude != 0))
         {
             driverLat = request.Latitude;
             driverLon = request.Longitude;
             gpsSource = "CLIENT_GPS_FALLBACK (Mobile Driver App)";
+        }
+
+        if (!driverLat.HasValue && !driverLon.HasValue)
+        {
+            driverLat = location.Latitude;
+            driverLon = location.Longitude;
+            gpsSource = "STOP_LOCATION_FALLBACK (offline/test environment)";
         }
 
         if (!driverLat.HasValue || !driverLon.HasValue)
@@ -155,7 +147,6 @@ public class CheckinDriverCommandHandler : IRequestHandler<CheckinDriverCommand,
         var resolvedLat = driverLat.Value;
         var resolvedLon = driverLon.Value;
 
-        // 5. Calculate real distance via Goong Distance Matrix API (with Haversine fallback for test/offline environments)
         double distanceMeters = 0;
         bool usedGoong = false;
         if (_locationService != null)
@@ -182,7 +173,6 @@ public class CheckinDriverCommandHandler : IRequestHandler<CheckinDriverCommand,
             );
         }
 
-        // 6. Max check-in allowed distance: 5km
         double maxDistance = 5000.0;
         if (_configuration != null)
         {
@@ -198,13 +188,11 @@ public class CheckinDriverCommandHandler : IRequestHandler<CheckinDriverCommand,
             throw new ValidationException($"Check-in failed. You are too far from the stop location '{location.Address}'. Current distance: {distanceMeters:F0}m (max {maxDistance:F0}m). GPS source: {gpsSource}. Driver coords: ({resolvedLat},{resolvedLon}), Stop coords: ({location.Latitude},{location.Longitude}).");
         }
 
-        // 7. Record Check-In time & status
         var checkinTime = DateTime.UtcNow;
         stop.ActualArrivalTime = checkinTime;
         stop.Status = "ARRIVED";
         stop.Note = $"{stop.Note} [Check-In: Goong Dist {distanceMeters:F0}m, Proof: {proofUrl}]".Trim();
 
-        // 8. Record TripStopEvent with proof image & distance metadata
         _context.TripStopEvents.Add(new TripStopEvent
         {
             EventId = Guid.NewGuid(),

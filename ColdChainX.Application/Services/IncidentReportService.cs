@@ -190,9 +190,6 @@ public class IncidentReportService : IIncidentReportService
                 }
             }
 
-            // =================================================================================
-            // THÔNG BÁO SỰ CỐ / KẸT XE TRỌNG QUÁ TRÌNH GIAO HÀNG CHO KHÁCH HÀNG (ĐƠN GIẢN HÓA)
-            // =================================================================================
             if (incident.TripId.HasValue)
             {
                 var remainingStops = await _db.TripStops
@@ -345,7 +342,7 @@ public class IncidentReportService : IIncidentReportService
             var actor = await _db.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.UserId == userId);
             var isPrivileged = actor?.Role?.RoleName is not null &&
                                (actor.Role.RoleName.Equals("Admin", StringComparison.OrdinalIgnoreCase) ||
-                                actor.Role.RoleName.Equals("WarehouseOperator", StringComparison.OrdinalIgnoreCase));
+                                actor.Role.RoleName.Equals("WarehouseWorker", StringComparison.OrdinalIgnoreCase));
             if (incident.ReportedBy != userId && !isPrivileged)
                 return ApiResponse<IncidentResponse>.Failure("You cannot add evidence to this incident.", 403);
 
@@ -907,8 +904,6 @@ public class IncidentReportService : IIncidentReportService
         var description = incident.Description;
         var resolutionNote = incident.ResolutionNote;
 
-        // Backward compatibility for incidents resolved before ResolutionNote had
-        // its own database column.
         if (resolutionNote == null && description.Contains(" | Resolution: "))
         {
             var parts = description.Split(

@@ -11,7 +11,6 @@ namespace ColdChainX.API.Services;
 
 public sealed class ColdChainMonitoringService : IColdChainMonitoringService
 {
-    // DELAYED (Luồng 8 — sự cố/sang xe) vẫn là chuyến đang chở hàng lạnh, telemetry phải được xử lý
     private static readonly string[] ActiveTripStatuses = { "IN_TRANSIT", "DELAYED" };
     private const double DeliveryRadiusMeters = 50;
     private const double SoftGeoFenceRadiusMeters = 1000;
@@ -59,7 +58,6 @@ public sealed class ColdChainMonitoringService : IColdChainMonitoringService
         {
             await ProcessOneTelemetryAsync(data, cancellationToken);
             
-            // Tối ưu: Thêm độ trễ 200ms giữa mỗi lần xử lý để tránh dội bom API bên thứ 3 (Goong) gây lỗi 429
             if (batch.Count > 1)
             {
                 await Task.Delay(200, cancellationToken);

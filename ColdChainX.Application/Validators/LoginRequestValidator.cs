@@ -13,7 +13,7 @@ namespace ColdChainX.Application.Validators
 
             RuleFor(x => x.Password)
                 .NotEmpty().WithMessage("Password is required")
-                .MinimumLength(8).WithMessage("Password must be at least 8 characters");
+                .MinimumLength(5).WithMessage("Password must be at least 5 characters");
         }
     }
 }

@@ -20,6 +20,10 @@ public interface IWorkAssignmentService
         string? status,
         CancellationToken cancellationToken = default);
 
+    Task<WorkAssignmentDto> GetByIdAsync(
+        Guid assignmentId,
+        CancellationToken cancellationToken = default);
+
     Task<WorkAssignmentDto> StartAsync(
         Guid assignmentId,
         Guid userId,

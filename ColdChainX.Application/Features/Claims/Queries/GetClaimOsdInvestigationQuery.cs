@@ -39,7 +39,6 @@ public class GetClaimOsdInvestigationQueryHandler : IRequestHandler<GetClaimOsdI
             return ApiResponse<object>.Failure("Không tìm thấy hồ sơ khiếu nại (Claim) với ID đã cung cấp.");
         }
 
-        // Lấy danh sách ảnh/video bằng chứng hiện trường hàng hư hỏng tại Dock
         var evidencePhotos = claim.ClaimEvidences.Select(e => new
         {
             EvidenceId = e.EvidenceId,
@@ -48,7 +47,6 @@ public class GetClaimOsdInvestigationQueryHandler : IRequestHandler<GetClaimOsdI
             UploadedAt = e.CreatedAt
         }).ToList();
 
-        // Đối chiếu phân tích dữ liệu cảm biến IoT xe lạnh & khuyến nghị AI
         var isTempViolation = claim.ClaimType == "TEMPERATURE_ABUSE" 
                               || claim.Description.Contains("nhiệt độ", StringComparison.OrdinalIgnoreCase)
                               || claim.Description.Contains("hỏng", StringComparison.OrdinalIgnoreCase)

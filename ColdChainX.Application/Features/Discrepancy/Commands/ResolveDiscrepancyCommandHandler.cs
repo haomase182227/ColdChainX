@@ -39,12 +39,10 @@ public class ResolveDiscrepancyCommandHandler : IRequestHandler<ResolveDiscrepan
                 lpn.Order.Status = "RECEIVING";
             }
 
-            // Update TransportDocument status to APPROVED
             var doc = await _context.TransportDocuments
                 .FirstOrDefaultAsync(d => d.OrderId == lpn.OrderId && d.DocType == "DISCREPANCY_REPORT", cancellationToken);
             if (doc != null)
             {
-                // Status mapping removed
             }
             
             await _context.SaveChangesAsync(cancellationToken);
@@ -57,7 +55,6 @@ public class ResolveDiscrepancyCommandHandler : IRequestHandler<ResolveDiscrepan
         }
         else
         {
-            // Reject -> Create Penalty Bill and Return
             lpn.State = LpnState.RETURN_PENDING;
             lpn.UpdatedAt = DateTime.UtcNow;
             if (lpn.Order != null)
@@ -82,12 +79,10 @@ public class ResolveDiscrepancyCommandHandler : IRequestHandler<ResolveDiscrepan
 
             _context.PenaltyBills.Add(bill);
 
-            // Update TransportDocument status to REJECTED
             var doc = await _context.TransportDocuments
                 .FirstOrDefaultAsync(d => d.OrderId == lpn.OrderId && d.DocType == "DISCREPANCY_REPORT", cancellationToken);
             if (doc != null)
             {
-                // Status mapping removed
             }
 
             await _context.SaveChangesAsync(cancellationToken);

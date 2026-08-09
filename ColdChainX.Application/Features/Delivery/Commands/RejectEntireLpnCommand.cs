@@ -40,7 +40,6 @@ public class RejectEntireLpnCommandHandler : IRequestHandler<RejectEntireLpnComm
 
     public async Task<ApiResponse<object>> Handle(RejectEntireLpnCommand request, CancellationToken cancellationToken)
     {
-        // 1. Kiểm tra StopId có tồn tại và thuộc TripId truyền vào không
         var stop = await _context.TripStops
             .Include(ts => ts.Location)
             .Include(ts => ts.Trip)
@@ -55,7 +54,6 @@ public class RejectEntireLpnCommandHandler : IRequestHandler<RejectEntireLpnComm
         if (stop.ActualArrivalTime == null)
             throw new ValidationException("Tài xế phải check-in tại điểm dừng trước khi xử lý từ chối bàn giao hàng.");
 
-        // 2. Tìm đơn hàng (Order) của Customer trên chuyến xe (Trip) tại điểm dừng này
         var order = await _context.TransportOrders
             .Include(o => o.Customer)
             .Include(o => o.Quotations)
@@ -64,13 +62,11 @@ public class RejectEntireLpnCommandHandler : IRequestHandler<RejectEntireLpnComm
         if (order == null)
             throw new NotFoundException($"Không tìm thấy Đơn hàng nào thuộc khách hàng (CustomerId: {request.CustomerId}) trong chuyến xe (TripId: {request.TripId}) tại điểm dừng này.");
 
-        // 3. Kiểm tra tính trùng lặp
         var existingEpod = await _context.DeliveryEpods
             .FirstOrDefaultAsync(e => e.OrderId == order.OrderId && e.HandoverConfirmedAt != null, cancellationToken);
         if (existingEpod != null)
             throw new ConflictException($"Đơn hàng '{order.TrackingCode}' đã được hoàn tất bàn giao và ký chốt sổ trước đó (ePOD: {existingEpod.EpodId}). Không thể thao tác từ chối LPN lại.");
 
-        // 4. Xử lý lưu ảnh minh chứng (bắt buộc)
         string evidenceUrl = request.EvidenceImageUrl ?? "";
         if (request.EvidenceImageFile != null && _fileService != null)
         {
@@ -89,7 +85,6 @@ public class RejectEntireLpnCommandHandler : IRequestHandler<RejectEntireLpnComm
             throw new ValidationException("Vui lòng đính kèm file ảnh chụp minh chứng sự cố từ chối toàn bộ LPN.");
         }
 
-        // 5. Tìm LPN duy nhất của đơn hàng (theo BRD hiện tại mỗi khách/đơn hàng thuộc 1 LPN)
         var lpns = await _context.Lpns
             .Where(l => l.OrderId == order.OrderId && (l.TripId == request.TripId || stop.Trip == null || l.TripId == stop.Trip.TripId))
             .ToListAsync(cancellationToken);
@@ -101,7 +96,6 @@ public class RejectEntireLpnCommandHandler : IRequestHandler<RejectEntireLpnComm
         int originalQty = orderLpn.Quantity > 0 ? orderLpn.Quantity : (order.Quantity);
         string primaryReason = string.IsNullOrWhiteSpace(request.RejectionReason) ? "TEMP_VIOLATION_FULL" : request.RejectionReason;
 
-        // 6. QUAY VỀ BÁO GIÁ (QUOTATION) ĐỂ GHI NHẬN TOÀN BỘ SỐ TIỀN KHẤU TRỪ / BỒI THƯỜNG
         var quotation = order.Quotations
             .Where(q => q.Status == "ACCEPTED" || q.Status == "APPROVED" || q.Status == "DRAFT" || q.FinalAmount > 0)
             .OrderByDescending(q => q.CreatedAt)
@@ -115,13 +109,11 @@ public class RejectEntireLpnCommandHandler : IRequestHandler<RejectEntireLpnComm
 
         decimal estimatedDeduction = baseAmount; // Khách từ chối 100%, khấu trừ/bồi thường toàn bộ giá trị báo giá
 
-        // TỰ ĐỘNG SINH GHI CHÚ OS&D TOÀN VẸN
         string returnStatusText = request.IsReturnToWarehouse ? "Đã lập Phiếu thu hồi về kho bãi (InboundReturnSlip) cho toàn bộ LPN" : "Tài xế bàn giao tang vật cho khách tự thỏa thuận tiêu hủy/xử lý tại chỗ (Không mang về bãi kho)";
         string generatedOsdNotes = $"[Hệ thống tự động lập - TỪ CHỐI 100% LPN] Khách hàng từ chối toàn bộ {originalQty}/{originalQty} kiện tại bãi Dock. Lý do: {primaryReason}. Tự động chiết tính bồi thường 100% theo Quotation: -{estimatedDeduction:N0}đ | COD thực thu: 0đ | Xử lý tang vật: {returnStatusText}.";
 
         var now = DateTime.UtcNow;
 
-        // 7. Cập nhật trạng thái LPN và Đơn hàng
         orderLpn.State = LpnState.DELIVERY_RETURNED;
         orderLpn.DiscrepancyReason = primaryReason;
         orderLpn.EvidenceImageUrl = evidenceUrl;
@@ -130,7 +122,6 @@ public class RejectEntireLpnCommandHandler : IRequestHandler<RejectEntireLpnComm
         order.Status = "OSD_REJECT_PENDING";
         order.Quantity = 0; // Số lượng thực nhận = 0
 
-        // 8. Tạo Hồ sơ Khiếu nại (Claim) cho Kế toán tính bồi thường
         string claimCode = $"CLM-{now:yyyyMMdd}-FULL{Random.Shared.Next(100, 999)}";
         Guid claimId = Guid.NewGuid();
 
@@ -147,7 +138,6 @@ public class RejectEntireLpnCommandHandler : IRequestHandler<RejectEntireLpnComm
         };
         _context.Claims.Add(accountingClaim);
 
-        // 9. SINH RA CHỨNG TỪ GIAO HÀNG (ePOD) VỚI TRẠNG THÁI OSD_FULL_REJECTED VÀ COD = 0 (LƯỢC QUA THANH TOÁN QR)
         var epodId = Guid.NewGuid();
         var epod = new DeliveryEpod
         {
@@ -167,7 +157,6 @@ public class RejectEntireLpnCommandHandler : IRequestHandler<RejectEntireLpnComm
         };
         _context.DeliveryEpods.Add(epod);
 
-        // 8.1 LẬP PHIẾU HẬU CẦN NGƯỢC (InboundReturnSlip)
         object? returnSlipResult = null;
         if (request.IsReturnToWarehouse)
         {
@@ -210,7 +199,6 @@ public class RejectEntireLpnCommandHandler : IRequestHandler<RejectEntireLpnComm
             };
         }
 
-        // 11. Lưu minh chứng hình ảnh đồng kiểm
         _context.TransportDocuments.Add(new TransportDocument
         {
             DocId = Guid.NewGuid(),
@@ -231,7 +219,6 @@ public class RejectEntireLpnCommandHandler : IRequestHandler<RejectEntireLpnComm
             CreatedAt = now
         });
 
-        // 12. GỬI NOTIFICATION VỀ KẾ TOÁN (ACCOUNTANT) VÀ ĐIỀU PHỐI (DISPATCHER) ĐỂ TÍNH BỒI THƯỜNG
         var existingTemplate = await _context.NotificationTemplates.FirstOrDefaultAsync(t => t.TemplateId == "OSD_CLAIM_ALERT", cancellationToken);
         if (existingTemplate == null)
         {
@@ -286,7 +273,6 @@ public class RejectEntireLpnCommandHandler : IRequestHandler<RejectEntireLpnComm
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        // 13. TRẢ VỀ KẾT QUẢ ĐÃ LƯỢC QUA BƯỚC THANH TOÁN QR VÀ CHỈ DẪN QUA API ĐÓNG SEAL MỚI
         var resultData = new
         {
             EpodId = epod.EpodId,

@@ -44,7 +44,6 @@ public class GenerateEpodPdfQueryHandler : IRequestHandler<GenerateEpodPdfQuery,
         if (epod == null)
             throw new Exception("ePOD not found for this order");
 
-        // The LPNs for this order
         var lpns = await _context.Lpns
             .Include(x => x.Order)
             .Where(x => x.OrderId == request.OrderId)

@@ -27,7 +27,6 @@ namespace ColdChainX.Application.Validators
                 }).WithMessage("Unsupported file format. Supported formats are: JPG, JPEG, PNG, PDF.")
                 .When(x => x.File != null);
 
-            // Mandatory attachment target (Exclusive OR constraint)
             RuleFor(x => x)
                 .Must(x =>
                 {
@@ -40,7 +39,6 @@ namespace ColdChainX.Application.Validators
                 })
                 .WithMessage("Attachment must be linked to exactly one target (WarehouseReceiptId, WarehouseReceiptItemId, InventoryAdjustmentId, or OutboundOrderId).");
 
-            // SealNumber required when AttachmentSubCategory == SEAL_PHOTO
             RuleFor(x => x.SealNumber)
                 .NotEmpty().WithMessage("SealNumber is required when sub-category is SEAL_PHOTO.")
                 .When(x => x.SubCategory == AttachmentSubCategory.SEAL_PHOTO);

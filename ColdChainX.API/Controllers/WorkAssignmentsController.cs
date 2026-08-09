@@ -44,8 +44,13 @@ public sealed class WorkAssignmentsController : ControllerBase
         [FromQuery] Guid? assignedToUserId,
         [FromQuery] Guid? warehouseId,
         [FromQuery] string? status,
-        CancellationToken cancellationToken)
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10,
+        CancellationToken cancellationToken = default)
     {
+        if (pageNumber <= 0 || pageSize <= 0)
+            return BadRequest(ApiResponse<IReadOnlyCollection<WorkAssignmentDto>>.Failure("PageNumber and PageSize must be greater than zero."));
+
         var result = await _workAssignmentService.GetAllAsync(
             assignedToUserId,
             warehouseId,
@@ -55,6 +60,18 @@ public sealed class WorkAssignmentsController : ControllerBase
         return Ok(ApiResponse<IReadOnlyCollection<WorkAssignmentDto>>.SuccessResponse(
             result,
             "Work assignments retrieved successfully"));
+    }
+
+    [HttpGet("{assignmentId:guid}")]
+    [HasPermission(PermissionCodes.WorkAssignmentManage)]
+    public async Task<ActionResult<ApiResponse<WorkAssignmentDto>>> GetById(
+        Guid assignmentId,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _workAssignmentService.GetByIdAsync(assignmentId, cancellationToken);
+        return Ok(ApiResponse<WorkAssignmentDto>.SuccessResponse(
+            result,
+            "Work assignment retrieved successfully"));
     }
 
     [HttpGet("me")]

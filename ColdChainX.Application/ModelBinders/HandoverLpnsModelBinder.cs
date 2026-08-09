@@ -7,10 +7,6 @@ using ColdChainX.Application.DTOs.Delivery;
 
 namespace ColdChainX.Application.ModelBinders;
 
-/// <summary>
-/// Model Binder hỗ trợ cả việc bind từ chuỗi JSON (trong Swagger UI) 
-/// và bind từ form-data dạng index như Lpns[0].LpnId (trong Postman / Mobile App).
-/// </summary>
 public class HandoverLpnsModelBinder : IModelBinder
 {
     public async Task BindModelAsync(ModelBindingContext bindingContext)
@@ -32,7 +28,6 @@ public class HandoverLpnsModelBinder : IModelBinder
             return;
         }
 
-        // 1. Thử giải mã nếu là chuỗi JSON array
         try
         {
             var trimmed = value.TrimStart();
@@ -49,7 +44,6 @@ public class HandoverLpnsModelBinder : IModelBinder
         }
         catch
         {
-            // Nếu lỗi json, tiếp tục thử bind dạng form collection
         }
 
         await BindFromFormCollectionAsync(bindingContext);
@@ -113,7 +107,6 @@ public class HandoverLpnsModelBinder : IModelBinder
                 item.ConditionImageUrl = conditionImageUrlVal;
             }
 
-            // Gán các file upload trực tiếp
             var evidenceFileKey = $"{bindingContext.ModelName}[{index}].EvidencePhotoFile";
             item.EvidencePhotoFile = form.Files.GetFile(evidenceFileKey);
 

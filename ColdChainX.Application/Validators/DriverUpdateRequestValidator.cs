@@ -22,4 +22,4 @@ namespace ColdChainX.Application.Validators
                 .When(x => !string.IsNullOrWhiteSpace(x.Status));
         }
     }
-}
+}

@@ -4,10 +4,6 @@ using Microsoft.Extensions.Logging;
 
 namespace ColdChainX.API.Implementations;
 
-/// <summary>
-/// Implementation đọc tọa độ GPS real-time trực tiếp từ Redis hot cache (không qua SQL Database).
-/// Đảm bảo độ trễ gần bằng 0 so với tín hiệu IoT gốc.
-/// </summary>
 public sealed class RedisRealtimeTelemetryService : IRealtimeTelemetryService
 {
     private readonly RedisService _redisService;

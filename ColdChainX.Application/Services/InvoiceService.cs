@@ -11,9 +11,6 @@ using ColdChainX.Shared.Responses;
 
 namespace ColdChainX.Application.Services
 {
-    /// <summary>
-    /// Service for querying invoices and checking client permissions.
-    /// </summary>
     public class InvoiceService : IInvoiceService
     {
         private readonly IApplicationDbContext _db;
@@ -33,19 +30,16 @@ namespace ColdChainX.Application.Services
                 .Include(i => i.InvoiceLines)
                 .AsNoTracking();
 
-            // Filter by CustomerId if specified (forced for Customer role, optional for Admin/WarehouseOperator)
             if (customerId.HasValue)
             {
                 query = query.Where(i => i.CustomerId == customerId.Value);
             }
 
-            // Filter by Status if specified
             if (!string.IsNullOrWhiteSpace(status))
             {
                 query = query.Where(i => i.Status == status.Trim());
             }
 
-            // Order by most recent issued date and creation date
             query = query.OrderByDescending(i => i.IssuedDate)
                          .ThenByDescending(i => i.CreatedAt);
 
@@ -74,15 +68,14 @@ namespace ColdChainX.Application.Services
 
             if (invoice == null)
             {
-                return ApiResponse<InvoiceResponse>.Failure("Invoice not found.");
+                return ApiResponse<InvoiceResponse>.Failure("Invoice not found.", 404);
             }
 
-            // Authorization: If role is Customer, the invoice must belong to their CustomerId
             if (userRole.Equals("Customer", StringComparison.OrdinalIgnoreCase))
             {
                 if (!customerId.HasValue || invoice.CustomerId != customerId.Value)
                 {
-                    return ApiResponse<InvoiceResponse>.Failure("Access denied to this invoice.");
+                    return ApiResponse<InvoiceResponse>.Failure("Access denied to this invoice.", 403);
                 }
             }
 
@@ -95,14 +88,12 @@ namespace ColdChainX.Application.Services
             Guid? customerId,
             string userRole)
         {
-            // Verify if order exists
             var order = await _db.TransportOrders.FindAsync(orderId);
             if (order == null)
             {
                 return ApiResponse<List<InvoiceResponse>>.Failure("Transport order not found.");
             }
 
-            // Authorization check for Customer role
             if (userRole.Equals("Customer", StringComparison.OrdinalIgnoreCase))
             {
                 if (!customerId.HasValue || order.CustomerId != customerId.Value)
@@ -111,7 +102,6 @@ namespace ColdChainX.Application.Services
                 }
             }
 
-            // Get invoices that have lines linking to this OrderId
             var invoices = await _db.Invoices
                 .Include(i => i.InvoiceLines)
                 .Where(i => i.InvoiceLines.Any(il => il.OrderId == orderId))
@@ -161,7 +151,6 @@ namespace ColdChainX.Application.Services
             using var transaction = await _db.Database.BeginTransactionAsync();
             try
             {
-                // Find all COMPLETED orders that have an APPROVED quotation but no invoice lines yet.
                 var ordersToInvoice = await _db.TransportOrders
                     .Include(o => o.Quotations)
                     .Include(o => o.InvoiceLines)

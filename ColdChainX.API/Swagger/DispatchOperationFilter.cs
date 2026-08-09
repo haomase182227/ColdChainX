@@ -25,7 +25,6 @@ namespace ColdChainX.API.Swagger
             var path = context.ApiDescription.RelativePath?.TrimEnd('/');
             if (path == null) return;
 
-            // Forms payload dropdowns
             if (path.StartsWith("api/Dispatch", StringComparison.OrdinalIgnoreCase))
             {
                 if (operation.RequestBody?.Content != null && operation.RequestBody.Content.TryGetValue("multipart/form-data", out var mediaType) && mediaType.Schema != null)
@@ -36,7 +35,6 @@ namespace ColdChainX.API.Swagger
                         {
                             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-                            // Locations: Status = ACTIVE
                             var locations = db.Locations
                                 .Where(l => l.Status == "ACTIVE")
                                 .OrderBy(l => l.Address)
@@ -71,7 +69,6 @@ var rawOrders = (from r in db.WarehouseReceipts
                             ApplyArrayEnum(mediaType.Schema, "OrderIds", orders);
                             ApplyArrayEnum(mediaType.Schema, "orderIds", orders);
 
-                            // Kho hiện có — phải chọn trước khi ghép chuyến (manual-dispatch)
                             var warehouses = db.Warehouses
                                 .OrderBy(w => w.WarehouseName)
                                 .Select(w => $"{w.WarehouseId}: {w.WarehouseName} ({w.WarehouseCode})")
@@ -91,7 +88,6 @@ var rawOrders = (from r in db.WarehouseReceipts
                                 ApplyEnum(mediaType.Schema, "VehicleId", vehicles);
                                 ApplyEnum(mediaType.Schema, "vehicleId", vehicles);
 
-                                // Tài xế khả dụng (không RELAX/Offline/Inactive) — chọn 1–2 người cho chuyến
                                 var driversList = db.Drivers
                                     .Where(d => d.Status != "RELAX" && d.Status != "Offline"
                                              && d.Status != "Inactive" && d.Status != "DELETED")
@@ -112,14 +108,12 @@ var rawOrders = (from r in db.WarehouseReceipts
                     catch (Exception) { /* Silence */ }
                 }
 
-                // Một số endpoint cần NHẬP TAY tripId/vehicleId (không dùng dropdown)
                 var freeTextTripId =
                     path.Contains("start-picking", StringComparison.OrdinalIgnoreCase) ||
                     path.Contains("seal-and-dispatch", StringComparison.OrdinalIgnoreCase) ||
                     path.Contains("vehicle-iot-check", StringComparison.OrdinalIgnoreCase) ||
                     path.Contains("route", StringComparison.OrdinalIgnoreCase);
 
-                // Path parameter dropdowns
                 var tripIdParam = operation.Parameters?.FirstOrDefault(p => string.Equals(p.Name, "tripId", StringComparison.OrdinalIgnoreCase));
                 if (tripIdParam != null && !freeTextTripId)
                 {

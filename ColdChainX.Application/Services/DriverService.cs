@@ -48,7 +48,6 @@ namespace ColdChainX.Application.Services
 
         public async Task<ApiResponse<DriverDto>> CreateAsync(DriverCreateRequest request)
         {
-            // Validate status if provided
             if (!string.IsNullOrWhiteSpace(request.Status) && !IsValidDriverStatus(request.Status))
                 return ApiResponse<DriverDto>.Failure(
                     $"Invalid driver status '{request.Status}'. Allowed values: {string.Join(", ", ValidDriverStatuses)}");
@@ -73,7 +72,6 @@ namespace ColdChainX.Application.Services
             if (driver == null)
                 return ApiResponse<DriverDto>.Failure("Driver not found");
 
-            // Validate status if provided
             if (!string.IsNullOrWhiteSpace(request.Status) && !IsValidDriverStatus(request.Status))
                 return ApiResponse<DriverDto>.Failure(
                     $"Invalid driver status '{request.Status}'. Allowed values: {string.Join(", ", ValidDriverStatuses)}");
@@ -139,4 +137,4 @@ namespace ColdChainX.Application.Services
         private static DateTime DbNow()
             => DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
     }
-}
+}

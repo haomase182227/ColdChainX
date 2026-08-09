@@ -26,6 +26,12 @@ namespace ColdChainX.Application.Services
 
         public async Task<ApiResponse<PagedResult<ExpiryAlertResponse>>> GetExpiryAlertsAsync(Guid? warehouseId, int warningDays, int pageNumber, int pageSize)
         {
+            if (warningDays < 0)
+                return ApiResponse<PagedResult<ExpiryAlertResponse>>.Failure("DaysThreshold must be non-negative.");
+
+            if (pageNumber <= 0 || pageSize <= 0)
+                return ApiResponse<PagedResult<ExpiryAlertResponse>>.Failure("PageNumber and PageSize must be greater than zero.");
+
             try
             {
                 var today = DateTime.UtcNow;
@@ -42,7 +48,6 @@ namespace ColdChainX.Application.Services
                     query = query.Where(l => l.Receipt.WarehouseId == warehouseId.Value);
                 }
 
-                // Filter soon-to-expire batches using SlaDeadline as expiration threshold
                 query = query.Where(l => l.SlaDeadline != null && l.SlaDeadline <= warningThresholdDate);
 
                 int totalCount = await query.CountAsync();
@@ -95,7 +100,6 @@ namespace ColdChainX.Application.Services
                     query = query.Where(l => l.Receipt.WarehouseId == warehouseId.Value);
                 }
 
-                // Filter stocks created or received before the threshold date
                 query = query.Where(l => l.InboundTime != null && l.InboundTime <= thresholdDateTime);
 
                 int totalCount = await query.CountAsync();
@@ -146,8 +150,6 @@ namespace ColdChainX.Application.Services
 
                 var items = await query.ToListAsync();
 
-                // Load the active locations and zones for temperature comparison
-                // Since WarehouseLocations and Zones are removed, we use Warehouse defaults
 
                 var responseList = new List<TempAuditResponse>();
 
@@ -156,7 +158,6 @@ namespace ColdChainX.Application.Services
                     var locCode = s.StorageLocation ?? string.Empty;
                     var warehouse = s.Receipt?.Warehouse;
 
-                    // Check if the required temperature matches the zone range
                     decimal? reqMin = s.RequiredTemperature;
                     decimal? reqMax = s.RequiredTemperature;
 

@@ -3,7 +3,6 @@ using ColdChainX.Core.Enums;
 
 namespace ColdChainX.Application.DTOs.Fleet;
 
-// ── Sub-object: một giấy tờ xe ──────────────────────────────────
 public class InlineVehicleDocumentRequest
 {
     public string DocumentNumber { get; set; } = null!;
@@ -12,7 +11,6 @@ public class InlineVehicleDocumentRequest
     public DateOnly? ExpireDate { get; set; }
 }
 
-// ── Sub-object: bằng lái ─────────────────────────────────────────
 public class InlineDriverLicenseRequest
 {
     public string LicenseNumber { get; set; } = null!;
@@ -21,10 +19,8 @@ public class InlineDriverLicenseRequest
     public DateOnly ExpiryDate { get; set; }
 }
 
-// ── Tạo xe (kèm giấy tờ tùy chọn) ─────────────────────────────
 public class CreateVehicleRequest
 {
-    /// <summary>Biển số xe (bắt buộc)</summary>
     public string TruckPlate { get; set; } = null!;
 
     public string? Brand { get; set; }
@@ -44,13 +40,11 @@ public class CreateVehicleRequest
     public double CurrentOdometer { get; set; }
     public double NextMaintenanceOdometer { get; set; }
 
-    // Giấy tờ kèm theo (optional)
     public InlineVehicleDocumentRequest? Registration { get; set; }
     public InlineVehicleDocumentRequest? Insurance { get; set; }
     public InlineVehicleDocumentRequest? CityPermit { get; set; }
 }
 
-// ── Tạo tài xế (kèm bằng lái tùy chọn) ──────────────────────
 public class CreateDriverRequest
 {
     public string FullName { get; set; } = null!;
@@ -60,7 +54,6 @@ public class CreateDriverRequest
     public DateOnly DateOfBirth { get; set; }
     public DateOnly JoinDate { get; set; }
 
-    // Bằng lái kèm theo (optional)
     public InlineDriverLicenseRequest? License { get; set; }
 }
 
@@ -88,7 +81,6 @@ public class UpdateVehicleDocumentRequest : CreateVehicleDocumentRequest
 {
 }
 
-// Dùng cho endpoint POST /api/drivers/{id}/licenses
 public class CreateDriverLicenseRequest
 {
     public string LicenseNumber { get; set; } = null!;
@@ -108,39 +100,16 @@ public class ImportExcelRequest
 
 public class SyncOdometerRequest
 {
-    /// <summary>
-    /// Biển số xe cần đồng bộ (ví dụ: "29C-12345").
-    /// </summary>
     public string TruckPlate { get; set; } = null!;
 
-    /// <summary>
-    /// Chỉ số công tơ mét hiện tại của xe (km).
-    /// </summary>
     public double Odometer { get; set; }
 
-    /// <summary>
-    /// Địa điểm đồng bộ odometer (ví dụ: tên kho bãi, địa chỉ thực tế).
-    /// </summary>
     public string? LocationText { get; set; }
 
-    /// <summary>
-    /// Lý do đồng bộ công tơ mét. Các giá trị chấp nhận:
-    /// - ROUTINE_SYNC (Đồng bộ định kỳ)
-    /// - PRE_TRIP_INSPECTION (Kiểm tra trước chuyến đi)
-    /// - POST_TRIP_REPORT (Báo cáo sau chuyến đi)
-    /// - MANUAL_CORRECTION (Điều chỉnh thủ công)
-    /// - OTHER (Lý do khác, ghi chú ở trường Note)
-    /// </summary>
     public OdometerSyncReason Reason { get; set; } = OdometerSyncReason.ROUTINE_SYNC;
 
-    /// <summary>
-    /// Ghi chú/chi tiết thêm về lý do đồng bộ (Bắt buộc nhập nếu lý do là OTHER).
-    /// </summary>
     public string? Note { get; set; }
 
-    /// <summary>
-    /// Tệp ảnh minh chứng chụp công tơ mét thực tế (upload trực tiếp từ thiết bị).
-    /// </summary>
     public IFormFile? OdometerPhoto { get; set; }
 }
 

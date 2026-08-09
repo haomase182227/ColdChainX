@@ -24,13 +24,10 @@ public class NotificationController : ControllerBase
         _environment = environment;
     }
 
-    /// <summary>Register or refresh the current user's mobile FCM token.</summary>
     [HttpPost("register-token")]
     [ProducesResponseType(
         typeof(ApiResponse<DeviceTokenRegistrationResponse>),
         StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> RegisterToken(
         [FromBody] RegisterDeviceTokenRequest request,
         CancellationToken cancellationToken)
@@ -45,11 +42,8 @@ public class NotificationController : ControllerBase
         return StatusCode(result.StatusCode, result);
     }
 
-    /// <summary>Deactivate an FCM token owned by the current user.</summary>
     [HttpDelete("unregister-token")]
     [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> UnregisterToken(
         [FromBody] UnregisterDeviceTokenRequest request,
         CancellationToken cancellationToken)
@@ -64,12 +58,10 @@ public class NotificationController : ControllerBase
         return StatusCode(result.StatusCode, result);
     }
 
-    /// <summary>Get the current user's notification history, newest first.</summary>
     [HttpGet]
     [ProducesResponseType(
         typeof(ApiResponse<PagedResult<NotificationResponse>>),
         StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetNotifications(
         [FromQuery] int pageNumber = 1,
         [FromQuery] int pageSize = 10,
@@ -77,6 +69,9 @@ public class NotificationController : ControllerBase
         [FromQuery] string? type = null,
         CancellationToken cancellationToken = default)
     {
+        if (pageNumber <= 0 || pageSize <= 0)
+            return BadRequest(ApiResponse<object>.Failure("PageNumber and PageSize must be greater than zero."));
+
         if (!TryGetCurrentUserId(out var userId))
             return InvalidToken();
 
@@ -90,12 +85,10 @@ public class NotificationController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Get one notification owned by the current user.</summary>
     [HttpGet("{id:guid}")]
     [ProducesResponseType(
         typeof(ApiResponse<NotificationResponse>),
         StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetNotification(
         [FromRoute] Guid id,
         CancellationToken cancellationToken)
@@ -110,7 +103,6 @@ public class NotificationController : ControllerBase
         return StatusCode(result.StatusCode, result);
     }
 
-    /// <summary>Get the current user's unread notification count.</summary>
     [HttpGet("unread-count")]
     [ProducesResponseType(
         typeof(ApiResponse<UnreadCountResponse>),
@@ -134,10 +126,8 @@ public class NotificationController : ControllerBase
         return StatusCode(response.StatusCode, response);
     }
 
-    /// <summary>Mark one notification owned by the current user as read.</summary>
     [HttpPut("{id:guid}/read")]
     [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> MarkAsRead(
         [FromRoute] Guid id,
         CancellationToken cancellationToken)
@@ -152,7 +142,6 @@ public class NotificationController : ControllerBase
         return StatusCode(result.StatusCode, result);
     }
 
-    /// <summary>Mark all notifications owned by the current user as read.</summary>
     [HttpPut("read-all")]
     [ProducesResponseType(typeof(ApiResponse<int>), StatusCodes.Status200OK)]
     public async Task<IActionResult> MarkAllAsRead(CancellationToken cancellationToken)
@@ -166,15 +155,10 @@ public class NotificationController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Send a test notification. Any authenticated user may use this in Development;
-    /// outside Development it is restricted to the Admin role.
-    /// </summary>
     [HttpPost("test")]
     [ProducesResponseType(
         typeof(ApiResponse<NotificationTestResponse>),
         StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> SendTest(
         [FromBody] NotificationTestRequest request,
         CancellationToken cancellationToken)

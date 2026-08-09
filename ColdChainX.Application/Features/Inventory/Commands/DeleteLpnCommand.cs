@@ -23,7 +23,6 @@ public class DeleteLpnResponse
 
 public class DeleteLpnCommandHandler : IRequestHandler<DeleteLpnCommand, DeleteLpnResponse>
 {
-    // Trang thai an toan duoc phep danh dau xoa
     private static readonly LpnState[] DeletableStates =
     {
         LpnState.EXPECTED,
@@ -39,15 +38,6 @@ public class DeleteLpnCommandHandler : IRequestHandler<DeleteLpnCommand, DeleteL
         _context = context;
     }
 
-    /// <summary>
-    /// Danh dau LPN la DELETED (soft-delete) — khong xoa du lieu khoi database.
-    ///
-    /// Precondition : LPN.State phai la EXPECTED / IN_STOCK / DISCREPANCY_HOLD / RETURN_PENDING
-    /// Postcondition: LPN.State = DELETED (van con trong DB, khong the dung trong bat ky quy trinh nao)
-    ///
-    /// Tu choi neu LPN dang trong quy trinh xuat kho
-    /// (ALLOCATED / LOADING / LOADING_COMPLETED / RELEASED / SHIPPING).
-    /// </summary>
     public async Task<DeleteLpnResponse> Handle(DeleteLpnCommand request, CancellationToken cancellationToken)
     {
         var lpn = await _context.Lpns.FirstOrDefaultAsync(x => x.LpnId == request.LpnId, cancellationToken);

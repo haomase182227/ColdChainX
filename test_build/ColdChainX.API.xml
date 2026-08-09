@@ -1,0 +1,718 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>ColdChainX.API</name>
+    </assembly>
+    <members>
+        <member name="M:ColdChainX.API.Controllers.AsnController.GetInboundSchedules(System.String,System.Nullable{System.DateTime},System.Nullable{System.DateTime},System.String,System.Nullable{System.Guid},System.Nullable{System.Guid},System.Nullable{System.Guid},System.Int32,System.Int32)">
+            <summary>
+            Retrieve list of scheduled inbound deliveries (ASNs), with filtering and paging.
+            </summary>
+            <remarks>
+            For Customer role: Only returns ASNs belonging to the authenticated customer.
+            For Admin/Manager/WarehouseOperator roles: Returns all ASNs with optional filters.
+            </remarks>
+            <param name="status">Optional status filter (e.g. SCHEDULED, ARRIVED).</param>
+            <param name="dateFrom">Optional start date range for requested drop-off time.</param>
+            <param name="dateTo">Optional end date range for requested drop-off time.</param>
+            <param name="searchQuery">Optional search term matching code, tracking code, item name, customer name, or address.</param>
+            <param name="warehouseId">Optional warehouse filter matching link or destination address.</param>
+            <param name="orderId">Optional order filter.</param>
+            <param name="customerId">Optional customer filter (available only to Admin/Manager/Operator).</param>
+            <param name="pageNumber">Page index (1-based).</param>
+            <param name="pageSize">Size of each page.</param>
+            <returns>A paginated list of scheduled inbound deliveries.</returns>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.AuthController.CreateWarehouseWorker(ColdChainX.Application.DTOs.CreateWarehouseWorkerRequest)">
+            <summary>
+            Tạo tài khoản nhân viên kho với role WarehouseOperator.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.AuthController.UpdateProfile(ColdChainX.Application.DTOs.UpdateUserRequest)">
+            <summary>
+            Update profile for the current user.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.AuthController.UpdateDriverFullName(System.Guid,ColdChainX.Application.DTOs.UpdateDriverFullNameRequest)">
+            <summary>
+            Admin: update driver's full name.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.AuthController.UpdateDriverDob(System.Guid,ColdChainX.Application.DTOs.UpdateDriverDobRequest)">
+            <summary>
+            Admin: update driver's date of birth.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.AuthController.UpdateDriverLicense(System.Guid,ColdChainX.Application.DTOs.UpdateDriverLicenseRequest)">
+            <summary>
+            Admin: update or create driver license information.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.AuthController.SoftDeleteUser(System.Guid)">
+            <summary>
+            Soft delete a user by id.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.API.Controllers.ClaimsController">
+            <summary>
+            Manages customer claims for compensation regarding damaged, lost, or delayed cold chain cargo.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.ClaimsController.CreateClaim(ColdChainX.Application.DTOs.Claim.CreateClaimRequest)">
+            <summary>
+            Lodge/Create a new customer claim with evidence attachments.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.ClaimsController.ResolveClaim(System.Guid,ColdChainX.Application.DTOs.Claim.ResolveClaimRequest)">
+            <summary>
+            Resolve/Finalize a customer claim (mark as RESOLVED/REJECTED and set fault owner).
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.ClaimsController.GetById(System.Guid)">
+            <summary>
+            Get details of a specific claim including evidence attachments.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.ClaimsController.GetList(System.Nullable{System.Guid},System.Int32,System.Int32)">
+            <summary>
+            Get a paginated list of claims.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.ContractsController.GetContractById(System.Guid)">
+            <summary>
+            Lấy thông tin hợp đồng (không bao gồm nội dung HTML).
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.ContractsController.GetContractHtml(System.Guid)">
+            <summary>
+            Lấy nội dung HTML nháp của hợp đồng dưới dạng raw HTML.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.ContractsController.TryExtractRawHtmlFromMalformedJson(System.String,System.String@)">
+            <summary>
+            Trích xuất HTML thô từ JSON bị lỗi do HTML chứa newline và dấu nháy kép chưa được escape.
+            Ví dụ: { "editedHtmlContent": "&lt;!DOCTYPE html&gt;\n&lt;html lang="vi"&gt;..." }
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.DeliveryController.GetTripDeliveryProgress(System.Guid)">
+            <summary>
+            Get delivery progress and LPN list for a trip.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.DeliveryController.GetLpnDeliveryDetail(System.Guid,System.Guid)">
+            <summary>
+            Get delivery confirmation detail for a specific LPN.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.DeliveryController.CheckinDriver(System.Guid,ColdChainX.Application.DTOs.Delivery.CheckinDriverRequest)">
+            <summary>
+            Check in driver, validate GPS, and cut the old seal.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.DeliveryController.ConfirmHandover(System.Guid,ColdChainX.Application.DTOs.Delivery.HandoverConfirmRequest)">
+            <summary>
+            Confirm handover at stop, upload signature, and handle partial returns.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.DeliveryController.RecordCodPayment(System.Guid,ColdChainX.Application.DTOs.Delivery.RecordCodPaymentRequest)">
+            <summary>
+            Record COD payment (Cash or QR).
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.DeliveryController.DepartStop(System.Guid,ColdChainX.Application.DTOs.Delivery.DepartRequest)">
+            <summary>
+            Depart stop and apply a new seal.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.DeliveryController.HandoverCod(System.Guid,ColdChainX.Application.DTOs.Delivery.CodHandoverRequest)">
+            <summary>
+            Handle driver COD handover at the end of trip.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.DeliveryController.UploadImage(Microsoft.AspNetCore.Http.IFormFile)">
+            <summary>
+            Upload an image to Cloudinary.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.DeliveryController.UpdateLocation(System.Guid,ColdChainX.Application.DTOs.Delivery.UpdateLocationRequest)">
+            <summary>
+            Update GPS Location and trigger Geofence ETA Notification
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.DeliveryController.MarkFailedDelivery(System.Guid,ColdChainX.Application.DTOs.Delivery.MarkFailedDeliveryRequest)">
+            <summary>
+            Mark delivery as failed after waiting 30 mins
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.DispatchController.GetAvailableLpns(System.Guid,System.Int32,System.Int32)">
+            <summary>
+            Lấy danh sách các LPN khả dụng (chưa lên xe) trong một kho cụ thể. (Dùng để chọn Pivot LPN)
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.DispatchController.FilterLpns(System.Guid,System.Int32,System.Int32)">
+            <summary>
+            [Lookup] Lấy danh sách 4 LPN tương thích với LPN gốc (Pivot).
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.DispatchController.LookupVehiclesByWarehouse(System.Guid)">
+            <summary>
+            [Lookup] Danh sách xe tải ACTIVE và chưa được gán chuyến đang hoạt động.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.DispatchController.LookupDrivers">
+            <summary>
+            [Lookup] Danh sách tài xế khả dụng – dùng để chọn 1-2 tài xế cho manual-dispatch.
+            </summary>
+            <remarks>
+            TÃƒÂ¡Ã‚Â»Ã‚Â± Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ng gÃƒÂ¡Ã‚Â»Ã‚Â¡ trÃƒÂ¡Ã‚ÂºÃ‚Â¡ng thÃƒÆ’Ã‚Â¡i RELAX nÃƒÂ¡Ã‚ÂºÃ‚Â¿u Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â£ qua ngÃƒÆ’Ã‚Â y/tuÃƒÂ¡Ã‚ÂºÃ‚Â§n giÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi hÃƒÂ¡Ã‚ÂºÃ‚Â¡n, sau Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â³ chÃƒÂ¡Ã‚Â»Ã¢â‚¬Â° trÃƒÂ¡Ã‚ÂºÃ‚Â£ vÃƒÂ¡Ã‚Â»Ã‚Â
+            cÃ¡c tÃ i xáº¿ cÃ³ thá»ƒ gÃ¡n chuyáº¿n (khÃ´ng RELAX/Offline/Inactive vÃ  cÃ²n báº±ng lÃ¡i háº¡n).
+            </remarks>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.DispatchController.LookupLocations">
+            <summary>
+            [Lookup] Danh sách Location đang ACTIVE – dùng để chọn kho xuất phát.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.DispatchController.LookupSchedules">
+            <summary>
+            [Lookup] Danh sách kho hiện có – dùng để chọn kho trạm dừng khi ghép chuyến (manual-dispatch).
+            </summary>
+            <summary>
+            [Lookup] Danh sach lich chay dang ACTIVE tu bang route_schedules.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.DispatchController.LookupLpnsReady(System.Nullable{System.Guid},System.Nullable{System.Guid},System.Int32,System.Int32)">
+             <summary>
+             [Lookup] Danh sách tài xế khả dụng – dùng để chọn 1-2 tài xế cho manual-dispatch.
+             </summary>
+             <remarks>
+             TruyÃƒÂ¡Ã‚Â»Ã‚Ân <paramref name="warehouseId"/> Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã†â€™ chÃƒÂ¡Ã‚Â»Ã¢â‚¬Â° lÃƒÂ¡Ã‚ÂºÃ‚Â¥y cÃƒÆ’Ã‚Â¡c LPN thuÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢c kho Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â£ chÃƒÂ¡Ã‚Â»Ã‚Ân
+             (Lpn.WarehouseId == warehouseId). Ãƒâ€žÃ‚ÂÃƒÆ’Ã‚Â¢y lÃƒÆ’Ã‚Â  bÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºc bÃƒÂ¡Ã‚ÂºÃ‚Â¯t buÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢c cÃƒÂ¡Ã‚Â»Ã‚Â§a luÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“ng manual-dispatch:
+             ngÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Âi dÃƒÆ’Ã‚Â¹ng chÃƒÂ¡Ã‚Â»Ã‚Ân kho trÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºc, sau Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â³ chÃƒÂ¡Ã‚Â»Ã¢â‚¬Â° thÃƒÂ¡Ã‚ÂºÃ‚Â¥y LPN cÃƒÂ¡Ã‚Â»Ã‚Â§a kho Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â³.
+            
+             MÃƒÂ¡Ã‚Â»Ã¢â‚¬â€i phÃƒÂ¡Ã‚ÂºÃ‚Â§n tÃƒÂ¡Ã‚Â»Ã‚Â­ Data trÃƒÂ¡Ã‚ÂºÃ‚Â£ vÃƒÂ¡Ã‚Â»Ã‚Â: lpnId, lpnCode, orderId, trackingCode, itemName, customerName,
+             warehouseId, warehouseName, destinationAddress, routeName, plannedDispatchDate, quantity,
+             actualWeightKg, actualCbm, tempCondition.
+            
+             CÃ³ phÃ¢n trang qua <paramref name="pageNumber"/> / <paramref name="pageSize"/> (máº·c Ä‘á»‹nh 1/10).
+             </remarks>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.DispatchController.ManualDispatch(System.Collections.Generic.List{System.String},ColdChainX.Application.DTOs.Dispatch.ManualDispatchFormRequest)">
+             <summary>
+             [BUOC 1/5] Ghép chuyến thủ công để chọn xe, tài xế và danh sách LPN.
+             </summary>
+             <remarks>
+             TRANG THAI LPN: IN_STOCK â†’ ALLOCATED
+            
+             Dieu kien:
+               - Phai chon Kho (WarehouseId) truoc; chi cac LPN thuoc kho do moi duoc ghep chuyen
+               - Tat ca LPN phai cung mot kho ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â khong duoc tron LPN tu nhieu kho khac nhau
+               - Cac LPN duoc chon phai o trang thai IN_STOCK
+               - Xe phai ACTIVE va chua duoc gan chuyen nao
+               - Tai xe phai co bang lai con han
+            
+             Sau buoc nay:
+               - LPN.State = ALLOCATED
+               - Trip.Status = PLANNED
+               - Tra ve LifoPdfUrl (so do xep hang LIFO) va thong tin lo trinh Goong
+            
+             Buoc tiep theo: POST /api/Dispatch/trip/{tripId}/start-picking
+             </remarks>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.DispatchController.TestLifoPdf(ColdChainX.API.Controllers.DispatchController.TestLifoPdfRequest)">
+            <summary>
+            API test tạo báo cáo LIFO PDF (Frontend Rendering)
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.DispatchController.GetTripsCanStartPicking(System.Int32,System.Int32)">
+            <summary>
+            [STEP 2/5 - LOOKUP] Danh sách chuyến ĐÃ ĐƯỢC GHÉP và sẵn sàng bốc hàng (Status = PLANNED).
+            </summary>
+            <remarks>
+            DÃ¹ng Ä‘á»ƒ FE biáº¿t nÃªn nháº­p tripId nÃ o vÃ o POST /api/Dispatch/trip/{tripId}/start-picking.
+            ChÃƒÂ¡Ã‚Â»Ã¢â‚¬Â° trÃƒÂ¡Ã‚ÂºÃ‚Â£ vÃƒÂ¡Ã‚Â»Ã‚Â cÃƒÆ’Ã‚Â¡c chuyÃƒÂ¡Ã‚ÂºÃ‚Â¿n Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â£ ghÃƒÆ’Ã‚Â©p (PLANNED) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â tÃƒÂ¡Ã‚Â»Ã‚Â©c Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â£ qua bÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºc manual-dispatch.
+            </remarks>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.DispatchController.StartPicking(System.String)">
+             <summary>
+             [STEP 2/5] Bắt đầu lệnh bốc hàng để chuyển LPN từ ALLOCATED sang LOADING.
+             </summary>
+             <remarks>
+             LPN state: ALLOCATED â†’ LOADING
+             Trip status: PLANNED â†’ PICKING
+            
+             Precondition : Trip.Status == PLANNED
+             Postcondition:
+               - Tat ca LPN cua chuyen: State = LOADING
+               - Trip.Status = PICKING
+            
+             Next step: goi POST /api/Outbound/pick cho tung LPN
+             </remarks>
+             <param name="tripId">ID chuyen hang (tu ket qua manual-dispatch)</param>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.DispatchController.CancelTrip(System.String)">
+             <summary>
+             Hủy một chuyến đang ghép (planning) để kết thúc việc bốc hàng / xếp hàng / kẹp chì.
+             </summary>
+             <remarks>
+             Ãƒâ€žÃ‚ÂIÃƒÂ¡Ã‚Â»Ã¢â€šÂ¬U KIÃƒÂ¡Ã‚Â»Ã¢â‚¬Â N: khÃƒÆ’Ã‚Â´ng Ãƒâ€žÃ¢â‚¬ËœÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Â£c cÃƒÆ’Ã‚Â³ LPN nÃƒÆ’Ã‚Â o ÃƒÂ¡Ã‚Â»Ã…Â¸ trÃƒÂ¡Ã‚ÂºÃ‚Â¡ng thÃƒÆ’Ã‚Â¡i SHIPPING (hÃƒÆ’Ã‚Â ng Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â£ xuÃƒÂ¡Ã‚ÂºÃ‚Â¥t phÃƒÆ’Ã‚Â¡t).
+            
+             Sau khi hÃƒÂ¡Ã‚Â»Ã‚Â§y, toÃƒÆ’Ã‚Â n bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ trÃƒÂ¡Ã‚Â»Ã…Â¸ vÃƒÂ¡Ã‚Â»Ã‚Â nhÃƒâ€ Ã‚Â° trÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºc khi gÃƒÂ¡Ã‚Â»Ã‚Âi manual-dispatch:
+               - LPN.State â†’ IN_STOCK (hÃ ng trá»Ÿ láº¡i kho), gá»¡ TripId
+               - Ãƒâ€žÃ‚ÂÃƒâ€ Ã‚Â¡n hÃƒÆ’Ã‚Â ng ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ IN_STOCK, gÃƒÂ¡Ã‚Â»Ã‚Â¡ MasterTripId
+               - Seal â†’ CANCELLED, gá»¡ SealNumber
+               - E-Waybill (TransportDocument) â†’ CANCELLED
+               - Vehicle.Status / Driver.Status â†’ ACTIVE (giáº£i phÃ³ng)
+               - Trip.Status â†’ CANCELLED
+            
+             Xe sau khi há»§y cÃ³ thá»ƒ Ä‘Æ°á»£c ghÃ©p chuyáº¿n má»›i qua POST /api/Dispatch/manual-dispatch.
+             </remarks>
+             <param name="tripId">ID chuyáº¿n cáº§n há»§y</param>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.DispatchController.CheckVehicleIoT(System.String)">
+            <summary>
+            Kiểm tra trạng thái kết nối, GPS, nhiệt độ, pin của các thiết bị IoT gắn trên xe.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.DispatchController.GetTripsReadyToSeal(System.Int32,System.Int32)">
+            <summary>
+            [STEP 5/5 - LOOKUP] Danh sách chuyến đã xếp xong và ĐỦ ĐIỀU KIỆN kẹp chì.
+            </summary>
+            <remarks>
+            TrÃƒÂ¡Ã‚ÂºÃ‚Â£ vÃƒÂ¡Ã‚Â»Ã‚Â cÃƒÆ’Ã‚Â¡c chuyÃƒÂ¡Ã‚ÂºÃ‚Â¿n cÃƒÆ’Ã‚Â³ Status = LOADING_COMPLETED vÃƒÆ’Ã‚Â  TÃƒÂ¡Ã‚ÂºÃ‚Â¤T CÃƒÂ¡Ã‚ÂºÃ‚Â¢ LPN Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â£ ÃƒÂ¡Ã‚Â»Ã…Â¸ trÃƒÂ¡Ã‚ÂºÃ‚Â¡ng thÃƒÆ’Ã‚Â¡i RELEASED.
+            DÃ¹ng Ä‘á»ƒ FE biáº¿t nÃªn nháº­p tripId nÃ o vÃ o POST /api/Dispatch/seal-and-dispatch/{tripId}.
+            </remarks>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.DispatchController.SealAndDispatch(System.String,ColdChainX.Application.DTOs.Dispatch.SealAndDispatchRequest)">
+             <summary>
+             [STEP 5/5] Kep chi + cap giay di duong (E-Waybill).
+             </summary>
+             <remarks>
+             LPN state: RELEASED â†’ SHIPPING
+             Trip status: LOADING_COMPLETED â†’ SEALED â†’ DISPATCHED
+            
+             Precondition:
+               - Trip.Status == LOADING_COMPLETED  (da goi load-trip truoc)
+               - Tat ca LPN cua chuyen: State == RELEASED
+               - SealCode la bat buoc
+            
+             Postcondition:
+               - LPN.State = SHIPPING
+               - Trip.Status = SEALED (hoac DISPATCHED neu sinh duoc E-Waybill)
+               - Tao Seal record + OutboundOrder + TransportDocument (E-Waybill PDF)
+               - Cap nhat Vehicle.Status = OnTrip, Driver.Status = OnTrip
+             </remarks>
+             <param name="tripId">ID chuyen hang</param>
+             <param name="request">SealCode bat buoc</param>
+        </member>
+        <member name="T:ColdChainX.API.Controllers.IncidentReportsController">
+            <summary>
+            Manages transport and warehouse operational incident reports (e.g. breakdown, spillage, cargo damage).
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.IncidentReportsController.ReportIncident(ColdChainX.Application.DTOs.Incident.CreateIncidentRequest)">
+            <summary>
+            Log/Report a new operational or transport incident.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.IncidentReportsController.ResolveIncident(System.Guid,ColdChainX.Application.DTOs.Incident.ResolveIncidentRequest)">
+            <summary>
+            Resolve a reported incident (mark as RESOLVED).
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.IncidentReportsController.GetRescueCandidates(System.Guid)">
+            <summary>
+            [Luồng 8 - Bước 2, Lookup] Danh sách xe lạnh ACTIVE đủ điều kiện thay thế cho chuyến gặp sự cố.
+            </summary>
+            <remarks>
+            Chỉ trả về các xe: đang ACTIVE, giữ được nhiệt độ mục tiêu của chuyến,
+            và đủ tải trọng/thể tích để sang toàn bộ LPN đang trên xe hỏng.
+            Dùng để Điều phối viên chọn ReplacementVehicleId cho POST /dispatch-rescue.
+            </remarks>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.IncidentReportsController.DispatchRescue(System.Guid,ColdChainX.Application.DTOs.Incident.DispatchRescueRequest)">
+             <summary>
+             [Luồng 8 - Bước 2+3] Điều xe lạnh thay thế đến hiện trường (Sang xe) và cập nhật lộ trình.
+             </summary>
+             <remarks>
+             Thực hiện trọn vẹn Bước 2 và Bước 3 của luồng xử lý sự cố:
+            
+               - Xe hỏng → MAINTENANCE + tự động mở phiếu sửa chữa (MaintenanceTicket OPEN)
+               - Xe thay thế gán vào chuyến → OnTrip; đội bốc xếp nhận lệnh sang toàn bộ LPN (SignalR)
+               - Trip.Status → DELAYED
+               - Hệ thống tự tính lại ETA các trạm phía trước (Goong, fallback Haversine/shift)
+               - Gửi thông báo xin lỗi kèm ETA mới cho tất cả khách hàng đang chờ ở các trạm phía trước
+               - Incident.Status → RESCUE_DISPATCHED (đóng hẳn bằng POST /{id}/resolve sau khi hoàn tất)
+             </remarks>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.IncidentReportsController.GetById(System.Guid)">
+            <summary>
+            Get details of a specific incident.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.IncidentReportsController.GetList(System.Nullable{System.Guid},System.Int32,System.Int32)">
+            <summary>
+            Get a paginated list of operational incidents.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.API.Controllers.InventoryAnalysisController">
+            <summary>
+            Controller for retrieving advanced inventory analysis, reports, and compliance audits.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.InventoryAnalysisController.GetExpiryAlerts(System.Nullable{System.Guid},System.Int32,System.Int32,System.Int32)">
+            <summary>
+            Retrieves items that are close to their expiration dates.
+            </summary>
+            <param name="warehouseId">Optional warehouse identifier to filter the results.</param>
+            <param name="warningDays">Number of days before expiration to alert (default: 30).</param>
+            <param name="pageNumber">Page number for pagination (default: 1).</param>
+            <param name="pageSize">Page size for pagination (default: 10).</param>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.InventoryAnalysisController.GetAgingInventory(System.Nullable{System.Guid},System.Int32,System.Int32,System.Int32)">
+            <summary>
+            Retrieves items that have been in storage longer than a threshold number of days.
+            </summary>
+            <param name="warehouseId">Optional warehouse identifier to filter the results.</param>
+            <param name="thresholdDays">Number of days in storage to define as aging (default: 90).</param>
+            <param name="pageNumber">Page number for pagination (default: 1).</param>
+            <param name="pageSize">Page size for pagination (default: 10).</param>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.InventoryAnalysisController.GetTemperatureAudits(System.Nullable{System.Guid},System.Int32,System.Int32)">
+            <summary>
+            Identifies inventory stocks stored in zones that do not match the required product temperature ranges.
+            </summary>
+            <param name="warehouseId">Optional warehouse identifier to filter the results.</param>
+            <param name="pageNumber">Page number for pagination (default: 1).</param>
+            <param name="pageSize">Page size for pagination (default: 10).</param>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.InventoryController.DeleteLpn(System.Guid)">
+             <summary>
+             Danh dau LPN la DELETED (soft-delete) — du lieu van con trong database.
+             </summary>
+             <remarks>
+             LPN state: EXPECTED | IN_STOCK | DISCREPANCY_HOLD | RETURN_PENDING → DELETED
+            
+             Khong xoa du lieu — chi doi State thanh DELETED.
+             LPN DELETED se khong hien thi trong GET /api/Inventory/lpns (tru khi loc ?status=DELETED).
+            
+             Tu choi neu LPN dang trong quy trinh xuat kho:
+               ALLOCATED / LOADING / LOADING_COMPLETED / RELEASED / SHIPPING
+             </remarks>
+             <param name="id">LpnId can xoa mem</param>
+        </member>
+        <member name="T:ColdChainX.API.Controllers.InvoicesController">
+            <summary>
+            Manages client and system invoices. Modeled after RESTful sub-resource patterns (similar to Shopify).
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.InvoicesController.GetInvoices(System.String,System.Nullable{System.Guid},System.Int32,System.Int32)">
+            <summary>
+            Retrieve list of invoices, filtered by status, with paging.
+            </summary>
+            <remarks>
+            For Customer role: Only returns invoices belonging to the authenticated customer.
+            For Admin/Manager roles: Returns all invoices across customers, with optional customerId filter.
+            </remarks>
+            <param name="status">Optional status filter (e.g. UNPAID, PAID).</param>
+            <param name="customerId">Optional customer filter (available only to Admin/Manager).</param>
+            <param name="pageNumber">Page index (1-based).</param>
+            <param name="pageSize">Size of each page.</param>
+            <returns>A paginated list of invoices.</returns>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.InvoicesController.GetInvoiceById(System.Guid)">
+            <summary>
+            Retrieve detailed invoice metadata and line items by Invoice ID.
+            </summary>
+            <remarks>
+            Validates user permissions before returning detailed invoice lines.
+            </remarks>
+            <param name="invoiceId">The unique identifier of the invoice.</param>
+            <returns>The detailed invoice response.</returns>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.InvoicesController.GetInvoicesByOrder(System.Guid)">
+            <summary>
+            Retrieve all invoices associated with a specific Transport Order ID.
+            </summary>
+            <remarks>
+            Modeled after Shopify's sub-resource pattern.
+            Matches: GET /api/v1/orders/{orderId}/invoices
+            </remarks>
+            <param name="orderId">The unique identifier of the transport order.</param>
+            <returns>A list of invoices linked to the order.</returns>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.OutboundController.Pick(ColdChainX.Application.Features.Outbound.Commands.PickLpnCommand)">
+             <summary>
+             [STEP 3/5] Xac nhan mot LPN da duoc boc len xe.
+             </summary>
+             <remarks>
+             LPN state: LOADING → LOADING_COMPLETED
+            
+             Precondition:
+               - LPN.State == LOADING  (set boi POST /api/Dispatch/trip/{id}/start-picking)
+               - Trip.Status == PICKING
+            
+             Postcondition:
+               - LPN.State = LOADING_COMPLETED
+            
+             Goi API nay tung LPN mot lan cho den khi tat ca LPN trong chuyen
+             deu o trang thai LOADING_COMPLETED.
+            
+             Next step: POST /api/Outbound/load-trip (khi tat ca LPN da LOADING_COMPLETED)
+             </remarks>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.OutboundController.LoadTrip(ColdChainX.Application.Features.Outbound.Commands.CompleteTripLoadingCommand)">
+             <summary>
+             [STEP 4/5] Xac nhan toan bo chuyen da len xe — chuyen LPN tu LOADING_COMPLETED sang RELEASED.
+             </summary>
+             <remarks>
+             LPN state: LOADING_COMPLETED → RELEASED
+             Trip status: PICKING → LOADING_COMPLETED
+            
+             Precondition:
+               - TAT CA LPN cua TripId phai o trang thai LOADING_COMPLETED
+                 (moi LPN da duoc goi POST /api/Outbound/pick truoc do)
+            
+             Postcondition:
+               - Tat ca LPN.State = RELEASED
+               - Trip.Status = LOADING_COMPLETED
+               - Sinh ManifestPdf + OutboundTicketPdf (neu co)
+            
+             Next step: POST /api/Dispatch/seal-and-dispatch/{tripId}
+             </remarks>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.OutboundController.GetAvailableLpns(System.Nullable{System.Guid})">
+             <summary>
+             [HELPER cho STEP 3] Lay danh sach LPN dang o trang thai LOADING — san sang de goi POST /api/Outbound/pick.
+             </summary>
+             <remarks>
+             Tra ve cac LPN co State == LOADING (da duoc start-picking).
+             Dung LpnId trong ket qua lam body cho POST /api/Outbound/pick.
+            
+             Tham so tuy chon: ?tripId={guid} de chi lay LPN cua mot chuyen cu the.
+             </remarks>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.OutboundController.GetAvailableTrips(System.Nullable{System.Guid})">
+             <summary>
+             [HELPER cho STEP 4] Lay danh sach chuyen dang PICKING kem tat ca LPN/don hang ben trong.
+             </summary>
+             <remarks>
+             Tra ve cac chuyen co Status == PICKING, moi chuyen kem danh sach LPN
+             (LOADING + LOADING_COMPLETED) va co ReadyToLoad = true khi tat ca LPN da LOADING_COMPLETED.
+            
+             Dung TripId trong ket qua lam body cho POST /api/Outbound/load-trip
+             (chi goi load-trip khi ReadyToLoad == true).
+            
+             Tham so tuy chon: ?tripId={guid} de xem chi tiet mot chuyen.
+             </remarks>
+        </member>
+        <member name="T:ColdChainX.API.Controllers.PaymentController">
+            <summary>
+            Handle payment webhooks from PayOS.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.PaymentController.ReceivePaymentWebhook(ColdChainX.Application.DTOs.Payment.PaymentWebhookRequest)">
+            <summary>
+            Receive PayOS payment webhook notification.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.UserController.GetUsers(System.Int32,System.Int32,System.String,System.String,System.Nullable{ColdChainX.Core.Enums.UserStatus},System.String,System.String)">
+            <summary>
+            Retrieve a paginated, filtered, and sorted list of users.
+            </summary>
+            <param name="page">1-based page index.</param>
+            <param name="pageSize">Number of items per page.</param>
+            <param name="search">Optional term to search by username, email, or full name.</param>
+            <param name="role">Optional filter by user role.</param>
+            <param name="status">Optional filter by user status.</param>
+            <param name="sortBy">Field to sort by (username, email, fullname, status, role, createdat).</param>
+            <param name="order">Sort order (asc or desc).</param>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.UserController.GetUserById(System.Guid)">
+            <summary>
+            Get user profile details by ID.
+            </summary>
+            <param name="id">The user's unique identifier.</param>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.UserController.CreateUser(ColdChainX.Application.DTOs.CreateUserRequest)">
+            <summary>
+            Create a new user account (Admin only).
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.UserController.UpdateUser(System.Guid,ColdChainX.Application.DTOs.AdminUpdateUserRequest)">
+            <summary>
+            Update an existing user's details (Admin only).
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.UserController.ChangeRole(System.Guid,ColdChainX.Application.DTOs.ChangeUserRoleRequest)">
+            <summary>
+            Change a user's role (Admin only).
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.UserController.ChangeStatus(System.Guid,ColdChainX.Application.DTOs.ChangeUserStatusRequest)">
+            <summary>
+            Change a user's status (Admin only).
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.UserController.UpdateWarehouse(System.Guid,ColdChainX.Application.DTOs.UpdateUserWarehouseRequest)">
+            <summary>
+            Change a warehouse operator's assigned warehouse (Admin only).
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.UserController.ResetPassword(System.Guid,ColdChainX.Application.DTOs.ResetPasswordRequest)">
+            <summary>
+            Reset a user's password (Admin only).
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.UserController.Restore(System.Guid)">
+            <summary>
+            Restore a soft-deleted user (Admin only).
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.UserController.SoftDelete(System.Guid)">
+            <summary>
+            Soft delete a user account (Admin only).
+            </summary>
+        </member>
+        <member name="T:ColdChainX.API.Controllers.WarehouseController">
+            <summary>
+            Manages warehouse entities, including creation, updates, listing, and deletion.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.WarehouseController.#ctor(ColdChainX.Application.Interfaces.IWarehouseService)">
+            <summary>
+            Initializes a new instance of the <see cref="T:ColdChainX.API.Controllers.WarehouseController"/> class.
+            </summary>
+            <param name="warehouseService">The service used to manage warehouses.</param>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.WarehouseController.Create(ColdChainX.Application.DTOs.Warehouse.CreateWarehouseRequest)">
+            <summary>
+            Create a new warehouse.
+            </summary>
+            <remarks>
+            Registers a new warehouse facility in the system.
+            
+            Business purpose:
+            Setup physical storage facilities to receive, store, and dispatch cold-chain products.
+            
+            Required roles:
+            Admin, Manager
+            
+            Workflow impact:
+            Creates the parent entity under which storage zones and specific storage locations can be configured.
+            </remarks>
+            <param name="request">The warehouse creation request containing code, name, capacity, and temperature limits.</param>
+            <returns>The newly created warehouse details.</returns>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.WarehouseController.Update(System.Guid,ColdChainX.Application.DTOs.Warehouse.UpdateWarehouseRequest)">
+            <summary>
+            Update an existing warehouse.
+            </summary>
+            <remarks>
+            Updates the attributes of an existing warehouse.
+            
+            Business purpose:
+            Modify name, type, capacity, address, or temperature parameters as operations evolve.
+            
+            Required roles:
+            Admin, Manager
+            
+            Workflow impact:
+            Instantly changes default compliance thresholds for inbound quality checks and capacity warnings.
+            </remarks>
+            <param name="id">The unique identifier of the warehouse to update.</param>
+            <param name="request">The updated warehouse details.</param>
+            <returns>The updated warehouse details.</returns>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.WarehouseController.Delete(System.Guid)">
+            <summary>
+            Soft-delete a warehouse.
+            </summary>
+            <remarks>
+            Deactivates and marks a warehouse as deleted.
+            
+            Business purpose:
+            Decommission a warehouse when it is no longer in service.
+            
+            Required roles:
+            Admin
+            
+            Workflow impact:
+            Blocks any future inbound receipts or cycle counts at this warehouse.
+            </remarks>
+            <param name="id">The unique identifier of the warehouse to delete.</param>
+            <returns>A boolean success indicator wrapped in ApiResponse.</returns>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.WarehouseController.GetById(System.Guid)">
+            <summary>
+            Get warehouse details by its unique identifier.
+            </summary>
+            <remarks>
+            Retrieves a warehouse by its GUID.
+            
+            Business purpose:
+            Display warehouse parameters, location coordinates, or capacity.
+            
+            Required roles:
+            All authenticated users.
+            
+            Workflow impact:
+            Information lookup for UI display or child-entity references.
+            </remarks>
+            <param name="id">The unique identifier of the warehouse.</param>
+            <returns>The warehouse details.</returns>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.WarehouseController.GetList(System.Int32,System.Int32,System.String)">
+            <summary>
+            Get a paginated list of warehouses with optional keyword search.
+            </summary>
+            <remarks>
+            Retrieves a page of warehouse records.
+            
+            Business purpose:
+            Display active and configured warehouses in lists or dropdowns.
+            
+            Required roles:
+            All authenticated users.
+            
+            Workflow impact:
+            Provides a search interface for operators selecting warehouses.
+            </remarks>
+            <param name="pageNumber">The index of the page, starting at 1.</param>
+            <param name="pageSize">The number of records per page.</param>
+            <param name="search">Optional query string to search by code or name.</param>
+            <returns>A paginated list of warehouses.</returns>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.WarehouseController.GetLpnsInWarehouse(System.Guid,System.Int32,System.Int32)">
+            <summary>
+            Retrieves all IN_STOCK LPNs in a specific warehouse.
+            </summary>
+            <param name="warehouseId">The unique identifier of the warehouse.</param>
+            <param name="page">Page number (default 1).</param>
+            <param name="pageSize">Page size (default 10).</param>
+            <returns>A paginated list of LPNs.</returns>
+        </member>
+        <member name="T:ColdChainX.API.Controllers.WarehouseUtilizationController">
+            <summary>
+            Controller for retrieving warehouse-specific capacity utilization and occupancy reports.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.API.Controllers.WarehouseUtilizationController.GetWarehouseUtilization(System.Guid)">
+            <summary>
+            Generates a warehouse occupancy and zone utilization report.
+            </summary>
+            <param name="id">The unique identifier of the warehouse.</param>
+        </member>
+        <member name="T:ColdChainX.API.Swagger.EnumSchemaFilter">
+            <summary>
+            Swagger SchemaFilter: chuyển enum thành kiểu string với danh sách giá trị tên chữ
+            để dropdown trong Swagger hiển thị tên (Truck, Active, ...) thay vì số (0, 1, 2, ...)
+            </summary>
+        </member>
+        <member name="T:ColdChainX.API.Swagger.RemoveAuthFromCreateAccountsFilter">
+            <summary>
+            Removes authorization requirement from public register endpoint
+            </summary>
+        </member>
+    </members>
+</doc>

@@ -16,7 +16,6 @@ namespace ColdChainX.API.Swagger
                 return;
             }
 
-            // Ensure multipart/form-data is properly displayed
             operation.RequestBody = new OpenApiRequestBody
             {
                 Content =

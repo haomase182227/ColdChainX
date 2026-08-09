@@ -68,19 +68,6 @@ public class InventoryController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Danh dau LPN la DELETED (soft-delete) — du lieu van con trong database.
-    /// </summary>
-    /// <remarks>
-    /// LPN state: EXPECTED | IN_STOCK | DISCREPANCY_HOLD | RETURN_PENDING → DELETED
-    ///
-    /// Khong xoa du lieu — chi doi State thanh DELETED.
-    /// LPN DELETED se khong hien thi trong GET /api/Inventory/lpns (tru khi loc ?status=DELETED).
-    ///
-    /// Tu choi neu LPN dang trong quy trinh xuat kho:
-    ///   ALLOCATED / LOADING / LOADING_COMPLETED / RELEASED / SHIPPING
-    /// </remarks>
-    /// <param name="id">LpnId can xoa mem</param>
     [HttpDelete("lpns/{id}")]
     [HasPermission(PermissionCodes.WarehouseInventoryAdjust)]
     [ProducesResponseType(typeof(ColdChainX.Application.Features.Inventory.Commands.DeleteLpnResponse), 200)]

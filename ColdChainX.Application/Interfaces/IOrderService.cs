@@ -12,7 +12,6 @@ namespace ColdChainX.Application.Interfaces
         Task<ApiResponse<CreateOrderResponse>> CreateOrderAsync(CreateOrderRequest request, Guid customerId);
         Task<ApiResponse<CreateOrderResponse>> UpdateOrderAsync(Guid orderId, UpdateOrderRequest request, Guid customerId);
         Task<ApiResponse<CreateOrderResponse>> AdminUpdateOrderAsync(Guid orderId, UpdateOrderRequest request, Guid salesUserId);
-        Task<ApiResponse<bool>> DeleteOrderAsync(Guid orderId, Guid customerId);
         Task<ApiResponse<ReviewOrderResponse>> ReviewOrderAsync(Guid orderId, ReviewOrderRequest request, Guid salesUserId);
         Task<ApiResponse<bool>> UploadPhysicalPodAsync(Guid orderId, string physicalPodImageUrl);
         Task<ApiResponse<byte[]>> ExportDigitalArchiveAsync(Guid orderId);

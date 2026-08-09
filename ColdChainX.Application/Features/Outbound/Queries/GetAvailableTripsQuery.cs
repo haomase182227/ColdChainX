@@ -6,11 +6,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ColdChainX.Application.Features.Outbound.Queries;
 
-/// <summary>
-/// Lay danh sach chuyen dang o trang thai PICKING kem tat ca LPN/don hang ben trong —
-/// dung de chuan bi du lieu cho POST /api/Outbound/pick va POST /api/Outbound/load-trip.
-/// Co the loc theo TripId (tuy chon) de xem chi tiet mot chuyen.
-/// </summary>
 public class GetAvailableTripsQuery : IRequest<List<AvailableTripDto>>
 {
     public Guid? TripId { get; set; }
@@ -32,7 +27,6 @@ public class GetAvailableTripsQueryHandler : IRequestHandler<GetAvailableTripsQu
 
     public async Task<List<AvailableTripDto>> Handle(GetAvailableTripsQuery request, CancellationToken cancellationToken)
     {
-        // Trang thai LPN dang trong qua trinh bock len xe cua mot chuyen PICKING.
         var inProgressStates = new[] { LpnState.LOADING, LpnState.LOADING_COMPLETED };
 
         var tripsQuery = _context.MasterTrips
@@ -70,7 +64,6 @@ public class GetAvailableTripsQueryHandler : IRequestHandler<GetAvailableTripsQu
             })
             .ToListAsync(cancellationToken);
 
-        // Tinh cac chi so tong hop cho tung chuyen.
         foreach (var trip in trips)
         {
             trip.TotalLpns = trip.Lpns.Count;
@@ -78,7 +71,6 @@ public class GetAvailableTripsQueryHandler : IRequestHandler<GetAvailableTripsQu
             trip.ReadyToLoad = trip.TotalLpns > 0 && trip.LoadingCompletedLpns == trip.TotalLpns;
         }
 
-        // Chi tra ve chuyen co LPN dang xu ly.
         return trips.Where(t => t.TotalLpns > 0).ToList();
     }
 }

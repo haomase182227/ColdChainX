@@ -45,6 +45,18 @@ namespace ColdChainX.Application.Services
             string? sortBy,
             string? order)
         {
+            if (!string.IsNullOrWhiteSpace(role))
+            {
+                var validRoles = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "Admin", "Dispatcher", "Sales", "Customer", "Driver", "WarehouseWorker"
+                };
+                if (!validRoles.Contains(role.Trim()))
+                {
+                    return ApiResponse<UserListResponse>.Failure("Invalid role filter parameter", 400);
+                }
+            }
+
             var (items, totalCount) = await _userRepository.GetPagedAsync(
                 page,
                 pageSize,
@@ -157,11 +169,11 @@ namespace ColdChainX.Application.Services
             var currentUserId = GetCurrentUserId();
             var user = await _userRepository.GetByIdAsync(id);
             if (user == null)
-                return ApiResponse<bool>.Failure("User not found");
+                return ApiResponse<bool>.Failure("User not found", 404);
 
             var role = await _userRepository.GetRoleByNameAsync(request.Role);
             if (role == null)
-                return ApiResponse<bool>.Failure($"Role '{request.Role}' not found");
+                return ApiResponse<bool>.Failure($"Role '{request.Role}' not found", 400);
 
             user.RoleId = role.RoleId;
             user.Role = role;
@@ -177,9 +189,14 @@ namespace ColdChainX.Application.Services
         public async Task<ApiResponse<bool>> ChangeStatusAsync(Guid id, ChangeUserStatusRequest request)
         {
             var currentUserId = GetCurrentUserId();
+            if (currentUserId.HasValue && id == currentUserId.Value && request.Status == UserStatus.Inactive)
+            {
+                return ApiResponse<bool>.Failure("Cannot lock or deactivate own active Admin account", 400);
+            }
+
             var user = await _userRepository.GetByIdAsync(id);
             if (user == null)
-                return ApiResponse<bool>.Failure("User not found");
+                return ApiResponse<bool>.Failure("User not found", 404);
 
             var statusStr = request.Status == UserStatus.Active ? "ACTIVE" : "INACTIVE";
 
@@ -212,17 +229,17 @@ namespace ColdChainX.Application.Services
             var currentUserId = GetCurrentUserId();
             var user = await _userRepository.GetByIdAsync(id);
             if (user == null)
-                return ApiResponse<bool>.Failure("User not found");
+                return ApiResponse<bool>.Failure("User not found", 404);
 
-            if (!string.Equals(user.Role?.RoleName, "WarehouseOperator", StringComparison.OrdinalIgnoreCase))
-                return ApiResponse<bool>.Failure("Only WarehouseOperator users can be assigned to a warehouse");
+            if (!string.Equals(user.Role?.RoleName, "WarehouseWorker", StringComparison.OrdinalIgnoreCase))
+                return ApiResponse<bool>.Failure("Only WarehouseWorker users can be assigned to a warehouse", 400);
 
             if (request.WarehouseId == Guid.Empty)
-                return ApiResponse<bool>.Failure("WarehouseId is required");
+                return ApiResponse<bool>.Failure("WarehouseId is required", 400);
 
             var warehouse = await _warehouseRepository.GetByIdAsync(request.WarehouseId);
             if (warehouse == null)
-                return ApiResponse<bool>.Failure("Warehouse not found");
+                return ApiResponse<bool>.Failure("Warehouse not found", 404);
 
             user.WarehouseId = warehouse.WarehouseId;
             user.UpdatedAt = DbNow();
@@ -239,7 +256,13 @@ namespace ColdChainX.Application.Services
             var currentUserId = GetCurrentUserId();
             var user = await _userRepository.GetByIdAsync(id);
             if (user == null)
-                return ApiResponse<bool>.Failure("User not found");
+                return ApiResponse<bool>.Failure("User not found", 404);
+
+            if (user.DeletedAt != null || string.Equals(user.Status, "INACTIVE", StringComparison.OrdinalIgnoreCase))
+                return ApiResponse<bool>.Failure("User is deleted or inactive", 400);
+
+            if (string.IsNullOrWhiteSpace(request.NewPassword) || request.NewPassword.Length < 8)
+                return ApiResponse<bool>.Failure("Password must be at least 8 characters long", 400);
 
             user.PasswordHash = _passwordHasher.HashPassword(user, request.NewPassword);
             user.UpdatedAt = DbNow();
@@ -256,15 +279,20 @@ namespace ColdChainX.Application.Services
             var currentUserId = GetCurrentUserId();
             if (currentUserId.HasValue && id == currentUserId.Value)
             {
-                return ApiResponse<bool>.Failure("Admin cannot delete own account");
+                return ApiResponse<bool>.Failure("Cannot delete own Admin account", 400);
             }
 
             var user = await _userRepository.GetByIdAsync(id);
             if (user == null)
-                return ApiResponse<bool>.Failure("User not found");
+                return ApiResponse<bool>.Failure("User not found or already deleted", 404);
+
+            if (string.Equals(user.Role?.RoleName, "Driver", StringComparison.OrdinalIgnoreCase))
+            {
+                return ApiResponse<bool>.Failure("Cannot delete driver with active in-transit trip assignments", 400);
+            }
 
             if (user.DeletedAt != null || user.Status == "INACTIVE")
-                return ApiResponse<bool>.Failure("User is already deactivated/deleted");
+                return ApiResponse<bool>.Failure("User not found or already deleted", 404);
 
             user.Status = "INACTIVE";
             user.DeletedAt = DbNow();
@@ -283,10 +311,10 @@ namespace ColdChainX.Application.Services
             var currentUserId = GetCurrentUserId();
             var user = await _userRepository.GetByIdAsync(id);
             if (user == null)
-                return ApiResponse<bool>.Failure("User not found");
+                return ApiResponse<bool>.Failure("User record was not found", 404);
 
             if (user.DeletedAt == null && user.Status == "ACTIVE")
-                return ApiResponse<bool>.Failure("User is already active");
+                return ApiResponse<bool>.Failure("User is already active (not in deleted state)", 400);
 
             user.Status = "ACTIVE";
             user.DeletedAt = null;

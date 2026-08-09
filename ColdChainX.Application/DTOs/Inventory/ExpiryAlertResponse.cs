@@ -2,9 +2,6 @@ using System;
 
 namespace ColdChainX.Application.DTOs.Inventory
 {
-    /// <summary>
-    /// Response model for inventory batches that are close to their expiration date.
-    /// </summary>
     public class ExpiryAlertResponse
     {
         public Guid StockId { get; set; }

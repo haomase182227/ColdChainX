@@ -38,8 +38,11 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAll([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
+            if (pageNumber <= 0 || pageSize <= 0)
+                return BadRequest(ApiResponse<object>.Failure("PageNumber and PageSize must be greater than zero."));
+
             var result = await _fleetService.GetDriversAsync();
             return Ok(result);
         }
@@ -54,6 +57,17 @@ namespace ColdChainX.API.Controllers
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] FleetCreateDriverRequest request)
         {
+            if (string.IsNullOrWhiteSpace(request.FullName) ||
+                string.IsNullOrWhiteSpace(request.Email) ||
+                string.IsNullOrWhiteSpace(request.IdentityNumber) ||
+                string.IsNullOrWhiteSpace(request.PhoneNumber))
+            {
+                return BadRequest(ApiResponse<object>.Failure("Driver full name, email, identity number and phone number are required.", 400));
+            }
+
+            if (request.License != null && request.License.ExpiryDate < DateOnly.FromDateTime(DateTime.Today))
+                return BadRequest(ApiResponse<object>.Failure("Commercial driver license is expired.", 400));
+
             var result = await _fleetService.CreateDriverAsync(request);
             if (!result.Success) return Conflict(result);
             return Ok(result);
@@ -109,7 +123,6 @@ namespace ColdChainX.API.Controllers
         {
             var driverId = GetDriverId();
             if (driverId == Guid.Empty) return Unauthorized(new { success = false, message = "Driver ID not found in token." });
-            // Only include statuses where the driver is physically operating or preparing the vehicle
             var activeStatuses = new[] { "LOADING", "LOADING_COMPLETED", "SEALED", "DISPATCHED", "IN_TRANSIT" };
             var activeTrip = await _dbContext.MasterTrips
                 .Include(t => t.Vehicle)
@@ -151,7 +164,7 @@ namespace ColdChainX.API.Controllers
             });
         }
 
-        [Authorize(Roles = "Driver,DRIVER,Shipping,SHIPPING")]
+        [Authorize(Roles = "Driver")]
         [HttpGet("me/trips")]
         public async Task<IActionResult> GetMyTrips([FromQuery] string status = "")
         {
@@ -164,7 +177,6 @@ namespace ColdChainX.API.Controllers
             if (driver == null)
                 return NotFound(new { success = false, message = "Không tìm thấy hồ sơ tài xế liên kết với tài khoản này." });
 
-            // Tái sử dụng logic lấy chuyến của GetDriverTrips
             return await GetDriverTrips(driver.DriverId, status);
         }
 
@@ -183,7 +195,6 @@ namespace ColdChainX.API.Controllers
             }
             else
             {
-                // Default active
                 var activeStatuses = new[] { "PLANNED", "PICKING", "LOADING", "LOADING_COMPLETED", "SEALED", "DISPATCHED" };
                 query = query.Where(t => activeStatuses.Contains(t.Status));
             }
@@ -386,10 +397,14 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpDelete("{id:guid}")]
-        public async Task<ActionResult<ApiResponse<bool>>> Delete(Guid id)
+        public async Task<IActionResult> Delete(Guid id)
         {
             var result = await _fleetService.SoftDeleteDriverAsync(id);
-            return result.Success ? Ok(result) : NotFound(result);
+            if (!result.Success)
+            {
+                return StatusCode(result.StatusCode != 0 ? result.StatusCode : StatusCodes.Status400BadRequest, result);
+            }
+            return Ok(result);
         }
     }
 }

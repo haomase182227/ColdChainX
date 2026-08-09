@@ -52,4 +52,4 @@ namespace ColdChainX.Application.Validators
                 .IsInEnum().WithMessage($"Status must be one of: {string.Join(", ", Enum.GetNames(typeof(VehicleStatus)))}");
         }
     }
-}
+}

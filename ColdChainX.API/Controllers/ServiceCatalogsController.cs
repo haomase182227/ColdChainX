@@ -11,7 +11,6 @@ namespace ColdChainX.API.Controllers
 {
     [Route("api/service-catalogs")]
     [ApiController]
-    // [Authorize] // Tạm tắt phân quyền
     public class ServiceCatalogsController : ControllerBase
     {
         private readonly IServiceCatalogService _serviceCatalogService;
@@ -47,7 +46,6 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost]
-        // [Authorize(Roles = "Admin,WarehouseOperator,Sales")] // Tạm tắt phân quyền
         public async Task<IActionResult> Create([FromBody] CreateServiceCatalogRequest request)
         {
             if (!ModelState.IsValid)
@@ -65,7 +63,6 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPut("{id}")]
-        // [Authorize(Roles = "Admin,WarehouseOperator,Sales")] // Tạm tắt phân quyền
         public async Task<IActionResult> Update(Guid id, [FromBody] UpdateServiceCatalogRequest request)
         {
             if (!ModelState.IsValid)
@@ -83,7 +80,6 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpDelete("{id}")]
-        // [Authorize(Roles = "Admin,WarehouseOperator")] // Tạm tắt phân quyền
         public async Task<IActionResult> Delete(Guid id)
         {
             var result = await _serviceCatalogService.DeleteAsync(id);

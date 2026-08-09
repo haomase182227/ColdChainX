@@ -6,12 +6,10 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace ColdChainX.Infrastructure.Migrations
 {
-    /// <inheritdoc />
     [DbContext(typeof(ApplicationDbContext))]
     [Migration("20260625090000_SeedInboundInStockLpns")]
     public partial class SeedInboundInStockLpns : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.Sql(
@@ -208,7 +206,6 @@ namespace ColdChainX.Infrastructure.Migrations
                 """);
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.Sql(

@@ -193,10 +193,8 @@ namespace ColdChainX.Application.Services
                     order.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
                     order.UpdatedBy = currentUserId;
 
-                    // Remove old items
                     _db.OutboundOrderItems.RemoveRange(order.OutboundOrderItems);
 
-                    // Add new items
                     foreach (var itemRequest in request.Items)
                     {
                         var item = new OutboundOrderItem

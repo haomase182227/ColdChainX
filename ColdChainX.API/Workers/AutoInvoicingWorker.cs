@@ -8,9 +8,6 @@ using ColdChainX.Application.Interfaces;
 
 namespace ColdChainX.API.Workers;
 
-/// <summary>
-/// Background worker to periodically generate invoices for completed orders.
-/// </summary>
 public class AutoInvoicingWorker : BackgroundService
 {
     private readonly ILogger<AutoInvoicingWorker> _logger;

@@ -23,7 +23,6 @@ public partial class MasterTrip
 
     public decimal? TotalDistanceKm { get; set; }
 
-    /// <summary>Estimated total driving duration (hours), from the Goong route. Split across drivers for 2-driver trips.</summary>
     public decimal? EstimatedDurationHours { get; set; }
 
     public decimal TargetTemperature { get; set; }

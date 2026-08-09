@@ -32,7 +32,6 @@ namespace ColdChainX.Application.Validators
             RuleFor(w => w.Address)
                 .MaximumLength(100).WithMessage("Address cannot exceed 100 characters.");
 
-            // Refrigeration temperature checks
             When(w => w.WarehouseType == "COLD", () =>
             {
                 RuleFor(w => w.DefaultMinTemp)

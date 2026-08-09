@@ -9,10 +9,6 @@ using ColdChainX.Shared.Responses;
 
 namespace ColdChainX.Application.Features.Delivery.Queries;
 
-/// <summary>
-/// Lấy mã QR thanh toán PayOS dựa trên EpodId.
-/// Tự động sinh mã QR với số tiền CodAmount đã được chốt ở bước ConfirmHandover.
-/// </summary>
 public class GetEpodPaymentQrQuery : IRequest<ApiResponse<object>>
 {
     public Guid EpodId { get; set; }
@@ -40,7 +36,6 @@ public class GetEpodPaymentQrQueryHandler : IRequestHandler<GetEpodPaymentQrQuer
 
         decimal totalCodDue = epod.CodAmount ?? 0m;
 
-        // Bỏ qua số tiền thật để test PayOS với giá 2,000 VND
         totalCodDue = 2000m;
 
         if (totalCodDue <= 0)
@@ -53,11 +48,9 @@ public class GetEpodPaymentQrQueryHandler : IRequestHandler<GetEpodPaymentQrQuer
             throw new ConflictException($"ePOD '{request.EpodId}' đã được thanh toán xong. Không cần tạo lại mã QR.");
         }
 
-        // Tạo mã PayOS Order Code duy nhất bằng cách kết hợp EpodId Hash và Timestamp (chống trùng lặp)
         var epodShort = request.EpodId.ToString("N")[..6].ToUpperInvariant();
         var description = $"COD {epodShort}";
         
-        // Dùng timestamp (số mili-giây) để đảm bảo orderCode sinh ra mỗi lần là duy nhất
         var payosOrderCode = long.Parse(DateTimeOffset.UtcNow.ToString("yyMMddHHmmssfff"));
 
         var qrResult = await _paymentGateway.CreatePaymentLinkAsync(

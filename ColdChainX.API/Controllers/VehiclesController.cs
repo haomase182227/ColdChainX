@@ -29,8 +29,11 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAll([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
+            if (pageNumber <= 0 || pageSize <= 0)
+                return BadRequest(ApiResponse<object>.Failure("PageNumber and PageSize must be greater than zero."));
+
             var result = await _fleetService.GetVehiclesAsync();
             return Ok(result);
         }
@@ -43,9 +46,16 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "Admin,ADMIN,WarehouseOperator,WAREHOUSEOPERATOR,Dispatcher,DISPATCHER")]
+        [Authorize(Roles = "Admin,WarehouseWorker,Dispatcher")]
         public async Task<IActionResult> Create([FromBody] CreateVehicleRequest request)
         {
+            if (string.IsNullOrWhiteSpace(request.TruckPlate))
+                return BadRequest(ApiResponse<object>.Failure("TruckPlate is required.", 400));
+            if (request.MaxWeight <= 0 || request.MaxCbm <= 0 || request.InnerLengthCm <= 0 || request.InnerWidthCm <= 0 || request.InnerHeightCm <= 0)
+                return BadRequest(ApiResponse<object>.Failure("Vehicle payload and dimensions must be greater than zero.", 400));
+            if (request.MinTemp > request.MaxTemp)
+                return BadRequest(ApiResponse<object>.Failure("MinTemp must be less than or equal to MaxTemp.", 400));
+
             var result = await _fleetService.CreateVehicleAsync(request);
             if (!result.Success) return Conflict(result);
             return Ok(result);
@@ -53,7 +63,7 @@ namespace ColdChainX.API.Controllers
 
         [HttpPost("import")]
         [Consumes("multipart/form-data")]
-        [Authorize(Roles = "Admin,ADMIN,WarehouseOperator,WAREHOUSEOPERATOR,Dispatcher,DISPATCHER")]
+        [Authorize(Roles = "Admin,WarehouseWorker,Dispatcher")]
         public async Task<IActionResult> Import([FromForm] ImportExcelRequest request)
         {
             var result = await _fleetService.ImportVehiclesAsync(request.ExcelFile);
@@ -61,7 +71,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("{vehicleId:guid}/documents")]
-        [Authorize(Roles = "Admin,ADMIN,WarehouseOperator,WAREHOUSEOPERATOR,Dispatcher,DISPATCHER")]
+        [Authorize(Roles = "Admin,WarehouseWorker,Dispatcher")]
         public async Task<IActionResult> CreateDocument(Guid vehicleId, [FromBody] CreateVehicleDocumentRequest request)
         {
             var result = await _fleetService.CreateVehicleDocumentAsync(vehicleId, request);
@@ -69,7 +79,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("sync-odometer")]
-        [Authorize(Roles = "Admin,ADMIN,WarehouseOperator,WAREHOUSEOPERATOR,Dispatcher,DISPATCHER,Driver,DRIVER")]
+        [Authorize(Roles = "Admin,WarehouseWorker,Dispatcher,Driver")]
         public async Task<IActionResult> SyncOdometer([FromForm] SyncOdometerRequest request)
         {
             Guid? userId = null;
@@ -90,7 +100,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("{vehicleId:guid}/maintenance-tickets")]
-        [Authorize(Roles = "Admin,ADMIN,WarehouseOperator,WAREHOUSEOPERATOR,Dispatcher,DISPATCHER")]
+        [Authorize(Roles = "Admin,WarehouseWorker,Dispatcher")]
         public async Task<IActionResult> CreateMaintenanceTicket(Guid vehicleId, [FromBody] CreateMaintenanceTicketRequest request)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -104,7 +114,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPut("{id:guid}")]
-        [Authorize(Roles = "Admin,ADMIN,WarehouseOperator,WAREHOUSEOPERATOR,Dispatcher,DISPATCHER")]
+        [Authorize(Roles = "Admin,WarehouseWorker,Dispatcher")]
         public async Task<IActionResult> Update(Guid id, [FromBody] VehicleUpdateRequest request)
         {
             var result = await _fleetService.UpdateVehicleAsync(id, request);
@@ -114,11 +124,15 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpDelete("{id:guid}")]
-        [Authorize(Roles = "Admin,ADMIN,WarehouseOperator,WAREHOUSEOPERATOR,Dispatcher,DISPATCHER")]
-        public async Task<ActionResult<ApiResponse<bool>>> Delete(Guid id)
+        [Authorize(Roles = "Admin,WarehouseWorker,Dispatcher")]
+        public async Task<IActionResult> Delete(Guid id)
         {
             var result = await _fleetService.SoftDeleteVehicleAsync(id);
-            return result.Success ? Ok(result) : NotFound(result);
+            if (!result.Success)
+            {
+                return StatusCode(result.StatusCode != 0 ? result.StatusCode : StatusCodes.Status400BadRequest, result);
+            }
+            return Ok(result);
         }
 
         [HttpGet("{id:guid}/maintenance-history")]
@@ -129,7 +143,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("{id:guid}/mark-unavailable")]
-        [Authorize(Roles = "Admin,ADMIN,WarehouseOperator,WAREHOUSEOPERATOR,Dispatcher,DISPATCHER")]
+        [Authorize(Roles = "Admin,WarehouseWorker,Dispatcher")]
         public async Task<IActionResult> MarkUnavailable(Guid id, [FromQuery] string reason = "Manual lock")
         {
             var result = await _fleetService.MarkVehicleUnavailableAsync(id, reason);

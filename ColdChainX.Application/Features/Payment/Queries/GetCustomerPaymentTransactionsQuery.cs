@@ -11,10 +11,6 @@ using ColdChainX.Shared.Responses;
 
 namespace ColdChainX.Application.Features.Payment.Queries;
 
-/// <summary>
-/// Lấy lịch sử giao dịch thanh toán chi tiết của riêng một khách hàng (Customer),
-/// kèm tổng hợp tài chính COD, bồi thường OS&D và dư nợ thanh toán.
-/// </summary>
 public class GetCustomerPaymentTransactionsQuery : IRequest<ApiResponse<object>>
 {
     public Guid CustomerId { get; set; }
@@ -31,17 +27,31 @@ public class GetCustomerPaymentTransactionsQueryHandler : IRequestHandler<GetCus
 
     public async Task<ApiResponse<object>> Handle(GetCustomerPaymentTransactionsQuery request, CancellationToken cancellationToken)
     {
-        // Kiểm tra khách hàng hoặc đơn hàng tương ứng
+        if (request.CustomerId == Guid.Empty)
+            return ApiResponse<object>.Failure("CustomerId is required.", 400);
+
         var customer = await _context.Customers
             .AsNoTracking()
             .FirstOrDefaultAsync(c => c.CustomerId == request.CustomerId, cancellationToken);
 
-        var customerName = customer?.CompanyName ?? $"Client {request.CustomerId.ToString().Substring(0, 8)}";
+        if (customer == null)
+        {
+            var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.UserId == request.CustomerId, cancellationToken);
+            if (user != null)
+            {
+                customer = await _context.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.Email == user.Email, cancellationToken);
+            }
+        }
 
-        // 1. Lấy các giao dịch trong PaymentTransactions của khách này
+        if (customer == null)
+            return ApiResponse<object>.Failure($"Customer entity with ID '{request.CustomerId}' was not found in database.", 404);
+
+        var targetCustomerId = customer.CustomerId;
+        var customerName = customer.CompanyName;
+
         var dbTransactions = await _context.PaymentTransactions
             .Include(t => t.Order)
-            .Where(t => t.CustomerId == request.CustomerId || (t.Order != null && t.Order.CustomerId == request.CustomerId))
+            .Where(t => t.CustomerId == targetCustomerId || (t.Order != null && t.Order.CustomerId == targetCustomerId))
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
@@ -69,12 +79,11 @@ public class GetCustomerPaymentTransactionsQueryHandler : IRequestHandler<GetCus
             });
         }
 
-        // 2. Hợp nhất thêm các ePOD đã thu tiền COD thuộc khách hàng này (nếu chưa có trong danh sách trên)
         var existingOrderIds = dbTransactions.Where(x => x.OrderId.HasValue).Select(x => x.OrderId!.Value).ToHashSet();
 
         var paidEpods = await _context.DeliveryEpods
             .Include(e => e.Order)
-            .Where(e => (e.PaymentStatus == "PAID" || e.CodAmountPaid > 0) && e.Order != null && e.Order.CustomerId == request.CustomerId && !existingOrderIds.Contains(e.Order.OrderId))
+            .Where(e => (e.PaymentStatus == "PAID" || e.CodAmountPaid > 0) && e.Order != null && e.Order.CustomerId == targetCustomerId && !existingOrderIds.Contains(e.Order.OrderId))
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
@@ -101,7 +110,6 @@ public class GetCustomerPaymentTransactionsQueryHandler : IRequestHandler<GetCus
             });
         }
 
-        // 3. Sắp xếp danh sách mới nhất
         var sortedResults = results.OrderByDescending(r => ((dynamic)r).CreatedAt).ToList();
 
         decimal totalCodPaidByCustomer = sortedResults.Where(r => ((dynamic)r).TransactionType == "IN").Sum(r => (decimal)((dynamic)r).Amount);
@@ -109,7 +117,7 @@ public class GetCustomerPaymentTransactionsQueryHandler : IRequestHandler<GetCus
 
         var financialSummary = new
         {
-            CustomerId = request.CustomerId,
+            CustomerId = targetCustomerId,
             CustomerName = customerName,
             TaxCode = customer?.TaxCode ?? "N/A",
             Address = customer?.Address ?? "N/A",

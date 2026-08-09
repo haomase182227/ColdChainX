@@ -1,8 +1,5 @@
 namespace ColdChainX.Core.Enums;
 
-/// <summary>
-/// Supported operational and transport incident categories.
-/// </summary>
 public enum IncidentType
 {
     ACCIDENT = 1,

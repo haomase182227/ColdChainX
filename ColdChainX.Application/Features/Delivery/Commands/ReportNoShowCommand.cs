@@ -62,11 +62,9 @@ public class ReportNoShowCommandHandler : IRequestHandler<ReportNoShowCommand, A
         if (stop.ActualArrivalTime == null)
             throw new ApiException("Tài xế chưa check-in tại điểm dừng này.", 400);
 
-        // 1. Cập nhật trạng thái điểm dừng thành SKIPPED_NOSHOW và đóng dấu giờ đi, cho phép tài xế di chuyển sang trạm tiếp theo
         stop.Status = "SKIPPED_NOSHOW";
         stop.ActualDepartureTime = DateTime.UtcNow;
 
-        // 2. Ghi bằng chứng hình ảnh vào TripStop (Ghi chú Note) và TripStopEvents (giống cơ chế check-in)
         stop.Note = $"{stop.Note} [No-Show Evidence: {proofUrl}]".Trim();
         _context.TripStopEvents.Add(new TripStopEvent
         {
@@ -77,7 +75,6 @@ public class ReportNoShowCommandHandler : IRequestHandler<ReportNoShowCommand, A
             MetaData = $"ProofImageUrl: {proofUrl}"
         });
 
-        // 3. Tra cứu đơn hàng tại Stop (dựa vào LocationId) và chuyển trạng thái LPN (không ghi vào bảng TransportDocument vì đã lưu tại TripStopEvents)
         if (stop.Trip?.TransportOrders != null && stop.LocationId != null)
         {
             var order = stop.Trip.TransportOrders.FirstOrDefault(o => o.DestLocation == stop.LocationId);
@@ -85,18 +82,15 @@ public class ReportNoShowCommandHandler : IRequestHandler<ReportNoShowCommand, A
             {
                 order.Status = "DELIVERY_FAILED_NOSHOW";
 
-                // Chuyển các kiện LPNs sang trạng thái chờ trả hàng (RETURN_PENDING)
                 var lpns = await _context.Lpns.Where(l => l.OrderId == order.OrderId).ToListAsync(cancellationToken);
                 foreach (var lpn in lpns)
                 {
                     lpn.State = ColdChainX.Core.Enums.LpnState.RETURN_PENDING;
                 }
 
-                // (Đã loại bỏ lưu TransportDocument và PenaltyBill)
             }
         }
 
-        // 4. Skip-Stop Route Re-optimization: Tự động gọi Goong Maps tính toán lại lộ trình tối ưu sang điểm tiếp theo cho tài xế
         if (stop.Trip?.TripStops != null && stop.Location != null)
         {
             var remainingStops = stop.Trip.TripStops
@@ -123,7 +117,6 @@ public class ReportNoShowCommandHandler : IRequestHandler<ReportNoShowCommand, A
                     var optimizedResult = await _goongMapService.GetOptimizedRouteAsync(
                         originCoord, destCoord, waypointsCoord, cancellationToken);
 
-                    // Re-assign StopSequence dựa trên thứ tự WaypointOrder mới từ Goong
                     if (optimizedResult != null && optimizedResult.WaypointOrder.Count == remainingStops.Count - 1)
                     {
                         int currentSeq = stop.StopSequence + 1;
@@ -140,7 +133,6 @@ public class ReportNoShowCommandHandler : IRequestHandler<ReportNoShowCommand, A
                 }
                 catch
                 {
-                    // Fallback an toàn: Nếu Goong API offline / test environment không có Key, giữ nguyên thứ tự ban đầu
                 }
             }
         }

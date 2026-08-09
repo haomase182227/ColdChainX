@@ -1,4 +1,4 @@
-﻿namespace ColdChainX.Core
+namespace ColdChainX.Core
 {
     public class Class1
     {

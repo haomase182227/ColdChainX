@@ -3,9 +3,6 @@ using System.Collections.Generic;
 
 namespace ColdChainX.Application.DTOs.Invoices
 {
-    /// <summary>
-    /// Response model for an invoice, including its line details.
-    /// </summary>
     public class InvoiceResponse
     {
         public Guid InvoiceId { get; set; }

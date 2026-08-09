@@ -38,24 +38,20 @@ public class RejectLpnDeliveryCommandHandler : IRequestHandler<RejectLpnDelivery
 
     public async Task<ApiResponse<LpnDeliveryStatusResponse>> Handle(RejectLpnDeliveryCommand request, CancellationToken cancellationToken)
     {
-        // 1. Fetch LPN and validate existence
         var lpn = await _context.Lpns
             .Include(l => l.Order)
             .FirstOrDefaultAsync(l => l.LpnId == request.LpnId, cancellationToken);
         if (lpn == null)
             throw new NotFoundException($"LPN with ID '{request.LpnId}' was not found.");
 
-        // 2. Validate LPN belongs to specified trip
         if (lpn.TripId != request.TripId)
             throw new InvalidOperationException($"LPN '{lpn.LpnCode}' does not belong to trip '{request.TripId}'.");
 
-        // 3. Fetch Trip and validate existence
         var trip = await _context.MasterTrips
             .FirstOrDefaultAsync(t => t.TripId == request.TripId, cancellationToken);
         if (trip == null)
             throw new NotFoundException($"Trip with ID '{request.TripId}' was not found.");
 
-        // 4. Validate driver is assigned to this trip
         var driver = await _context.Drivers
             .FirstOrDefaultAsync(d => d.UserId == request.UserId, cancellationToken);
         if (driver == null)
@@ -66,8 +62,6 @@ public class RejectLpnDeliveryCommandHandler : IRequestHandler<RejectLpnDelivery
         if (!isAssignedDriver)
             throw new ForbiddenException("You are not authorized to confirm deliveries for this trip.");
 
-        // 5. Check LPN state (Only SHIPPING allowed, handle double-submit Conflict)
-        // 5. Check LPN state (Only SHIPPING allowed, handle double-submit Conflict)
         if (lpn.State != LpnState.SHIPPING)
         {
             var existing = await _context.LpnDeliveryConfirmations
@@ -79,7 +73,6 @@ public class RejectLpnDeliveryCommandHandler : IRequestHandler<RejectLpnDelivery
             throw new InvalidOperationException($"LPN '{lpn.LpnCode}' is not eligible for delivery confirmation. Current state: {lpn.State}. Only SHIPPING LPNs can be confirmed.");
         }
 
-        // Verify stop check-in
         DateTime? stopCheckinAt = null;
         if (lpn.Order?.DestLocation != null)
         {
@@ -98,7 +91,6 @@ public class RejectLpnDeliveryCommandHandler : IRequestHandler<RejectLpnDelivery
             }
         }
 
-        // 6. Validate evidence image
         if (request.EvidenceImage == null || request.EvidenceImage.Length == 0)
             throw new ValidationException("Evidence image is required. Please attach a photo of the delivery.");
 
@@ -110,7 +102,6 @@ public class RejectLpnDeliveryCommandHandler : IRequestHandler<RejectLpnDelivery
         if (!allowedTypes.Contains(request.EvidenceImage.ContentType.ToLower()))
             throw new ValidationException($"Invalid file type '{request.EvidenceImage.ContentType}'. Only image files are accepted (jpg, jpeg, png, webp).");
 
-        // 7. Validate Reject Reason and Note
         if (string.IsNullOrWhiteSpace(request.RejectReason))
             throw new ValidationException("Reject reason is required.");
         
@@ -127,7 +118,6 @@ public class RejectLpnDeliveryCommandHandler : IRequestHandler<RejectLpnDelivery
         if (request.RejectNote != null && request.RejectNote.Length > 500)
             throw new ValidationException("Reject note must not exceed 500 characters.");
 
-        // 8. Upload to Cloudinary
         string imageUrl;
         try
         {
@@ -141,14 +131,12 @@ public class RejectLpnDeliveryCommandHandler : IRequestHandler<RejectLpnDelivery
         if (string.IsNullOrEmpty(imageUrl))
             throw new ExternalServiceException("Image upload returned empty URL. Please try again.");
 
-        // Fetch latest temperature from TelemetryLogs or fallback to 4.5
         var latestTelemetry = await _context.TelemetryLogs
             .Where(t => t.TripId == request.TripId)
             .OrderByDescending(t => t.Timestamp)
             .FirstOrDefaultAsync(cancellationToken);
         var recordedTemp = latestTelemetry != null ? latestTelemetry.Temperature : 4.5m;
 
-        // 9. Database transaction and save using execution strategy
         var strategy = _context.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync(async () =>
         {
@@ -180,10 +168,8 @@ public class RejectLpnDeliveryCommandHandler : IRequestHandler<RejectLpnDelivery
 
                 await _context.SaveChangesAsync(cancellationToken);
 
-                // Sync Order status
                 await SyncOrderDeliveryStatusAsync(lpn.OrderId, cancellationToken);
 
-                // Sync Trip status
                 await TryCompleteTripAsync(request.TripId, cancellationToken);
 
                 await _context.SaveChangesAsync(cancellationToken);
@@ -220,7 +206,6 @@ public class RejectLpnDeliveryCommandHandler : IRequestHandler<RejectLpnDelivery
         var anyShipping = lpns.Any(l => l.State == LpnState.SHIPPING);
         if (anyShipping) return;
 
-        // Fetch confirmations to verify COD payments
         var lpnIds = lpns.Select(l => l.LpnId).ToList();
         var confirmations = await _context.LpnDeliveryConfirmations
             .Where(c => lpnIds.Contains(c.LpnId))

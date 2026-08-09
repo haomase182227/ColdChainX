@@ -1,4 +1,4 @@
-﻿namespace ColdChainX.Shared
+namespace ColdChainX.Shared
 {
     public class Class1
     {

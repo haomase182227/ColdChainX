@@ -58,7 +58,6 @@ public sealed class IotWatchdogWorker : BackgroundService
         var trips = await db.MasterTrips
             .Include(t => t.Vehicle)
                 .ThenInclude(v => v!.IotDevices)
-            // DELAYED (Luồng 8 — sự cố/sang xe) vẫn chở hàng lạnh nên vẫn phải giám sát IoT
             .Where(t => (t.Status == "IN_TRANSIT" || t.Status == "DELAYED") && t.VehicleId != null)
             .ToListAsync(cancellationToken);
 

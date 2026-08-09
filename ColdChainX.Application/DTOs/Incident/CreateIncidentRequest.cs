@@ -15,7 +15,6 @@ namespace ColdChainX.Application.DTOs.Incident
         public decimal DriverPaidAmount { get; set; }
         public bool RequiresRescue { get; set; }
 
-        /// <summary>Optional incident photos or receipts (0..5 files).</summary>
         public List<IFormFile>? EvidenceFiles { get; set; }
     }
 }

@@ -61,7 +61,6 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
-        // Get all available roles for registration
         [HttpGet("roles")]
         public async Task<IActionResult> GetRoles()
         {
@@ -70,7 +69,6 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
-        // Public endpoint for customer self-registration
         [AllowAnonymous]
         [HttpPost("create-customer")]
         [Consumes("multipart/form-data")]
@@ -81,8 +79,7 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
-        // Admin endpoint: create a driver user and driver record with role assigned
-        [Authorize(Roles = "Admin,ADMIN")]
+        [Authorize(Roles = "Admin")]
         [HttpPost("create-driver")]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> CreateDriver([FromForm] CreateDriverRequest request)
@@ -92,15 +89,13 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>
-        /// Tạo tài khoản nhân viên kho với role WarehouseOperator.
-        /// </summary>
-        [AllowAnonymous]
+        [Authorize(Roles = "Admin")]
+        [HttpPost("create-warehouse-worker")]
         [HttpPost("create-warehouse-operator")]
         [Consumes("multipart/form-data")]
-        public async Task<IActionResult> CreateWarehouseOperator([FromForm] CreateWarehouseOperatorRequest request)
+        public async Task<IActionResult> CreateWarehouseWorker([FromForm] CreateWarehouseWorkerRequest request)
         {
-            var result = await _authService.CreateWarehouseOperatorAsync(request);
+            var result = await _authService.CreateWarehouseWorkerAsync(request);
             if (!result.Success) return BadRequest(result);
             return Ok(result);
         }
@@ -113,9 +108,6 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>
-        /// Sign in with a Google ID token obtained by Google Identity Services on the frontend.
-        /// </summary>
         [AllowAnonymous]
         [HttpPost("google-login")]
         [ProducesResponseType(typeof(ApiResponse<GoogleLoginResponse>), StatusCodes.Status200OK)]
@@ -131,15 +123,9 @@ namespace ColdChainX.API.Controllers
             return StatusCode(result.StatusCode, result);
         }
 
-        /// <summary>
-        /// Start backend Google OAuth login.
-        /// Open this endpoint URL directly in a browser, complete Google sign-in, then follow
-        /// the redirects. Swagger's normal JSON request UI cannot complete this browser flow.
-        /// </summary>
         [AllowAnonymous]
         [HttpGet("google-auth")]
         [ProducesResponseType(StatusCodes.Status302Found)]
-        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status500InternalServerError)]
         public IActionResult GoogleAuth()
         {
             if (!TryGetAbsoluteHttpUri(_googleSettings.RedirectUri, out var redirectUri) ||
@@ -180,14 +166,9 @@ namespace ColdChainX.API.Controllers
             return Redirect(authorizationUrl);
         }
 
-        /// <summary>
-        /// Google OAuth callback. This endpoint is called by Google, not directly by the frontend.
-        /// </summary>
         [AllowAnonymous]
         [HttpGet("google/callback")]
         [ProducesResponseType(StatusCodes.Status302Found)]
-        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> GoogleCallback(
             [FromQuery] string? code,
             [FromQuery] string? state,
@@ -248,9 +229,6 @@ namespace ColdChainX.API.Controllers
             return Redirect(frontendUrl);
         }
 
-        /// <summary>
-        /// Exchange the short-lived, single-use Google login code for the application JWT.
-        /// </summary>
         [AllowAnonymous]
         [HttpPost("google/exchange")]
         [ProducesResponseType(typeof(ApiResponse<GoogleLoginResponse>), StatusCodes.Status200OK)]
@@ -305,9 +283,6 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>
-        /// Change the current user's password.
-        /// </summary>
         [Authorize]
         [HttpPut("change-password")]
         [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
@@ -326,9 +301,6 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>
-        /// Update profile for the current user.
-        /// </summary>
         [Authorize]
         [HttpPut("profile")]
         public async Task<IActionResult> UpdateProfile([FromBody] UpdateUserRequest request)
@@ -344,10 +316,7 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>
-        /// Admin: update driver's full name.
-        /// </summary>
-        [Authorize(Roles = "Admin,ADMIN")]
+        [Authorize(Roles = "Admin")]
         [HttpPatch("update-driver/{driverId:guid}/fullname")]
         public async Task<IActionResult> UpdateDriverFullName(Guid driverId, [FromBody] UpdateDriverFullNameRequest request)
         {
@@ -360,10 +329,7 @@ namespace ColdChainX.API.Controllers
 
     
 
-        /// <summary>
-        /// Admin: update driver's date of birth.
-        /// </summary>
-        [Authorize(Roles = "Admin,ADMIN")]
+        [Authorize(Roles = "Admin")]
         [HttpPatch("update-driver/{driverId:guid}/date-of-birth")]
         public async Task<IActionResult> UpdateDriverDob(Guid driverId, [FromBody] UpdateDriverDobRequest request)
         {
@@ -376,10 +342,7 @@ namespace ColdChainX.API.Controllers
 
         
 
-        /// <summary>
-        /// Admin: update or create driver license information.
-        /// </summary>
-        [Authorize(Roles = "Admin,ADMIN")]
+        [Authorize(Roles = "Admin")]
         [HttpPatch("update-driver/{driverId:guid}/license")]
         public async Task<IActionResult> UpdateDriverLicense(Guid driverId, [FromBody] UpdateDriverLicenseRequest request)
         {
@@ -397,10 +360,7 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>
-        /// Soft delete a user by id.
-        /// </summary>
-        [Authorize(Roles = "Admin,ADMIN")]
+        [Authorize(Roles = "Admin")]
         [HttpDelete("{id:guid}")]
         public async Task<IActionResult> SoftDeleteUser(Guid id)
         {

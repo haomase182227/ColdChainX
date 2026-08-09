@@ -36,7 +36,6 @@ public class CutSealCommandHandler : IRequestHandler<CutSealCommand, ApiResponse
             .FirstOrDefaultAsync(t => t.TripId == request.TripId, cancellationToken)
             ?? throw new NotFoundException($"Chuyến xe với ID '{request.TripId}' không tồn tại trên hệ thống.");
 
-        // Tìm seal đang hoạt động (Status != "CUT" và RemovedAt == null) của chuyến xe
         var activeSeal = await _context.Seals
             .Where(s => s.TripId == request.TripId && s.RemovedAt == null && s.Status != "CUT" && s.Status != "REMOVED")
             .OrderByDescending(s => s.AppliedAt ?? s.CreatedAt)
@@ -44,7 +43,6 @@ public class CutSealCommandHandler : IRequestHandler<CutSealCommand, ApiResponse
 
         if (activeSeal == null)
         {
-            // Nếu không tìm thấy seal trong DB, nhưng Trip có SealNumber, ta tự động tạo bản ghi seal đã cắt để lưu dấu vết audit
             activeSeal = new Core.Entities.Seal
             {
                 SealId = Guid.NewGuid(),
@@ -65,10 +63,8 @@ public class CutSealCommandHandler : IRequestHandler<CutSealCommand, ApiResponse
             activeSeal.StopId = request.StopId;
         }
 
-        // Cập nhật trạng thái chì trên Trip
         trip.SealNumber = $"{activeSeal.SealCode} (ĐÃ CẮT / UNSEALED)";
 
-        // Chuyển các thiết bị IoT trên xe về trạng thái Stream off để ngừng gửi tín hiệu liên tục khi mở cửa dỡ hàng
         if (trip.VehicleId.HasValue)
         {
             var iotDevices = await _context.IotDevices
@@ -87,7 +83,6 @@ public class CutSealCommandHandler : IRequestHandler<CutSealCommand, ApiResponse
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        // TẮT CẢNH BÁO AI (Mute AI Alerts) để khi mở cửa xe dỡ hàng, AI không gửi liên tục các cảnh báo nhiệt độ / mở cửa
         int muteHours = 3;
         string muteReason = $"Đã cắt chì seal [{activeSeal.SealCode}] để mở cửa xe dỡ hàng. Hệ thống AI tự động tạm tắt cảnh báo nhiệt độ & cửa mở trong {muteHours} giờ.";
         _aiControlService.MuteTripAiAlerting(trip.TripId, TimeSpan.FromHours(muteHours), muteReason);

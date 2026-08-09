@@ -37,7 +37,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet("my-orders")]
-        [Authorize(Roles = "Customer")]
+        [Authorize(Roles = "Sales,Customer")]
         public async Task<IActionResult> GetMyOrders([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10, [FromQuery] string? status = null)
         {
             var customerIdClaim = User.FindFirst("CustomerId")?.Value;
@@ -57,7 +57,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "Customer")]
+        [Authorize(Roles = "Sales,Customer")]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> CreateOrder([FromForm] CreateOrderRequest request)
         {
@@ -71,7 +71,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPut("{orderId:guid}")]
-        [Authorize(Roles = "Customer")]
+        [Authorize(Roles = "Sales,Customer")]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> UpdateOrder(Guid orderId, [FromForm] UpdateOrderRequest request)
         {
@@ -85,7 +85,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPut("{orderId:guid}/admin")]
-        [Authorize(Roles = "Admin,WarehouseOperator,Sales")]
+        [Authorize(Roles = "Sales,Customer")]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> AdminUpdateOrder(Guid orderId, [FromForm] UpdateOrderRequest request)
         {
@@ -99,7 +99,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("{orderId:guid}/review")]
-        [Authorize(Roles = "Sales,Admin,Dispatcher")]
+        [Authorize(Roles = "Sales,Customer")]
         public async Task<IActionResult> ReviewOrder(Guid orderId, [FromBody] ReviewOrderRequest request)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -128,7 +128,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("{orderId}/physical-pod")]
-        [Authorize(Roles = "Driver,Admin")]
+        [Authorize(Roles = "Sales,Customer")]
         public async Task<IActionResult> UploadPhysicalPod(Guid orderId, [FromBody] string physicalPodImageUrl)
         {
             var result = await _orderService.UploadPhysicalPodAsync(orderId, physicalPodImageUrl);
@@ -139,7 +139,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet("{orderId}/digital-archive")]
-        [Authorize(Roles = "Accountant,Admin,Customer")]
+        [Authorize(Roles = "Sales,Customer")]
         public async Task<IActionResult> ExportDigitalArchive(Guid orderId)
         {
             var result = await _orderService.ExportDigitalArchiveAsync(orderId);

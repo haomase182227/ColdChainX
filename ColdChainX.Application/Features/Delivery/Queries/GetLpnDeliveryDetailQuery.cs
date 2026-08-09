@@ -31,22 +31,18 @@ public class GetLpnDeliveryDetailQueryHandler : IRequestHandler<GetLpnDeliveryDe
 
     public async Task<ApiResponse<LpnDeliveryStatusResponse>> Handle(GetLpnDeliveryDetailQuery request, CancellationToken cancellationToken)
     {
-        // 1. Fetch LPN and validate existence
         var lpn = await _context.Lpns
             .Include(l => l.Order)
             .FirstOrDefaultAsync(l => l.LpnId == request.LpnId, cancellationToken);
         if (lpn == null)
             throw new NotFoundException($"LPN with ID '{request.LpnId}' was not found.");
 
-        // 2. Validate LPN belongs to specified trip
         if (lpn.TripId != request.TripId)
             throw new InvalidOperationException($"LPN '{lpn.LpnCode}' does not belong to trip '{request.TripId}'.");
 
-        // 3. Fetch delivery confirmation
         var confirmation = await _context.LpnDeliveryConfirmations
             .FirstOrDefaultAsync(c => c.LpnId == request.LpnId, cancellationToken);
 
-        // Read bank configurations for VietQR
         var bankId = _configuration?["PaymentSettings:BankId"] ?? "vietinbank";
         var bankAccount = _configuration?["PaymentSettings:BankAccount"] ?? "1111111111";
         var bankAccountName = _configuration?["PaymentSettings:BankAccountName"] ?? "NGUYEN VAN A";
@@ -61,7 +57,6 @@ public class GetLpnDeliveryDetailQueryHandler : IRequestHandler<GetLpnDeliveryDe
             vietQrUrl = $"https://img.vietqr.io/image/{bankId}-{bankAccount}-compact.png?amount={(int)codAmount}&addInfo={memo}&accountName={accName}";
         }
 
-        // 4. Map to response
         var response = new LpnDeliveryStatusResponse
         {
             LpnId = lpn.LpnId,

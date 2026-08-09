@@ -2,9 +2,6 @@ using System;
 
 namespace ColdChainX.Application.DTOs.Inventory
 {
-    /// <summary>
-    /// Response model representing stocks stored in locations with mismatched temperature settings.
-    /// </summary>
     public class TempAuditResponse
     {
         public Guid StockId { get; set; }
