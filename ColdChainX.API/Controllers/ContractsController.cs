@@ -38,26 +38,6 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
-        [HttpGet]
-        [Authorize(Roles = "Sales,Admin,Dispatcher")]
-        public async Task<IActionResult> GetContracts(
-            [FromQuery] string? status = null,
-            [FromQuery] Guid? customerId = null,
-            [FromQuery] DateTime? fromDate = null,
-            [FromQuery] DateTime? toDate = null,
-            [FromQuery] int pageNumber = 1,
-            [FromQuery] int pageSize = 10)
-        {
-            var result = await _contractService.GetContractsAsync(
-                status,
-                customerId,
-                fromDate,
-                toDate,
-                pageNumber,
-                pageSize);
-            return Ok(result);
-        }
-
         [HttpGet("{contractId:guid}")]
         public async Task<IActionResult> GetContractById(Guid contractId)
         {

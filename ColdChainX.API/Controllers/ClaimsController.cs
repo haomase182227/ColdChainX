@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -30,7 +30,6 @@ namespace ColdChainX.API.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin,WarehouseWorker,Customer")]
-        [ProducesResponseType(typeof(ApiResponse<ClaimResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> CreateClaim([FromForm] CreateClaimRequest request)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -46,7 +45,6 @@ namespace ColdChainX.API.Controllers
 
         [HttpPost("{id:guid}/resolve")]
         [Authorize(Roles = "Admin,WarehouseWorker,Dispatcher")]
-        [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ResolveClaim([FromRoute] Guid id, [FromBody] ResolveClaimRequest request)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -61,7 +59,6 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet("{id:guid}")]
-        [ProducesResponseType(typeof(ApiResponse<ClaimResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetById([FromRoute] Guid id)
         {
             var result = await _claimService.GetClaimByIdAsync(id);
@@ -72,7 +69,6 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet]
-        [ProducesResponseType(typeof(ApiResponse<PagedResult<ClaimResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetList(
             [FromQuery] Guid? orderId = null,
             [FromQuery] string? status = null,
@@ -113,7 +109,6 @@ namespace ColdChainX.API.Controllers
 
         [HttpGet("{id:guid}/osd-investigation")]
         [Authorize(Roles = "Admin,Dispatcher,Accountant,WarehouseWorker")]
-        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetClaimOsdInvestigation([FromRoute] Guid id)
         {
             var result = await _mediator.Send(new ColdChainX.Application.Features.Claims.Queries.GetClaimOsdInvestigationQuery { ClaimId = id });
@@ -125,7 +120,6 @@ namespace ColdChainX.API.Controllers
 
         [HttpPost("{id:guid}/payout")]
         [Authorize(Roles = "Admin,Accountant,Dispatcher")]
-        [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
         public async Task<IActionResult> CompletePayout([FromRoute] Guid id, [FromBody] CompleteClaimPayoutRequest request)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;

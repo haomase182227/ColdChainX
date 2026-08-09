@@ -85,14 +85,6 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
         }
         var evidenceImageUrl = uploadedUrls.Any() ? string.Join(",", uploadedUrls) : null;
 
-        var asn = await _context.InboundAsns
-            .Include(a => a.Order)
-                .ThenInclude(o => o.OrderDimension)
-            .FirstOrDefaultAsync(a => a.AsnId == request.AsnId, cancellationToken);
-
-        if (asn?.Order == null)
-            return Failure("ASN or linked order was not found.");
-
         if (asn.WarehouseId.HasValue && asn.WarehouseId.Value != warehouseId.Value)
             return Failure("ASN does not belong to current receiver warehouse.");
 

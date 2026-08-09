@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using System.Text.Encodings.Web;
 using ColdChainX.API.Services;
@@ -109,8 +109,6 @@ namespace ColdChainX.API.Controllers
 
         [AllowAnonymous]
         [HttpPost("google-login")]
-        [ProducesResponseType(typeof(ApiResponse<GoogleLoginResponse>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ApiResponse<GoogleLoginResponse>), StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> GoogleLogin(
             [FromBody] GoogleLoginRequest request,
             CancellationToken cancellationToken)
@@ -124,7 +122,6 @@ namespace ColdChainX.API.Controllers
 
         [AllowAnonymous]
         [HttpGet("google-auth")]
-        [ProducesResponseType(StatusCodes.Status302Found)]
         public IActionResult GoogleAuth()
         {
             if (!TryGetAbsoluteHttpUri(_googleSettings.RedirectUri, out var redirectUri) ||
@@ -167,7 +164,6 @@ namespace ColdChainX.API.Controllers
 
         [AllowAnonymous]
         [HttpGet("google/callback")]
-        [ProducesResponseType(StatusCodes.Status302Found)]
         public async Task<IActionResult> GoogleCallback(
             [FromQuery] string? code,
             [FromQuery] string? state,
@@ -230,8 +226,6 @@ namespace ColdChainX.API.Controllers
 
         [AllowAnonymous]
         [HttpPost("google/exchange")]
-        [ProducesResponseType(typeof(ApiResponse<GoogleLoginResponse>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ApiResponse<GoogleLoginResponse>), StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> ExchangeGoogleLoginCode(
             [FromBody] GoogleExchangeRequest request,
             CancellationToken cancellationToken)
@@ -284,9 +278,6 @@ namespace ColdChainX.API.Controllers
 
         [Authorize]
         [HttpPut("change-password")]
-        [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
         {
             var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)

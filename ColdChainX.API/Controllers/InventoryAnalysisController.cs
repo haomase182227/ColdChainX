@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -23,7 +23,6 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet("expiry-alerts")]
-        [ProducesResponseType(typeof(ApiResponse<PagedResult<ExpiryAlertResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetExpiryAlerts(
             [FromQuery] Guid? warehouseId = null,
             [FromQuery] int? warningDays = null,
@@ -46,7 +45,6 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet("aging-report")]
-        [ProducesResponseType(typeof(ApiResponse<PagedResult<AgingStockResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetAgingInventory(
             [FromQuery] Guid? warehouseId = null,
             [FromQuery] int thresholdDays = 90,
@@ -61,7 +59,6 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet("temperature-audits")]
-        [ProducesResponseType(typeof(ApiResponse<PagedResult<TempAuditResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetTemperatureAudits(
             [FromQuery] Guid? warehouseId = null,
             [FromQuery] int pageNumber = 1,

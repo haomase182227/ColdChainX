@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -25,7 +25,6 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet]
-        [ProducesResponseType(typeof(ApiResponse<PagedResult<InvoiceResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetInvoices(
             [FromQuery] string? status,
             [FromQuery] Guid? customerId = null,
@@ -59,7 +58,6 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet("{invoiceId:guid}")]
-        [ProducesResponseType(typeof(ApiResponse<InvoiceResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetInvoiceById([FromRoute] Guid invoiceId)
         {
             var userRole = User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
@@ -85,7 +83,6 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet("~/api/v1/orders/{orderId:guid}/invoices")]
-        [ProducesResponseType(typeof(ApiResponse<List<InvoiceResponse>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetInvoicesByOrder([FromRoute] Guid orderId)
         {
             var userRole = User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
@@ -112,7 +109,6 @@ namespace ColdChainX.API.Controllers
 
         [HttpPost("generate-periodic")]
         [Authorize(Roles = "Accountant,Admin,WarehouseWorker")]
-        [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GeneratePeriodicInvoices()
         {
             var result = await _invoiceService.GeneratePeriodicInvoicesAsync();
