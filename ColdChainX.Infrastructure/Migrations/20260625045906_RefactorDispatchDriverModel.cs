@@ -1,17 +1,14 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
 namespace ColdChainX.Infrastructure.Migrations
 {
-    /// <inheritdoc />
     public partial class RefactorDispatchDriverModel : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // ── STEP 1: Add new column + tables BEFORE touching legacy columns ──
             migrationBuilder.AddColumn<decimal>(
                 name: "estimated_duration_hours",
                 schema: "public",
@@ -108,7 +105,6 @@ namespace ColdChainX.Infrastructure.Migrations
                 columns: new[] { "trip_id", "driver_id" },
                 unique: true);
 
-            // ── STEP 2: Migrate existing single-driver assignments into trip_drivers ──
             migrationBuilder.Sql(@"
                 INSERT INTO public.trip_drivers (trip_driver_id, trip_id, driver_id, driver_role, assigned_duration_hours, created_at)
                 SELECT gen_random_uuid(), mt.trip_id, mt.driver_id, 'PRIMARY', 0, CURRENT_TIMESTAMP
@@ -120,18 +116,12 @@ namespace ColdChainX.Infrastructure.Migrations
                       WHERE td.trip_id = mt.trip_id AND td.driver_id = mt.driver_id
                   );");
 
-            // ── STEP 3: Drop legacy driver_id columns/relationships ──
-            // Use idempotent DROP COLUMN ... IF EXISTS CASCADE so we tolerate schema drift
-            // between environments (Azure may not have the EF-named FK/index on driver_id).
-            // CASCADE removes any dependent FK constraint and index automatically.
             migrationBuilder.Sql("ALTER TABLE public.master_trips DROP COLUMN IF EXISTS driver_id CASCADE;");
             migrationBuilder.Sql("ALTER TABLE public.vehicles DROP COLUMN IF EXISTS driver_id CASCADE;");
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            // ── Re-add legacy columns ──
             migrationBuilder.AddColumn<Guid>(
                 name: "driver_id",
                 schema: "public",
@@ -146,7 +136,6 @@ namespace ColdChainX.Infrastructure.Migrations
                 type: "uuid",
                 nullable: true);
 
-            // ── Copy the PRIMARY driver of each trip back into master_trips.driver_id ──
             migrationBuilder.Sql(@"
                 UPDATE public.master_trips mt
                 SET driver_id = sub.driver_id

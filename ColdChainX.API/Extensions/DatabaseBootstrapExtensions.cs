@@ -29,6 +29,69 @@ namespace ColdChainX.API.Extensions
 
             try
             {
+                var sqlWidenColumns = @"DO $$
+BEGIN
+    -- Widen status columns to varchar(50) across all workflow tables
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'transport_orders' AND column_name = 'status') THEN
+        EXECUTE 'ALTER TABLE public.transport_orders ALTER COLUMN status TYPE character varying(50)';
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'claims' AND column_name = 'status') THEN
+        EXECUTE 'ALTER TABLE public.claims ALTER COLUMN status TYPE character varying(50)';
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'claims' AND column_name = 'fault_owner') THEN
+        EXECUTE 'ALTER TABLE public.claims ALTER COLUMN fault_owner TYPE character varying(50)';
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'delivery_epods' AND column_name = 'status') THEN
+        EXECUTE 'ALTER TABLE public.delivery_epods ALTER COLUMN status TYPE character varying(50)';
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'master_trips' AND column_name = 'status') THEN
+        EXECUTE 'ALTER TABLE public.master_trips ALTER COLUMN status TYPE character varying(50)';
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'return_slips' AND column_name = 'status') THEN
+        EXECUTE 'ALTER TABLE public.return_slips ALTER COLUMN status TYPE character varying(50)';
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'incident_reports' AND column_name = 'status') THEN
+        EXECUTE 'ALTER TABLE public.incident_reports ALTER COLUMN status TYPE character varying(50)';
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'penalty_bills' AND column_name = 'status') THEN
+        EXECUTE 'ALTER TABLE public.penalty_bills ALTER COLUMN status TYPE character varying(50)';
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'work_assignments' AND column_name = 'status') THEN
+        EXECUTE 'ALTER TABLE public.work_assignments ALTER COLUMN status TYPE character varying(50)';
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'system_configs' AND column_name = 'status') THEN
+        EXECUTE 'ALTER TABLE public.system_configs ALTER COLUMN status TYPE character varying(50)';
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'lpns' AND column_name = 'status') THEN
+        EXECUTE 'ALTER TABLE public.lpns ALTER COLUMN status TYPE character varying(50)';
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'invoices' AND column_name = 'status') THEN
+        EXECUTE 'ALTER TABLE public.invoices ALTER COLUMN status TYPE character varying(50)';
+    END IF;
+END $$;";
+
+                logger.LogInformation("Applying column length patches (varchar(50))...");
+                await db.Database.ExecuteSqlRawAsync(sqlWidenColumns);
+                logger.LogInformation("Column length patches applied.");
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to apply column length patches.");
+            }
+
+            try
+            {
                 var sqlRename = @"DO $$
 DECLARE
     colname text;
@@ -79,7 +142,6 @@ END $$;";
                 logger.LogInformation("Applying DB rename/compatibility SQL...");
                 await db.Database.ExecuteSqlRawAsync(sqlRename);
                 logger.LogInformation("DB rename/compatibility SQL executed.");
-                // Ensure common user columns exist (idempotent)
                 var sqlEnsureUserCols = @"DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='users') THEN
@@ -296,7 +358,6 @@ END $$;";
 
             try
             {
-                // Seed Users using EF Core
                 var adminExists = await db.Users.AnyAsync(u => u.UserId == Guid.Parse("11111111-1111-1111-1111-111111111111"));
                 if (!adminExists)
                 {
@@ -381,7 +442,6 @@ END $$;";
                 logger.LogError(ex, "Failed to seed default users.");
             }
 
-            // Seed fleet sample data (Vehicle + Drivers) for the new TripDriver dispatch flow.
             try
             {
                 var vehicleId = Guid.Parse("77777777-7777-7777-7777-777777777777");
@@ -434,7 +494,6 @@ END $$;";
                 {
                     if (await db.Drivers.AnyAsync(d => d.DriverId == s.DriverId)) continue;
 
-                    // Avoid linking to a user already taken by another driver.
                     var userId = s.UserId.HasValue && !await db.Drivers.AnyAsync(d => d.UserId == s.UserId)
                         ? s.UserId
                         : null;

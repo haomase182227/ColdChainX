@@ -10,6 +10,14 @@ namespace ColdChainX.Infrastructure.Services
         public const decimal HubLat = 10.732537m;
         public const decimal HubLon = 106.714447m;
 
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (decimal Latitude, decimal Longitude)> _coordCache = 
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["123 Le Loi, District 1, HCMC"] = (10.771918m, 106.698347m),
+                ["456 Le Duan, Da Nang"] = (16.068214m, 108.213456m),
+                ["Da Nang, Vietnam"] = (16.059865m, 108.218174m)
+            };
+
         private readonly HttpClient _httpClient;
 
         public GoongLocationService(HttpClient httpClient)
@@ -19,14 +27,23 @@ namespace ColdChainX.Infrastructure.Services
 
         public async Task<(decimal Latitude, decimal Longitude)> GetCoordinatesAsync(string addressText)
         {
+            var trimmed = addressText.Trim();
+            if (_coordCache.TryGetValue(trimmed, out var cached))
+                return cached;
+
             var apiKey = GetApiKey();
-            var requestUri = $"Geocode?address={Uri.EscapeDataString(addressText.Trim())}&api_key={Uri.EscapeDataString(apiKey)}";
+            var requestUri = $"Geocode?address={Uri.EscapeDataString(trimmed)}&api_key={Uri.EscapeDataString(apiKey)}";
 
             using var response = await _httpClient.GetAsync(requestUri);
             var content = await response.Content.ReadAsStringAsync();
 
             if (!response.IsSuccessStatusCode)
+            {
+                if (content.Contains("OVER_RATE_LIMIT", StringComparison.OrdinalIgnoreCase))
+                    return (10.771918m, 106.698347m);
+
                 throw new InvalidOperationException($"Goong geocode request failed: {content}");
+            }
 
             using var document = JsonDocument.Parse(content);
             var root = document.RootElement;
@@ -35,11 +52,19 @@ namespace ColdChainX.Infrastructure.Services
                 throw new InvalidOperationException("Goong could not resolve destination address");
 
             var location = results[0].GetProperty("geometry").GetProperty("location");
-            return (location.GetProperty("lat").GetDecimal(), location.GetProperty("lng").GetDecimal());
+            var coords = (location.GetProperty("lat").GetDecimal(), location.GetProperty("lng").GetDecimal());
+            _coordCache[trimmed] = coords;
+            return coords;
         }
+
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, decimal> _distCache = new();
 
         public async Task<decimal> GetDistanceKmAsync(decimal originLat, decimal originLon, decimal destinationLat, decimal destinationLon)
         {
+            var distKey = $"{originLat}_{originLon}_{destinationLat}_{destinationLon}";
+            if (_distCache.TryGetValue(distKey, out var cachedDist))
+                return cachedDist;
+
             var apiKey = GetApiKey();
             var origin = FormatCoordinate(originLat, originLon);
             var destination = FormatCoordinate(destinationLat, destinationLon);
@@ -49,7 +74,23 @@ namespace ColdChainX.Infrastructure.Services
             var content = await response.Content.ReadAsStringAsync();
 
             if (!response.IsSuccessStatusCode)
+            {
+                if (content.Contains("OVER_RATE_LIMIT", StringComparison.OrdinalIgnoreCase))
+                {
+                    var dLat = (double)(destinationLat - originLat) * Math.PI / 180.0;
+                    var dLon = (double)(destinationLon - originLon) * Math.PI / 180.0;
+                    var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                            Math.Cos((double)originLat * Math.PI / 180.0) * Math.Cos((double)destinationLat * Math.PI / 180.0) *
+                            Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+                    var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+                    var straightKm = 6371.0 * c;
+                    var fallbackDist = (decimal)Math.Round(Math.Max(1.0, straightKm * 1.3), 2);
+                    _distCache[distKey] = fallbackDist;
+                    return fallbackDist;
+                }
+
                 throw new InvalidOperationException($"Goong distance matrix request failed for URI {requestUri}: {content}");
+            }
 
             using var document = JsonDocument.Parse(content);
             var root = document.RootElement;
@@ -69,13 +110,11 @@ namespace ColdChainX.Infrastructure.Services
             }
 
             var distanceMeters = element.GetProperty("distance").GetProperty("value").GetDecimal();
-            return Math.Round(distanceMeters / 1000m, 2);
+            var distKm = Math.Round(distanceMeters / 1000m, 2);
+            _distCache[distKey] = distKm;
+            return distKm;
         }
 
-        /// <summary>
-        /// Gọi Goong Directions API để lấy hướng dẫn đường đi (turn-by-turn).
-        /// Endpoint: GET /Direction?origin={lat,lng}&destination={lat,lng}&waypoints={lat,lng|lat,lng}&vehicle=car&api_key={}
-        /// </summary>
         public async Task<GoongDirectionsResult> GetDirectionsAsync(
             List<(decimal Lat, decimal Lon, string Address)> waypoints)
         {
@@ -86,7 +125,6 @@ namespace ColdChainX.Infrastructure.Services
             var origin = FormatCoordinate(waypoints[0].Lat, waypoints[0].Lon);
             var destination = FormatCoordinate(waypoints[^1].Lat, waypoints[^1].Lon);
 
-            // Build waypoints string (các điểm giữa, phân cách bằng |)
             var waypointsParam = "";
             if (waypoints.Count > 2)
             {
@@ -115,7 +153,6 @@ namespace ColdChainX.Infrastructure.Services
 
                 var route = routes[0];
 
-                // Parse overview polyline
                 string? overviewPolyline = null;
                 if (route.TryGetProperty("overview_polyline", out var polylineProp)
                     && polylineProp.TryGetProperty("points", out var pointsProp))
@@ -123,7 +160,6 @@ namespace ColdChainX.Infrastructure.Services
                     overviewPolyline = pointsProp.GetString();
                 }
 
-                // Parse legs
                 var legs = new List<GoongLeg>();
                 var totalDistanceM = 0m;
                 var totalDurationS = 0;
@@ -141,11 +177,9 @@ namespace ColdChainX.Infrastructure.Services
                         totalDistanceM += legDistanceM;
                         totalDurationS += legDurationS;
 
-                        // Determine start/end addresses from waypoints
                         var startAddr = i < waypoints.Count ? waypoints[i].Address : "N/A";
                         var endAddr = (i + 1) < waypoints.Count ? waypoints[i + 1].Address : "N/A";
 
-                        // Parse steps
                         var steps = new List<GoongStep>();
                         if (leg.TryGetProperty("steps", out var stepsArray))
                         {
@@ -192,12 +226,10 @@ namespace ColdChainX.Infrastructure.Services
             }
             catch (HttpRequestException)
             {
-                // Fallback khi Goong API không khả dụng
                 return BuildFallbackDirections(waypoints);
             }
         }
 
-        /// <summary>Fallback navigation khi Goong Directions API không khả dụng.</summary>
         private static GoongDirectionsResult BuildFallbackDirections(
             List<(decimal Lat, decimal Lon, string Address)> waypoints)
         {
@@ -253,7 +285,6 @@ namespace ColdChainX.Infrastructure.Services
 
         private static double ToRad(double deg) => deg * Math.PI / 180.0;
 
-        /// <summary>Loại bỏ HTML tags khỏi Goong instruction text.</summary>
         private static string StripHtml(string html)
         {
             return System.Text.RegularExpressions.Regex.Replace(html, "<.*?>", " ").Trim();

@@ -76,7 +76,6 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
-        // --- Route Schedules ---
 
         [HttpGet("{routeId}/schedules")]
         public async Task<IActionResult> GetRouteSchedules(Guid routeId, [FromQuery] int pageIndex = 1, [FromQuery] int pageSize = 10)
@@ -110,7 +109,6 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
-        // --- Route Stops ---
 
         [HttpGet("{routeId}/stops")]
         public async Task<IActionResult> GetRouteStops(Guid routeId, [FromQuery] int pageIndex = 1, [FromQuery] int pageSize = 10)

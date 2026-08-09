@@ -24,7 +24,6 @@ public class PdfGeneratorService : IPdfGeneratorService
 
         var htmlContent = await File.ReadAllTextAsync(templatePath);
 
-        // Compile and render Handlebars template
         var template = Handlebars.Compile(htmlContent);
         var finalHtml = template(data);
 
@@ -36,7 +35,6 @@ public class PdfGeneratorService : IPdfGeneratorService
             executablePath = installedBrowser.GetExecutablePath();
         }
 
-        // Generate PDF
         await using var browser = await Puppeteer.LaunchAsync(new LaunchOptions
         {
             Headless = true,

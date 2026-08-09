@@ -24,7 +24,6 @@ namespace ColdChainX.API.Swagger
             var path = context.ApiDescription.RelativePath?.TrimEnd('/');
             if (path == null) return;
 
-            // Route matching for api/v1/warehouse-receipts/orders/{orderId}/qc or completion
             if (path.StartsWith("api/v1/warehouse-receipts/orders/{orderId}", StringComparison.OrdinalIgnoreCase))
             {
                 var orderIdParam = operation.Parameters?.FirstOrDefault(p => string.Equals(p.Name, "orderId", StringComparison.OrdinalIgnoreCase));

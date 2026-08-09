@@ -1,8 +1,5 @@
 namespace ColdChainX.Core.Enums;
 
-/// <summary>
-/// Operational impact level of an incident.
-/// </summary>
 public enum IncidentSeverity
 {
     LOW = 1,

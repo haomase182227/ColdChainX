@@ -37,18 +37,15 @@ namespace ColdChainX.Application.Features.Dispatch.Commands
                 if (trip.Status != "COMPLETED")
                     return ApiResponse<bool>.Failure("Trip must be COMPLETED to be reconciled.", 400);
 
-                // Calculate expected COD
                 decimal expectedCod = trip.TransportOrders
                     .SelectMany(o => o.DeliveryEpods)
                     .Where(e => e.PaymentMethod == "CASH" && e.PaymentStatus == "PAID") // Or collected
                     .Sum(e => e.CodAmountPaid ?? 0); 
 
-                // Compare remitted with expected
                 if (request.RemittedAmount < expectedCod)
                 {
                     decimal shortage = expectedCod - request.RemittedAmount;
 
-                    // Find driver
                     var tripDriver = trip.TripDrivers.FirstOrDefault(d => d.DriverRole == "PRIMARY") ?? trip.TripDrivers.FirstOrDefault();
                     Guid? driverUserId = tripDriver?.Driver?.UserId;
                     

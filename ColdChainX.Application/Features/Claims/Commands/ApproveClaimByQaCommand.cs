@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MediatR;
@@ -20,6 +21,7 @@ public class ApproveClaimByQaCommand : IRequest<ApiResponse<object>>
     public Guid QaUserId { get; set; }
     
     public string? Note { get; set; }
+    public decimal? ApprovedAmount { get; set; }
 }
 
 public class ApproveClaimByQaCommandHandler : IRequestHandler<ApproveClaimByQaCommand, ApiResponse<object>>
@@ -40,7 +42,16 @@ public class ApproveClaimByQaCommandHandler : IRequestHandler<ApproveClaimByQaCo
         if (claim == null)
             throw new NotFoundException($"Không tìm thấy yêu cầu bồi thường '{request.ClaimId}'.");
 
-        // Bước 2: Dispatcher / QA đánh giá lỗi IoT Log, bấm [Duyệt lỗi] -> Đẩy thẳng cho Kế toán (Accountant)
+        if (claim.Status == "RESOLVED" || claim.Status == "REJECTED" || claim.Status == "RESOLVED_PAID" || claim.Status == "CLOSED")
+            throw new ConflictException("Claim is not in a resolvable status (Claim is already finalized).");
+
+        var resolvableStatuses = new[] { "OPEN", "PENDING_REVIEW", "PENDING_DISPATCHER_REVIEW", "APPROVED" };
+        if (!resolvableStatuses.Contains(claim.Status ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+            throw new ConflictException("Claim is not in a resolvable status (Claim is already resolved or paid).");
+
+        if (request.ApprovedAmount.HasValue && request.ApprovedAmount.Value < 0)
+            throw new ValidationException("Approved amount cannot be negative.");
+
         claim.Status = "PENDING_ACCOUNTANT_REVIEW";
         claim.ResolutionNote = $"[Bước 2 - Dispatcher/QA Approved by {request.QaUserId}]: Đã kiểm tra biểu đồ nhiệt độ (IoT Log). Bấm [Duyệt lỗi]. Hồ sơ lập tức búng thẳng sang Dashboard của Kế Toán (Accountant)! Ghi chú: {request.Note}";
         claim.ResolvedAt = DateTime.UtcNow;

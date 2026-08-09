@@ -35,13 +35,11 @@ public class CloseShiftCommandHandler : IRequestHandler<CloseShiftCommand, ApiRe
 
     public async Task<ApiResponse<object>> Handle(CloseShiftCommand request, CancellationToken cancellationToken)
     {
-        // 1. Fetch Warehouse and validate
         var warehouse = await _context.Warehouses
             .FirstOrDefaultAsync(w => w.WarehouseId == request.WarehouseId, cancellationToken);
         if (warehouse == null)
             throw new NotFoundException($"Không tìm thấy kho bãi với ID '{request.WarehouseId}'.");
 
-        // 2. Fetch Trip and validate existence
         var trip = await _context.MasterTrips
             .FirstOrDefaultAsync(t => t.TripId == request.TripId, cancellationToken);
         if (trip == null)
@@ -50,12 +48,10 @@ public class CloseShiftCommandHandler : IRequestHandler<CloseShiftCommand, ApiRe
         if (trip.Status == "COMPLETED" || trip.Status == "CANCELLED")
             throw new ValidationException($"Chuyến xe này đã ở trạng thái {trip.Status}, không thể đóng ca.");
 
-        // 3. Lấy danh sách tài xế phân công
         var tripDrivers = await _context.TripDrivers
             .Where(td => td.TripId == trip.TripId)
             .ToListAsync(cancellationToken);
 
-        // 4. Validate all orders have been completed / handed over (HandoverConfirmedAt != null)
         var pendingOrders = await _context.TransportOrders
             .Where(o => o.MasterTripId == trip.TripId)
             .ToListAsync(cancellationToken);
@@ -89,11 +85,9 @@ public class CloseShiftCommandHandler : IRequestHandler<CloseShiftCommand, ApiRe
             using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
             try
             {
-                // 5. Update Trip
                 trip.Status = "COMPLETED";
                 trip.CompletedAt = closeTime;
 
-                // 6. Release Vehicle and update location
                 if (trip.VehicleId != null)
                 {
                     var vehicle = await _context.Vehicles
@@ -105,7 +99,6 @@ public class CloseShiftCommandHandler : IRequestHandler<CloseShiftCommand, ApiRe
                     }
                 }
 
-                // 7. Release all Drivers and update location
                 foreach (var td in tripDrivers)
                 {
                     var d = await _context.Drivers
@@ -137,7 +130,6 @@ public class CloseShiftCommandHandler : IRequestHandler<CloseShiftCommand, ApiRe
                 await _context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
 
-                // 8. SignalR — Notify trip completed
                 await _deliveryEvents.NotifyTripCompletedAsync(
                     trip.TripId,
                     trip.TripId.ToString("N")[..8].ToUpper(),

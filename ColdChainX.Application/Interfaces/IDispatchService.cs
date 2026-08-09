@@ -8,46 +8,18 @@ namespace ColdChainX.Application.Interfaces;
 
 public interface IDispatchService
 {
-    // ═══════════════════════════════════════════════════════════════════════
-    //  API 1: AUTO-DISPATCH — Tự động ghép chuyến
-    //  API 1: MANUAL-DISPATCH — Ghép chuyến thủ công
-    // ═══════════════════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// Thủ công chọn đơn hàng IN_WAREHOUSE,
-    /// nhóm theo nhiệt độ + điểm đến, chọn xe/tài xế (giấy tờ còn hạn),
-    /// tính lộ trình TSP + Goong, sinh LIFO load plan, sinh hướng dẫn navigation.
-    /// </summary>
     Task<ManualDispatchResult> ManualDispatchAsync(ManualDispatchRequest request);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  API 2: START PICKING — Bắt đầu lấy hàng từ kho
-    // ═══════════════════════════════════════════════════════════════════════
 
-    /// <summary>Chuyển trip PLANNED → PICKING, thông báo loader bắt đầu lấy hàng.</summary>
     Task<StartPickingResult> StartPickingAsync(Guid tripId);
 
-    /// <summary>
-    /// Hủy chuyến đã ghép (ở bất kỳ giai đoạn nào trước khi hàng SHIPPING):
-    /// reset LPN về IN_STOCK (hàng về kho), đơn hàng về IN_STOCK, xe/tài xế về ACTIVE,
-    /// hủy seal và vô hiệu giấy đi đường. Chặn nếu có LPN đã ở trạng thái SHIPPING.
-    /// </summary>
     Task<CancelTripResult> CancelTripAsync(Guid tripId);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  API 3: IOT CHECK — Kiểm tra tín hiệu IoT xe
-    // ═══════════════════════════════════════════════════════════════════════
 
-    /// <summary>Kiểm tra tín hiệu IoT (GPS, nhiệt độ, battery) của xe.</summary>
     Task<VehicleIoTStatus> CheckVehicleIoTAsync(Guid vehicleId, Guid tripId);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  API 4: SEAL & DISPATCH — Kẹp chì + kiểm tra chất hàng
-    // ═══════════════════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// Kiểm tra tất cả đơn hàng đã chất lên xe chưa → kẹp chì → cấp E-Waybill.
-    /// </summary>
     Task<SealAndDispatchResult> SealAndDispatchAsync(Guid tripId, string sealCode, Guid sealedBy);
 
 }

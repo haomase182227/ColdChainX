@@ -5,10 +5,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace ColdChainX.Infrastructure.Migrations
 {
-    /// <inheritdoc />
     public partial class AddWarehouseColumnsAndSoftDelete : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<Guid>(
@@ -82,7 +80,6 @@ namespace ColdChainX.Infrastructure.Migrations
                 nullable: false,
                 defaultValue: "");
 
-            // Populate unique codes and default types for existing rows before applying the unique index
             migrationBuilder.Sql("UPDATE public.warehouses SET warehouse_code = 'WH-' || SUBSTR(warehouse_id::text, 1, 8) WHERE warehouse_code = '' OR warehouse_code IS NULL;");
             migrationBuilder.Sql("UPDATE public.warehouses SET warehouse_type = 'COLD' WHERE warehouse_type = '' OR warehouse_type IS NULL;");
 
@@ -94,46 +91,16 @@ namespace ColdChainX.Infrastructure.Migrations
                 unique: true,
                 filter: "\"deleted_at\" IS NULL");
 
-            // Commented out as they already exist in the target database from ERD.txt initialization
-            /*
-            migrationBuilder.CreateIndex(
-                name: "IX_drivers_user_id",
-                schema: "public",
-                table: "drivers",
-                column: "user_id");
-
-            migrationBuilder.AddForeignKey(
-                name: "fk_drivers_users",
-                schema: "public",
-                table: "drivers",
-                column: "user_id",
-                principalSchema: "public",
-                principalTable: "users",
-                principalColumn: "user_id");
-            */
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            /*
-            migrationBuilder.DropForeignKey(
-                name: "fk_drivers_users",
-                schema: "public",
-                table: "drivers");
-            */
 
             migrationBuilder.DropIndex(
                 name: "warehouses_warehouse_code_key",
                 schema: "public",
                 table: "warehouses");
 
-            /*
-            migrationBuilder.DropIndex(
-                name: "IX_drivers_user_id",
-                schema: "public",
-                table: "drivers");
-            */
 
             migrationBuilder.DropColumn(
                 name: "created_by",

@@ -39,7 +39,6 @@ public class PayoutClaimByAccountantCommandHandler : IRequestHandler<PayoutClaim
         if (claim == null)
             throw new NotFoundException($"Không tìm thấy yêu cầu bồi thường '{request.ClaimId}'.");
 
-        // Cho phép Kế toán xử lý hồ sơ từ Dispatcher chuyển sang (PENDING_ACCOUNTANT_REVIEW, PENDING_PAYOUT, hoặc OPEN)
         if (claim.Status != null && !claim.Status.StartsWith("PENDING", StringComparison.OrdinalIgnoreCase) && !claim.Status.Equals("OPEN", StringComparison.OrdinalIgnoreCase))
             throw new ApiException($"Yêu cầu bồi thường đang ở trạng thái '{claim.Status}'. Không nằm trong luồng chờ Kế toán chốt chi bồi thường.", 400);
 
@@ -53,7 +52,6 @@ public class PayoutClaimByAccountantCommandHandler : IRequestHandler<PayoutClaim
         decimal actualRefund = request.RefundAmount ?? 500000m; // Con số chốt bồi thường thực tế
         string txCode = request.PayoutTransactionCode ?? $"PTX-OUT-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}";
 
-        // Bước 4: Lập lệnh chi tiền mặt / chuyển khoản bồi thường (Cash Refund), chốt sổ vào PaymentTransactions
         var payoutTx = new PaymentTransaction
         {
             TransactionId = Guid.NewGuid(),
@@ -73,7 +71,6 @@ public class PayoutClaimByAccountantCommandHandler : IRequestHandler<PayoutClaim
         };
         _context.PaymentTransactions.Add(payoutTx);
 
-        // Nếu hạch toán là DRIVER_DEBT, tạo ngay phiếu trừ nợ/PenaltyBill cho tài xế hoặc lưu chốt công nợ
         if (string.Equals(claim.InternalChargebackOption, "DRIVER_DEBT", StringComparison.OrdinalIgnoreCase) && claim.Order != null)
         {
             var driverDebtBill = new PenaltyBill

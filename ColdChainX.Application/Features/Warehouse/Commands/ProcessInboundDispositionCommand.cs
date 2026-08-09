@@ -42,20 +42,17 @@ public class ProcessInboundDispositionCommandHandler : IRequestHandler<ProcessIn
         if (lpn == null)
             throw new NotFoundException("Kiện hàng LPN tương ứng không tồn tại trong DB.");
 
-        // Quét mã nhận tại HUB
         lpn.State = LpnState.RECEIVED_AT_HUB;
         lpn.UpdatedAt = DateTime.UtcNow;
 
         string dispositionAction;
         string? generatedClaimCode = null;
 
-        // Kiểm tra lý do trả hàng để tự động phân luồng (Disposition)
         bool isNoShow = (returnSlip.Reason != null && (returnSlip.Reason.Contains("NOSHOW", StringComparison.OrdinalIgnoreCase) || returnSlip.Reason.Contains("No-Show", StringComparison.OrdinalIgnoreCase)))
                      || (returnSlip.Order?.Status == "DELIVERY_FAILED");
 
         if (isNoShow)
         {
-            // Trường hợp No-Show: Hàng còn nguyên vẹn -> Đưa lại vào kho chờ ghép chuyến mới (manual-dispatch)
             lpn.State = LpnState.IN_STOCK;
             lpn.TripId = null; // Xóa TripId cũ để sẵn sàng cho manual-dispatch
             if (request.ReturnWarehouseId != Guid.Empty)
@@ -67,7 +64,6 @@ public class ProcessInboundDispositionCommandHandler : IRequestHandler<ProcessIn
                 returnSlip.Order.Status = "READY_FOR_ROUTING";
             }
             
-            // Reset thời gian lưu kho và SLA sau khi rớt lại (gia hạn thêm thời gian xử lý)
             lpn.InboundTime = DateTime.UtcNow;
             lpn.SlaDeadline = lpn.IsFastTrack ? DateTime.UtcNow.AddHours(12) : DateTime.UtcNow.AddHours(24);
 
@@ -75,7 +71,6 @@ public class ProcessInboundDispositionCommandHandler : IRequestHandler<ProcessIn
         }
         else
         {
-            // Trường hợp Reject (Hỏng / lỗi nhiệt độ / OS&D): Cô lập kiềm tỏa tang vật tại bãi
             lpn.State = LpnState.DISCREPANCY_HOLD;
             dispositionAction = "DISCREPANCY_HOLD (Hàng lỗi/từ chối OS&D -> Cách ly chờ xử lý riêng)";
         }

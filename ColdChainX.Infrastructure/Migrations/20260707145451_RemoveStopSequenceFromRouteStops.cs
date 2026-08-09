@@ -5,13 +5,10 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace ColdChainX.Infrastructure.Migrations
 {
-    /// <inheritdoc />
     public partial class RemoveStopSequenceFromRouteStops : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder) { }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropForeignKey(

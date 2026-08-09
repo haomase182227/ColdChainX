@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Advanced Shipping Notice</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+        .content table { width: 100%; border-collapse: collapse; }
+        .content th, .content td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h2>ADVANCED SHIPPING NOTICE (ASN)</h2>
+        <p>Code: {{Asn.AsnCode}}</p>
+    </div>
+    <div class="content">
+        <table>
+            <tr>
+                <th>Customer ID</th>
+                <td>{{Asn.CustomerId}}</td>
+            </tr>
+            <tr>
+                <th>Order ID</th>
+                <td>{{Asn.OrderId}}</td>
+            </tr>
+            <tr>
+                <th>Requested Drop-off</th>
+                <td>{{Asn.RequestedDropoffTime}}</td>
+            </tr>
+            <tr>
+                <th>Contact Phone</th>
+                <td>{{Asn.Phone}}</td>
+            </tr>
+            <tr>
+                <th>Status</th>
+                <td>{{Asn.Status}}</td>
+            </tr>
+        </table>
+        
+        <div style="margin-top: 30px; text-align: center;">
+            <p><strong>QR Code Value:</strong></p>
+            <p style="background-color: #f4f4f4; padding: 10px;">{{Asn.QrCodeValue}}</p>
+        </div>
+    </div>
+</body>
+</html>

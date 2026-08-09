@@ -145,7 +145,6 @@ namespace ColdChainX.Infrastructure.Repositories
                 .Include(u => u.Role)
                 .Include(u => u.Warehouse);
 
-            // If we explicitly search for Inactive/Deleted status, we must ignore the query filter
             if (status.HasValue && status.Value == ColdChainX.Core.Enums.UserStatus.Inactive)
             {
                 query = _db.Users.IgnoreQueryFilters()

@@ -25,23 +25,12 @@ public class CompleteTripLoadingCommandHandler : IRequestHandler<CompleteTripLoa
         _pdfService = pdfService;
     }
 
-    /// <summary>
-    /// Xac nhan toan bo chuyen da len xe — chuyen LPN tu LOADING_COMPLETED sang RELEASED.
-    ///
-    /// Precondition  : TAT CA LPN cua TripId phai o trang thai LOADING_COMPLETED
-    ///                 (moi LPN da duoc goi POST /api/Outbound/pick truoc do)
-    /// Postcondition : LPN.State == RELEASED
-    ///                 Trip.Status == LOADING_COMPLETED
-    ///
-    /// Sau buoc nay, goi POST /api/Dispatch/seal-and-dispatch/{tripId} de kep chi.
-    /// </summary>
     public async Task<CompleteTripLoadingResponse> Handle(CompleteTripLoadingCommand request, CancellationToken cancellationToken)
     {
         var trip = await _context.MasterTrips.FirstOrDefaultAsync(t => t.TripId == request.TripId, cancellationToken);
         if (trip == null)
             return new CompleteTripLoadingResponse { Success = false, Message = "Không tìm thấy chuyến hàng." };
 
-        // Lay TAT CA LPN cua chuyen theo TripId
         var allLpns = await _context.Lpns
             .Where(l => l.TripId == request.TripId)
             .ToListAsync(cancellationToken);
@@ -49,7 +38,6 @@ public class CompleteTripLoadingCommandHandler : IRequestHandler<CompleteTripLoa
         if (!allLpns.Any())
             return new CompleteTripLoadingResponse { Success = false, Message = "Chuyến hàng không có LPN nào." };
 
-        // Kiem tra toan bo LPN da duoc boc (LOADING_COMPLETED)
         var notDoneLpns = allLpns.Where(l => l.State != LpnState.LOADING_COMPLETED).ToList();
         if (notDoneLpns.Any())
         {
@@ -62,7 +50,6 @@ public class CompleteTripLoadingCommandHandler : IRequestHandler<CompleteTripLoa
             };
         }
 
-        // Chuyen tat ca LPN sang RELEASED
         foreach (var lpn in allLpns)
         {
             lpn.State = LpnState.RELEASED;
@@ -72,7 +59,6 @@ public class CompleteTripLoadingCommandHandler : IRequestHandler<CompleteTripLoa
         trip.Status = "LOADING_COMPLETED";
         await _context.SaveChangesAsync(cancellationToken);
 
-        // Publish events cho tat ca LPN
         foreach (var lpn in allLpns)
             await _mediator.Publish(new Events.LpnShippedEvent(lpn.OrderId, lpn.LpnId), cancellationToken);
 

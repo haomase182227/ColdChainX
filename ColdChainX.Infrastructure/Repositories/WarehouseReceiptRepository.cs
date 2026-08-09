@@ -40,7 +40,6 @@ namespace ColdChainX.Infrastructure.Repositories
 
         public async Task<List<WarehouseReceipt>> GetActiveReceiptsByWarehouseIdAsync(Guid warehouseId)
         {
-            // Fetch receipts that are completed/active at the warehouse
             return await _db.WarehouseReceipts
                 .Where(r => r.WarehouseId == warehouseId)
                 .Include(r => r.Lpns)

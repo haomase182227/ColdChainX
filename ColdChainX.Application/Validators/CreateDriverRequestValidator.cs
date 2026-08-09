@@ -28,7 +28,6 @@ namespace ColdChainX.Application.Validators
                 .MaximumLength(50).WithMessage("Username must not exceed 50 characters")
                 .When(x => !string.IsNullOrWhiteSpace(x.Username));
 
-            // License validation: if one field is provided, others should be too
             When(x => !string.IsNullOrWhiteSpace(x.LicenseNumber) ||
                       !string.IsNullOrWhiteSpace(x.LicenseClass) ||
                       x.IssueDate.HasValue ||

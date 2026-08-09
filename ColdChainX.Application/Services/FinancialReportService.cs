@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using ColdChainX.Application.DTOs.FinancialReports;
 using ColdChainX.Application.Interfaces;
+using ColdChainX.Shared.Exceptions;
 using ColdChainX.Shared.Responses;
 
 namespace ColdChainX.Application.Services
@@ -28,13 +29,17 @@ namespace ColdChainX.Application.Services
         {
             try
             {
+                if (fromDate.HasValue && toDate.HasValue && fromDate.Value > toDate.Value)
+                {
+                    throw new ValidationException("FromDate must be earlier than ToDate");
+                }
+
                 var start = fromDate ?? DateTime.UtcNow.AddDays(-30);
                 var end = toDate ?? DateTime.UtcNow;
 
                 var startOnly = DateOnly.FromDateTime(start);
                 var endOnly = DateOnly.FromDateTime(end);
 
-                // 1. Invoices
                 var invoices = await _db.Invoices
                     .Where(i => i.IssuedDate >= startOnly && i.IssuedDate <= endOnly)
                     .ToListAsync();
@@ -44,13 +49,11 @@ namespace ColdChainX.Application.Services
                 var paidInvoicesCount = invoices.Count(i => i.Status == "PAID");
                 var unpaidInvoicesCount = invoices.Count(i => i.Status != "PAID");
 
-                // 2. COD Transactions
                 var codTransactions = await _db.PaymentTransactions
                     .Where(t => t.TransactionType == "IN" && t.Status == "COMPLETED" && t.CreatedAt >= start && t.CreatedAt <= end)
                     .ToListAsync();
                 var totalCodCollected = codTransactions.Sum(t => t.Amount);
 
-                // 3. Claims Payout
                 var claimTransactions = await _db.PaymentTransactions
                     .Where(t => t.TransactionType == "OUT" && t.ClaimId != null && t.Status == "COMPLETED" && t.CreatedAt >= start && t.CreatedAt <= end)
                     .ToListAsync();
@@ -59,7 +62,6 @@ namespace ColdChainX.Application.Services
                 var claimsCount = await _db.Claims
                     .CountAsync(c => c.CreatedAt >= start && c.CreatedAt <= end);
 
-                // 4. Incident Reimbursements
                 var incidentExpenses = await _db.IncidentReports
                     .Where(i => (i.ExpenseStatus == "REIMBURSED" || i.ExpenseStatus == "APPROVED") && i.ReportedAt >= start && i.ReportedAt <= end)
                     .ToListAsync();
@@ -95,6 +97,11 @@ namespace ColdChainX.Application.Services
 
         public async Task<byte[]> ExportVatInvoicesCsvAsync(DateTime? fromDate, DateTime? toDate, string? status)
         {
+            if (fromDate.HasValue && toDate.HasValue && fromDate.Value > toDate.Value)
+            {
+                throw new ValidationException("FromDate must be earlier than ToDate");
+            }
+
             var start = fromDate ?? DateTime.UtcNow.AddDays(-30);
             var end = toDate ?? DateTime.UtcNow;
             var startOnly = DateOnly.FromDateTime(start);
@@ -115,10 +122,8 @@ namespace ColdChainX.Application.Services
             var list = await query.OrderByDescending(i => i.IssuedDate).ToListAsync();
 
             var sb = new StringBuilder();
-            // UTF-8 BOM for Microsoft Excel
             sb.Append('\uFEFF');
 
-            // Header
             sb.AppendLine("STT,Mã Hóa Đơn,Số HĐ GTGT (VAT),Khách Hàng,Mã Số Thuế,Mã Vận Đơn (Tracking),Ngày Phát Hành,Tiền Trước Thuế (VND),Thuế Suất (%),Tiền Thuế VAT (VND),Tổng Tiền Thanh Toán (VND),Trạng Thái,Link PDF Hóa Đơn");
 
             int index = 1;
@@ -141,6 +146,11 @@ namespace ColdChainX.Application.Services
 
         public async Task<byte[]> ExportCodSettlementCsvAsync(DateTime? fromDate, DateTime? toDate, Guid? driverId)
         {
+            if (fromDate.HasValue && toDate.HasValue && fromDate.Value > toDate.Value)
+            {
+                throw new ValidationException("FromDate must be earlier than ToDate");
+            }
+
             var start = fromDate ?? DateTime.UtcNow.AddDays(-30);
             var end = toDate ?? DateTime.UtcNow;
 
@@ -179,6 +189,11 @@ namespace ColdChainX.Application.Services
 
         public async Task<byte[]> ExportClaimsExpensesCsvAsync(DateTime? fromDate, DateTime? toDate)
         {
+            if (fromDate.HasValue && toDate.HasValue && fromDate.Value > toDate.Value)
+            {
+                throw new ValidationException("FromDate must be earlier than ToDate");
+            }
+
             var start = fromDate ?? DateTime.UtcNow.AddDays(-30);
             var end = toDate ?? DateTime.UtcNow;
 

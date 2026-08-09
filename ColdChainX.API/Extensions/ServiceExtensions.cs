@@ -37,10 +37,8 @@ namespace ColdChainX.API.Extensions
             services.Configure<GoogleAuthSettings>(
                 configuration.GetSection(GoogleAuthSettings.SectionName));
 
-            // Required for IHttpContextAccessor used in SimplePdfService to build absolute PDF URLs
             services.AddHttpContextAccessor();
 
-            // CORS
             var allowedOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
                 ?? Array.Empty<string>();
             services.AddCors(options =>
@@ -73,10 +71,7 @@ namespace ColdChainX.API.Extensions
 
             services.AddDbContext<ApplicationDbContext>(options =>
             {
-                options.UseNpgsql(connectionString, b => b.EnableRetryOnFailure(
-                    maxRetryCount: 5,
-                    maxRetryDelay: TimeSpan.FromSeconds(10),
-                    errorCodesToAdd: null));
+                options.UseNpgsql(connectionString);
                 options.ConfigureWarnings(warnings => 
                     warnings.Ignore(new Microsoft.Extensions.Logging.EventId(10622)));
             });
@@ -162,7 +157,6 @@ namespace ColdChainX.API.Extensions
                 services.AddHostedService<FleetComplianceWorker>();
             }
             
-            // Dispatch and Load Planning
             services.AddHttpClient<ColdChainX.Infrastructure.Integration.GeminiLoadOptimizerClient>();
             services.AddScoped<ICargoCompatibilityService, CargoCompatibilityService>();
             services.AddScoped<IDispatchService, DispatchService>();
@@ -187,9 +181,7 @@ namespace ColdChainX.API.Extensions
                     options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
                 });
 
-            // Removed duplicate validator registration line
 
-            // JWT Authentication
             var jwt = configuration.GetSection("JwtSettings").Get<JwtSettings>()
                       ?? throw new InvalidOperationException("JwtSettings is missing.");
             var key = Encoding.UTF8.GetBytes(jwt.Key);

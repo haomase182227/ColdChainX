@@ -32,8 +32,17 @@ public class ScheduleBookingStatusWorker : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to close route schedules after cut-off.");
-                await Task.Delay(CheckInterval, stoppingToken);
+                if (!stoppingToken.IsCancellationRequested)
+                {
+                    try
+                    {
+                        _logger.LogError(ex, "Failed to close route schedules after cut-off.");
+                    }
+                    catch (ObjectDisposedException) { }
+                }
+                
+                try { await Task.Delay(CheckInterval, stoppingToken); }
+                catch (OperationCanceledException) { break; }
             }
         }
     }
@@ -59,8 +68,16 @@ public class ScheduleBookingStatusWorker : BackgroundService
             schedule.Status = "INACTIVE";
 
         await db.SaveChangesAsync(cancellationToken);
-        _logger.LogInformation(
-            "Closed booking for {Count} route schedule(s) after cut-off.",
-            expiredSchedules.Count);
+        
+        if (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                _logger.LogInformation(
+                    "Closed booking for {Count} route schedule(s) after cut-off.",
+                    expiredSchedules.Count);
+            }
+            catch (ObjectDisposedException) { }
+        }
     }
 }

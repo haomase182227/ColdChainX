@@ -23,8 +23,6 @@ public class GeminiLoadOptimizerClient
             throw new InvalidOperationException("Gemini API Key is not configured.");
         }
 
-        // Construct a prompt based on vehicle dimensions (simulated from MaxCbm) and orders
-        // Note: For actual 3D layout, we mock dimensions L x W x H if they are not present.
         var vehicleLength = 3.0m;
         var vehicleWidth = 1.8m;
         var vehicleHeight = vehicle.MaxCbm / (vehicleLength * vehicleWidth);
@@ -37,7 +35,6 @@ Orders to pack:
 ";
         foreach (var order in orders)
         {
-            // Calculate a mock dimension based on expected Cbm
             var dim = Math.Pow((double)(order.OrderDimension?.ExpectedCbm ?? 0m), 1.0 / 3.0);
             prompt += $"- OrderId: {order.OrderId}, Item: {order.ItemName}, Quantity: {order.Quantity}, CBM: {(order.OrderDimension?.ExpectedCbm ?? 0m)}, Weight: {(order.OrderDimension?.ExpectedWeightKg ?? 0m)}kg, DestLocationId: {order.DestLocation}\n";
         }
@@ -109,13 +106,11 @@ Please provide the loading instructions in JSON format indicating if they all fi
             throw new Exception($"All Gemini models failed. Errors:\n{string.Join("\n", errors)}");
         }
         
-        // Extract the JSON text from the response
         try
         {
             using var document = JsonDocument.Parse(responseContent);
             var text = document.RootElement.GetProperty("candidates")[0].GetProperty("content").GetProperty("parts")[0].GetProperty("text").GetString();
             
-            // Clean markdown block if present
             if (text != null && text.StartsWith("```json"))
             {
                 text = text.Replace("```json", "").Replace("```", "").Trim();

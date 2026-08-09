@@ -50,7 +50,6 @@ public class PutawayLpnCommandHandler : IRequestHandler<PutawayLpnCommand, Putaw
             return new PutawayLpnResponse { Success = false, Message = "WarehouseId is required." };
         }
 
-        // Kho được chọn từ danh sách kho hiện có — chỉ kiểm tra tồn tại để tránh lỗi khóa ngoại.
         var warehouseExists = await _context.Warehouses.AnyAsync(w => w.WarehouseId == request.WarehouseId, cancellationToken);
         if (!warehouseExists)
         {
@@ -65,7 +64,6 @@ public class PutawayLpnCommandHandler : IRequestHandler<PutawayLpnCommand, Putaw
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        // Publish Event
         await _mediator.Publish(new Events.LpnPutawayCompletedEvent(lpn.OrderId, lpn.LpnId), cancellationToken);
 
         return new PutawayLpnResponse 

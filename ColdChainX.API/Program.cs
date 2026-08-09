@@ -36,7 +36,6 @@ builder.Services.AddSingleton(Channel.CreateUnbounded<TelemetryData>(new Unbound
 }));
 builder.Services.AddSingleton<RedisService>();
 
-// Đã bật lại TelemetryMqttWorker
 if (configuration.GetValue("HostedWorkers:TelemetryMqtt", true))
 {
     builder.Services.AddHostedService<TelemetryMqttWorker>();
@@ -47,7 +46,6 @@ if (configuration.GetValue("HostedWorkers:TelemetryProcessor", true))
     builder.Services.AddHostedService<TelemetryProcessorWorker>();
 }
 
-// Đã bật lại IotWatchdogWorker
 if (configuration.GetValue("HostedWorkers:IotWatchdog", true))
 {
     builder.Services.AddHostedService<IotWatchdogWorker>();
@@ -90,6 +88,7 @@ builder.Services.AddSwaggerGen(c =>
     c.OperationFilter<RegisterOperationFilter>();
     c.OperationFilter<CreateCustomerOperationFilter>();
     c.OperationFilter<CreateDriverOperationFilter>();
+    c.OperationFilter<CommonApiResponsesOperationFilter>();
     c.OperationFilter<RemoveAuthFromCreateAccountsFilter>();
     c.OperationFilter<DispatchOperationFilter>();
     c.OperationFilter<WarehouseReceiptOperationFilter>();
@@ -155,9 +154,6 @@ else
 
 app.UseMiddleware<ExceptionMiddleware>();
 
-// Cần thiết khi deploy trên Render/cloud (reverse proxy).
-// Đọc X-Forwarded-Proto & X-Forwarded-Host để Request.Scheme và Request.Host
-// phản ánh đúng URL công khai thay vì địa chỉ nội bộ của proxy.
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor
@@ -167,7 +163,6 @@ app.UseForwardedHeaders(new ForwardedHeadersOptions
     KnownProxies = { }
 });
 
-// Enable Swagger in all environments for testing
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
@@ -176,8 +171,6 @@ app.UseSwaggerUI(c =>
 });
 
 app.UseRouting();
-// Enable body buffering for PayOS webhook HMAC verification
-// (applies only to the webhook endpoint to avoid memory overhead on other endpoints)
 app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/api/payments/bank-webhook"))
@@ -190,7 +183,6 @@ app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Health check endpoint
 app.MapGet("/", () => Results.Ok(new
 {
     status = "healthy",

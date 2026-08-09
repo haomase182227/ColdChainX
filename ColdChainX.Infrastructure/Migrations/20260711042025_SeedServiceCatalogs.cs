@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -7,10 +7,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace ColdChainX.Infrastructure.Migrations
 {
-    /// <inheritdoc />
     public partial class SeedServiceCatalogs : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.InsertData(
@@ -31,7 +29,6 @@ namespace ColdChainX.Infrastructure.Migrations
                 values: new object[] { new Guid("44444444-4444-4444-4444-444444444444"), 100000m, "Bảo hiểm rủi ro hư hỏng hàng do biến thiên nhiệt độ", true, true, "PHI_BAO_HIEM", "Phí bảo hiểm hàng lạnh", null });
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DeleteData(

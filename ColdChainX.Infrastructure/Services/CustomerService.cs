@@ -19,6 +19,12 @@ namespace ColdChainX.Infrastructure.Services
 
         public async Task<ApiResponse<PagedResult<CustomerResponse>>> GetCustomersAsync(int pageNumber, int pageSize)
         {
+            if (pageNumber <= 0)
+                return ApiResponse<PagedResult<CustomerResponse>>.Failure("Page number must be greater than 0", 400);
+
+            if (pageSize <= 0)
+                return ApiResponse<PagedResult<CustomerResponse>>.Failure("Page size must be greater than 0", 400);
+
             var query = _db.Customers
                 .AsNoTracking()
                 .Include(c => c.TransportOrders)
@@ -45,7 +51,7 @@ namespace ColdChainX.Infrastructure.Services
                 .FirstOrDefaultAsync(c => c.CustomerId == customerId);
 
             if (customer == null)
-                return ApiResponse<CustomerResponse>.Failure("Customer not found");
+                return ApiResponse<CustomerResponse>.Failure("Customer not found", 404);
 
             return ApiResponse<CustomerResponse>.SuccessResponse(ToCustomerResponse(customer), "Customer retrieved successfully");
         }

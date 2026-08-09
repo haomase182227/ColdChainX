@@ -68,7 +68,6 @@ public class GetTripDocumentsQueryHandler : IRequestHandler<GetTripDocumentsQuer
             throw new NotFoundException("Không tìm thấy đơn hàng nào thuộc sở hữu của Quý khách trên chuyến xe này.");
         }
 
-        // Tự động suy luận thông tin điểm hạ hàng (Address) từ chính đơn hàng của Khách (kể cả khi không cần truyền StopId)
         if ((!request.StopId.HasValue || request.StopId == Guid.Empty) && customerOrders.Any())
         {
             var destAddresses = customerOrders

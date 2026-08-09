@@ -3,22 +3,15 @@ using System.Collections.Generic;
 
 namespace ColdChainX.Application.DTOs.Incident
 {
-    /// <summary>
-    /// [Luồng 8 — Bước 2] Yêu cầu điều xe lạnh thay thế đến hiện trường sự cố (Sang xe).
-    /// </summary>
     public class DispatchRescueRequest
     {
-        /// <summary>Xe lạnh thay thế được điều đến hiện trường (bắt buộc, phải ACTIVE).</summary>
         public Guid ReplacementVehicleId { get; set; }
 
-        /// <summary>Thời gian dự kiến bốc chuyển toàn bộ hàng sang xe mới (phút). Mặc định 45 phút.</summary>
         public int? TransloadMinutes { get; set; }
 
-        /// <summary>Ghi chú lệnh điều động (hiển thị cho đội bốc xếp tại hiện trường).</summary>
         public string? Note { get; set; }
     }
 
-    /// <summary>Xe đủ điều kiện thay thế cho chuyến gặp sự cố (đúng dải nhiệt và đủ tải).</summary>
     public class RescueCandidateResponse
     {
         public Guid VehicleId { get; set; }
@@ -36,9 +29,6 @@ namespace ColdChainX.Application.DTOs.Incident
 
     public class ContinueTripAfterIncidentRequest
     {
-        /// <summary>
-        /// Ghi chú xử lý tại chỗ. Mobile có thể bỏ trống; backend sẽ lưu ghi chú mặc định.
-        /// </summary>
         public string? HandlingNote { get; set; }
     }
 
@@ -59,7 +49,6 @@ namespace ColdChainX.Application.DTOs.Incident
         public string Message { get; set; } = null!;
     }
 
-    /// <summary>ETA mới của một điểm dừng phía trước sau khi hệ thống tính lại.</summary>
     public class StopEtaChange
     {
         public Guid StopId { get; set; }
@@ -71,10 +60,6 @@ namespace ColdChainX.Application.DTOs.Incident
         public int NotifiedCustomers { get; set; }
     }
 
-    /// <summary>
-    /// [Luồng 8 — Bước 2 + 3] Kết quả xử lý sự cố: sang xe, chuyến DELAYED,
-    /// ETA mới cho các trạm phía trước và số khách hàng đã được thông báo.
-    /// </summary>
     public class IncidentRescueResult
     {
         public Guid IncidentId { get; set; }
@@ -91,10 +76,8 @@ namespace ColdChainX.Application.DTOs.Incident
         public string RescueVehiclePlate { get; set; } = null!;
         public string RescueVehicleStatus { get; set; } = null!;
 
-        /// <summary>Số LPN cần bốc chuyển sang xe mới tại hiện trường.</summary>
         public int TransloadLpnCount { get; set; }
 
-        /// <summary>Cách tính ETA mới: GOONG | HAVERSINE_FALLBACK | SHIFT_FALLBACK.</summary>
         public string EtaMethod { get; set; } = null!;
 
         public List<StopEtaChange> UpdatedStops { get; set; } = new();

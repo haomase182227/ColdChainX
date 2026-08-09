@@ -1,14 +1,12 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
 namespace ColdChainX.Infrastructure.Migrations
 {
-    /// <inheritdoc />
     public partial class AddFirebaseNotifications : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropForeignKey(
@@ -16,9 +14,6 @@ namespace ColdChainX.Infrastructure.Migrations
                 schema: "public",
                 table: "notifications");
 
-            // Some deployed databases no longer have the legacy EF-generated index.
-            // PostgreSQL requires IF EXISTS here so the migration works for both
-            // the original schema and those reconciled environments.
             migrationBuilder.Sql(
                 @"DROP INDEX IF EXISTS public.""IX_notifications_user_id"";");
 
@@ -180,7 +175,6 @@ namespace ColdChainX.Infrastructure.Migrations
                 onDelete: ReferentialAction.SetNull);
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropForeignKey(

@@ -3,9 +3,6 @@ using System.Collections.Generic;
 
 namespace ColdChainX.Application.DTOs.Dispatch;
 
-/// <summary>
-/// Complete dispatch-facing view of a trip and its operational relationships.
-/// </summary>
 public sealed class TripDetailsDto
 {
     public Guid TripId { get; set; }
@@ -34,9 +31,6 @@ public sealed class TripDetailsDto
     public TripVehicleDetailsDto? Vehicle { get; set; }
     public List<TripDriverDetailsDto> Drivers { get; set; } = new();
     public List<TripStopDetailsDto> Stops { get; set; } = new();
-    /// <summary>
-    /// Kế hoạch xếp LIFO. Phần tử đầu tiên có LoadOrder = 1 và được xếp lên xe trước.
-    /// </summary>
     public List<TripLifoLoadItemDto> LoadPlan { get; set; } = new();
     public List<TripOrderDetailsDto> Orders { get; set; } = new();
     public List<TripLpnDetailsDto> Lpns { get; set; } = new();
@@ -418,7 +412,6 @@ public sealed class TripIncidentEvidenceDto
 
 public sealed class TripLifoLoadItemDto
 {
-    /// <summary>Thứ tự xếp lên xe; 1 là xếp đầu tiên và nằm sâu nhất.</summary>
     public int LoadOrder { get; set; }
     public Guid LpnId { get; set; }
     public string LpnCode { get; set; } = string.Empty;

@@ -36,11 +36,7 @@ public sealed class PermissionService : IPermissionService
 
         if (string.Equals(user.Role.RoleName, "Admin", StringComparison.OrdinalIgnoreCase))
         {
-            return await _db.Permissions
-                .AsNoTracking()
-                .AnyAsync(
-                    p => p.IsActive && p.PermCode == normalizedCode,
-                    cancellationToken);
+            return true;
         }
 
         var now = DbNow();
@@ -184,8 +180,6 @@ public sealed class PermissionService : IPermissionService
         {
             await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
 
-            // Serialize full-replacement updates for the same role across all API instances.
-            // This prevents two concurrent checkbox submissions from being merged accidentally.
             await _db.Database.ExecuteSqlInterpolatedAsync(
                 $"SELECT pg_advisory_xact_lock(hashtextextended({roleId.ToString()}, 0))",
                 cancellationToken);

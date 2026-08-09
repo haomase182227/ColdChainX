@@ -75,7 +75,6 @@ namespace ColdChainX.Application.Services
             if (!receiverExists)
                 return ApiResponse<WarehouseReceiptResponse>.Failure("Receiver (clerk) user not found");
 
-            // Perform core temperature QC check
             bool tempPassed = true;
             string qcNote = "";
             if (!string.IsNullOrWhiteSpace(order.TempCondition))
@@ -101,7 +100,6 @@ namespace ColdChainX.Application.Services
                 }
             }
 
-            // Perform Odor Matrix validation (Warning only)
             string? warningMessage = null;
             var activeReceipts = await _receiptRepository.GetActiveReceiptsByWarehouseIdAsync(warehouseId);
             if (activeReceipts.Any())
@@ -180,7 +178,6 @@ namespace ColdChainX.Application.Services
             var warehouse = await _db.Warehouses.FindAsync(receipt.WarehouseId);
             var warehouseName = warehouse?.WarehouseName ?? "Unknown Warehouse";
 
-            // Update Lpn since we only have 1 Lpn per receipt in this flow.
             var lpn = await _db.Lpns.FirstOrDefaultAsync(l => l.ReceiptId == receipt.ReceiptId);
             if (lpn != null && request.Items.Any())
             {
@@ -190,7 +187,6 @@ namespace ColdChainX.Application.Services
                 lpn.ActualCbm = (item.LengthCm * item.WidthCm * item.HeightCm) / 1000000m;
                 lpn.StorageLocation = string.IsNullOrWhiteSpace(item.ConditionStatus) ? "GOOD" : item.ConditionStatus.Trim();
                 lpn.DiscrepancyReason = item.Note?.Trim();
-                // other mapping as necessary
                 
                 receipt.TotalActualQty = item.ActualQty;
             }
@@ -223,7 +219,6 @@ namespace ColdChainX.Application.Services
                     if (!receipt.Lpns.Any())
                         return ApiResponse<WarehouseReceiptResponse>.Failure("Measurements are missing. Please complete Step 2 first.");
 
-                    // Execute Compliance validation - dummy pass since attachments are gone
                     var complianceResult = new ColdChainX.Application.Models.ComplianceCheckResult { Passed = true, MissingRequirements = new List<string>(), PendingRequirements = new List<string>() };
 
                     if (!complianceResult.Passed)
@@ -277,7 +272,6 @@ namespace ColdChainX.Application.Services
                     var clerk = await _db.Users.FindAsync(receipt.ReceiverId);
                     var clerkName = clerk?.FullName ?? "Unknown Clerk";
 
-                    // Calculate actual total weight and volume (CBM) from measurements
                     decimal totalActualWeight = 0;
                     decimal totalActualCbm = 0;
                     foreach (var item in receipt.Lpns)
@@ -287,7 +281,6 @@ namespace ColdChainX.Application.Services
                         totalActualCbm += cbm;
                     }
 
-                    // Update order dimensions
                     if (order.OrderDimension != null)
                     {
                         order.OrderDimension.ActualWeightKg = totalActualWeight;
@@ -295,7 +288,6 @@ namespace ColdChainX.Application.Services
                     }
                     order.Status = InWarehouseStatus;
 
-                    // Recalculate freight and generate adjustment invoice if necessary
                     var originalQuotation = await _db.Quotations
                         .Where(q => q.OrderId == orderId)
                         .OrderByDescending(q => q.CreatedAt)
@@ -325,7 +317,6 @@ namespace ColdChainX.Application.Services
                             var vatAmount = Math.Round(subtotal * VatRate, 0);
                             var finalAmount = subtotal + vatAmount;
 
-                            // If final cost differs, create an adjustment invoice
                             if (finalAmount != originalQuotation.FinalAmount)
                             {
                                 var diffSubTotal = subtotal - (originalQuotation.BaseFreight + originalQuotation.LastMileSurcharge.GetValueOrDefault() + originalQuotation.VasAmount.GetValueOrDefault());
@@ -361,7 +352,6 @@ namespace ColdChainX.Application.Services
                                     TaxRate = VatRate
                                 };
 
-                                 // Generate PDF for the adjustment invoice
                                  try
                                  {
                                      adjustmentInvoice.PdfUrl = await GenerateInvoicePdfAsync(order, adjustmentInvoice, adjustmentLine, warehouseName);
@@ -393,9 +383,7 @@ namespace ColdChainX.Application.Services
                     }
 
 
-                    // Inventory module has been removed. No stock will be recorded.
 
-                    // Generate HTML and PDF Receipt
                     try
                     {
                         receipt.PdfUrl = await GenerateReceiptPdfAsync(order, receipt, warehouseName, clerkName);

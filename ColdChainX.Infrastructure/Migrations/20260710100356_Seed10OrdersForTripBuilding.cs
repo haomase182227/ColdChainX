@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace ColdChainX.Infrastructure.Migrations
 {
-    /// <inheritdoc />
     public partial class Seed10OrdersForTripBuilding : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)

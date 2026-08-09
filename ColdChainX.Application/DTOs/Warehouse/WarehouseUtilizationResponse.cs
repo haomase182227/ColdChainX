@@ -3,9 +3,6 @@ using System.Collections.Generic;
 
 namespace ColdChainX.Application.DTOs.Warehouse
 {
-    /// <summary>
-    /// Response model for warehouse capacity and zone utilization statistics.
-    /// </summary>
     public class WarehouseUtilizationResponse
     {
         public Guid WarehouseId { get; set; }

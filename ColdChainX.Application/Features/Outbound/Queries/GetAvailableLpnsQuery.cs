@@ -6,10 +6,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ColdChainX.Application.Features.Outbound.Queries;
 
-/// <summary>
-/// Lay danh sach LPN dang o trang thai LOADING — san sang de goi POST /api/Outbound/pick.
-/// Co the loc theo TripId (tuy chon).
-/// </summary>
 public class GetAvailableLpnsQuery : IRequest<List<AvailableLpnDto>>
 {
     public Guid? TripId { get; set; }

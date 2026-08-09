@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ColdChainX - Automated Test Runner Dashboard</title>
     <style>
+        * { box-sizing: border-box; }
         :root {
             --primary: #0d6efd;
             --success: #198754;
@@ -18,13 +19,17 @@
         body { 
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
             margin: 0; padding: 0; display: flex; height: 100vh; background: #e9ecef; color: var(--dark);
+            overflow: hidden;
         }
         #sidebar { 
-            width: 420px; background: var(--light-bg); border-right: 1px solid var(--border); 
-            padding: 20px; overflow-y: auto; box-shadow: 2px 0 8px rgba(0,0,0,0.08); z-index: 100;
+            width: 350px; min-width: 350px; max-width: 350px; flex: 0 0 350px;
+            background: var(--light-bg); border-right: 1px solid var(--border); 
+            padding: 18px; overflow-y: auto; box-shadow: 2px 0 8px rgba(0,0,0,0.08); z-index: 100;
+            transition: all 0.3s ease;
         }
+        #sidebar.hidden { width: 0; min-width: 0; max-width: 0; flex: 0 0 0; padding: 0; border: none; overflow: hidden; }
         #main-content { 
-            flex-grow: 1; padding: 25px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px;
+            flex: 1 1 0; min-width: 0; padding: 15px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px;
         }
         .card { 
             background: white; border: 1px solid var(--border); border-radius: 8px; 
@@ -68,42 +73,44 @@
         .badge-failed { background: #f8d7da; color: #842029; border: 1px solid #f5c2c7; }
         .badge-skipped { background: #fff3cd; color: #664d03; border: 1px solid #ffecb5; }
 
-        .stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
         .stat-box { 
-            background: white; padding: 15px; border-radius: 8px; border: 1px solid var(--border); 
+            background: white; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); 
             text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02);
         }
-        .stat-box .number { font-size: 24px; font-weight: bold; margin-top: 5px; }
+        .stat-box .number { font-size: 22px; font-weight: bold; margin-top: 4px; }
         .stat-box.passed .number { color: var(--success); }
         .stat-box.failed .number { color: var(--danger); }
         .stat-box.skipped .number { color: #d97706; }
 
-        .progress-wrapper { background: white; padding: 18px; border-radius: 8px; border: 1px solid var(--border); }
-        .progress-bar-container { width: 100%; height: 24px; background: #e9ecef; border-radius: 12px; overflow: hidden; margin-top: 8px; position: relative; }
+        .progress-wrapper { background: white; padding: 12px 15px; border-radius: 8px; border: 1px solid var(--border); }
+        .progress-bar-container { width: 100%; height: 22px; background: #e9ecef; border-radius: 11px; overflow: hidden; margin-top: 6px; position: relative; }
         .progress-bar-fill { height: 100%; background: linear-gradient(90deg, #10b981, #059669); width: 0%; transition: width 0.3s ease; }
-        .progress-text { position: absolute; width: 100%; text-align: center; line-height: 24px; font-weight: bold; font-size: 12px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
+        .progress-text { position: absolute; width: 100%; text-align: center; line-height: 22px; font-weight: bold; font-size: 12px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
         
-        .log-container { flex-grow: 1; background: white; border: 1px solid var(--border); border-radius: 8px; padding: 18px; overflow: hidden; display: flex; flex-direction: column; }
-        .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        .filter-pills { display: flex; gap: 8px; }
+        .log-container { flex-grow: 1; background: white; border: 1px solid var(--border); border-radius: 8px; padding: 16px; overflow: hidden; display: flex; flex-direction: column; min-height: 520px; }
+        .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .filter-pills { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
         .pill { padding: 6px 14px; border-radius: 16px; font-size: 13px; cursor: pointer; border: 1px solid var(--border); background: #f8f9fa; font-weight: 600; transition: all 0.2s; }
         .pill.active { background: #3b82f6; color: white; border-color: #3b82f6; }
         
-        .log-list { overflow-y: auto; flex-grow: 1; display: flex; flex-direction: column; gap: 10px; max-height: calc(100vh - 360px); }
+        .log-list { overflow-y: auto; flex-grow: 1; display: flex; flex-direction: column; gap: 12px; padding-right: 4px; max-height: calc(100vh - 210px); }
         .test-item { 
-            border: 1px solid var(--border); border-radius: 6px; padding: 12px 15px; 
+            border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; 
             display: flex; flex-direction: column; gap: 8px; background: #fff; transition: background 0.15s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.03);
         }
-        .test-item:hover { background: #f8faFC; }
-        .test-item.failed-item { border-left: 5px solid var(--danger); background: #fff8f8; }
-        .test-item.passed-item { border-left: 5px solid var(--success); }
-        .test-item.skipped-item { border-left: 5px solid var(--warning); }
+        .test-item:hover { background: #f8fbFF; border-color: #cbd5e1; }
+        .test-item.failed-item { border-left: 6px solid var(--danger); background: #fffafb; }
+        .test-item.passed-item { border-left: 6px solid var(--success); }
+        .test-item.skipped-item { border-left: 6px solid var(--warning); }
         
-        .test-title { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 15px; }
-        .test-meta { font-size: 12px; color: var(--gray); display: flex; gap: 15px; align-items: center; }
+        .test-title { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 15px; line-height: 1.4; }
+        .test-meta { font-size: 13px; color: #475569; display: flex; gap: 18px; align-items: center; flex-wrap: wrap; margin-top: 2px; }
         .error-detail { 
-            background: #ffe3e3; color: #991b1b; padding: 10px; border-radius: 4px; font-family: monospace; 
-            font-size: 13px; white-space: pre-wrap; word-break: break-all; margin-top: 5px; border: 1px solid #ffc9c9;
+            background: #fff5f5; color: #991b1b; padding: 12px 14px; border-radius: 6px; font-family: 'Consolas', 'Fira Code', 'Courier New', monospace; 
+            font-size: 13px; white-space: pre-wrap; word-break: break-word; overflow-x: auto; max-height: 350px; overflow-y: auto;
+            margin-top: 6px; border: 1px solid #fecaca; box-shadow: inset 0 1px 2px rgba(0,0,0,0.04);
         }
         
         .checkbox-label { display: flex; align-items: center; gap: 8px; font-weight: 600; color: #334155; cursor: pointer; margin-top: 10px; font-size: 14px; }
@@ -119,10 +126,26 @@
     <div class="card">
         <h3>📂 Cấu hình File Spec HTML</h3>
         <label>Đường dẫn Spec File:</label>
+        
+        <!-- Hidden Browser File Input for instant native file chooser -->
+        <input type="file" id="specFileInput" accept=".html" onchange="handleSpecFileUpload(this)" style="display: none;">
+
         <div style="display: flex; gap: 6px;">
-            <input type="text" id="specPathInput" placeholder="Đang tìm kiếm file spec...">
-            <button class="btn-outline" onclick="browseSpecFile()" style="width: auto; padding: 0 12px; font-weight: bold; white-space: nowrap;" title="Mở hộp thoại chọn file trên Windows">🔍 Chọn File</button>
+            <input type="text" id="specPathInput" placeholder="Đang tìm kiếm file spec..." onchange="onSpecPathChange()" onkeyup="if(event.key==='Enter') onSpecPathChange()">
+            <button class="btn-outline" onclick="openFilePicker()" style="width: auto; padding: 0 12px; font-weight: bold; white-space: nowrap; background: #e0f2fe; color: #0284c7; border-color: #7dd3fc;" title="Mở cửa sổ chọn file trên máy tính">🔍 Chọn File</button>
         </div>
+
+        <div id="candidatesWrapper" style="margin-top: 10px; display: none;">
+            <label style="font-size: 11px; color: #475569; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">⚡ Hoặc chọn file có sẵn trong dự án:</label>
+            <select id="specCandidatesSelect" onchange="onCandidateSelected(this.value)" style="margin-top: 4px; font-size: 12px; padding: 6px 8px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; width: 100%;">
+            </select>
+        </div>
+
+        <div style="display: flex; gap: 8px; margin-top: 10px;">
+            <button type="button" onclick="openFilePicker()" class="btn-outline" style="flex: 1; font-size: 11px; padding: 6px 8px; text-align: center;">📤 Duyệt / Tải HTML</button>
+            <button type="button" onclick="browseDesktopDialog()" class="btn-outline" style="flex: 1; font-size: 11px; padding: 6px 8px; text-align: center;" title="Mở hộp thoại OpenFileDialog của Windows">🖥️ Hộp thoại Windows</button>
+        </div>
+
         <div id="specStatus" style="margin-top: 8px; font-size: 12px; color: var(--gray);">Chưa tải thông tin spec...</div>
     </div>
 
@@ -133,7 +156,7 @@
 
         <label>Lọc Module cần chạy (Filter):</label>
         <select id="moduleFilter">
-            <option value="">Tất cả (All Modules - 100 Functions)</option>
+            <option value="">Tất cả (All Modules - 111/212 Functions)</option>
             <option value="AUTH">AUTH - Xác thực & Phân quyền (6 Fns)</option>
             <option value="USR">USR - Quản lý Tài khoản & Quyền (10 Fns)</option>
             <option value="CUS">CUS - Hồ sơ Khách hàng & CRM (2 Fns)</option>
@@ -146,6 +169,20 @@
             <option value="ORD">ORD - Quản lý Đơn hàng & POD (11 Fns)</option>
             <option value="INB">INB - Inbound LPN & Kho lạnh (8 Fns)</option>
             <option value="OUT">OUT - Outbound, Tái cấu hình & Xuất (5 Fns)</option>
+            <option value="WH">WH - Quản lý Kho bãi & LPN (6 Fns)</option>
+            <option value="INV">INV - Quản lý Tồn kho & Cảnh báo (4 Fns)</option>
+            <option value="DSP">DSP - Ghép chuyến & Điều phối (5 Fns)</option>
+            <option value="MON">MON - Giám sát IoT & Nhiệt độ (7 Fns)</option>
+            <option value="IOT">IOT - Thiết bị IoT & Cảm biến (5 Fns)</option>
+            <option value="DEL">DEL - Giao hàng, ePOD & COD (15 Fns)</option>
+            <option value="RET">RET - Hàng hoàn & Xử lý sai lệch (8 Fns)</option>
+            <option value="CLM">CLM - Khiếu nại & Đền bù (5 Fns)</option>
+            <option value="ACC">ACC - Kế toán, Hóa đơn & Báo cáo (11 Fns)</option>
+            <option value="INC">INC - Báo cáo Sự cố & Cứu hộ (11 Fns)</option>
+            <option value="FLT">FLT - Quản lý Đội xe & Bảo dưỡng (9 Fns)</option>
+            <option value="DRV">DRV - Quản lý Tài xế & Đánh giá (7 Fns)</option>
+            <option value="NTF">NTF - Thông báo Hệ thống (4 Fns)</option>
+            <option value="WRK">WRK - Phân công Nhân viên Kho (6 Fns)</option>
         </select>
 
         <label class="checkbox-label" style="color: #0284c7;">
@@ -210,7 +247,10 @@
     <!-- Danh sách Test Cases & Logs -->
     <div class="log-container">
         <div class="log-header">
-            <h3>📋 Nhật ký thực thi kiểm thử thời gian thực</h3>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <h3 style="margin: 0;">📋 Nhật ký thực thi kiểm thử thời gian thực</h3>
+                <button class="btn-outline" style="padding: 5px 12px; font-size: 13px; width: auto; font-weight: bold; background: #f1f5f9; color: #0f172a;" onclick="toggleSidebar()" title="Ẩn cột cấu hình bên trái để phóng to toàn màn hình cho danh sách test">📐 Ẩn/Hiện Cột Cấu Hình (Phóng To)</button>
+            </div>
             <div class="filter-pills">
                 <span class="pill active" onclick="setFilter('ALL', this)">Tất cả (<span id="countAll">0</span>)</span>
                 <span class="pill" onclick="setFilter('PASSED', this)">Passed (<span id="countPass">0</span>)</span>
@@ -228,28 +268,95 @@
     let pollInterval = null;
 
     window.onload = () => {
+        loadSpecCandidates();
         autoDetectSpec();
         startPolling();
     };
 
+    async function loadSpecCandidates() {
+        try {
+            const res = await fetch('/api/spec/candidates');
+            const candidates = await res.json();
+            const wrapper = document.getElementById('candidatesWrapper');
+            const select = document.getElementById('specCandidatesSelect');
+            if (candidates && candidates.length > 0) {
+                select.innerHTML = '<option value="">-- Chọn file Spec từ danh sách tìm thấy --</option>' + 
+                    candidates.map(c => `<option value="${escapeHtml(c.path)}">${escapeHtml(c.name)} (${(c.size / 1024).toFixed(0)} KB)</option>`).join('');
+                wrapper.style.display = 'block';
+            }
+        } catch (e) {
+            console.warn('Lỗi tải danh sách candidates:', e);
+        }
+    }
+
     async function autoDetectSpec() {
         try {
+            document.getElementById('specStatus').innerHTML = '<i>Đang tự động dò tìm file Spec...</i>';
             const res = await fetch('/api/spec/auto-detect');
             const data = await res.json();
-            document.getElementById('specPathInput').value = data.path;
-            if (data.exists) {
-                parseSpec(data.path);
-            } else {
-                document.getElementById('specStatus').innerHTML = '<span style="color:red;">⚠ Không tìm thấy file. Hãy kiểm tra lại đường dẫn!</span>';
+            if (data.path) {
+                document.getElementById('specPathInput').value = data.path;
+                if (data.exists) {
+                    parseSpec(data.path);
+                    const select = document.getElementById('specCandidatesSelect');
+                    if (select) select.value = data.path;
+                } else {
+                    document.getElementById('specStatus').innerHTML = '<span style="color:#d97706;">⚠ File chưa tìm thấy ở đường dẫn mặc định. Hãy bấm <b>"🔍 Chọn File"</b> để chọn file .html trên máy của bạn.</span>';
+                }
             }
         } catch (e) {
             console.error('Lỗi nhận diện file:', e);
         }
     }
 
-    async function browseSpecFile() {
+    function openFilePicker() {
+        const fileInput = document.getElementById('specFileInput');
+        fileInput.value = '';
+        fileInput.click();
+    }
+
+    async function handleSpecFileUpload(input) {
+        if (!input.files || input.files.length === 0) return;
+        const file = input.files[0];
+        document.getElementById('specStatus').innerHTML = `<i>Đang xử lý file <b>${escapeHtml(file.name)}</b>...</i>`;
+
         try {
-            document.getElementById('specStatus').innerHTML = '<i>Đang mở hộp thoại chọn file trên desktop...</i>';
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const res = await fetch('/api/spec/upload', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                document.getElementById('specPathInput').value = data.path;
+                document.getElementById('specStatus').innerHTML = `<span style="color:green; font-weight:bold;">✓ Đã tải lên & nhận diện: ${data.totalFunctions} Functions, ${data.totalTestCases} Test Cases</span>`;
+                loadSpecCandidates();
+            } else {
+                document.getElementById('specStatus').innerHTML = `<span style="color:red;">Lỗi: ${data.error || 'Không thể đọc dữ liệu kiểm thử'}</span>`;
+            }
+        } catch (e) {
+            document.getElementById('specStatus').innerHTML = `<span style="color:red;">Lỗi tải file: ${e.message}</span>`;
+        }
+    }
+
+    function onCandidateSelected(path) {
+        if (!path) return;
+        document.getElementById('specPathInput').value = path;
+        parseSpec(path);
+    }
+
+    function onSpecPathChange() {
+        const path = document.getElementById('specPathInput').value.trim();
+        if (path) {
+            parseSpec(path);
+        }
+    }
+
+    async function browseDesktopDialog() {
+        try {
+            document.getElementById('specStatus').innerHTML = '<i>Đang mở hộp thoại Windows... (Nếu không thấy, hãy kiểm tra thanh Taskbar)</i>';
             const curr = document.getElementById('specPathInput').value || '';
             const res = await fetch(`/api/spec/browse?currentPath=${encodeURIComponent(curr)}`);
             const data = await res.json();
@@ -259,6 +366,7 @@
             } else {
                 const current = document.getElementById('specPathInput').value;
                 if (current) parseSpec(current);
+                else document.getElementById('specStatus').innerHTML = '<span>Đã hủy chọn file.</span>';
             }
         } catch (e) {
             alert('Lỗi khi mở hộp thoại chọn file: ' + e.message);
@@ -267,7 +375,7 @@
 
     async function parseSpec(path) {
         try {
-            document.getElementById('specStatus').innerHTML = 'Đang đọc và phân tích file spec...';
+            document.getElementById('specStatus').innerHTML = '<i>Đang đọc và phân tích file spec...</i>';
             const res = await fetch(`/api/spec/parse?path=${encodeURIComponent(path)}`);
             const data = await res.json();
             if (data.success) {
@@ -416,7 +524,7 @@
                     <span>Thời gian: <b>${r.elapsedMs}ms</b></span>
                     <span>Thông điệp: <b>${escapeHtml(r.message || '')}</b></span>
                 </div>
-                ${r.status === 'Failed' && r.responseBody ? `<div class="error-detail"><b>[Backend Error Body]:</b><br/>${escapeHtml(r.responseBody)}</div>` : ''}
+                ${r.status === 'Failed' && r.responseBody ? `<div class="error-detail"><b>🐞 Chi tiết dữ liệu phản hồi (Backend Response):</b><pre style="margin: 6px 0 0 0; white-space: pre-wrap; font-family: inherit;">${formatJson(r.responseBody)}</pre></div>` : ''}
             </div>`;
         });
 
@@ -429,6 +537,20 @@
         el.classList.add('active');
         // Immediately fetch and trigger render
         fetch('/api/run/status').then(r => r.json()).then(data => renderLogs(data.recentResults || []));
+    }
+
+    function toggleSidebar() {
+        document.getElementById('sidebar').classList.toggle('hidden');
+    }
+
+    function formatJson(str) {
+        if (!str) return '';
+        try {
+            const obj = JSON.parse(str);
+            return escapeHtml(JSON.stringify(obj, null, 2));
+        } catch(e) {
+            return escapeHtml(str);
+        }
     }
 
     function escapeHtml(str) {

@@ -9,7 +9,6 @@ public class MockErpIntegrationService : IErpIntegrationService
 {
     public Task<ErpInventorySyncResponse> DeductInventoryAsync(Guid orderId, string itemCode, int quantity, CancellationToken cancellationToken = default)
     {
-        // Giả lập tích hợp với MISA / SAP ERP: Tự động trừ tồn kho khi giao nhận/trả hàng hoàn tất
         var response = new ErpInventorySyncResponse
         {
             IsSuccess = true,
@@ -24,7 +23,6 @@ public class MockErpIntegrationService : IErpIntegrationService
 
     public Task<ErpInvoiceResponse> GenerateVatInvoiceAsync(Guid orderId, decimal totalAmount, string customerName, CancellationToken cancellationToken = default)
     {
-        // Giả lập phát hành hóa đơn giá trị gia tăng điện tử (VAT Electronic Invoice)
         var randomCode = Guid.NewGuid().ToString("N").Substring(0, 10).ToUpper();
         var invoiceNo = $"VAT-{DateTime.UtcNow:yyyy}-{randomCode.Substring(0, 6)}";
 

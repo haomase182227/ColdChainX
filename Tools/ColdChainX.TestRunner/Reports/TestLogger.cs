@@ -2,10 +2,6 @@ using ColdChainX.TestRunner.Models;
 
 namespace ColdChainX.TestRunner.Reports;
 
-/// <summary>
-/// File-based detailed logger for test execution.
-/// Creates a timestamped .log file with full request/response details for debugging.
-/// </summary>
 public class TestLogger : IDisposable
 {
     private readonly StreamWriter _writer;

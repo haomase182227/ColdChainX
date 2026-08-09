@@ -87,7 +87,6 @@ public class DispatchController : ControllerBase
         return Guid.TryParse(idClaim, out var userId) ? userId : Guid.Empty;
     }
 
-    // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Lookup endpoints (dÃƒÆ’Ã‚Â¹ng Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã†â€™ populate dropdown trong form) ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 
     private string? FormatDateWithWeekday(DateTime? date)
     {
@@ -108,9 +107,6 @@ public class DispatchController : ControllerBase
     }
 
 
-    /// <summary>
-    /// Lấy danh sách các LPN khả dụng (chưa lên xe) trong một kho cụ thể. (Dùng để chọn Pivot LPN)
-    /// </summary>
     [HttpGet("available-lpns")]
     [ProducesResponseType(typeof(PagedResponse<List<FilterLpnResponse>>), 200)]
     public async Task<IActionResult> GetAvailableLpns([FromQuery] Guid warehouseId, [FromQuery] int pageIndex = 1, [FromQuery] int pageSize = 20)
@@ -153,9 +149,6 @@ public class DispatchController : ControllerBase
         return Ok(PagedResponse<List<FilterLpnResponse>>.SuccessPagedResponse(res, pageIndex, pageSize, totalCount));
     }
 
-    /// <summary>
-    /// [Lookup] Lấy danh sách 4 LPN tương thích với LPN gốc (Pivot).
-    /// </summary>
     [HttpGet("filter-lpns")]
     [ProducesResponseType(typeof(PagedResponse<List<FilterLpnResponse>>), 200)]
     public async Task<IActionResult> FilterLpns([FromQuery] Guid pivotLpnId, [FromQuery] int pageIndex = 1, [FromQuery] int pageSize = 20)
@@ -183,9 +176,7 @@ public class DispatchController : ControllerBase
         {
             if (lpn.Order == null) continue;
 
-            // Ãƒâ€žÃ‚ÂÃƒÆ’Ã‚Â£ BÃƒÂ¡Ã‚Â»Ã…Â½ QUA LÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºp 0 (RÃƒÆ’Ã‚Â ng buÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢c LÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ch trÃƒÆ’Ã‚Â¬nh), lÃƒÂ¡Ã‚ÂºÃ‚Â¥y TÃƒÂ¡Ã‚ÂºÃ‚Â¤T CÃƒÂ¡Ã‚ÂºÃ‚Â¢ hÃƒÆ’Ã‚Â ng hÃƒÆ’Ã‚Â³a trong kho.
 
-            // Lá»›p 1: RÃ ng buá»™c Danh má»¥c
             var pCat = pivotLpn.Order.Category.ToUpper();
             var tCat = lpn.Order.Category.ToUpper();
 
@@ -195,7 +186,6 @@ public class DispatchController : ControllerBase
             if ((pCat == "FROZEN_FRUITS_VEGGIES" || pCat == "ICE_CREAM_BEVERAGES") &&
                 (tCat != "FROZEN_FRUITS_VEGGIES" && tCat != "ICE_CREAM_BEVERAGES")) continue;
 
-            // LÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºp 2: Dung sai NhiÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡t Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ Ãƒâ€žÃ‚ÂÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ng
             decimal pTemp = pivotLpn.RequiredTemperature ?? 0;
             decimal tTemp = lpn.RequiredTemperature ?? 0;
             decimal tolerance = 2m; // Default
@@ -204,7 +194,6 @@ public class DispatchController : ControllerBase
 
             if (Math.Abs(pTemp - tTemp) > tolerance) continue;
 
-            // Lá»›p 3: RÃ ng buá»™c Ma tráº­n MÃ¹i
             if (pivotLpn.Order.HasStrongOdor && tCat == "ICE_CREAM_BEVERAGES") continue;
             if (pCat == "ICE_CREAM_BEVERAGES" && lpn.Order.HasStrongOdor) continue;
 
@@ -242,9 +231,6 @@ public class DispatchController : ControllerBase
         return Ok(PagedResponse<List<FilterLpnResponse>>.SuccessPagedResponse(res, pageIndex, pageSize, totalCount, "Filtered LPNs successfully."));
     }
 
-    /// <summary>
-    /// [Lookup] Danh sách xe tải ACTIVE và chưa được gán chuyến đang hoạt động.
-    /// </summary>
 
     [HttpGet("lookup/vehicles/by-warehouse/{warehouseId}")]
     [ProducesResponseType(typeof(object), 200)]
@@ -253,7 +239,7 @@ public class DispatchController : ControllerBase
         var warehouseName = await _db.Warehouses
             .Where(w => w.WarehouseId == warehouseId)
             .Select(w => w.WarehouseName)
-            .FirstOrDefaultAsync() ?? "Kho hiá»‡n táº¡i";
+            .FirstOrDefaultAsync() ?? "Kho hien tai";
 
         var wIdStr = warehouseId.ToString();
         var busyVehicleIds = _db.MasterTrips
@@ -277,7 +263,7 @@ public class DispatchController : ControllerBase
         var items = vehicles.Select(v => new
         {
             v.VehicleId,
-            Label = $"{v.TruckPlate} - {v.VehicleType} | tải {v.MaxWeight}kg / {v.MaxCbm}m3",
+            Label = $"{v.TruckPlate} - {v.VehicleType} | tai {v.MaxWeight}kg / {v.MaxCbm}m3",
             v.TruckPlate,
             v.VehicleType,
             v.MaxWeight,
@@ -291,7 +277,7 @@ public class DispatchController : ControllerBase
                         v.MaxCbm,
                         v.InnerLengthCm.Value * v.InnerWidthCm.Value * v.InnerHeightCm.Value / 1_000_000m) * 0.8m
                     : v.MaxCbm * 0.8m,
-            CurrentLocation = v.CurrentLocation == wIdStr ? warehouseName : "ChÆ°a xÃ¡c Ä‘á»‹nh"
+            CurrentLocation = v.CurrentLocation == wIdStr ? warehouseName : "Chua xac dinh"
         }).ToList();
 
         return Ok(items);
@@ -304,7 +290,7 @@ public class DispatchController : ControllerBase
         var warehouseName = await _db.Warehouses
             .Where(w => w.WarehouseId == warehouseId)
             .Select(w => w.WarehouseName)
-            .FirstOrDefaultAsync() ?? "Kho hiá»‡n táº¡i";
+            .FirstOrDefaultAsync() ?? "Kho hien tai";
 
         var wIdStr = warehouseId.ToString();
         var busyDriverIds = _db.TripDrivers
@@ -336,7 +322,7 @@ public class DispatchController : ControllerBase
                     .FirstOrDefault();
 
                 var isLicValid = lic != null;
-                var tag = !isLicValid ? "[HẾT HẠN BẰNG]" : d.Status == "ACTIVE" ? "" : $"[{d.Status}]";
+                var tag = !isLicValid ? "[HET HAN BANG]" : d.Status == "ACTIVE" ? "" : $"[{d.Status}]";
                 return new
                 {
                     d.DriverId,
@@ -346,8 +332,8 @@ public class DispatchController : ControllerBase
                     LicenseClass = lic?.LicenseClass ?? "N/A",
                     LicenseExpiryDate = lic?.ExpiryDate,
                     IsLicenseValid = isLicValid,
-                    Label = $"{d.FullName} ({d.PhoneNumber}) {tag} - Háº¡ng {lic?.LicenseClass ?? "N/A"}",
-                    CurrentLocation = d.CurrentLocation == wIdStr ? warehouseName : "ChÆ°a xÃ¡c Ä‘á»‹nh"
+                    Label = $"{d.FullName} ({d.PhoneNumber}) {tag} - Hang {lic?.LicenseClass ?? "N/A"}",
+                    CurrentLocation = d.CurrentLocation == wIdStr ? warehouseName : "Chua xac dinh"
                 };
             })
             .ToList();
@@ -372,7 +358,7 @@ public class DispatchController : ControllerBase
             .Select(v => new
             {
                 v.VehicleId,
-                Label      = $"{v.TruckPlate} ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â  {v.VehicleType} | tÃƒÂ¡Ã‚ÂºÃ‚Â£i {v.MaxWeight}kg / {v.MaxCbm}mÃƒâ€šÃ‚Â³",
+                Label      = $"{v.TruckPlate} - {v.VehicleType} | tai {v.MaxWeight}kg / {v.MaxCbm}m3",
                 v.TruckPlate,
                 v.VehicleType,
                 v.MaxWeight,
@@ -390,16 +376,9 @@ public class DispatchController : ControllerBase
                 v.MaxTemp
             })
             .ToList();
-        return Ok(ApiResponse<object>.SuccessResponse(items, "Láº¥y danh sÃ¡ch xe táº£i thÃ nh cÃ´ng."));
+        return Ok(ApiResponse<object>.SuccessResponse(items, "Lay danh sach xe tai thanh cong."));
     }
 
-    /// <summary>
-    /// [Lookup] Danh sách tài xế khả dụng – dùng để chọn 1-2 tài xế cho manual-dispatch.
-    /// </summary>
-    /// <remarks>
-    /// TÃƒÂ¡Ã‚Â»Ã‚Â± Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ng gÃƒÂ¡Ã‚Â»Ã‚Â¡ trÃƒÂ¡Ã‚ÂºÃ‚Â¡ng thÃƒÆ’Ã‚Â¡i RELAX nÃƒÂ¡Ã‚ÂºÃ‚Â¿u Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â£ qua ngÃƒÆ’Ã‚Â y/tuÃƒÂ¡Ã‚ÂºÃ‚Â§n giÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi hÃƒÂ¡Ã‚ÂºÃ‚Â¡n, sau Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â³ chÃƒÂ¡Ã‚Â»Ã¢â‚¬Â° trÃƒÂ¡Ã‚ÂºÃ‚Â£ vÃƒÂ¡Ã‚Â»Ã‚Â
-    /// cÃ¡c tÃ i xáº¿ cÃ³ thá»ƒ gÃ¡n chuyáº¿n (khÃ´ng RELAX/Offline/Inactive vÃ  cÃ²n báº±ng lÃ¡i háº¡n).
-    /// </remarks>
     [HttpGet("lookup/drivers")]
     [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> LookupDrivers()
@@ -409,7 +388,6 @@ public class DispatchController : ControllerBase
             .Where(d => d.Status != "Offline" && d.Status != "Inactive" && d.Status != "DELETED")
             .ToListAsync();
 
-        // TÃƒÂ¡Ã‚Â»Ã‚Â± Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ng gÃƒÂ¡Ã‚Â»Ã‚Â¡ RELAX Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â£ hÃƒÂ¡Ã‚ÂºÃ‚Â¿t hÃƒÂ¡Ã‚ÂºÃ‚Â¡n (cÃƒÂ¡Ã‚ÂºÃ‚Â­p nhÃƒÂ¡Ã‚ÂºÃ‚Â­t Status tÃƒÂ¡Ã‚ÂºÃ‚Â¡i chÃƒÂ¡Ã‚Â»Ã¢â‚¬â€)
         foreach (var d in candidates)
             await _driverAvailability.ReconcileStatusAsync(d);
         await _db.SaveChangesAsync();
@@ -432,19 +410,16 @@ public class DispatchController : ControllerBase
                     LicenseClass = lic?.LicenseClass,
                     LicenseExpiry = lic?.ExpiryDate,
                     HasValidLicense = lic != null,
-                    Label = $"{d.FullName} ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â {d.PhoneNumber}" + (lic != null ? $" | BÃƒÂ¡Ã‚ÂºÃ‚Â±ng {lic.LicenseClass}" : " | ÃƒÂ¢Ã…Â¡Ã‚Â  HÃƒÂ¡Ã‚ÂºÃ‚Â¿t hÃƒÂ¡Ã‚ÂºÃ‚Â¡n bÃƒÂ¡Ã‚ÂºÃ‚Â±ng lÃƒÆ’Ã‚Â¡i")
+                    Label = $"{d.FullName} - {d.PhoneNumber}" + (lic != null ? $" | Bang {lic.LicenseClass}" : " | Het han bang lai")
                 };
             })
             .Where(x => x.HasValidLicense)
             .OrderBy(x => x.FullName)
             .ToList();
 
-        return Ok(ApiResponse<object>.SuccessResponse(items, "Láº¥y danh sÃ¡ch tÃ i xáº¿ thÃ nh cÃ´ng."));
+        return Ok(ApiResponse<object>.SuccessResponse(items, "Lay danh sach tai xe thanh cong."));
     }
 
-    /// <summary>
-    /// [Lookup] Danh sách Location đang ACTIVE – dùng để chọn kho xuất phát.
-    /// </summary>
     [HttpGet("lookup/locations")]
     [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> LookupLocations()
@@ -462,15 +437,9 @@ public class DispatchController : ControllerBase
             })
             .ToListAsync();
 
-        return Ok(ApiResponse<object>.SuccessResponse(locations, "Láº¥y danh sÃ¡ch kho/Ä‘iá»ƒm Ä‘áº¿n thÃ nh cÃ´ng."));
+        return Ok(ApiResponse<object>.SuccessResponse(locations, "Lay danh sach kho/diem den thanh cong."));
     }
 
-    /// <summary>
-    /// [Lookup] Danh sách kho hiện có – dùng để chọn kho trạm dừng khi ghép chuyến (manual-dispatch).
-    /// </summary>
-    /// <summary>
-    /// [Lookup] Danh sach lich chay dang ACTIVE tu bang route_schedules.
-    /// </summary>
     [HttpGet("lookup/Schedule")]
     [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> LookupSchedules()
@@ -534,23 +503,9 @@ public class DispatchController : ControllerBase
             })
             .ToListAsync();
 
-        return Ok(ApiResponse<object>.SuccessResponse(items, "Láº¥y danh sÃ¡ch kho xuáº¥t phÃ¡t thÃ nh cÃ´ng."));
+        return Ok(ApiResponse<object>.SuccessResponse(items, "Lay danh sach kho xuat phat thanh cong."));
     }
 
-    /// <summary>
-    /// [Lookup] Danh sách tài xế khả dụng – dùng để chọn 1-2 tài xế cho manual-dispatch.
-    /// </summary>
-    /// <remarks>
-    /// TruyÃƒÂ¡Ã‚Â»Ã‚Ân <paramref name="warehouseId"/> Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã†â€™ chÃƒÂ¡Ã‚Â»Ã¢â‚¬Â° lÃƒÂ¡Ã‚ÂºÃ‚Â¥y cÃƒÆ’Ã‚Â¡c LPN thuÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢c kho Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â£ chÃƒÂ¡Ã‚Â»Ã‚Ân
-    /// (Lpn.WarehouseId == warehouseId). Ãƒâ€žÃ‚ÂÃƒÆ’Ã‚Â¢y lÃƒÆ’Ã‚Â  bÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºc bÃƒÂ¡Ã‚ÂºÃ‚Â¯t buÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢c cÃƒÂ¡Ã‚Â»Ã‚Â§a luÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“ng manual-dispatch:
-    /// ngÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Âi dÃƒÆ’Ã‚Â¹ng chÃƒÂ¡Ã‚Â»Ã‚Ân kho trÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºc, sau Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â³ chÃƒÂ¡Ã‚Â»Ã¢â‚¬Â° thÃƒÂ¡Ã‚ÂºÃ‚Â¥y LPN cÃƒÂ¡Ã‚Â»Ã‚Â§a kho Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â³.
-    ///
-    /// MÃƒÂ¡Ã‚Â»Ã¢â‚¬â€i phÃƒÂ¡Ã‚ÂºÃ‚Â§n tÃƒÂ¡Ã‚Â»Ã‚Â­ Data trÃƒÂ¡Ã‚ÂºÃ‚Â£ vÃƒÂ¡Ã‚Â»Ã‚Â: lpnId, lpnCode, orderId, trackingCode, itemName, customerName,
-    /// warehouseId, warehouseName, destinationAddress, routeName, plannedDispatchDate, quantity,
-    /// actualWeightKg, actualCbm, tempCondition.
-    ///
-    /// CÃ³ phÃ¢n trang qua <paramref name="pageNumber"/> / <paramref name="pageSize"/> (máº·c Ä‘á»‹nh 1/10).
-    /// </remarks>
     [HttpGet("lookup/lpns-ready")]
     [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> LookupLpnsReady(
@@ -617,7 +572,7 @@ public class DispatchController : ControllerBase
         var items = rawLpns.Select(x => new DispatchLpnReadyDto
         {
             LpnId = x.LpnId,
-            Label = $"{x.LpnCode} ({x.TrackingCode}) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â {x.ItemName} | Qty: {x.Quantity} | {x.ActualWeightKg}kg / {x.ActualCbm}mÃƒâ€šÃ‚Â³ ({x.TempCondition}) | KhÃƒÆ’Ã‚Â¡ch: {x.CustomerName} | Kho: {x.WarehouseName}",
+            Label = $"{x.LpnCode} ({x.TrackingCode}) — {x.ItemName} | Qty: {x.Quantity} | {x.ActualWeightKg}kg / {x.ActualCbm}m³ ({x.TempCondition}) | Khách: {x.CustomerName} | Kho: {x.WarehouseName}",
             LpnCode = x.LpnCode,
             OrderId = x.OrderId,
             TrackingCode = x.TrackingCode,
@@ -628,7 +583,7 @@ public class DispatchController : ControllerBase
             WarehouseId = x.WarehouseId,
             WarehouseName = x.WarehouseName,
             DestinationAddress = x.DestinationAddress,
-            RouteName = x.RouteOriginCity != null ? $"{x.RouteOriginCity} â†’ {x.RouteDestCity}" : null,
+            RouteName = x.RouteOriginCity != null ? $"{x.RouteOriginCity} ? {x.RouteDestCity}" : null,
             PlannedDispatchDate = x.DepartureDate,
             Quantity = x.Quantity,
             ActualWeightKg = x.ActualWeightKg,
@@ -643,12 +598,11 @@ public class DispatchController : ControllerBase
 
         var pagedResult = PagedResult<DispatchLpnReadyDto>.Create(items, totalRecords, safePageNumber, safePageSize);
 
-        return Ok(ApiResponse<PagedResult<DispatchLpnReadyDto>>.SuccessResponse(pagedResult, "Láº¥y danh sÃ¡ch LPN thÃ nh cÃ´ng."));
+        return Ok(ApiResponse<PagedResult<DispatchLpnReadyDto>>.SuccessResponse(pagedResult, "Lay danh sach LPN thanh cong."));
     }
 
     [HttpPost("compatible-lpns/search")]
     [ProducesResponseType(typeof(ApiResponse<CompatibleLpnsSearchResponse>), 200)]
-    [ProducesResponseType(typeof(ApiResponse<object>), 400)]
     public async Task<IActionResult> SearchCompatibleLpns(
         [FromBody] CompatibleLpnsSearchRequest? request,
         [FromQuery] int pageNumber = 1,
@@ -765,7 +719,7 @@ public class DispatchController : ControllerBase
             || !vehicle.InnerHeightCm.HasValue || vehicle.InnerHeightCm.Value <= 0)
         {
             return BadRequest(ApiResponse<object>.Failure(
-                $"Xe {vehicle.TruckPlate} chưa có đủ kích thước lòng thùng (dài, rộng, cao) để mô phỏng xếp hàng."));
+                $"Xe {vehicle.TruckPlate} chua co du kich thuoc long thung (dai, rong, cao) de mo phong xep hang."));
         }
 
         decimal vLength = vehicle.InnerLengthCm.Value;
@@ -792,7 +746,7 @@ public class DispatchController : ControllerBase
         if (lpnsWithoutDimensions.Count > 0)
         {
             return BadRequest(ApiResponse<object>.Failure(
-                $"Các LPN sau chưa có đủ kích thước dài, rộng, cao để mô phỏng xếp hàng: {string.Join(", ", lpnsWithoutDimensions)}."));
+                $"Cac LPN sau chua co du kich thuoc dai, rong, cao de mo phong xep hang: {string.Join(", ", lpnsWithoutDimensions)}."));
         }
 
         var selectedValidation = _cargoCompatibilityService.ValidateSelectedSet(
@@ -841,7 +795,6 @@ public class DispatchController : ControllerBase
 
         var engineItems = new List<ColdChainX.Application.Services.LpnDims>();
         
-        // LIFO logic: rank by SlaDeadline. Latest deadline = delivered last = packed first (highest sequence)
         var orderedLpns = lpns.OrderByDescending(l => l.SlaDeadline).ToList();
         for (int i = 0; i < orderedLpns.Count; i++)
         {
@@ -938,14 +891,10 @@ public class DispatchController : ControllerBase
         return Ok(ApiResponse<SimulatePackingResponse>.SuccessResponse(response, "Preview load plan successful."));
     }
 
-    /// <summary>
-    /// API thông minh: Tìm ra Lịch trình (Schedule) từ một ID bất kỳ (có thể là LpnId, OrderId, TripId hoặc chính ScheduleId).
-    /// </summary>
     [HttpGet("resolve-schedule/{entityId:guid}")]
     [AllowAnonymous]
     public async Task<IActionResult> ResolveScheduleFromId(Guid entityId)
     {
-        // 1. Thử xem ID này có phải là LPN ID không?
         var lpn = await _db.Lpns
             .Include(l => l.Order)
                 .ThenInclude(o => o.Schedule)
@@ -955,7 +904,6 @@ public class DispatchController : ControllerBase
             return Ok(ApiResponse<object>.SuccessResponse(new { EntityType = "LPN", Schedule = lpn.Order.Schedule }, "Success"));
         }
 
-        // 2. Thử xem ID này có phải là Order ID không?
         var order = await _db.TransportOrders
             .Include(o => o.Schedule)
             .FirstOrDefaultAsync(o => o.OrderId == entityId);
@@ -964,7 +912,6 @@ public class DispatchController : ControllerBase
             return Ok(ApiResponse<object>.SuccessResponse(new { EntityType = "ORDER", Schedule = order.Schedule }, "Success"));
         }
 
-        // 3. Thử xem ID này có phải là Trip ID không?
         var trip = await _db.MasterTrips.FirstOrDefaultAsync(t => t.TripId == entityId);
         if (trip != null)
         {
@@ -975,50 +922,27 @@ public class DispatchController : ControllerBase
             }
         }
 
-        // 4. Thử xem ID này có phải là chính Schedule ID không?
         var schedule = await _db.RouteSchedules.FirstOrDefaultAsync(s => s.ScheduleId == entityId);
         if (schedule != null)
         {
             return Ok(ApiResponse<object>.SuccessResponse(new { EntityType = "SCHEDULE", Schedule = schedule }, "Success"));
         }
 
-        return NotFound(ApiResponse<object>.Failure($"Không thể truy xuất được Lịch trình (Schedule) nào từ ID: {entityId}"));
+        return NotFound(ApiResponse<object>.Failure($"Khong the truy xuat duoc Lich trinh (Schedule) nao tu ID: {entityId}"));
     }
 
-    /// <summary>
-    /// [BUOC 1/5] Ghép chuyến thủ công để chọn xe, tài xế và danh sách LPN.
-    /// </summary>
-    /// <remarks>
-    /// TRANG THAI LPN: IN_STOCK â†’ ALLOCATED
-    ///
-    /// Dieu kien:
-    ///   - Phai chon Kho (WarehouseId) truoc; chi cac LPN thuoc kho do moi duoc ghep chuyen
-    ///   - Tat ca LPN phai cung mot kho ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â khong duoc tron LPN tu nhieu kho khac nhau
-    ///   - Cac LPN duoc chon phai o trang thai IN_STOCK
-    ///   - Xe phai ACTIVE va chua duoc gan chuyen nao
-    ///   - Tai xe phai co bang lai con han
-    ///
-    /// Sau buoc nay:
-    ///   - LPN.State = ALLOCATED
-    ///   - Trip.Status = PLANNED
-    ///   - Tra ve LifoPdfUrl (so do xep hang LIFO) va thong tin lo trinh Goong
-    ///
-    /// Buoc tiep theo: POST /api/Dispatch/trip/{tripId}/start-picking
-    /// </remarks>
     [HttpPost("manual-dispatch")]
     [Consumes("multipart/form-data")]
     [ProducesResponseType(typeof(ManualDispatchResult), 200)]
-    [ProducesResponseType(typeof(object), 400)]
-    [ProducesResponseType(typeof(object), 500)]
     public async Task<IActionResult> ManualDispatch(
         [FromQuery] List<string> lpnIds,
         [FromForm] ManualDispatchFormRequest form)
     {
         if (lpnIds == null || !lpnIds.Any())
-            return BadRequest(ApiResponse<object>.Failure("Vui lÃƒÆ’Ã‚Â²ng chÃƒÂ¡Ã‚Â»Ã‚Ân ÃƒÆ’Ã‚Â­t nhÃƒÂ¡Ã‚ÂºÃ‚Â¥t mÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢t LPN."));
+            return BadRequest(ApiResponse<object>.Failure("Vui lòng chọn ít nhất một LPN."));
 
         if (form.PlannedStartTime >= form.PlannedEndTime)
-            return BadRequest(ApiResponse<object>.Failure("PlannedStartTime phÃƒÂ¡Ã‚ÂºÃ‚Â£i nhÃƒÂ¡Ã‚Â»Ã‚Â hÃƒâ€ Ã‚Â¡n PlannedEndTime."));
+            return BadRequest(ApiResponse<object>.Failure("PlannedStartTime phải nhỏ hơn PlannedEndTime."));
 
         if (string.IsNullOrWhiteSpace(form.ScheduleId)
             || !Guid.TryParse(ExtractGuid(form.ScheduleId), out var selectedScheduleId)
@@ -1027,7 +951,6 @@ public class DispatchController : ControllerBase
             return BadRequest(ApiResponse<object>.Failure("ScheduleId is required."));
         }
 
-        // TÃƒÆ’Ã‚Â i xÃƒÂ¡Ã‚ÂºÃ‚Â¿: 1ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“2 ngÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Âi, gÃƒÆ’Ã‚Â¡n theo chuyÃƒÂ¡Ã‚ÂºÃ‚Â¿n qua TripDriver
         var driverIds = (form.DriverIds ?? new List<string>())
             .Where(d => !string.IsNullOrWhiteSpace(d))
             .Select(d => ExtractGuid(d))
@@ -1037,14 +960,14 @@ public class DispatchController : ControllerBase
             .ToList();
 
         if (driverIds.Count < 1 || driverIds.Count > 2)
-            return BadRequest(ApiResponse<object>.Failure("Vui lÃƒÂ²ng chÃ¡Â»Â n 1 hoÃ¡ÂºÂ·c 2 tÃƒÂ i xÃ¡ÂºÂ¿ cho chuyÃ¡ÂºÂ¿n."));
+            return BadRequest(ApiResponse<object>.Failure("Vui lòng chọn 1 hoặc 2 tài xế cho chuyến."));
 
         var parsedLpnIds = new List<Guid>();
         foreach (var lpnId in lpnIds)
         {
             if (!Guid.TryParse(ExtractGuid(lpnId), out var parsedLpnId) || parsedLpnId == Guid.Empty)
             {
-                return BadRequest(ApiResponse<object>.Failure($"LpnId '{lpnId}' khÃ´ng há»£p lá»‡."));
+                return BadRequest(ApiResponse<object>.Failure($"LpnId '{lpnId}' khong hop le."));
             }
 
             parsedLpnIds.Add(parsedLpnId);
@@ -1077,11 +1000,10 @@ public class DispatchController : ControllerBase
                 errors: new { invalidLpnIds }));
         }
 
-        // Tá»± Ä‘á»™ng tÃ¬m kho xuáº¥t phÃ¡t tá»« LPN Ä‘áº§u tiÃªn
         var firstLpnId = parsedLpnIds.First();
         var firstLpn = await _db.Lpns.Include(l => l.Order).FirstOrDefaultAsync(l => l.LpnId == firstLpnId);
         if (firstLpn == null)
-            return BadRequest(ApiResponse<object>.Failure($"KhÃ´ng tÃ¬m tháº¥y LPN {firstLpnId}."));
+            return BadRequest(ApiResponse<object>.Failure($"Khong tim thay LPN {firstLpnId}."));
 
         Guid originLocId;
         if (firstLpn.Order != null && firstLpn.Order.PickupLocation.HasValue)
@@ -1095,16 +1017,15 @@ public class DispatchController : ControllerBase
                 .Select(l => l.LocationId)
                 .FirstOrDefaultAsync();
             if (fallbackLocId == Guid.Empty)
-                return BadRequest(ApiResponse<object>.Failure("KhÃ´ng tÃ¬m tháº¥y vá»‹ trÃ­ kho xuáº¥t phÃ¡t nÃ o trong há»‡ thá»‘ng."));
+                return BadRequest(ApiResponse<object>.Failure("Khong tim thay vi tri kho xuat phat nao trong he thong."));
             originLocId = fallbackLocId;
         }
 
         var parsedVehicleId = Guid.Parse(ExtractGuid(form.VehicleId));
 
-        // Kiá»ƒm tra xe Ä‘Ã£ Ä‘Æ°á»£c gÃ¡n thiáº¿t bá»‹ IoT chÆ°a
         var hasIot = await _db.IotDevices.AnyAsync(d => d.VehicleId == parsedVehicleId);
         if (!hasIot)
-            return BadRequest(ApiResponse<object>.Failure("Xe chÆ°a Ä‘Æ°á»£c gÃ¡n thiáº¿t bá»‹ IoT. Vui lÃ²ng gÃ¡n thiáº¿t bá»‹ IoT cho xe nÃ y trÆ°á»›c khi ghÃ©p chuyáº¿n."));
+            return BadRequest(ApiResponse<object>.Failure("Xe chưa được gắn thiết bị IoT. Vui lòng gắn thiết bị IoT cho xe này trước khi ghép chuyến."));
 
         var request = new ManualDispatchRequest
         {
@@ -1123,7 +1044,6 @@ public class DispatchController : ControllerBase
         {
             var result = await _dispatchService.ManualDispatchAsync(request);
 
-            // Sinh file PDF LÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡nh Ãƒâ€žÃ¢â‚¬ËœiÃƒÂ¡Ã‚Â»Ã‚Âu Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ng + Load Plan
             var goongKey = Environment.GetEnvironmentVariable("key") ?? "xV6YBygCVRIQYybUrDAfaqYuuVfO9qvQBqQSA7uK";
             var html = ManifestTemplateBuilder.BuildHtml(result, goongKey);
             var baseUrl = $"{Request.Scheme}://{Request.Host}";
@@ -1150,7 +1070,7 @@ public class DispatchController : ControllerBase
                 });
                 await _db.SaveChangesAsync();
             }
-            return Ok(ApiResponse<ManualDispatchResult>.SuccessResponse(result, "GhÃ©p chuyáº¿n thÃ nh cÃ´ng!"));
+            return Ok(ApiResponse<ManualDispatchResult>.SuccessResponse(result, "Ghep chuyen thanh cong!"));
         }
         catch (InvalidOperationException ex)
         {
@@ -1158,17 +1078,11 @@ public class DispatchController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, ApiResponse<object>.Failure($"LÃƒÂ¡Ã‚Â»Ã¢â‚¬â€i hÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡ thÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœng khi manual-dispatch: {ex.Message}"));
+            return StatusCode(500, ApiResponse<object>.Failure($"Loi he thong khi manual-dispatch: {ex.Message}"));
         }
     }
 
-    // ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â
-    //  API 1.1: LÃƒÂ¡Ã‚ÂºÃ‚Â¤Y LÃƒÂ¡Ã‚ÂºÃ‚Â I LINK SÃƒâ€ Ã‚Â  Ãƒâ€žÃ‚ÂÃƒÂ¡Ã‚Â»Ã¢â‚¬â„¢ LIFO PDF BÃƒÂ¡Ã‚ÂºÃ‚Â°NG TRIP ID
-    // ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â
 
-    /// <summary>
-    /// API test tạo báo cáo LIFO PDF (Frontend Rendering)
-    /// </summary>
     [HttpPost("test-lifo-pdf")]
     public IActionResult TestLifoPdf([FromBody] TestLifoPdfRequest request)
     {
@@ -1194,49 +1108,38 @@ public class DispatchController : ControllerBase
 
     [HttpGet("trip/{tripId}/lifo-url")]
     [ProducesResponseType(typeof(object), 200)]
-    [ProducesResponseType(typeof(object), 404)]
     public async Task<IActionResult> GetLifoUrl(string tripId)
     {
         var rawId = ExtractGuid(tripId);
         if (!Guid.TryParse(rawId, out var id))
-            return BadRequest(new { Success = false, Error = "TripId khÃ´ng há»£p lá»‡." });
+            return BadRequest(new { Success = false, Error = "TripId khong hop le." });
 
-        // TrÃƒÂ¡Ã‚ÂºÃ‚Â£ vÃƒÂ¡Ã‚Â»Ã‚Â trÃƒÂ¡Ã‚Â»Ã‚Â±c tiÃƒÂ¡Ã‚ÂºÃ‚Â¿p link Cloudinary cÃƒÆ’Ã‚Â³ chÃƒÂ¡Ã‚Â»Ã‚Â¯ kÃƒÆ’Ã‚Â½ (Signed URL) Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã†â€™ bypass lÃƒÂ¡Ã‚Â»Ã¢â‚¬â€i 401
         var url = _fileService.GetSignedUrl($"coldchainx/lifo_{id}");
         return Ok(new { Success = true, LifoPdfUrl = url });
     }
 
-    // ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â
-    //  API 1.3: LÃƒÂ¡Ã‚ÂºÃ‚Â¤Y LÃƒÂ¡Ã‚ÂºÃ‚Â I LINK GIÃƒÂ¡Ã‚ÂºÃ‚Â¤Y Ãƒâ€žÃ‚ÂI Ãƒâ€žÃ‚ÂÃƒâ€ Ã‚Â¯ÃƒÂ¡Ã‚Â»Ã…â€œNG (E-WAYBILL) THEO TRIP ID
-    // ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â
 
     [HttpGet("trip/{tripId}/waybill-url")]
     [ProducesResponseType(typeof(object), 200)]
-    [ProducesResponseType(typeof(object), 404)]
     public IActionResult GetWaybillUrl(string tripId)
     {
         var rawId = ExtractGuid(tripId);
         if (!Guid.TryParse(rawId, out var id))
-            return BadRequest(new { Success = false, Error = "TripId khÃ´ng há»£p lá»‡." });
+            return BadRequest(new { Success = false, Error = "TripId khong hop le." });
 
-        // GiÃƒÂ¡Ã‚ÂºÃ‚Â¥y Ãƒâ€žÃ¢â‚¬Ëœi Ãƒâ€žÃ¢â‚¬ËœÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Âng lÃƒâ€ Ã‚Â°u vÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi prefix "waybill_" (tÃƒÆ’Ã‚Â¡ch biÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡t hoÃƒÆ’Ã‚Â n toÃƒÆ’Ã‚Â n vÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi sÃƒâ€ Ã‚Â¡ Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“ LIFO "lifo_")
         var url = _fileService.GetSignedUrl($"coldchainx/waybill_{id}");
         return Ok(new { Success = true, WaybillPdfUrl = url });
     }
 
-    // ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â
-    //  API 1.2: LÃƒÂ¡Ã‚ÂºÃ‚Â¤Y LÃƒÂ¡Ã‚ÂºÃ‚Â I BÃƒÂ¡Ã‚ÂºÃ‚Â¢N Ãƒâ€žÃ‚ÂÃƒÂ¡Ã‚Â»Ã¢â‚¬â„¢ DÃƒÂ¡Ã‚ÂºÃ‚ÂªN Ãƒâ€žÃ‚ÂÃƒâ€ Ã‚Â¯ÃƒÂ¡Ã‚Â»Ã…â€œNG (GOONG) THEO TRIP ID
-    // ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â
 
     [HttpGet("trip/{tripId}/route")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(TripRouteResponse), 200)]
-    [ProducesResponseType(typeof(object), 404)]
     public async Task<IActionResult> GetTripRoute(string tripId)
     {
         var rawId = ExtractGuid(tripId);
         if (!Guid.TryParse(rawId, out var id))
-            return BadRequest(new { Success = false, Error = "TripId khÃ´ng há»£p lá»‡." });
+            return BadRequest(new { Success = false, Error = "TripId khong hop le." });
 
         var trip = await _db.MasterTrips
             .Include(t => t.OriginLocation)
@@ -1246,7 +1149,7 @@ public class DispatchController : ControllerBase
             .FirstOrDefaultAsync(t => t.TripId == id);
 
         if (trip == null)
-            return NotFound(new { Success = false, Error = "KhÃ´ng tÃ¬m tháº¥y chuyáº¿n Ä‘i." });
+            return NotFound(new { Success = false, Error = "Khong tim thay chuyen di." });
 
         var actualDestinationLocation = trip.DestinationLocation;
         if (trip.TripStops != null && trip.TripStops.Any())
@@ -1286,26 +1189,13 @@ public class DispatchController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { Success = false, Error = "LÃƒÂ¡Ã‚Â»Ã¢â‚¬â€i khi gÃƒÂ¡Ã‚Â»Ã‚Âi Goong API tÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi Ãƒâ€ Ã‚Â°u lÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ trÃƒÆ’Ã‚Â¬nh.", Detail = ex.Message });
+            return StatusCode(500, new { Success = false, Error = "Lỗi khi gọi Goong API tối ưu lộ trình.", Detail = ex.Message });
         }
     }
 
-    // ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â
-    //  API 2: START PICKING ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â BÃƒÂ¡Ã‚ÂºÃ‚Â¯t Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚ÂºÃ‚Â§u lÃƒÂ¡Ã‚ÂºÃ‚Â¥y hÃƒÆ’Ã‚Â ng tÃƒÂ¡Ã‚Â»Ã‚Â« kho
-    // ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â
 
-    /// <summary>
-    /// Lấy danh sách chuyến đi cùng đầy đủ xe, tài xế, tuyến, điểm dừng, LPN,
-    /// đơn hàng, khách hàng, kho, chứng từ, ePOD, seal và sự cố.
-    /// Orders và LPNs được sắp theo thứ tự xếp hàng LIFO.
-    /// </summary>
-    /// <remarks>
-    /// Có thể lọc theo status và tìm theo trip ID, biển số xe, mã tuyến,
-    /// mã đơn hàng hoặc mã LPN. pageSize tối đa là 100 vì mỗi chuyến chứa
-    /// toàn bộ dữ liệu vận hành liên quan.
-    /// </remarks>
     [HttpGet("trips")]
-    [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,Dispatcher,DISPATCHER")]
+    [Authorize(Roles = "Sales,Dispatcher,Admin")]
     [ProducesResponseType(typeof(ApiResponse<PagedResult<TripDetailsDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAllTrips(
         [FromQuery] int pageNumber = 1,
@@ -1355,15 +1245,11 @@ public class DispatchController : ControllerBase
 
         return Ok(ApiResponse<PagedResult<TripDetailsDto>>.SuccessResponse(
             pagedResult,
-            "Lấy danh sách chuyến đi thành công."));
+            "Lay danh sach chuyen di thanh cong."));
     }
 
-    /// <summary>
-    /// Lấy đầy đủ thông tin một chuyến đi theo ID, bao gồm toàn bộ LPN và đơn hàng
-    /// đã được sắp theo thứ tự xếp hàng LIFO.
-    /// </summary>
     [HttpGet("trips/{id:guid}")]
-    [Authorize(Roles = "Admin,ADMIN,WarehouseWorker,WAREHOUSEWORKER,Dispatcher,DISPATCHER")]
+    [Authorize(Roles = "Sales,Dispatcher,Admin")]
     [ProducesResponseType(typeof(ApiResponse<TripDetailsDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<TripDetailsDto>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetTripById(
@@ -1376,22 +1262,15 @@ public class DispatchController : ControllerBase
         if (trip == null)
         {
             return NotFound(ApiResponse<TripDetailsDto>.Failure(
-                $"Không tìm thấy chuyến đi với ID '{id}'.",
+                $"Khong tim thay chuyen di voi ID '{id}'.",
                 StatusCodes.Status404NotFound));
         }
 
         return Ok(ApiResponse<TripDetailsDto>.SuccessResponse(
             trip,
-            "Lấy chi tiết chuyến đi thành công."));
+            "Lay chi tiet chuyen di thanh cong."));
     }
 
-    /// <summary>
-    /// [STEP 2/5 - LOOKUP] Danh sách chuyến ĐÃ ĐƯỢC GHÉP và sẵn sàng bốc hàng (Status = PLANNED).
-    /// </summary>
-    /// <remarks>
-    /// DÃ¹ng Ä‘á»ƒ FE biáº¿t nÃªn nháº­p tripId nÃ o vÃ o POST /api/Dispatch/trip/{tripId}/start-picking.
-    /// ChÃƒÂ¡Ã‚Â»Ã¢â‚¬Â° trÃƒÂ¡Ã‚ÂºÃ‚Â£ vÃƒÂ¡Ã‚Â»Ã‚Â cÃƒÆ’Ã‚Â¡c chuyÃƒÂ¡Ã‚ÂºÃ‚Â¿n Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â£ ghÃƒÆ’Ã‚Â©p (PLANNED) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â tÃƒÂ¡Ã‚Â»Ã‚Â©c Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â£ qua bÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºc manual-dispatch.
-    /// </remarks>
     [HttpGet("trips/can-start-picking")]
     [ProducesResponseType(typeof(PagedResult<ColdChainX.Application.DTOs.Dispatch.TripDispatchDto>), 200)]
     public async Task<IActionResult> GetTripsCanStartPicking([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
@@ -1427,28 +1306,13 @@ public class DispatchController : ControllerBase
         return Ok(pagedResult);
     }
 
-    /// <summary>
-    /// [STEP 2/5] Bắt đầu lệnh bốc hàng để chuyển LPN từ ALLOCATED sang LOADING.
-    /// </summary>
-    /// <remarks>
-    /// LPN state: ALLOCATED â†’ LOADING
-    /// Trip status: PLANNED â†’ PICKING
-    ///
-    /// Precondition : Trip.Status == PLANNED
-    /// Postcondition:
-    ///   - Tat ca LPN cua chuyen: State = LOADING
-    ///   - Trip.Status = PICKING
-    ///
-    /// Next step: goi POST /api/Outbound/pick cho tung LPN
-    /// </remarks>
-    /// <param name="tripId">ID chuyen hang (tu ket qua manual-dispatch)</param>
     [HttpPost("trip/{tripId}/start-picking")]
     [ProducesResponseType(typeof(StartPickingResult), 200)]
     public async Task<IActionResult> StartPicking(string tripId)
     {
         var rawId = ExtractGuid(tripId);
         if (!Guid.TryParse(rawId, out var parsedTripId))
-            return BadRequest(new { Success = false, Error = "TripId khÃ´ng há»£p lá»‡." });
+            return BadRequest(new { Success = false, Error = "TripId khong hop le." });
 
         try
         {
@@ -1461,38 +1325,18 @@ public class DispatchController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { Success = false, Error = "LÃƒÂ¡Ã‚Â»Ã¢â‚¬â€i hÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡ thÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœng khi bÃƒÂ¡Ã‚ÂºÃ‚Â¯t Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚ÂºÃ‚Â§u picking.", Detail = ex.Message });
+            return StatusCode(500, new { Success = false, Error = "Lỗi hệ thống khi bắt đầu picking.", Detail = ex.Message });
         }
     }
 
-    // ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â
-    //  API 2.1: CANCEL TRIP ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â HÃƒÂ¡Ã‚Â»Ã‚Â§y chuyÃƒÂ¡Ã‚ÂºÃ‚Â¿n Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â£ ghÃƒÆ’Ã‚Â©p, reset toÃƒÆ’Ã‚Â n bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ vÃƒÂ¡Ã‚Â»Ã‚Â free
-    // ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â
 
-    /// <summary>
-    /// Hủy một chuyến đang ghép (planning) để kết thúc việc bốc hàng / xếp hàng / kẹp chì.
-    /// </summary>
-    /// <remarks>
-    /// Ãƒâ€žÃ‚ÂIÃƒÂ¡Ã‚Â»Ã¢â€šÂ¬U KIÃƒÂ¡Ã‚Â»Ã¢â‚¬Â N: khÃƒÆ’Ã‚Â´ng Ãƒâ€žÃ¢â‚¬ËœÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Â£c cÃƒÆ’Ã‚Â³ LPN nÃƒÆ’Ã‚Â o ÃƒÂ¡Ã‚Â»Ã…Â¸ trÃƒÂ¡Ã‚ÂºÃ‚Â¡ng thÃƒÆ’Ã‚Â¡i SHIPPING (hÃƒÆ’Ã‚Â ng Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â£ xuÃƒÂ¡Ã‚ÂºÃ‚Â¥t phÃƒÆ’Ã‚Â¡t).
-    ///
-    /// Sau khi hÃƒÂ¡Ã‚Â»Ã‚Â§y, toÃƒÆ’Ã‚Â n bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ trÃƒÂ¡Ã‚Â»Ã…Â¸ vÃƒÂ¡Ã‚Â»Ã‚Â nhÃƒâ€ Ã‚Â° trÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºc khi gÃƒÂ¡Ã‚Â»Ã‚Âi manual-dispatch:
-    ///   - LPN.State â†’ IN_STOCK (hÃ ng trá»Ÿ láº¡i kho), gá»¡ TripId
-    ///   - Ãƒâ€žÃ‚ÂÃƒâ€ Ã‚Â¡n hÃƒÆ’Ã‚Â ng ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ IN_STOCK, gÃƒÂ¡Ã‚Â»Ã‚Â¡ MasterTripId
-    ///   - Seal â†’ CANCELLED, gá»¡ SealNumber
-    ///   - E-Waybill (TransportDocument) â†’ CANCELLED
-    ///   - Vehicle.Status / Driver.Status â†’ ACTIVE (giáº£i phÃ³ng)
-    ///   - Trip.Status â†’ CANCELLED
-    ///
-    /// Xe sau khi há»§y cÃ³ thá»ƒ Ä‘Æ°á»£c ghÃ©p chuyáº¿n má»›i qua POST /api/Dispatch/manual-dispatch.
-    /// </remarks>
-    /// <param name="tripId">ID chuyáº¿n cáº§n há»§y</param>
     [HttpPost("trip/{tripId}/cancel")]
     [ProducesResponseType(typeof(CancelTripResult), 200)]
     public async Task<IActionResult> CancelTrip(string tripId)
     {
         var rawId = ExtractGuid(tripId);
         if (!Guid.TryParse(rawId, out var parsedTripId))
-            return BadRequest(new { Success = false, Error = "TripId khÃ´ng há»£p lá»‡." });
+            return BadRequest(new { Success = false, Error = "TripId khong hop le." });
 
         try
         {
@@ -1509,37 +1353,31 @@ public class DispatchController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { Success = false, Error = "LÃƒÂ¡Ã‚Â»Ã¢â‚¬â€i hÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡ thÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœng khi hÃƒÂ¡Ã‚Â»Ã‚Â§y chuyÃƒÂ¡Ã‚ÂºÃ‚Â¿n.", Detail = ex.Message });
+            return StatusCode(500, new { Success = false, Error = "Lỗi hệ thống khi hủy chuyến.", Detail = ex.Message });
         }
     }
 
-    // ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â
-    //  API 3: IOT CHECK ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â KiÃƒÂ¡Ã‚Â»Ã†â€™m tra tÃƒÆ’Ã‚Â­n hiÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡u IoT xe
-    // ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â
 
-    /// <summary>
-    /// Kiểm tra trạng thái kết nối, GPS, nhiệt độ, pin của các thiết bị IoT gắn trên xe.
-    /// </summary>
     [HttpPost("vehicle-iot-check/{tripId}")]
     [ProducesResponseType(typeof(VehicleIoTStatus), 200)]
     public async Task<IActionResult> CheckVehicleIoT(string tripId)
     {
         var rawTripId = ExtractGuid(tripId);
         if (!Guid.TryParse(rawTripId, out var parsedTripId))
-            return BadRequest(new { Success = false, Error = "TripId khÃ´ng há»£p lá»‡." });
+            return BadRequest(new { Success = false, Error = "TripId khong hop le." });
 
         var trip = await _db.MasterTrips.FirstOrDefaultAsync(t => t.TripId == parsedTripId);
         if (trip == null)
-            return BadRequest(new { Success = false, Error = "KhÃ´ng tÃ¬m tháº¥y chuyáº¿n Ä‘i." });
+            return NotFound(new { Success = false, Error = "Khong tim thay chuyen di." });
 
         if (trip.VehicleId == null)
-            return BadRequest(new { Success = false, Error = "Chuyáº¿n Ä‘i nÃ y chÆ°a Ä‘Æ°á»£c gÃ¡n xe." });
+            return BadRequest(new { Success = false, Error = "Chuyen di nay chua duoc gan xe." });
             
         var parsedVehicleId = trip.VehicleId.Value;
 
         var hasIot = await _db.IotDevices.AnyAsync(d => d.VehicleId == parsedVehicleId);
         if (!hasIot)
-            return BadRequest(new { Success = false, Error = "Xe cháº¡y chuyáº¿n nÃ y chÆ°a Ä‘Æ°á»£c gÃ¡n thiáº¿t bá»‹ IoT." });
+            return BadRequest(new { Success = false, Error = "Xe chay chuyen nay chua duoc gan thiet bi IoT." });
 
         try
         {
@@ -1552,17 +1390,7 @@ public class DispatchController : ControllerBase
         }
     }
 
-    // ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â
-    //  API 4: SEAL & DISPATCH ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â KÃƒÂ¡Ã‚ÂºÃ‚Â¹p chÃƒÆ’Ã‚Â¬ + kiÃƒÂ¡Ã‚Â»Ã†â€™m tra chÃƒÂ¡Ã‚ÂºÃ‚Â¥t hÃƒÆ’Ã‚Â ng
-    // ÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚ÂÃƒÂ¢Ã¢â‚¬Â¢Ã‚Â
 
-    /// <summary>
-    /// [STEP 5/5 - LOOKUP] Danh sách chuyến đã xếp xong và ĐỦ ĐIỀU KIỆN kẹp chì.
-    /// </summary>
-    /// <remarks>
-    /// TrÃƒÂ¡Ã‚ÂºÃ‚Â£ vÃƒÂ¡Ã‚Â»Ã‚Â cÃƒÆ’Ã‚Â¡c chuyÃƒÂ¡Ã‚ÂºÃ‚Â¿n cÃƒÆ’Ã‚Â³ Status = LOADING_COMPLETED vÃƒÆ’Ã‚Â  TÃƒÂ¡Ã‚ÂºÃ‚Â¤T CÃƒÂ¡Ã‚ÂºÃ‚Â¢ LPN Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â£ ÃƒÂ¡Ã‚Â»Ã…Â¸ trÃƒÂ¡Ã‚ÂºÃ‚Â¡ng thÃƒÆ’Ã‚Â¡i RELEASED.
-    /// DÃ¹ng Ä‘á»ƒ FE biáº¿t nÃªn nháº­p tripId nÃ o vÃ o POST /api/Dispatch/seal-and-dispatch/{tripId}.
-    /// </remarks>
     [HttpGet("trips/ready-to-seal")]
     [ProducesResponseType(typeof(PagedResult<ColdChainX.Application.DTOs.Dispatch.TripDispatchDto>), 200)]
     public async Task<IActionResult> GetTripsReadyToSeal([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
@@ -1601,26 +1429,6 @@ public class DispatchController : ControllerBase
         return Ok(pagedResult);
     }
 
-    /// <summary>
-    /// [STEP 5/5] Kep chi + cap giay di duong (E-Waybill).
-    /// </summary>
-    /// <remarks>
-    /// LPN state: RELEASED â†’ SHIPPING
-    /// Trip status: LOADING_COMPLETED â†’ SEALED â†’ DISPATCHED
-    ///
-    /// Precondition:
-    ///   - Trip.Status == LOADING_COMPLETED  (da goi load-trip truoc)
-    ///   - Tat ca LPN cua chuyen: State == RELEASED
-    ///   - SealCode la bat buoc
-    ///
-    /// Postcondition:
-    ///   - LPN.State = SHIPPING
-    ///   - Trip.Status = SEALED (hoac DISPATCHED neu sinh duoc E-Waybill)
-    ///   - Tao Seal record + OutboundOrder + TransportDocument (E-Waybill PDF)
-    ///   - Cap nhat Vehicle.Status = OnTrip, Driver.Status = OnTrip
-    /// </remarks>
-    /// <param name="tripId">ID chuyen hang</param>
-    /// <param name="request">SealCode bat buoc</param>
     [HttpPost("seal-and-dispatch/{tripId}")]
     [Consumes("multipart/form-data")]
     [ProducesResponseType(typeof(SealAndDispatchResult), 200)]
@@ -1628,13 +1436,13 @@ public class DispatchController : ControllerBase
     {
         var rawId = ExtractGuid(tripId);
         if (!Guid.TryParse(rawId, out var parsedTripId))
-            return BadRequest(new { Success = false, Error = "TripId khÃ´ng há»£p lá»‡." });
+            return BadRequest(new { Success = false, Error = "TripId khong hop le." });
 
         var currentUserId = GetCurrentUserId();
         if (currentUserId == Guid.Empty) return Unauthorized();
 
         if (string.IsNullOrWhiteSpace(request.SealCode))
-            return BadRequest(new { Success = false, Error = "SealCode lÃ  báº¯t buá»™c." });
+            return BadRequest(new { Success = false, Error = "SealCode la bat buoc." });
 
         try
         {
@@ -1647,7 +1455,7 @@ public class DispatchController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { Success = false, Error = "LÃƒÂ¡Ã‚Â»Ã¢â‚¬â€i hÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡ thÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœng khi kÃƒÂ¡Ã‚ÂºÃ‚Â¹p chÃƒÆ’Ã‚Â¬.", Detail = ex.Message });
+            return StatusCode(500, new { Success = false, Error = "Lỗi hệ thống khi kẹp chì.", Detail = ex.Message });
         }
     }
 
@@ -2002,11 +1810,11 @@ public class DispatchController : ControllerBase
 
         if (stopSequence == totalStops)
         {
-            parts.Add("Điểm giao cuối lộ trình → xếp sâu vào đuôi xe (LIFO)");
+            parts.Add("Diem giao cuoi lo trinh - xep sau vao duoi xe (LIFO)");
         }
         else if (stopSequence == 1)
         {
-            parts.Add("Điểm giao đầu tiên → xếp gần cửa xe");
+            parts.Add("Điểm giao đầu tiên - xếp gần cửa xe");
         }
         else
         {
@@ -2015,11 +1823,11 @@ public class DispatchController : ControllerBase
 
         parts.Add(zone switch
         {
-            "REAR" => "Hàng đông lạnh → ngăn REAR",
-            "MID" => "Hàng mát → ngăn MID",
-            _ => "Hàng nhiệt độ thường → ngăn FRONT"
+            "REAR" => "Hang dong lanh - ngan REAR",
+            "MID" => "Hang mat - ngan MID",
+            _ => "Hang nhiet do thuong - ngan FRONT"
         });
-        parts.Add($"Khối lượng {weightKg:F1}kg → hàng nặng xếp dưới");
+        parts.Add($"Khối lượng {weightKg:F1}kg - hàng nặng xếp dưới");
 
         return string.Join("; ", parts);
     }

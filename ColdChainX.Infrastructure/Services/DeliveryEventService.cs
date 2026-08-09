@@ -4,10 +4,6 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace ColdChainX.Infrastructure.Services;
 
-/// <summary>
-/// Implements IDeliveryEventService using SignalR NotificationHub.
-/// Sends real-time notifications to relevant role groups.
-/// </summary>
 public class DeliveryEventService : IDeliveryEventService
 {
     private readonly IHubContext<NotificationHub> _hubContext;
@@ -17,7 +13,6 @@ public class DeliveryEventService : IDeliveryEventService
         _hubContext = hubContext;
     }
 
-    /// <inheritdoc/>
     public async Task NotifyHandoverPartialReturnAsync(
         Guid orderId,
         string trackingCode,
@@ -43,7 +38,6 @@ public class DeliveryEventService : IDeliveryEventService
             }, cancellationToken);
     }
 
-    /// <inheritdoc/>
     public async Task NotifyCodPaymentConfirmedAsync(
         Guid orderId,
         string trackingCode,
@@ -71,7 +65,6 @@ public class DeliveryEventService : IDeliveryEventService
             }, cancellationToken);
     }
 
-    /// <inheritdoc/>
     public async Task NotifyTripCompletedAsync(
         Guid tripId,
         string tripCode,

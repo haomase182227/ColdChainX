@@ -7,10 +7,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace ColdChainX.Infrastructure.Migrations
 {
-    /// <inheritdoc />
     public partial class AddComplianceAndAttachmentModule : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropIndex(
@@ -62,7 +60,6 @@ namespace ColdChainX.Infrastructure.Migrations
                 nullable: false,
                 defaultValue: 0);
 
-            // 1. Add customer_id as nullable
             migrationBuilder.AddColumn<Guid>(
                 name: "customer_id",
                 schema: "public",
@@ -70,7 +67,6 @@ namespace ColdChainX.Infrastructure.Migrations
                 type: "uuid",
                 nullable: true);
 
-            // 2. Populate existing rows using a valid system customer
             migrationBuilder.Sql(@"
                 DO $$
                 DECLARE
@@ -91,7 +87,6 @@ namespace ColdChainX.Infrastructure.Migrations
                 END $$;
             ");
 
-            // 3. Alter column to NOT NULL
             migrationBuilder.AlterColumn<Guid>(
                 name: "customer_id",
                 schema: "public",
@@ -413,7 +408,6 @@ namespace ColdChainX.Infrastructure.Migrations
                 onDelete: ReferentialAction.Restrict);
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropForeignKey(

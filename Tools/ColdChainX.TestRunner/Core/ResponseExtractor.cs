@@ -2,10 +2,6 @@ using System.Text.Json;
 
 namespace ColdChainX.TestRunner.Core;
 
-/// <summary>
-/// Extracts important values (tokens, IDs) from API responses
-/// and saves them to TestContext for chaining.
-/// </summary>
 public static class ResponseExtractor
 {
     public static void Extract(TestContext ctx, string functionCode, string responseBody)
@@ -15,11 +11,9 @@ public static class ResponseExtractor
             var doc = JsonDocument.Parse(responseBody);
             var root = doc.RootElement;
 
-            // Check if response has "data" field
             if (!root.TryGetProperty("data", out var data))
                 return;
 
-            // Function-specific extraction
             switch (functionCode)
             {
                 case "AUTH001": // CreateCustomer
@@ -44,19 +38,22 @@ public static class ResponseExtractor
                     SaveIfExists(ctx, data, "refreshToken", "lastRefreshToken");
                     SaveIfExists(ctx, data, "userId", "userId");
                     SaveIfExists(ctx, data, "customerId", "customerId");
-                    // Auto-detect role and save role-specific token
                     AutoSaveRoleToken(ctx, data);
                     break;
 
+                case "OUT001":
+                    SaveIfExists(ctx, data, "outboundOrderId", "outboundOrderId");
+                    SaveIfExists(ctx, data, "outboundOrderId", "outboundId");
+                    AutoExtractIds(ctx, data, functionCode);
+                    break;
+
                 default:
-                    // Generic: auto-extract any *Id and *Token fields
                     AutoExtractIds(ctx, data, functionCode);
                     break;
             }
         }
         catch
         {
-            // Silently ignore extraction errors
         }
     }
 
@@ -64,7 +61,6 @@ public static class ResponseExtractor
     {
         string? roleName = null;
 
-        // Try to find role in nested objects
         if (data.TryGetProperty("roleName", out var rn))
             roleName = rn.GetString();
         else if (data.TryGetProperty("role", out var r))
@@ -95,22 +91,36 @@ public static class ResponseExtractor
                 var name = prop.Name;
                 if ((name.EndsWith("Id", StringComparison.OrdinalIgnoreCase) ||
                      name.Contains("Token", StringComparison.OrdinalIgnoreCase) ||
-                     name.EndsWith("Code", StringComparison.OrdinalIgnoreCase)) &&
+                     name.EndsWith("Code", StringComparison.OrdinalIgnoreCase) ||
+                     name.EndsWith("Key", StringComparison.OrdinalIgnoreCase)) &&
                     prop.Value.ValueKind is JsonValueKind.String or JsonValueKind.Number)
                 {
                     var val = prop.Value.ToString();
                     if (!string.IsNullOrEmpty(val) && val != "00000000-0000-0000-0000-000000000000")
                         ctx.Set(name, val);
                 }
+                else if (prop.Value.ValueKind == JsonValueKind.Object)
+                {
+                    AutoExtractIds(ctx, prop.Value, funcCode);
+                }
+                else if (prop.Value.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in prop.Value.EnumerateArray())
+                    {
+                        if (item.ValueKind == JsonValueKind.Object)
+                            AutoExtractIds(ctx, item, funcCode);
+                    }
+                }
             }
         }
-        // If data is an array and has items, extract from first item
         else if (data.ValueKind == JsonValueKind.Array)
         {
-            var arr = data.EnumerateArray().ToList();
-            if (arr.Count > 0 && arr[0].ValueKind == JsonValueKind.Object)
+            foreach (var item in data.EnumerateArray())
             {
-                AutoExtractIds(ctx, arr[0], funcCode);
+                if (item.ValueKind == JsonValueKind.Object)
+                {
+                    AutoExtractIds(ctx, item, funcCode);
+                }
             }
         }
     }

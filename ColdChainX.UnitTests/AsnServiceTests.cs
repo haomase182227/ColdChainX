@@ -36,7 +36,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task GetInboundSchedules_WithoutFilters_ReturnsAllScheduledASNs()
         {
-            // Arrange
             var customerId = Guid.NewGuid();
             var customer = new Customer { CustomerId = customerId, CompanyName = "Company A", TaxCode = "TAX-A", Email = "a@a.com" };
             _db.Customers.Add(customer);
@@ -72,7 +71,6 @@ namespace ColdChainX.UnitTests
             _db.InboundAsns.Add(asn);
             await _db.SaveChangesAsync();
 
-            // Act
             var result = await _service.GetInboundSchedulesAsync(
                 customerId: null,
                 status: null,
@@ -84,7 +82,6 @@ namespace ColdChainX.UnitTests
                 pageNumber: 1,
                 pageSize: 10);
 
-            // Assert
             Assert.True(result.Success);
             Assert.Equal(1, result.Data.TotalRecords);
             Assert.Single(result.Data.Data);
@@ -95,7 +92,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task GetInboundSchedules_WithCustomerFilter_RestrictsResults()
         {
-            // Arrange
             var customerId1 = Guid.NewGuid();
             var customerId2 = Guid.NewGuid();
             var customer1 = new Customer { CustomerId = customerId1, CompanyName = "Company A", TaxCode = "TAX-A", Email = "a@a.com" };
@@ -111,7 +107,6 @@ namespace ColdChainX.UnitTests
             _db.InboundAsns.AddRange(asn1, asn2);
             await _db.SaveChangesAsync();
 
-            // Act
             var result = await _service.GetInboundSchedulesAsync(
                 customerId: customerId1,
                 status: null,
@@ -123,7 +118,6 @@ namespace ColdChainX.UnitTests
                 pageNumber: 1,
                 pageSize: 10);
 
-            // Assert
             Assert.True(result.Success);
             Assert.Equal(1, result.Data.TotalRecords);
             Assert.Equal("ASN-01", result.Data.Data.First().AsnCode);
@@ -132,7 +126,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task GetInboundSchedules_WithStatusFilter_RestrictsResults()
         {
-            // Arrange
             var order = new TransportOrder { OrderId = Guid.NewGuid(), TrackingCode = "TRK-01", ItemName = "Item 1", Category = "FOOD", PackingType = "BOX", TempCondition = "COLD", Status = "ASSIGNED" };
             _db.TransportOrders.Add(order);
 
@@ -141,7 +134,6 @@ namespace ColdChainX.UnitTests
             _db.InboundAsns.AddRange(asn1, asn2);
             await _db.SaveChangesAsync();
 
-            // Act
             var result = await _service.GetInboundSchedulesAsync(
                 customerId: null,
                 status: "ARRIVED",
@@ -153,7 +145,6 @@ namespace ColdChainX.UnitTests
                 pageNumber: 1,
                 pageSize: 10);
 
-            // Assert
             Assert.True(result.Success);
             Assert.Equal(1, result.Data.TotalRecords);
             Assert.Equal("ASN-02", result.Data.Data.First().AsnCode);
@@ -162,7 +153,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task GetInboundSchedules_WithDateRangeFilter_FiltersCorrectly()
         {
-            // Arrange
             var order = new TransportOrder { OrderId = Guid.NewGuid(), TrackingCode = "TRK-01", ItemName = "Item 1", Category = "FOOD", PackingType = "BOX", TempCondition = "COLD", Status = "ASSIGNED" };
             _db.TransportOrders.Add(order);
 
@@ -172,7 +162,6 @@ namespace ColdChainX.UnitTests
             _db.InboundAsns.AddRange(asn1, asn2);
             await _db.SaveChangesAsync();
 
-            // Act
             var result = await _service.GetInboundSchedulesAsync(
                 customerId: null,
                 status: null,
@@ -184,7 +173,6 @@ namespace ColdChainX.UnitTests
                 pageNumber: 1,
                 pageSize: 10);
 
-            // Assert
             Assert.True(result.Success);
             Assert.Equal(1, result.Data.TotalRecords);
             Assert.Equal("ASN-02", result.Data.Data.First().AsnCode);
@@ -193,7 +181,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task GetInboundSchedules_WithWarehouseFilter_AddressMatching_ReturnsMatchedASNs()
         {
-            // Arrange
             var warehouseId = Guid.NewGuid();
             var warehouse = new Warehouse
             {
@@ -219,7 +206,6 @@ namespace ColdChainX.UnitTests
             _db.InboundAsns.AddRange(asn1, asn2);
             await _db.SaveChangesAsync();
 
-            // Act
             var result = await _service.GetInboundSchedulesAsync(
                 customerId: null,
                 status: null,
@@ -231,7 +217,6 @@ namespace ColdChainX.UnitTests
                 pageNumber: 1,
                 pageSize: 10);
 
-            // Assert
             Assert.True(result.Success);
             Assert.Equal(1, result.Data.TotalRecords);
             var item = result.Data.Data.First();
@@ -243,7 +228,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task GetInboundSchedules_WithOrderIdFilter_ReturnsOnlyMatchedOrderASN()
         {
-            // Arrange
             var orderId1 = Guid.NewGuid();
             var orderId2 = Guid.NewGuid();
             var order1 = new TransportOrder { OrderId = orderId1, TrackingCode = "TRK-01", ItemName = "Item 1", Category = "FOOD", PackingType = "BOX", TempCondition = "COLD", Status = "ASSIGNED" };
@@ -255,7 +239,6 @@ namespace ColdChainX.UnitTests
             _db.InboundAsns.AddRange(asn1, asn2);
             await _db.SaveChangesAsync();
 
-            // Act
             var result = await _service.GetInboundSchedulesAsync(
                 customerId: null,
                 status: null,
@@ -267,7 +250,6 @@ namespace ColdChainX.UnitTests
                 pageNumber: 1,
                 pageSize: 10);
 
-            // Assert
             Assert.True(result.Success);
             Assert.Equal(1, result.Data.TotalRecords);
             Assert.Equal("ASN-01", result.Data.Data.First().AsnCode);

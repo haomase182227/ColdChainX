@@ -12,6 +12,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
+using ColdChainX.Shared.Responses;
 
 namespace ColdChainX.API.Controllers;
 
@@ -64,6 +65,9 @@ public class DiscrepancyController : ControllerBase
     [HasPermission(PermissionCodes.WarehouseTaskView)]
     public async Task<IActionResult> GetPendingDiscrepancies([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
     {
+        if (pageNumber <= 0 || pageSize <= 0)
+            return BadRequest(ApiResponse<object>.Failure("PageNumber and PageSize must be greater than zero."));
+
         var result = await _mediator.Send(new GetPendingDiscrepanciesQuery
         {
             PageNumber = pageNumber,
@@ -130,7 +134,6 @@ public class DiscrepancyController : ControllerBase
                 receipt.PdfUrl = pdfUrl;
                 count++;
 
-                // Create or update TransportDocument for discrepancy report
                 var doc = await _context.TransportDocuments
                     .FirstOrDefaultAsync(d => d.OrderId == receipt.OrderId && d.DocType == "DISCREPANCY_REPORT");
                 if (doc == null)
@@ -151,13 +154,11 @@ public class DiscrepancyController : ControllerBase
                     doc.CreatedAt = DateTime.UtcNow;
                 }
 
-                // Load the appendix for this order to inject the raw HTML
                 var appendix = await _context.ContractAppendices
                     .Where(a => a.OrderId == receipt.OrderId)
                     .OrderByDescending(a => a.CreatedAt)
                     .FirstOrDefaultAsync();
 
-                // Update corresponding notifications' Params
                 var notifications = await _context.Notifications
                     .Where(n => n.OrderId == receipt.OrderId && n.TemplateId == "NOTI_QC_DISCREPANCY")
                     .ToListAsync();
@@ -183,14 +184,12 @@ public class DiscrepancyController : ControllerBase
                         }
                         catch (Exception)
                         {
-                            // Ignore json parsing errors
                         }
                     }
                 }
             }
             catch (Exception)
             {
-                // Ignore and proceed
             }
         }
 

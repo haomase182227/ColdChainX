@@ -22,7 +22,6 @@ namespace ColdChainX.Application.DTOs.Asns
         public string QrCodeValue { get; set; } = null!;
         public DateTime? CreatedAt { get; set; }
         
-        // Matched Warehouse Info
         public Guid? WarehouseId { get; set; }
         public string? WarehouseName { get; set; }
     }

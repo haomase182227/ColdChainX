@@ -34,18 +34,15 @@ public class VerifyCodPaymentCommandHandler : IRequestHandler<VerifyCodPaymentCo
 
     public async Task<ApiResponse<LpnDeliveryStatusResponse>> Handle(VerifyCodPaymentCommand request, CancellationToken cancellationToken)
     {
-        // 1. Fetch LPN and validate existence
         var lpn = await _context.Lpns
             .Include(l => l.Order)
             .FirstOrDefaultAsync(l => l.LpnId == request.LpnId, cancellationToken);
         if (lpn == null)
             throw new NotFoundException($"LPN with ID '{request.LpnId}' was not found.");
 
-        // 2. Validate LPN belongs to specified trip
         if (lpn.TripId != request.TripId)
             throw new InvalidOperationException($"LPN '{lpn.LpnCode}' does not belong to trip '{request.TripId}'.");
 
-        // 3. Fetch LPN delivery confirmation
         var confirmation = await _context.LpnDeliveryConfirmations
             .FirstOrDefaultAsync(c => c.LpnId == request.LpnId, cancellationToken);
         if (confirmation == null)
@@ -54,11 +51,9 @@ public class VerifyCodPaymentCommandHandler : IRequestHandler<VerifyCodPaymentCo
         if (confirmation.OutcomeType != "DELIVERED")
             throw new InvalidOperationException($"LPN '{lpn.LpnCode}' was not marked as DELIVERED (current outcome: {confirmation.OutcomeType}). COD verification is only allowed for delivered items.");
 
-        // 4. Check if already verified
         if (confirmation.IsCodVerified)
             throw new ConflictException($"COD payment for LPN '{lpn.LpnCode}' has already been verified at {confirmation.CodVerifiedAt:yyyy-MM-ddTHH:mm:ssZ}.");
 
-        // 5. Update confirmation and sync status
         var strategy = _context.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync(async () =>
         {
@@ -71,13 +66,11 @@ public class VerifyCodPaymentCommandHandler : IRequestHandler<VerifyCodPaymentCo
 
                 await _context.SaveChangesAsync(cancellationToken);
 
-                // Sync Order status since COD is now verified
                 await SyncOrderDeliveryStatusAsync(lpn.OrderId, cancellationToken);
 
                 await _context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
 
-                // VietQR Generation in Response
                 var bankId = _configuration?["PaymentSettings:BankId"] ?? "vietinbank";
                 var bankAccount = _configuration?["PaymentSettings:BankAccount"] ?? "1111111111";
                 var bankAccountName = _configuration?["PaymentSettings:BankAccountName"] ?? "NGUYEN VAN A";
@@ -131,7 +124,6 @@ public class VerifyCodPaymentCommandHandler : IRequestHandler<VerifyCodPaymentCo
         var anyShipping = lpns.Any(l => l.State == LpnState.SHIPPING);
         if (anyShipping) return;
 
-        // Fetch confirmations to verify COD payments
         var lpnIds = lpns.Select(l => l.LpnId).ToList();
         var confirmations = await _context.LpnDeliveryConfirmations
             .Where(c => lpnIds.Contains(c.LpnId))

@@ -13,12 +13,6 @@ using ColdChainX.Shared.Responses;
 
 namespace ColdChainX.Application.Features.Delivery.Commands;
 
-/// <summary>
-/// Bước kiểm tra xác nhận tiền đã về hệ thống PayOS và Lưu trữ minh chứng:
-/// 1. Kiểm tra trạng thái giao dịch COD trong DB (xem Webhook PayOS đã nổ "tinh tinh" chưa).
-/// 2. Hỗ trợ đính kèm Ảnh chụp màn hình chuyển khoản thành công từ ngân hàng/MoMo của khách hàng.
-/// 3. Nếu mạng Ngân hàng chậm/nghẽn mà bác tài đã có ảnh bill thành công, hệ thống chuyển sang "PAID_VERIFIED_BY_PROOF" để lái xe an tâm tiếp tục lộ trình!
-/// </summary>
 public class VerifyQrPaymentCommand : IRequest<ApiResponse<object>>
 {
     public Guid EpodId { get; set; }
@@ -52,7 +46,6 @@ public class VerifyQrPaymentCommandHandler : IRequestHandler<VerifyQrPaymentComm
             paymentEvidenceUrl = await _fileService.UploadFileAsync(request.Request.PaymentEvidenceFile);
         }
 
-        // 1. Tìm theo EpodId
         var epod = await _context.DeliveryEpods
             .Include(e => e.Order)
                 .ThenInclude(o => o!.Customer)
@@ -65,7 +58,6 @@ public class VerifyQrPaymentCommandHandler : IRequestHandler<VerifyQrPaymentComm
         if (epod.Order != null) orders.Add(epod.Order);
         referenceTarget = $"EPOD-{epod.EpodId.ToString()[..8].ToUpper()}";
 
-        // 2. Kiểm tra trạng thái tiền đã về hệ thống qua Webhook PayOS chưa
         var orderIds = orders.Select(o => o.OrderId).ToList();
         string epodPrefix = request.EpodId.ToString().Substring(0, 8);
         var existingTransactions = await _context.PaymentTransactions
@@ -79,7 +71,6 @@ public class VerifyQrPaymentCommandHandler : IRequestHandler<VerifyQrPaymentComm
         string statusExplanation = "";
         string finalizedPaymentStatus = epods.FirstOrDefault()?.PaymentStatus ?? "UNPAID";
 
-        // 4. Lưu ảnh chụp màn hình bill chuyển khoản của khách hàng (Payment Evidence)
         if (!string.IsNullOrEmpty(paymentEvidenceUrl))
         {
             foreach (var e in epods)
@@ -89,14 +80,12 @@ public class VerifyQrPaymentCommandHandler : IRequestHandler<VerifyQrPaymentComm
 
                 if (!isAlreadyConfirmedByWebhook)
                 {
-                    // Nếu tiền PayOS chưa nhảy Webhook (mạng Napas nghẽn), việc có ảnh chụp bill hợp lệ giúp chuyển trạng thái tạm duyệt
                     e.PaymentStatus = "PAID_PROOF";
                     e.PaymentConfirmedAt = DateTime.UtcNow;
                     finalizedPaymentStatus = "PAID_PROOF";
                 }
             }
 
-            // Ghi vào thư viện chứng từ TransportDocuments để Kế toán dễ đối soát sau chuyến
             foreach (var order in orders)
             {
                 var proofDoc = new TransportDocument
@@ -117,7 +106,6 @@ public class VerifyQrPaymentCommandHandler : IRequestHandler<VerifyQrPaymentComm
             }
         }
 
-        // 5. Nếu chưa có giao dịch trong Sổ cái nhưng tài xế đã xác nhận bill, ghi nhận bản ghi Sổ cái tạm thời
         if (!existingTransactions.Any() && !string.IsNullOrEmpty(paymentEvidenceUrl))
         {
             decimal totalCod = epods.Sum(e => e.CodAmountPaid ?? e.CodAmount ?? 0m);
@@ -143,12 +131,10 @@ public class VerifyQrPaymentCommandHandler : IRequestHandler<VerifyQrPaymentComm
         }
         else if (existingTransactions.Any() && !string.IsNullOrEmpty(paymentEvidenceUrl))
         {
-            // Bổ sung ảnh bill vào bản ghi sổ cái hiện tại
             var tx = existingTransactions.First();
             tx.EvidenceImageUrl = paymentEvidenceUrl;
         }
 
-        // 6. Xử lý chính thức trạng thái khi đã xác nhận qua webhook
         if (isAlreadyConfirmedByWebhook)
         {
             foreach (var e in epods)
@@ -173,7 +159,6 @@ public class VerifyQrPaymentCommandHandler : IRequestHandler<VerifyQrPaymentComm
             }
         }
 
-        // 7. Tạo Hóa đơn (Invoice) và Sinh PDF nếu chưa có
         if (isAlreadyConfirmedByWebhook || !string.IsNullOrEmpty(paymentEvidenceUrl))
         {
             foreach (var order in orders)
@@ -226,7 +211,6 @@ public class VerifyQrPaymentCommandHandler : IRequestHandler<VerifyQrPaymentComm
 
                     _context.Invoices.Add(invoice);
 
-                    // Generate HTML & PDF
                     string htmlContent = ColdChainX.Application.Templates.InvoiceHtmlTemplate.GenerateHtml(invoice);
                     invoice.PdfUrl = await _pdfService.SaveInvoicePdfAsync(htmlContent, invoice.InvoiceCode);
                 }

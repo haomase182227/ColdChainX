@@ -113,7 +113,6 @@ public class FleetManagementService : IFleetManagementService
                 && v.Status != "DELETED"))
             return ApiResponse<VehicleFleetResponse>.Failure("Engine number already exists");
 
-        // Tài xế không còn gắn trực tiếp với xe — tài xế được gán theo từng chuyến (TripDriver).
 
         var vehicle = new Vehicle
         {
@@ -145,7 +144,6 @@ public class FleetManagementService : IFleetManagementService
         };
         _db.Vehicles.Add(vehicle);
 
-        // Tạo giấy tờ kèm theo (nếu có)
         AddInlineVehicleDocument(vehicle, "REGISTRATION", request.Registration);
         AddInlineVehicleDocument(vehicle, "INSURANCE",     request.Insurance);
         AddInlineVehicleDocument(vehicle, "CITY_PERMIT",  request.CityPermit);
@@ -159,7 +157,14 @@ public class FleetManagementService : IFleetManagementService
     public async Task<ApiResponse<bool>> SoftDeleteVehicleAsync(Guid vehicleId)
     {
         var vehicle = await _db.Vehicles.FindAsync(vehicleId);
-        if (vehicle == null) return ApiResponse<bool>.Failure("Vehicle not found");
+        if (vehicle == null) return ApiResponse<bool>.Failure("Vehicle not found", 404);
+
+        var activeTripStatuses = new[] { "PLANNED", "PICKING", "LOADING", "LOADING_COMPLETED", "SEALED", "DISPATCHED", "IN_TRANSIT" };
+        var hasActiveTrip = await _db.MasterTrips.AnyAsync(t => t.VehicleId == vehicleId && activeTripStatuses.Contains(t.Status));
+        if (hasActiveTrip)
+        {
+            return ApiResponse<bool>.Failure("Vehicle is currently assigned to an active trip", 409);
+        }
 
         vehicle.Status = "DELETED";
         await _db.SaveChangesAsync();
@@ -316,7 +321,6 @@ public class FleetManagementService : IFleetManagementService
                 vehicle.CurrentOdometer = GetDouble(row, vehicle.CurrentOdometer, "CurrentOdometer", "Odometer");
                 vehicle.NextMaintenanceOdometer = GetDouble(row, vehicle.NextMaintenanceOdometer, "NextMaintenanceOdometer", "MocBaoDuongTiepTheo");
 
-                // Tài xế không còn gắn trực tiếp với xe — gán theo từng chuyến (TripDriver).
 
                 UpsertVehicleDocumentFromImport(vehicle, row, "REGISTRATION", "Registration", "DangKiem");
                 UpsertVehicleDocumentFromImport(vehicle, row, "INSURANCE", "Insurance", "BaoHiem");
@@ -412,12 +416,10 @@ public class FleetManagementService : IFleetManagementService
         if (await _db.Users.AnyAsync(u => u.Email == email))
             return ApiResponse<DriverFleetResponse>.Failure("Email already in use");
 
-        // Lấy role Driver
         var driverRole = await _db.Roles.FirstOrDefaultAsync(r => r.RoleName == "Driver");
         if (driverRole == null)
             return ApiResponse<DriverFleetResponse>.Failure("Driver role not found in the system");
 
-        // Tạo tài khoản User cho tài xế
         var user = new User
         {
             UserId = Guid.NewGuid(),
@@ -446,7 +448,6 @@ public class FleetManagementService : IFleetManagementService
         };
         _db.Drivers.Add(driver);
 
-        // Tạo bằng lái kèm theo (nếu có)
         if (request.License != null)
         {
             var license = new DriverLicense
@@ -610,7 +611,14 @@ public class FleetManagementService : IFleetManagementService
     public async Task<ApiResponse<bool>> SoftDeleteDriverAsync(Guid driverId)
     {
         var driver = await _db.Drivers.FindAsync(driverId);
-        if (driver == null) return ApiResponse<bool>.Failure("Driver not found");
+        if (driver == null) return ApiResponse<bool>.Failure("Driver not found", 404);
+
+        var activeTripStatuses = new[] { "PLANNED", "PICKING", "LOADING", "LOADING_COMPLETED", "SEALED", "DISPATCHED", "IN_TRANSIT" };
+        var hasActiveTrip = await _db.TripDrivers.AnyAsync(td => td.DriverId == driverId && td.Trip != null && activeTripStatuses.Contains(td.Trip.Status));
+        if (hasActiveTrip)
+        {
+            return ApiResponse<bool>.Failure("Driver is currently assigned to an active trip", 409);
+        }
 
         driver.Status = "DELETED";
         await _db.SaveChangesAsync();
@@ -660,7 +668,6 @@ public class FleetManagementService : IFleetManagementService
                     _db.Drivers.Add(driver);
                     result.Inserted++;
 
-                    // Tự động tạo User nếu có cột Email
                     var emailRaw = TrimOrNull(Get(row, "Email", "email"));
                     if (!string.IsNullOrWhiteSpace(emailRaw))
                     {
@@ -668,7 +675,6 @@ public class FleetManagementService : IFleetManagementService
                         var existingUser = await _db.Users.FirstOrDefaultAsync(u => u.Email == emailNorm);
                         if (existingUser != null)
                         {
-                            // Liên kết user đã có nếu chưa linked
                             driver.UserId = existingUser.UserId;
                         }
                         else
@@ -1066,7 +1072,6 @@ public class FleetManagementService : IFleetManagementService
 
         if (vehicle.Status == "ACTIVE" && vehicle.CurrentOdometer >= vehicle.NextMaintenanceOdometer)
         {
-            // Phase 1: Chống trùng lặp — chỉ gửi notification 1 lần cho mỗi mốc bảo dưỡng
             var unreadOdometerNotifications = await _db.Notifications
                 .Where(n => (n.TemplateId == "NOTI_MAINTENANCE_ODOMETER" || n.TemplateId == "NOTI_MAINTENANCE_ODOMETER_IN_TRIP") &&
                             n.IsRead != true)
@@ -1077,7 +1082,6 @@ public class FleetManagementService : IFleetManagementService
 
             if (!alreadyNotified)
             {
-                // Phase 2: Kiểm tra xe có đang trong chuyến hay không
                 var activeStatuses = new[] { "SEALED", "DISPATCHED", "IN_TRANSIT", "DELAYED" };
                 var isInTrip = await _db.MasterTrips.AnyAsync(t =>
                     t.VehicleId == vehicle.VehicleId &&
@@ -1088,13 +1092,11 @@ public class FleetManagementService : IFleetManagementService
 
                 if (isInTrip)
                 {
-                    // Xe đang trong chuyến → giữ ACTIVE, gửi cảnh báo "sẽ khoá sau chuyến"
                     templateId = "NOTI_MAINTENANCE_ODOMETER_IN_TRIP";
                     message = $"Xe {vehicle.TruckPlate} đã chạy {vehicle.CurrentOdometer:0.#} KM, vượt mốc bảo dưỡng. Xe đang trong chuyến, sẽ tự động khoá sau khi kết thúc.";
                 }
                 else
                 {
-                    // Xe rảnh → khoá lại bằng MAINTENANCE_PENDING, yêu cầu tạo phiếu bảo trì
                     vehicle.Status = "MAINTENANCE_PENDING";
                     templateId = "NOTI_MAINTENANCE_ODOMETER";
                     message = $"Xe {vehicle.TruckPlate} đã chạy {vehicle.CurrentOdometer:0.#} KM, vượt mốc bảo dưỡng. Xe đã được khoá, vui lòng tạo phiếu bảo trì.";
@@ -1119,7 +1121,6 @@ public class FleetManagementService : IFleetManagementService
                     });
             }
 
-            // Phase 3: Nếu reason = POST_TRIP_REPORT (kết thúc chuyến) và xe vẫn vượt mốc → khoá xe
             if (request.Reason == OdometerSyncReason.POST_TRIP_REPORT && vehicle.Status == "ACTIVE")
             {
                 vehicle.Status = "MAINTENANCE_PENDING";
@@ -1160,11 +1161,16 @@ public class FleetManagementService : IFleetManagementService
 
     public async Task<ApiResponse<MaintenanceTicketResponse>> CompleteMaintenanceTicketAsync(Guid ticketId, CompleteMaintenanceTicketRequest request)
     {
+        if (request.Cost <= 0)
+            return ApiResponse<MaintenanceTicketResponse>.Failure("Maintenance cost must be greater than zero.", 400);
+
         var ticket = await _db.MaintenanceTickets
             .Include(t => t.Vehicle)
                 .ThenInclude(v => v!.VehicleDocuments)
             .FirstOrDefaultAsync(t => t.TicketId == ticketId);
-        if (ticket == null) return ApiResponse<MaintenanceTicketResponse>.Failure("Maintenance ticket not found");
+        if (ticket == null) return ApiResponse<MaintenanceTicketResponse>.Failure("Maintenance ticket not found", 404);
+        if (string.Equals(ticket.Status, "RESOLVED", StringComparison.OrdinalIgnoreCase))
+            return ApiResponse<MaintenanceTicketResponse>.Failure("Maintenance ticket is already completed.", 409);
 
         ticket.Status = "RESOLVED";
         ticket.Cost = request.Cost;
@@ -1189,7 +1195,6 @@ public class FleetManagementService : IFleetManagementService
                 await RefreshVehicleStatusAsync(ticket.Vehicle);
             }
 
-            // Phase 4: Dọn dẹp notification bảo dưỡng cũ khi bảo trì xong
             var truckPlate = ticket.Vehicle.TruckPlate;
             var oldNotifications = await _db.Notifications
                 .Where(n => (n.TemplateId == "NOTI_MAINTENANCE_ODOMETER" || n.TemplateId == "NOTI_MAINTENANCE_ODOMETER_IN_TRIP") &&
@@ -1518,8 +1523,6 @@ public class FleetManagementService : IFleetManagementService
             return null;
 
         var dimensionCbm = vehicle.InnerLengthCm.Value
-            * vehicle.InnerWidthCm.Value
-            * vehicle.InnerHeightCm.Value
             / 1_000_000m;
         var nominalCbm = vehicle.MaxCbm > 0
             ? Math.Min(vehicle.MaxCbm, dimensionCbm)
@@ -1829,8 +1832,6 @@ public class FleetManagementService : IFleetManagementService
         if (nextInnerLength is > 0 && nextInnerWidth is > 0 && nextInnerHeight is > 0)
         {
             var physicalCbm = nextInnerLength.Value
-                * nextInnerWidth.Value
-                * nextInnerHeight.Value
                 / 1_000_000m;
             if (nextMaxCbm > physicalCbm)
             {

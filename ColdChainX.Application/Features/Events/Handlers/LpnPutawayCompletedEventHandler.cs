@@ -23,8 +23,6 @@ public class LpnPutawayCompletedEventHandler : INotificationHandler<LpnPutawayCo
 
     public Task Handle(LpnPutawayCompletedEvent notification, CancellationToken cancellationToken)
     {
-        // Không tự động đổi trạng thái Order thành IN_WAREHOUSE nữa.
-        // Chỉ cần cập nhật LPN tới trạng thái IN_STOCK là đủ.
         _logger.LogInformation("LPN Putaway completed for Order {OrderId}. Order status unchanged.", notification.OrderId);
         return Task.CompletedTask;
     }

@@ -89,8 +89,6 @@ public class NotificationService : INotificationService
         }
         else
         {
-            // A refreshed FCM token identifies the current authenticated installation.
-            // Reassigning the existing row preserves the global unique-token invariant.
             existing.UserId = userId;
             existing.Platform = platform;
             existing.DeviceId = deviceId;
@@ -157,7 +155,6 @@ public class NotificationService : INotificationService
                 d => d.UserId == userId && d.Token == token,
                 cancellationToken);
 
-        // Idempotent and deliberately does not disclose whether another user owns the token.
         if (existing == null || !existing.IsActive)
             return ApiResponse<bool>.SuccessResponse(true, "Device token is unregistered.");
 

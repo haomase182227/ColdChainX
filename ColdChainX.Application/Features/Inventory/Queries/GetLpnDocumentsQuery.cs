@@ -41,7 +41,6 @@ public class GetLpnDocumentsQueryHandler : IRequestHandler<GetLpnDocumentsQuery,
 
         var docs = new List<LpnDocumentDto>();
 
-        // 1. Warehouse Receipt (Phiếu nhập kho)
         if (!string.IsNullOrWhiteSpace(lpn.Receipt?.PdfUrl))
         {
             docs.Add(new LpnDocumentDto
@@ -52,7 +51,6 @@ public class GetLpnDocumentsQueryHandler : IRequestHandler<GetLpnDocumentsQuery,
             });
         }
 
-        // 2. Discrepancy Note (Biên bản bất thường) - Always generated dynamically if requested
         if (!string.IsNullOrEmpty(lpn.DiscrepancyReason) || !string.IsNullOrEmpty(lpn.EvidenceImageUrl))
         {
             docs.Add(new LpnDocumentDto
@@ -63,7 +61,6 @@ public class GetLpnDocumentsQueryHandler : IRequestHandler<GetLpnDocumentsQuery,
             });
         }
 
-        // 3. Evidence Image (Hình ảnh bằng chứng)
         if (!string.IsNullOrEmpty(lpn.EvidenceImageUrl))
         {
             docs.Add(new LpnDocumentDto
@@ -74,7 +71,6 @@ public class GetLpnDocumentsQueryHandler : IRequestHandler<GetLpnDocumentsQuery,
             });
         }
 
-        // 4. Dispatch Note / Manifest (Phiếu xuất kho)
         if (lpn.TripId.HasValue)
         {
             docs.Add(new LpnDocumentDto
@@ -85,7 +81,6 @@ public class GetLpnDocumentsQueryHandler : IRequestHandler<GetLpnDocumentsQuery,
             });
         }
 
-        // 5. ePOD (Proof of Delivery for the Order)
         if (lpn.State == ColdChainX.Core.Enums.LpnState.RELEASED || 
             lpn.State == ColdChainX.Core.Enums.LpnState.SHIPPING ||
             lpn.State == ColdChainX.Core.Enums.LpnState.DELIVERED ||

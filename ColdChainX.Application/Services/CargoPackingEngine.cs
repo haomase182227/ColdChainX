@@ -53,7 +53,6 @@ namespace ColdChainX.Application.Services
                 return result;
             }
 
-            // 1. Airflow Circulation: Reduce usable dimensions
             decimal usableLength = container.Length - 20m; // Front 10cm + Rear 10cm
             decimal usableHeight = container.Height - 20m; // Top 20cm
 
@@ -63,7 +62,6 @@ namespace ColdChainX.Application.Services
                 return result;
             }
 
-            // 2. Sorting Rules (LIFO, Temperature, Weight, Volume)
             var sortedItems = itemsToPack
                 .OrderByDescending(i => i.RouteStopSequence)
                 .ThenBy(i => i.RequiredTemperature) // Colder items first (front)
@@ -77,12 +75,9 @@ namespace ColdChainX.Application.Services
                 .GroupBy(i => i.LpnId)
                 .ToDictionary(g => g.Key, g => g.All(i => i.IsStackable));
 
-            // 3. Keep-out Zone: Evaporator (Lốc lạnh) Obstacle
-            // Calculate physical dimensions
             decimal evapH_physical = Math.Min(container.Height * 0.3m, 60m);
             decimal evapD_physical = 30m;
             
-            // Map to packing coordinate system (which already reduced top 20cm and front 10cm)
             decimal packingEvapH = evapH_physical - 20m;
             decimal packingEvapD = evapD_physical - 10m;
 
@@ -105,10 +100,8 @@ namespace ColdChainX.Application.Services
                 var orientations = GetOrientations(item);
                 bool placed = false;
 
-                // Candidate points: start with origin
                 var candidatePoints = new List<(decimal x, decimal y, decimal z)> { (0, 0, 0) };
 
-                // Add corners of already placed items as candidates
                 foreach (var pi in placedItems)
                 {
                     candidatePoints.Add((pi.X + pi.W, pi.Y, pi.Z));
@@ -116,7 +109,6 @@ namespace ColdChainX.Application.Services
                     candidatePoints.Add((pi.X, pi.Y, pi.Z + pi.D));
                 }
 
-                // Sort candidates to pack tightly: bottom-left-back first (z, y, x)
                 candidatePoints = candidatePoints
                     .OrderBy(p => p.z)
                     .ThenBy(p => p.y)
@@ -127,7 +119,6 @@ namespace ColdChainX.Application.Services
                 {
                     foreach (var (w, h, d) in orientations)
                     {
-                        // Check container boundaries (using reduced dimensions for Airflow)
                         if (point.x + w > container.Width ||
                             point.y + h > usableHeight ||
                             point.z + d > usableLength)
@@ -135,7 +126,6 @@ namespace ColdChainX.Application.Services
                             continue;
                         }
 
-                        // Check collisions
                         bool collision = false;
                         foreach (var pi in placedItems)
                         {
@@ -181,11 +171,8 @@ namespace ColdChainX.Application.Services
                 }
             }
 
-            // Remove dummy obstacles (like Evaporator)
             placedItems.RemoveAll(pi => pi.LpnId == Guid.Empty);
 
-            // Center the cargo horizontally (along X-axis) to distribute weight evenly
-            // AND offset along Z-axis for Front Bulkhead clearance (10cm)
             if (placedItems.Any())
             {
                 decimal maxPlacedX = placedItems.Max(pi => pi.X + pi.W);
@@ -202,10 +189,6 @@ namespace ColdChainX.Application.Services
             result.PlacedItems = placedItems;
             result.UnplacedLpnIds = unplacedIds;
 
-            // Calculate utilization based on Cold Chain USABLE volume
-            // 1. Airflow: 20cm height, 20cm length reduced
-            // (usableLength and usableHeight are already defined above)
-            // 2. Evaporator (approx 50cm depth x Width x 30% height)
             decimal evapH = Math.Min(container.Height * 0.3m, 60m);
             decimal evaporatorVolume = 50m * container.Width * evapH;
             
@@ -223,8 +206,6 @@ namespace ColdChainX.Application.Services
             var w = item.Width;
             var h = item.Height;
 
-            // 6 possible orientations in 3D space
-            // Assuming W is X-axis (width), H is Y-axis (height), D is Z-axis (length/depth)
             var list = new List<(decimal w, decimal h, decimal d)>
             {
                 (w, h, l),
@@ -235,7 +216,6 @@ namespace ColdChainX.Application.Services
                 (h, w, l)
             };
 
-            // Remove duplicates (e.g. if l == w)
             return list.Distinct().ToList();
         }
 

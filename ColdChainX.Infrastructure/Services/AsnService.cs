@@ -45,25 +45,21 @@ namespace ColdChainX.Infrastructure.Services
                     .ThenInclude(o => o.WarehouseReceipts)
                 .AsNoTracking();
 
-            // Filter by Order ID
             if (orderId.HasValue)
             {
                 query = query.Where(a => a.OrderId == orderId.Value);
             }
 
-            // Filter by Customer
             if (customerId.HasValue)
             {
                 query = query.Where(a => a.Order.CustomerId == customerId.Value);
             }
 
-            // Filter by Status
             if (!string.IsNullOrWhiteSpace(status))
             {
                 query = query.Where(a => a.Status == status.Trim());
             }
 
-            // Filter by Date Range
             if (dateFrom.HasValue)
             {
                 query = query.Where(a => a.RequestedDropoffTime >= dateFrom.Value);
@@ -73,7 +69,6 @@ namespace ColdChainX.Infrastructure.Services
                 query = query.Where(a => a.RequestedDropoffTime <= dateTo.Value);
             }
 
-            // Filter by Search Query
             if (!string.IsNullOrWhiteSpace(searchQuery))
             {
                 var search = searchQuery.Trim().ToLower();
@@ -84,7 +79,6 @@ namespace ColdChainX.Infrastructure.Services
                     || (a.Order.DestLocationNavigation != null && a.Order.DestLocationNavigation.Address.ToLower().Contains(search)));
             }
 
-            // Filter by Warehouse (pre-receipt address match or post-receipt link)
             if (warehouseId.HasValue)
             {
                 var warehouse = await _db.Warehouses.FindAsync(warehouseId.Value);
@@ -105,7 +99,6 @@ namespace ColdChainX.Infrastructure.Services
                 }
             }
 
-            // Sort by earliest requested drop-off time (upcoming first)
             query = query.OrderBy(a => a.RequestedDropoffTime);
 
             var totalRecords = await query.CountAsync();
@@ -233,7 +226,6 @@ namespace ColdChainX.Infrastructure.Services
 
             try
             {
-                // Generate PDF and Upload
                 var pdfBytes = await _pdfGeneratorService.GeneratePdfAsync("Asn", new { Asn = asn, Order = order });
                 var pdfUrl = await _fileService.UploadFileAsync(pdfBytes, $"{asnCode}.pdf");
                 
@@ -242,7 +234,6 @@ namespace ColdChainX.Infrastructure.Services
             }
             catch (Exception)
             {
-                // Ignore PDF gen error for now so we don't break ASN creation
             }
 
             return ApiResponse<AsnResponse>.SuccessResponse(new AsnResponse

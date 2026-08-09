@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            color: #172033;
+            font-family: Arial, sans-serif;
+            font-size: 13px;
+            line-height: 1.5;
+            margin: 0 auto;
+            max-width: 800px;
+            padding: 24px;
+        }
+
+        .header {
+            border-bottom: 3px solid #176b87;
+            margin-bottom: 24px;
+            padding-bottom: 14px;
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #176b87;
+            font-size: 21px;
+            margin: 0 0 4px;
+            text-transform: uppercase;
+        }
+
+        .header p { margin: 0; }
+
+        h2 {
+            color: #176b87;
+            font-size: 15px;
+            margin: 22px 0 8px;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th, td {
+            border: 1px solid #cbd5df;
+            padding: 8px 10px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        th {
+            background: #eef6f8;
+            width: 28%;
+        }
+
+        .amount {
+            font-size: 15px;
+            font-weight: 700;
+            text-align: right;
+        }
+
+        .note {
+            border: 1px solid #cbd5df;
+            min-height: 58px;
+            padding: 10px;
+            white-space: pre-wrap;
+        }
+
+        .signatures {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 42px;
+            text-align: center;
+        }
+
+        .signature { width: 42%; }
+        .signature-space { height: 58px; }
+        .muted { color: #64748b; font-size: 11px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Biên bản giải quyết sự cố</h1>
+        <p>Mã sự cố: <strong>{{IncidentId}}</strong></p>
+    </div>
+
+    <h2>Thông tin sự cố</h2>
+    <table>
+        <tr><th>Mã chuyến</th><td>{{TripId}}</td></tr>
+        <tr><th>Loại sự cố</th><td>{{IncidentType}}</td></tr>
+        <tr><th>Mức độ</th><td>{{Severity}}</td></tr>
+        <tr><th>Vị trí ghi nhận</th><td>{{Location}}</td></tr>
+        <tr><th>Người báo cáo</th><td>{{ReporterName}}</td></tr>
+        <tr><th>Thời gian báo cáo</th><td>{{ReportedAt}}</td></tr>
+    </table>
+
+    <h2>Nội dung</h2>
+    <div class="note">{{Description}}</div>
+
+    <h2>Kết quả xử lý</h2>
+    <table>
+        <tr><th>Người xác nhận xử lý</th><td>{{ResolverName}}</td></tr>
+        <tr><th>Thời gian hoàn tất</th><td>{{ResolvedAt}}</td></tr>
+        <tr><th>Số tiền tài xế đã tự chi</th><td class="amount">{{DriverPaidAmount}} VND</td></tr>
+        <tr><th>Số tiền kế toán đã hoàn lại</th><td class="amount">{{ReimbursedAmount}} VND</td></tr>
+    </table>
+
+    <h2>Ghi chú giải quyết</h2>
+    <div class="note">{{ResolutionNote}}</div>
+
+    <div class="signatures">
+        <div class="signature">
+            <strong>Người xác nhận xử lý</strong>
+            <div class="signature-space"></div>
+            <div>{{ResolverName}}</div>
+        </div>
+        <div class="signature">
+            <strong>Đại diện kế toán</strong>
+            <div class="signature-space"></div>
+            <div class="muted">Ký và ghi rõ họ tên</div>
+        </div>
+    </div>
+</body>
+</html>

@@ -58,7 +58,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task ReviewOrder_Approve_SetsStatusToApproved()
         {
-            // Arrange
             var customerId = Guid.NewGuid();
             var orderId = Guid.NewGuid();
 
@@ -97,10 +96,8 @@ namespace ColdChainX.UnitTests
                 Action = "APPROVE"
             };
 
-            // Act
             var result = await _service.ReviewOrderAsync(orderId, request, Guid.NewGuid());
 
-            // Assert
             Assert.True(result.Success, result.Message);
             Assert.Equal("APPROVED", result.Data.Status);
 
@@ -112,7 +109,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task ReviewOrder_Reject_SetsStatusToRejected()
         {
-            // Arrange
             var customerId = Guid.NewGuid();
             var orderId = Guid.NewGuid();
 
@@ -138,10 +134,8 @@ namespace ColdChainX.UnitTests
                 CustomerNote = "Documents incomplete"
             };
 
-            // Act
             var result = await _service.ReviewOrderAsync(orderId, request, Guid.NewGuid());
 
-            // Assert
             Assert.True(result.Success, result.Message);
             Assert.Equal("REJECTED", result.Data.Status);
 
@@ -153,7 +147,6 @@ namespace ColdChainX.UnitTests
         [Fact]
         public async Task UpdateOrder_WhenPendingReview_UpdatesOrderAndKeepsPendingReviewStatus()
         {
-            // Arrange
             var customerId = Guid.NewGuid();
             var orderId = Guid.NewGuid();
             _db.TransportOrders.Add(new TransportOrder
@@ -176,10 +169,8 @@ namespace ColdChainX.UnitTests
                 Quantity = 10
             };
 
-            // Act
             var result = await _service.UpdateOrderAsync(orderId, request, customerId);
 
-            // Assert
             Assert.True(result.Success, result.Message);
             Assert.NotNull(result.Data);
             Assert.Equal("Updated cargo", result.Data.ItemName);

@@ -353,7 +353,6 @@ public class WarehouseFlowService : IWarehouseFlowService
         if (schedule == null)
             return null;
 
-        // Deadline is exactly on the Scheduled Departure Date at the CutOff Time
         return schedule.DepartureDate.Date.Add(schedule.CutOffTime);
     }
 

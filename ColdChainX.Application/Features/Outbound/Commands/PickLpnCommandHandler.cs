@@ -14,15 +14,6 @@ public class PickLpnCommandHandler : IRequestHandler<PickLpnCommand, PickLpnResp
         _context = context;
     }
 
-    /// <summary>
-    /// Xác nhận một LPN đã được bốc lên xe.
-    ///
-    /// Precondition  : LPN.State == LOADING  (set bởi start-picking)
-    /// Postcondition : LPN.State == LOADING_COMPLETED
-    ///
-    /// Goi tung LPN mot lan. Sau khi tat ca LPN cua chuyen deu LOADING_COMPLETED,
-    /// goi POST /api/Outbound/load-trip de xac nhan toan bo chuyen.
-    /// </summary>
     public async Task<PickLpnResponse> Handle(PickLpnCommand request, CancellationToken cancellationToken)
     {
         var lpn = await _context.Lpns.FirstOrDefaultAsync(l => l.LpnId == request.LpnId, cancellationToken);

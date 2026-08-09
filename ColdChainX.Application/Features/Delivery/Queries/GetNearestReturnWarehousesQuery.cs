@@ -13,9 +13,6 @@ using ColdChainX.Shared.Responses;
 
 namespace ColdChainX.Application.Features.Delivery.Queries;
 
-/// <summary>
-/// Query lấy danh sách toàn bộ các kho trong hệ thống sắp xếp theo khoảng cách so với tọa độ GPS mới nhất từ thiết bị IoT của xe bốc chuyến (TripId).
-/// </summary>
 public class GetNearestReturnWarehousesQuery : IRequest<ApiResponse<object>>
 {
     public Guid TripId { get; set; }
@@ -37,7 +34,6 @@ public class GetNearestReturnWarehousesQueryHandler : IRequestHandler<GetNearest
         if (request.TripId == Guid.Empty)
             throw new ValidationException("Vui lòng cung cấp tham số tripId hợp lệ.");
 
-        // 1. Tìm chuyến hàng theo TripId để xác định đang đi xe nào
         var trip = await _context.MasterTrips
             .Include(t => t.Vehicle)
             .ThenInclude(v => v!.IotDevices)
@@ -51,12 +47,10 @@ public class GetNearestReturnWarehousesQueryHandler : IRequestHandler<GetNearest
 
         var vehicle = trip.Vehicle;
 
-        // 2. Truy xuất dữ liệu vị trí GPS của xe từ thiết bị IoT (bảng TelemetryLogs) lưu trong DB
         var deviceIds = vehicle.IotDevices
             .Select(d => d.DeviceId)
             .ToList();
 
-        // Tìm log Telemetry mới nhất của chuyến hàng hoặc của các thiết bị IoT gắn trên xe
         var latestTelemetry = await _context.TelemetryLogs
             .Include(t => t.Device)
             .Where(t => t.TripId == trip.TripId || (t.DeviceId.HasValue && deviceIds.Contains(t.DeviceId.Value)))
@@ -81,7 +75,6 @@ public class GetNearestReturnWarehousesQueryHandler : IRequestHandler<GetNearest
             deviceCode = vehicle.IotDevices.FirstOrDefault(d => !string.IsNullOrEmpty(d.DeviceCode))?.DeviceCode ?? "UNCONNECTED_IOT";
             locationSource = $"Dữ liệu định vị IoT (Hiện thiết bị {deviceCode} trên xe {vehicle.TruckPlate} chưa gửi log tọa độ mới vào DB, hệ thống lấy theo tọa độ check-in trạm gần nhất)";
             
-            // Cơ chế dự phòng thông minh khi môi trường test chưa có data stream của IoT: lấy tọa độ điểm dừng đã Arrived của chuyến
             var lastStop = await _context.TripStops
                 .Include(s => s.Location)
                 .Where(s => s.TripId == trip.TripId && s.ActualArrivalTime != null && s.Location != null)
@@ -96,7 +89,6 @@ public class GetNearestReturnWarehousesQueryHandler : IRequestHandler<GetNearest
             }
         }
 
-        // 3. Lấy toàn bộ danh sách kho trong hệ thống (Không giới hạn Top)
         var warehouses = await _context.Warehouses
             .Where(w => w.Status == null || w.Status.ToUpper() == "ACTIVE" || w.Status.ToUpper() == "OK")
             .ToListAsync(cancellationToken);
@@ -111,7 +103,6 @@ public class GetNearestReturnWarehousesQueryHandler : IRequestHandler<GetNearest
             }, "Không tìm thấy kho trong cơ sở dữ liệu.");
         }
 
-        // 4. Chiết tính khoảng cách từ vị trí IoT của xe tới từng kho trong hệ thống
         decimal baseHubLat = 10.732537m;
         decimal baseHubLon = 106.714447m;
 
@@ -149,14 +140,12 @@ public class GetNearestReturnWarehousesQueryHandler : IRequestHandler<GetNearest
                     }
                     catch
                     {
-                        // Ignore Goong Geocoder exceptions and derive fallback coordinate
                     }
                 }
             }
 
             if (!parsed)
             {
-                // Tạo sai số tọa độ xung quanh TP.HCM theo mã kho để các kho có khoảng cách chênh lệch sinh động
                 int hash = Math.Abs((w.WarehouseCode ?? w.WarehouseId.ToString()).GetHashCode());
                 decimal latOffset = (hash % 150 - 75) * 0.0015m;
                 decimal lonOffset = ((hash / 150) % 150 - 75) * 0.0015m;
@@ -172,7 +161,6 @@ public class GetNearestReturnWarehousesQueryHandler : IRequestHandler<GetNearest
             warehouseDistances.Add((w, wLat, wLon, distKm, distMeters, estMinutes));
         }
 
-        // 5. Sắp xếp toàn bộ các kho trong hệ thống theo khoảng cách từ gần đến xa và lấy 5 kho gần nhất
         var sortedWarehouses = warehouseDistances
             .OrderBy(item => item.DistanceMeters)
             .Take(5)

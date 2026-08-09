@@ -170,7 +170,6 @@ namespace ColdChainX.Infrastructure.Services
 
             using var reader = new System.IO.StreamReader(fileStream);
             
-            // Read header
             var header = await reader.ReadLineAsync();
             if (header == null)
             {
@@ -179,7 +178,6 @@ namespace ColdChainX.Infrastructure.Services
 
             int rowNumber = 1;
 
-            // Load existing routes for faster validation
             var existingRoutes = await _db.RouteMasters.Select(r => new { r.RouteId, r.RouteCode }).ToListAsync();
             var existingRouteCodesMap = existingRoutes.ToDictionary(r => r.RouteCode, r => r.RouteId, StringComparer.OrdinalIgnoreCase);
 
@@ -235,7 +233,6 @@ namespace ColdChainX.Infrastructure.Services
                 }
 
                 var hasOverlap = await CheckOverlapAsync(routeId, minWeightKg, maxWeightKg, null);
-                // Also check overlap with other tiers in the same file
                 if (!hasOverlap)
                 {
                     foreach(var validTier in validTiers.Where(t => t.RouteId == routeId))
@@ -270,6 +267,15 @@ namespace ColdChainX.Infrastructure.Services
                 result.SuccessfulRows++;
             }
 
+            if (result.FailedRows > 0)
+            {
+                return ApiResponse<ImportResultDto>.Failure(
+                    $"Import failed with {result.FailedRows} errors.",
+                    400,
+                    result.Errors
+                );
+            }
+
             if (validTiers.Any())
             {
                 _db.WeightTiers.AddRange(validTiers);
@@ -287,15 +293,10 @@ namespace ColdChainX.Infrastructure.Services
 
             foreach (var tier in existingTiers)
             {
-                // Overlap logic:
-                // Range A: [minWeight, maxWeight]
-                // Range B: [tier.MinWeightKg, tier.MaxWeightKg]
                 
                 var maxA = maxWeight ?? decimal.MaxValue;
                 var maxB = tier.MaxWeightKg ?? decimal.MaxValue;
 
-                // Two ranges overlap if max(minA, minB) < min(maxA, maxB)
-                // (or <= depending on if boundary overlap is allowed. Usually it's strictly greater/less)
                 if (Math.Max(minWeight, tier.MinWeightKg) < Math.Min(maxA, maxB))
                 {
                     return true;

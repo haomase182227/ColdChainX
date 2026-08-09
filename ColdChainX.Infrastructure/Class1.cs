@@ -1,4 +1,4 @@
-﻿namespace ColdChainX.Infrastructure
+namespace ColdChainX.Infrastructure
 {
     public class Class1
     {

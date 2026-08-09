@@ -3,9 +3,6 @@ using ColdChainX.TestRunner.Models;
 
 namespace ColdChainX.TestRunner.Core;
 
-/// <summary>
-/// Singleton service managing live execution state for Web UI real-time monitoring.
-/// </summary>
 public class TestRunState
 {
     private readonly object _lock = new();

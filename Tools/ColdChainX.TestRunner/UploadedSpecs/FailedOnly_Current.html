@@ -1,0 +1,3421 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ColdChainX - 107 Backend Functions Unit Test Specification Matrix (101 - 208)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600;700&family=Inter:wght@400;500;600;700&family=Fira+Code:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --navy-dark: #002060;
+            --navy-header: #092c5c;
+            --navy-light: #1e3a8a;
+            --bg-page: #f8fafc;
+            --bg-sidebar: #ffffff;
+            --border-color: #cbd5e1;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --blue-accent: #2563eb;
+            --green-pass: #16a34a;
+            --bg-zebra: #f1f5f9;
+            --font-main: 'Segoe UI', 'Inter', -apple-system, sans-serif;
+            --font-mono: 'Fira Code', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-page);
+            color: var(--text-main);
+            font-family: var(--font-main);
+            font-size: 13px;
+            line-height: 1.4;
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* Left Panel - Navigation & List */
+        .left-panel {
+            width: 360px;
+            min-width: 360px;
+            background: var(--bg-sidebar);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            box-shadow: 2px 0 8px rgba(0,0,0,0.04);
+            z-index: 10;
+        }
+
+        .brand-header {
+            background: var(--navy-header);
+            color: #ffffff;
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .brand-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+        }
+
+        .brand-subtitle {
+            font-size: 12px;
+            color: #93c5fd;
+            font-weight: 400;
+        }
+
+        .search-container {
+            padding: 12px 16px;
+            border-bottom: 1px solid #e2e8f0;
+            background: #f8fafc;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 12.5px;
+            outline: none;
+            transition: all 0.2s;
+            background: #ffffff;
+        }
+
+        .search-input:focus {
+            border-color: var(--blue-accent);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .category-pills {
+            display: flex;
+            gap: 6px;
+            padding: 10px 16px;
+            overflow-x: auto;
+            white-space: nowrap;
+            border-bottom: 1px solid #e2e8f0;
+            background: #ffffff;
+            scrollbar-width: thin;
+        }
+
+        .category-pills::-webkit-scrollbar {
+            height: 4px;
+        }
+
+        .category-pills::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 2px;
+        }
+
+        .pill-btn {
+            padding: 5px 12px;
+            border: 1px solid var(--border-color);
+            background: #f8fafc;
+            border-radius: 16px;
+            font-size: 11.5px;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .pill-btn:hover {
+            background: #e2e8f0;
+            color: var(--text-main);
+        }
+
+        .pill-btn.active {
+            background: var(--navy-header);
+            color: #ffffff;
+            border-color: var(--navy-header);
+        }
+
+        .function-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            background: #f1f5f9;
+        }
+
+        .function-card {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px 14px;
+            cursor: pointer;
+            transition: all 0.15s;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .function-card:hover {
+            border-color: var(--blue-accent);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+        }
+
+        .function-card.active {
+            border: 2px solid var(--blue-accent);
+            background: #eff6ff;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.12);
+        }
+
+        .card-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .card-code {
+            font-family: var(--font-mono);
+            font-size: 12.5px;
+            font-weight: 700;
+            color: var(--blue-accent);
+        }
+
+        .card-tcs {
+            font-size: 11px;
+            font-weight: 600;
+            background: #f1f5f9;
+            color: var(--text-muted);
+            padding: 2px 8px;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .function-card.active .card-tcs {
+            background: #dbeafe;
+            color: var(--blue-accent);
+            border-color: #bfdbfe;
+        }
+
+        .card-name {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-main);
+            word-break: break-all;
+        }
+
+        .card-req {
+            font-size: 11.5px;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Right Panel - Workspace & Table */
+        .right-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+            background: #f8fafc;
+        }
+
+        .top-control-bar {
+            background: #ffffff;
+            border-bottom: 1px solid var(--border-color);
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+            z-index: 5;
+        }
+
+        .sheet-title {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sheet-title h2 {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--navy-dark);
+            letter-spacing: -0.3px;
+        }
+
+        .stats-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .stat-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: #f8fafc;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 12px;
+        }
+
+        .stat-box strong {
+            font-weight: 700;
+            color: var(--navy-header);
+        }
+
+        .nav-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #f8fafc;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 3px 6px;
+        }
+
+        .nav-btn {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            background: transparent;
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-main);
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .nav-btn:hover:not(:disabled) {
+            background: #e2e8f0;
+        }
+
+        .nav-btn:disabled {
+            color: #cbd5e1;
+            cursor: not-allowed;
+        }
+
+        .nav-counter {
+            font-weight: 700;
+            font-size: 12.5px;
+            color: var(--navy-header);
+            min-width: 60px;
+            text-align: center;
+            user-select: none;
+        }
+
+        .action-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 14px;
+            border: 1px solid var(--border-color);
+            background: #ffffff;
+            color: var(--navy-header);
+            font-weight: 700;
+            font-size: 12.5px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .action-btn:hover {
+            background: #f1f5f9;
+        }
+
+        .action-btn.primary-btn {
+            background: var(--navy-header);
+            color: #ffffff;
+            border-color: var(--navy-header);
+        }
+
+        .action-btn.primary-btn:hover {
+            background: var(--navy-dark);
+        }
+
+        /* Main Content Container */
+        .content-workspace {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+        }
+
+        .specification-sheet {
+            background: #ffffff;
+            border: 2px solid #334155;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+            margin-bottom: 32px;
+            overflow: hidden;
+            padding: 0;
+        }
+
+        /* Excel-Style Tables */
+        .meta-table, .matrix-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 12.5px;
+        }
+
+        .meta-table th, .meta-table td, .matrix-table th, .matrix-table td {
+            border: 1px solid #94a3b8;
+            padding: 8px 10px;
+        }
+
+        .meta-label {
+            background-color: #f1f5f9;
+            font-weight: 700;
+            color: var(--text-main);
+            width: 130px;
+        }
+
+        .meta-value {
+            font-weight: 500;
+            color: #000000;
+        }
+
+        .meta-value-code {
+            font-weight: 700;
+            color: var(--blue-accent);
+            font-family: var(--font-mono);
+        }
+
+        .meta-req {
+            font-weight: 600;
+            color: #000000;
+        }
+
+        .stats-row-header {
+            background-color: #f8fafc;
+            text-align: center;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .stats-row-value {
+            text-align: center;
+            font-weight: 700;
+            font-size: 13px;
+        }
+
+        .val-passed {
+            color: var(--green-pass);
+        }
+
+        .val-total {
+            color: var(--blue-accent);
+            font-size: 13.5px;
+        }
+
+        /* Matrix Section Styling */
+        .matrix-header-banner {
+            background-color: var(--navy-dark);
+            color: #ffffff;
+            font-size: 14px;
+            font-weight: 700;
+            padding: 10px 14px;
+            border: 1px solid #334155;
+        }
+
+        .matrix-table {
+            border-top: none;
+        }
+
+        .th-func-title {
+            background-color: var(--navy-dark);
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 13.5px;
+            border-color: #334155 !important;
+            padding: 10px 14px;
+        }
+
+        .th-tc-id {
+            background-color: var(--navy-dark);
+            color: #ffffff;
+            font-family: var(--font-mono);
+            font-weight: 700;
+            font-size: 11.5px;
+            text-align: center;
+            vertical-align: bottom;
+            width: 38px;
+            min-width: 38px;
+            max-width: 38px;
+            padding: 8px 4px;
+            border-color: #334155 !important;
+        }
+
+        .vertical-text {
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            display: inline-block;
+            white-space: nowrap;
+            letter-spacing: 0.5px;
+            padding-top: 4px;
+        }
+
+        .td-cat-navy {
+            background-color: var(--navy-dark);
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 13px;
+            text-align: center;
+            vertical-align: middle;
+            width: 90px;
+            min-width: 90px;
+            border-color: #334155 !important;
+        }
+
+        .section-divider {
+            background-color: #e2e8f0;
+            font-weight: 700;
+            color: var(--text-main);
+            padding: 6px 12px;
+        }
+
+        .item-text-cell {
+            color: #000000;
+            font-weight: 500;
+            line-height: 1.35;
+        }
+
+        .item-text-right {
+            text-align: right;
+            padding-right: 14px !important;
+        }
+
+        .tc-mark-cell {
+            text-align: center;
+            vertical-align: middle;
+            font-family: var(--font-mono);
+            font-weight: 800;
+            font-size: 15px;
+            color: #000000;
+        }
+
+        .matrix-table tbody tr:hover .item-text-cell,
+        .matrix-table tbody tr:hover .tc-mark-cell {
+            background-color: #f8fafc;
+        }
+
+        /* Print formatting */
+        @media print {
+            body {
+                height: auto;
+                overflow: visible;
+                background: #ffffff;
+            }
+            .left-panel, .top-control-bar {
+                display: none !important;
+            }
+            .right-panel, .content-workspace {
+                overflow: visible;
+                height: auto;
+                padding: 0;
+            }
+            .specification-sheet {
+                box-shadow: none;
+                margin-bottom: 20px;
+                page-break-after: always;
+                border-color: #000000;
+            }
+            .specification-sheet:last-child {
+                page-break-after: auto;
+            }
+            .th-func-title, .th-tc-id, .td-cat-navy, .matrix-header-banner {
+                background-color: var(--navy-dark) !important;
+                color: #ffffff !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .section-divider, .meta-label, .stats-row-header {
+                background-color: #f1f5f9 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Left Navigation Panel -->
+    <aside class="left-panel">
+        <div class="brand-header">
+            <div class="brand-title">
+                <span>❄️ ColdChainX</span>
+            </div>
+            <div class="brand-subtitle">Unit Test Specification Matrix • Functions 101 - 208</div>
+        </div>
+
+        <div class="search-container">
+            <input type="text" class="search-input" id="searchInput" placeholder="Search code, function, module..." oninput="filterAndRenderList()">
+        </div>
+
+        <div class="category-pills" id="categoryPills">
+            <button class="pill-btn active" onclick="selectCategory('ALL')">ALL (107)</button>
+            <button class="pill-btn" onclick="selectCategory('ACC')">ACC (11)</button>
+            <button class="pill-btn" onclick="selectCategory('CLM')">CLM (5)</button>
+            <button class="pill-btn" onclick="selectCategory('DEL')">DEL (15)</button>
+            <button class="pill-btn" onclick="selectCategory('DRV')">DRV (7)</button>
+            <button class="pill-btn" onclick="selectCategory('DSP')">DSP (5)</button>
+            <button class="pill-btn" onclick="selectCategory('FLT')">FLT (9)</button>
+            <button class="pill-btn" onclick="selectCategory('INC')">INC (11)</button>
+            <button class="pill-btn" onclick="selectCategory('INV')">INV (4)</button>
+            <button class="pill-btn" onclick="selectCategory('IOT')">IOT (5)</button>
+            <button class="pill-btn" onclick="selectCategory('MON')">MON (7)</button>
+            <button class="pill-btn" onclick="selectCategory('NTF')">NTF (4)</button>
+            <button class="pill-btn" onclick="selectCategory('OUT')">OUT (4)</button>
+            <button class="pill-btn" onclick="selectCategory('RET')">RET (8)</button>
+            <button class="pill-btn" onclick="selectCategory('WH')">WH (6)</button>
+            <button class="pill-btn" onclick="selectCategory('WRK')">WRK (6)</button>
+        </div>
+
+        <div class="function-list" id="functionList">
+            <!-- Dynamically populated by JS -->
+        </div>
+    </aside>
+
+    <!-- Right Workspace Panel -->
+    <main class="right-panel">
+        <!-- Top Controls & Summary Bar -->
+        <header class="top-control-bar">
+            <div class="sheet-title">
+                <h2>Unit Test Specification Sheet</h2>
+            </div>
+
+            <div class="stats-toolbar">
+                <div class="stat-box">
+                    <span>📋 <strong>112</strong> Functions</span>
+                </div>
+                <div class="stat-box">
+                    <span>🧪 <strong>461</strong> Test Cases</span>
+                </div>
+                <div class="stat-box">
+                    <span>N/A/B: <strong>127</strong> / <strong>275</strong> / <strong>59</strong></span>
+                </div>
+
+                <div class="nav-controls">
+                    <button class="nav-btn" id="prevBtn" onclick="navigate(-1)" title="Previous Function">&lt;</button>
+                    <span class="nav-counter" id="navCounter">1 / 112</span>
+                    <button class="nav-btn" id="nextBtn" onclick="navigate(1)" title="Next Function">&gt;</button>
+                </div>
+
+                <button class="action-btn" id="viewAllBtn" onclick="toggleViewAll()">
+                    <span id="viewAllIcon">📄</span> <span id="viewAllText">View All (112)</span>
+                </button>
+
+                <button class="action-btn primary-btn" onclick="window.print()">
+                    <span>🖨️ Print / PDF</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Workspace Area -->
+        <div class="content-workspace" id="workspaceContainer">
+            <!-- Specification Tables dynamically rendered here -->
+        </div>
+    </main>
+
+    <!-- Embedded JSON Data compatible with HtmlSpecParser.cs -->
+    <script id="specsData" type="application/json">
+[
+    {
+        "no":  102,
+        "code":  "OUT007",
+        "func_name":  "StartPicking",
+        "cls_name":  "OutboundOrderService",
+        "requirement":  "Assign warehouse picker operator and transition outbound order to PICKING state",
+        "description":  "Verifies outbound order is in ALLOCATED status, validates that assigned picker user exists and has WarehouseWorker role, generates optimized cold-storage pick route across aisles/bins, and sets order status to PICKING.",
+        "sheet_name":  "OUT007_startPicking",
+        "preconditions":  [
+                              "Outbound order exists in database and is in ALLOCATED status",
+                              "Assigned picker user exists with active WarehouseWorker role",
+                              "Warehouse storage bins containing allocated pallets are online and accessible"
+                          ],
+        "inputs":  {
+                       "Input":  [
+                                     "d3b07384-d113-46c6-950c-619f7e5b32cf (status=ALLOCATED)",
+                                     "00000000-0000-0000-0000-000000000000 (not found)",
+                                     "00642e55-eefe-4417-9c77-f1cc2fe43415 (status=DRAFT, no pallets allocated)",
+                                     "bd0eff84-2d1a-48a4-a23c-0061e1075584 (status=SHIPPED)"
+                                 ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cPickingTaskResponse\u003e with Status=PICKING, AssignedPickerId, and PickPathList",
+                        "HTTP 404 Not Found - Outbound order or picker user not found",
+                        "HTTP 409 Conflict - Order is not in ALLOCATED state or picking task already started",
+                        "HTTP 400 Bad Request - Assigned user does not have WarehouseWorker role"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Outbound order or picker user not found",
+                           "ConflictException: Order must be in ALLOCATED state to start picking",
+                           "ValidationException: Assigned user lacks warehouse picker role"
+                       ],
+        "logs":  [
+                     "Picking process started for outbound order; optimal pick route dispatched to worker terminal",
+                     "Failed to start picking: order status conflict or unauthorized worker role"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Start picking with valid allocated order and active warehouse worker",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  103,
+        "code":  "OUT008",
+        "func_name":  "CompletePicking",
+        "cls_name":  "OutboundOrderService",
+        "requirement":  "Confirm pallet retrieval from storage bin to staging bay and update order status to PICKED",
+        "description":  "Scans and verifies pallet LPN barcode against bin location, confirms physical transfer of pallets into cold staging bay, verifies temperature compliance during staging, and transitions order status to PICKED.",
+        "sheet_name":  "OUT008_completePicking",
+        "preconditions":  [
+                              "Outbound order is currently in PICKING status",
+                              "Target pre-cooling staging bay exists, is online, and has available capacity",
+                              "Forklift operator terminal is connected with barcode scanner"
+                          ],
+        "inputs":  {
+                       "Input1":  [
+                                      "d3b07384-d113-46c6-950c-619f7e5b32cf (status=PICKING)",
+                                      "00000000-0000-0000-0000-000000000000 (not found)"
+                                  ],
+                       "Input2":  [
+                                      "[\u00276decac0d-8ac5-47b3-96c1-2713efc3dcd4\u0027, \u002724ec6a58-d4d0-4159-9423-b5ae0a333b6e\u0027] (all allocated LPNs)",
+                                      "[\u00276decac0d-8ac5-47b3-96c1-2713efc3dcd4\u0027] (partial LPNs missing item)",
+                                      "[] (empty list)",
+                                      "[\u002700000000-0000-0000-0000-000000000000\u0027] (unallocated LPN)"
+                                  ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cPickingCompletionResponse\u003e with Status=PICKED, StagingLocation, and PickedAt timestamp",
+                        "HTTP 404 Not Found - Outbound order or pallet LPN not found",
+                        "HTTP 409 Conflict - Scanned pallet barcode does not match picking manifest or order is not in PICKING state",
+                        "HTTP 400 Bad Request - Target staging bay exceeds maximum pallet capacity"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Outbound order or pallet LPN not found in database",
+                           "ConflictException: Pallet barcode scan verification failed",
+                           "ValidationException: Staging bay is full or invalid"
+                       ],
+        "logs":  [
+                     "Pallet LPNs successfully picked to staging bay; order status updated to PICKED",
+                     "Picking completion rejected: barcode mismatch or invalid staging capacity"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Complete picking with all matching LPN scans and valid staging bay",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  104,
+        "code":  "OUT009",
+        "func_name":  "ShipOrder",
+        "cls_name":  "OutboundOrderService",
+        "requirement":  "Confirm vehicle loading, verify temperature compliance, and transition outbound order to SHIPPED",
+        "description":  "Validates that outbound order is in PICKED status, verifies that transport vehicle is docked and reefer chamber temperature satisfies cargo thermal specs, verifies LIFO loading sequence, and transitions order status to SHIPPED.",
+        "sheet_name":  "OUT009_shipOrder",
+        "preconditions":  [
+                              "Outbound order is in PICKED status with all pallets staged at loading bay",
+                              "Transport vehicle is assigned to dispatch trip and docked at loading bay",
+                              "Vehicle reefer chamber sensor is online and pre-cooled to compliant temperature"
+                          ],
+        "inputs":  {
+                       "Input1":  [
+                                      "d3b07384-d113-46c6-950c-619f7e5b32cf (status=PICKED)",
+                                      "00000000-0000-0000-0000-000000000000 (not found)"
+                                  ],
+                       "Input2":  [
+                                      "STAGING-DOCK-01 (valid active dock)",
+                                      "\"\" (empty staging location)",
+                                      "OCCUPIED-DOCK-09 (dock full/occupied)"
+                                  ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cShipOrderResponse\u003e with Status=SHIPPED, DepartureTimestamp, and TrackingNumber",
+                        "HTTP 404 Not Found - Outbound order or vehicle not found",
+                        "HTTP 409 Conflict - Order is not in PICKED state or vehicle is not assigned to trip",
+                        "HTTP 400 Bad Request - Vehicle chamber temperature exceeds maximum allowable threshold"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Outbound order or vehicle entity not found",
+                           "ConflictException: Order must be in PICKED status before shipping",
+                           "ValidationException: Vehicle pre-cooling temperature out of compliant range"
+                       ],
+        "logs":  [
+                     "Outbound order shipped successfully; inventory decremented from warehouse balances",
+                     "Order shipping aborted: thermal non-compliance or order state conflict"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Ship order with compliant vehicle reefer temperature and valid docked vehicle",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  105,
+        "code":  "OUT010",
+        "func_name":  "CompleteTripLoading",
+        "cls_name":  "WarehouseFlowService",
+        "requirement":  "Complete vehicle loading verification, validate reefer temperature, and record security seal",
+        "description":  "Verifies that all pallet LPNs for trip orders have been loaded into refrigerated vehicle according to LIFO plan, verifies sensor telemetry temperature against product thresholds, and records security bolt seal number.",
+        "sheet_name":  "OUT010_completeTripLoading",
+        "preconditions":  [
+                              "Dispatch trip exists and is in LOADING status",
+                              "All outbound orders assigned to trip have been scanned and placed in vehicle",
+                              "Reefer telemetry sensor is active and transmitting live readings"
+                          ],
+        "inputs":  {
+                       "Input":  [
+                                     "d3b07384-d113-46c6-950c-619f7e5b32cf (status=STAGED, vehicle loaded)",
+                                     "00000000-0000-0000-0000-000000000000 (not found)",
+                                     "00642e55-eefe-4417-9c77-f1cc2fe43415 (status=ALLOCATED, not staged yet)",
+                                     "bd0eff84-2d1a-48a4-a23c-0061e1075584 (already shipped)"
+                                 ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cTripLoadingResultDto\u003e with Status=LOADED, SealVerified=true, ReadyForDeparture=true",
+                        "HTTP 404 Not Found - Trip entity not found",
+                        "HTTP 409 Conflict - Trip is not in LOADING status or orders still pending pallet scan",
+                        "HTTP 400 Bad Request - Reefer temperature exceeds threshold or seal number is missing"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Dispatch trip entity not found",
+                           "ConflictException: Trip state must be LOADING to complete loading verification",
+                           "ValidationException: Security seal number is required or temperature is out of range"
+                       ],
+        "logs":  [
+                     "Trip loading verified; departure security seal recorded and status transitioned to LOADED",
+                     "Trip loading verification failed: thermal check failure or missing security seal"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Complete trip loading with compliant sensor reading and valid security seal",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  116,
+        "code":  "DSP001",
+        "func_name":  "PlanLoadFromWarehouse",
+        "cls_name":  "DispatchService",
+        "requirement":  "Dispatcher plans truck load from warehouse allocating orders to available refrigerated vehicle",
+        "description":  "Selects approved outbound transport orders, validates vehicle payload weight/volume and thermal zone compatibility (Frozen vs Chilled), reserves vehicle capacity, and creates dispatch load plan.",
+        "sheet_name":  "DSP001_planLoadFromWarehouse",
+        "preconditions":  [
+                              "Outbound orders are in APPROVED or ALLOCATED status",
+                              "Target refrigerated vehicle is available and inspected",
+                              "User has Dispatcher role"
+                          ],
+        "inputs":  {
+                       "Input":  [
+                                     "WarehouseId=\u002787b07384-d113-46c6-950c-619f7e5b32cd\u0027, VehicleId=\u0027b8c4c37f-5d1f-4b08-8e6c-0e782d8db1a1\u0027, OrderIds=[\u0027d3b07384-d113-46c6-950c-619f7e5b32cf\u0027, \u002700642e55-eefe-4417-9c77-f1cc2fe43415\u0027] (valid \u003c= 1000kg)",
+                                     "WarehouseId=\u002787b07384-d113-46c6-950c-619f7e5b32cd\u0027, VehicleId=\u002700000000-0000-0000-0000-000000000000\u0027, OrderIds=[\u0027d3b07384-d113-46c6-950c-619f7e5b32cf\u0027] (vehicle not found)",
+                                     "WarehouseId=\u002787b07384-d113-46c6-950c-619f7e5b32cd\u0027, VehicleId=\u0027b8c4c37f-5d1f-4b08-8e6c-0e782d8db1a1\u0027, OrderIds=[\u0027d3b07384-d113-46c6-950c-619f7e5b32cf\u0027, \u002700642e55-eefe-4417-9c77-f1cc2fe43415\u0027, \u002746c2ce57-ad24-4b8f-8d68-1fa3e52f3d3a\u0027] (weight exceeds vehicle capacity)",
+                                     "WarehouseId=\u002787b07384-d113-46c6-950c-619f7e5b32cd\u0027, VehicleId=\u0027b8c4c37f-5d1f-4b08-8e6c-0e782d8db1a1\u0027, OrderIds=[] (empty order list)"
+                                 ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cDispatchLoadPlanDto\u003e with TripId, TotalPallets, TotalWeightKg, ThermalCompatibility=true",
+                        "HTTP 404 Not Found - Warehouse or vehicle entity not found",
+                        "HTTP 409 Conflict - Vehicle payload capacity exceeded or vehicle not available",
+                        "HTTP 400 Bad Request - Incompatible thermal zones in single compartment or empty order list"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Warehouse or vehicle entity not found",
+                           "ConflictException: Vehicle payload weight/volume limit exceeded",
+                           "ValidationException: Cargo thermal requirements incompatible with vehicle refrigeration type"
+                       ],
+        "logs":  [
+                     "Dispatch load plan generated with payload capacity and thermal validation",
+                     "Load planning failed: vehicle overload or thermal incompatibility"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Plan load with compatible orders within vehicle weight and thermal capacity",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  117,
+        "code":  "DSP002",
+        "func_name":  "ManualDispatch",
+        "cls_name":  "DispatchService",
+        "requirement":  "Dispatcher creates manual dispatch trip assigning driver, vehicle, stops, and departure schedule",
+        "description":  "Validates driver license validity and availability, verifies vehicle compliance documents and inspection status, establishes sequence of delivery stops, and transitions trip to PLANNED/ASSIGNED state.",
+        "sheet_name":  "DSP002_manualDispatch",
+        "preconditions":  [
+                              "Orders are ready for dispatch",
+                              "Driver is active with valid commercial driver license",
+                              "Vehicle is roadworthy with active insurance and inspection"
+                          ],
+        "inputs":  {
+                       "Input":  [
+                                     "TripId=\u0027582b7823-1f34-4947-8279-775421e771f6\u0027, DriverId=\u00273e635455-7491-4ea1-87bb-3ac35ad6c867\u0027 (Nguyễn Huy Hoàng, FC active in DB)",
+                                     "TripId=\u0027582b7823-1f34-4947-8279-775421e771f6\u0027, DriverId=\u002700000000-0000-0000-0000-000000000000\u0027 (driver not found)",
+                                     "TripId=\u002700000000-0000-0000-0000-000000000000\u0027, DriverId=\u00273e635455-7491-4ea1-87bb-3ac35ad6c867\u0027 (trip not found)",
+                                     "TripId=\u0027582b7823-1f34-4947-8279-775421e771f6\u0027, DriverId=\u00273e635455-7491-4ea1-87bb-3ac35ad6c867\u0027 (driver already assigned to concurrent active trip)"
+                                 ]
+                   },
+        "returns":  [
+                        "HTTP 201 Created - ApiResponse\u003cTripDetailDto\u003e with TripCode, Status=ASSIGNED, DriverName, EstimatedDuration",
+                        "HTTP 409 Conflict - Driver is already assigned to another active trip or driver license expired",
+                        "HTTP 400 Bad Request - Scheduled departure cannot be in past or delivery stops list is empty"
+                    ],
+        "exceptions":  [
+                           "ConflictException: Driver is currently assigned to an active delivery trip",
+                           "ValidationException: Commercial driver license expired or invalid departure schedule"
+                       ],
+        "logs":  [
+                     "Manual dispatch trip created successfully; driver and vehicle assigned with delivery stops",
+                     "Manual dispatch failed: driver conflict or schedule validation error"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Create manual dispatch trip with active driver and valid stop sequence",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  118,
+        "code":  "DSP003",
+        "func_name":  "CalculateRouteAndLIFO",
+        "cls_name":  "DispatchService",
+        "requirement":  "Calculate multi-stop optimal delivery route and reverse LIFO pallet loading sequence",
+        "description":  "Executes geographic route optimization (TSP / OSRM routing) across delivery stops, establishes Last-In-First-Out (LIFO) loading sequence so first delivery stop cargo is placed nearest to reefer rear doors.",
+        "sheet_name":  "DSP003_calculateRouteAndLIFO",
+        "preconditions":  [
+                              "Trip exists with assigned destination customer delivery stops",
+                              "Customer geolocations (latitude/longitude) are verified",
+                              "Vehicle chamber layout (aisles/pallets depth) is defined"
+                          ],
+        "inputs":  {
+                       "Input":  [
+                                     "582b7823-1f34-4947-8279-775421e771f6 (trip status=PLANNED with 3 stops)",
+                                     "00000000-0000-0000-0000-000000000000 (not found)",
+                                     "bd0eff84-2d1a-48a4-a23c-0061e1075584 (trip status=COMPLETED, cannot re-optimize)",
+                                     "invalid-guid-format"
+                                 ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cRouteAndLifoPlanDto\u003e with StopSequence, TotalDistanceKm, TotalDurationMins, and LifoLoadingMatrix",
+                        "HTTP 404 Not Found - Trip not found",
+                        "HTTP 400 Bad Request - One or more stop locations cannot be routed via road network"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Trip not found in database",
+                           "ValidationException: Failed to calculate road route for destination coordinates"
+                       ],
+        "logs":  [
+                     "Multi-stop delivery route and LIFO loading matrix calculated successfully",
+                     "Routing calculation failed: unreachable GPS coordinates or trip not found"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Calculate optimal multi-stop route and LIFO loading plan for 3-stop delivery trip",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           },
+                           {
+                               "id":  "UTCID02",
+                               "type":  "N",
+                               "desc":  "Calculate LIFO loading preserving fixed manual stop sequence",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input":  1
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  119,
+        "code":  "DSP004",
+        "func_name":  "IssueDispatchDocuments",
+        "cls_name":  "DispatchService",
+        "requirement":  "Issue formal dispatch documents, delivery manifest, and generate QR electronic waybills",
+        "description":  "Verifies that trip loading has been completed, generates digital delivery manifests, issues electronic transport waybills with cryptographic signatures, and provides downloadable PDF package.",
+        "sheet_name":  "DSP004_issueDispatchDocuments",
+        "preconditions":  [
+                              "Trip is in LOADED status with verified security seals",
+                              "All outbound delivery orders are verified and attached",
+                              "User has Dispatcher or Manager role"
+                          ],
+        "inputs":  {
+                       "Input":  [
+                                     "582b7823-1f34-4947-8279-775421e771f6 (trip PLANNED, vehicle assigned, driver assigned)",
+                                     "00000000-0000-0000-0000-000000000000 (not found)",
+                                     "582b7823-1f34-4947-8279-775421e771f6 (trip missing assigned driver)",
+                                     "bd0eff84-2d1a-48a4-a23c-0061e1075584 (trip already dispatched status=IN_TRANSIT)"
+                                 ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cDispatchDocumentsDto\u003e with ManifestPdfUrl, WaybillQrCodes, IssuedAt, DocumentHash",
+                        "HTTP 404 Not Found - Trip not found",
+                        "HTTP 409 Conflict - Cannot issue dispatch documents before trip loading and seal verification",
+                        "HTTP 400 Bad Request - Unsupported document output format"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Trip not found",
+                           "ConflictException: Trip must be in LOADED status to issue dispatch documents",
+                           "ValidationException: Invalid document format"
+                       ],
+        "logs":  [
+                     "Digital dispatch documents and electronic waybills issued with QR codes",
+                     "Document generation rejected: trip not loaded or format unsupported"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Issue official dispatch documents and QR waybills for fully loaded trip",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  120,
+        "code":  "DSP005",
+        "func_name":  "CancelTrip",
+        "cls_name":  "DispatchService",
+        "requirement":  "Cancel planned dispatch trip, release assigned driver/vehicle, and reset order statuses",
+        "description":  "Validates trip cancellation eligibility (must be PLANNED or ASSIGNED, not IN_TRANSIT or COMPLETED), releases vehicle and driver schedules, resets assigned orders back to APPROVED/ALLOCATED, and updates trip status to CANCELLED.",
+        "sheet_name":  "DSP005_cancelTrip",
+        "preconditions":  [
+                              "Trip exists in database and is in PLANNED or ASSIGNED status",
+                              "Trip has not departed warehouse (not IN_TRANSIT or COMPLETED)",
+                              "User has Dispatcher role"
+                          ],
+        "inputs":  {
+                       "Input1":  [
+                                      "582b7823-1f34-4947-8279-775421e771f6 (status=PLANNED)",
+                                      "00000000-0000-0000-0000-000000000000 (not found)",
+                                      "bd0eff84-2d1a-48a4-a23c-0061e1075584 (status=IN_TRANSIT, cannot cancel directly)"
+                                  ],
+                       "Input2":  [
+                                      "Hủy chuyến do khách hàng hoãn lịch nhận hàng (valid reason)",
+                                      "\"\" (empty cancellation reason)"
+                                  ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cTripDetailDto\u003e with Status=CANCELLED, ReleasedOrdersCount, DriverReleased=true",
+                        "HTTP 404 Not Found - Trip not found",
+                        "HTTP 409 Conflict - Cannot cancel trip that has already departed (IN_TRANSIT or COMPLETED)",
+                        "HTTP 400 Bad Request - Cancellation reason is required"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Trip not found in database",
+                           "ConflictException: Invalid trip state transition for cancellation",
+                           "ValidationException: Cancellation reason cannot be empty"
+                       ],
+        "logs":  [
+                     "Dispatch trip cancelled; assigned driver, vehicle, and orders released",
+                     "Trip cancellation rejected: trip already in transit or missing cancellation reason"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Cancel planned dispatch trip with valid reason and release assigned resources",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  124,
+        "code":  "MON004",
+        "func_name":  "GetStopTemperatureChart",
+        "cls_name":  "ColdChainMonitoringController",
+        "requirement":  "Retrieve temperature compliance chart recorded during unloading dwell at delivery stop",
+        "description":  "Isolates and returns telemetry temperature readings recorded while vehicle was docked at a specific customer delivery stop (dwell time during door open and pallet unloading).",
+        "sheet_name":  "MON004_getStopTemperatureChart",
+        "preconditions":  [
+                              "Delivery Stop exists in database",
+                              "Vehicle arrived and completed or started stop unloading",
+                              "User is authorized"
+                          ],
+        "inputs":  {
+                       "Input1":  [
+                                      "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d (unacknowledged alert)",
+                                      "00000000-0000-0000-0000-000000000000 (not found)",
+                                      "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d (already acknowledged alert)"
+                                  ],
+                       "Input2":  [
+                                      "Đã liên hệ tài xế kiểm tra máy lạnh xe 51C-101.11 (valid note)",
+                                      "\"\" (empty acknowledgement note)"
+                                  ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cStopTemperatureReportDto\u003e with StopName, DwellStartTime, DwellEndTime, DoorOpenDurationMins, MaxTempDuringUnload",
+                        "HTTP 404 Not Found - Delivery stop not found",
+                        "HTTP 200 OK - ApiResponse with DwellStartTime=null and 0 data points (stop not yet reached)",
+                        "HTTP 200 OK - Empty dataset matching boundary criteria"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Delivery stop not found in database",
+                           "ValidationException: Parameter is required or invalid format"
+                       ],
+        "logs":  [
+                     "Stop unloading temperature and door dwell analysis retrieved",
+                     "Stop temperature chart query failed: stop not found"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Retrieve GetStopTemperatureChart successfully with valid existing parameters",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           },
+                           {
+                               "id":  "UTCID04",
+                               "type":  "B",
+                               "desc":  "Retrieve GetStopTemperatureChart at boundary range with 0 matching records",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  1
+                                       },
+                               "ret":  [
+                                           3
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  133,
+        "code":  "DEL001",
+        "func_name":  "Handle",
+        "cls_name":  "CloseShiftCommandHandler",
+        "requirement":  "Driver completes delivery shift, verifies all stops finished, and closes mobile driver session",
+        "description":  "Verifies that driver has completed or reported all assigned delivery stops, validates COD handover status, records ending odometer, and transitions trip to COMPLETED/SHIFT_CLOSED.",
+        "sheet_name":  "DEL001_closeShift",
+        "preconditions":  [
+                              "Driver has active delivery trip in progress",
+                              "All delivery stops on trip have terminal status (DELIVERED, REJECTED, or NO_SHOW)",
+                              "All collected COD cash has been submitted or accounted for"
+                          ],
+        "inputs":  {
+                       "Input1":  [
+                                      "30000000-0000-0000-0000-000000000101 (Sóng Thần, Bình Dương in DB)",
+                                      "00000000-0000-0000-0000-000000000000 (not found)",
+                                      "30000000-0000-0000-0000-000000000101 (stop already checked in)"
+                                  ],
+                       "Input2":  [
+                                      "Latitude=10.8985, Longitude=106.7583, Note=\u0027Đã đến cổng kho Sóng Thần\u0027 (valid GPS within geofence)",
+                                      "Latitude=21.0285, Longitude=105.8542 (GPS \u003e 5km away from stop: geofence violation)",
+                                      "Latitude=999.0, Longitude=999.0 (invalid coordinates out of range)"
+                                  ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cCloseShiftResultDto\u003e with Status=COMPLETED, TotalDistanceKm=400, ShiftClosedAt",
+                        "HTTP 404 Not Found - Trip or driver not found",
+                        "HTTP 409 Conflict - Cannot close shift with pending unvisited delivery stops",
+                        "HTTP 400 Bad Request - Ending odometer cannot be less than starting odometer"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Trip not found",
+                           "ConflictException: Trip still has uncompleted delivery stops",
+                           "ValidationException: Ending odometer must be greater than or equal to start odometer"
+                       ],
+        "logs":  [
+                     "Driver shift closed successfully; trip marked COMPLETED and vehicle released",
+                     "Close shift failed: unvisited stops or odometer validation error"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Close driver shift after all delivery stops successfully completed",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  134,
+        "code":  "DEL002",
+        "func_name":  "Handle",
+        "cls_name":  "CheckinDriverCommandHandler",
+        "requirement":  "Driver checks in at customer delivery destination stop with GPS geofence validation",
+        "description":  "Verifies driver GPS coordinates are within authorized geofence radius (e.g. \u003c= 200m) of destination customer address, records arrival timestamp, and updates stop status to ARRIVED.",
+        "sheet_name":  "DEL002_checkinDriver",
+        "preconditions":  [
+                              "Delivery stop is in EN_ROUTE status",
+                              "Driver mobile device has active GPS location",
+                              "Destination customer has registered geolocation"
+                          ],
+        "inputs":  {
+                       "Input1":  [
+                                      "30000000-0000-0000-0000-000000000101 (checked in stop)",
+                                      "00000000-0000-0000-0000-000000000000 (not found)",
+                                      "30000000-0000-0000-0000-000000000101 (stop not yet checked in: ActualArrivalTime=null)"
+                                  ],
+                       "Input2":  [
+                                      "TripId=\u0027582b7823-1f34-4947-8279-775421e771f6\u0027, CustomerId=\u002735f5b2a8-3a7c-4ee2-b294-c7fcced2e697\u0027, SignatureFile=\u0027customer_signature.png\u0027 (valid)",
+                                      "TripId=\u0027582b7823-1f34-4947-8279-775421e771f6\u0027, CustomerId=\u002735f5b2a8-3a7c-4ee2-b294-c7fcced2e697\u0027, SignatureFile=null (missing mandatory signature)",
+                                      "TripId=\u002700000000-0000-0000-0000-000000000000\u0027, CustomerId=\u002735f5b2a8-3a7c-4ee2-b294-c7fcced2e697\u0027, SignatureFile=\u0027customer_signature.png\u0027 (trip not found)",
+                                      "TripId=\u0027582b7823-1f34-4947-8279-775421e771f6\u0027, CustomerId=\u002700000000-0000-0000-0000-000000000000\u0027, SignatureFile=\u0027customer_signature.png\u0027 (order not found for customer at this stop)"
+                                  ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cCheckinDriverResponse\u003e with Status=ARRIVED, DistanceMeters=50, ArrivedAt",
+                        "HTTP 404 Not Found - Delivery stop not found",
+                        "HTTP 409 Conflict - Driver is outside destination geofence radius or stop already completed",
+                        "HTTP 400 Bad Request - GPS coordinates are required"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Delivery stop not found",
+                           "ConflictException: Driver location is outside allowed geofence threshold",
+                           "ValidationException: Driver GPS coordinates must be provided"
+                       ],
+        "logs":  [
+                     "Driver checked in at delivery stop within geofence radius",
+                     "Driver check-in rejected: geofence boundary violation or missing GPS"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Check in at delivery stop within 50m of customer geofence",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  135,
+        "code":  "DEL003",
+        "func_name":  "Handle",
+        "cls_name":  "CutSealCommandHandler",
+        "requirement":  "Driver records security seal removal upon arrival at delivery stop with photo evidence",
+        "description":  "Verifies that driver is checked in at destination stop, matches scanned seal number with trip departure seal, verifies seal integrity photo, and records seal removal event.",
+        "sheet_name":  "DEL003_cutSeal",
+        "preconditions":  [
+                              "Driver has checked in at stop (Status=ARRIVED)",
+                              "Active departure seal exists on vehicle",
+                              "Photo evidence of intact seal is captured"
+                          ],
+        "inputs":  {
+                       "Input1":  [
+                                      "30000000-0000-0000-0000-000000000101 (completed handover stop)",
+                                      "00000000-0000-0000-0000-000000000000 (not found)"
+                                  ],
+                       "Input2":  [
+                                      "d3b07384-d113-46c6-950c-619f7e5b32cf (order with confirmed ePOD)",
+                                      "00000000-0000-0000-0000-000000000000 (not found)",
+                                      "00642e55-eefe-4417-9c77-f1cc2fe43415 (order without confirmed handover ePOD)"
+                                  ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cCutSealResultDto\u003e with Status=SEAL_REMOVED, SealMatched=true, CutAt",
+                        "HTTP 404 Not Found - Delivery stop not found",
+                        "HTTP 409 Conflict - Scanned seal number does not match registered departure seal (potential tampering)",
+                        "HTTP 400 Bad Request - Photo evidence of seal removal is required"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Delivery stop not found",
+                           "ConflictException: Security seal number verification mismatch",
+                           "ValidationException: Photo evidence URL is required"
+                       ],
+        "logs":  [
+                     "Security seal verified and cut at destination stop; doors unlocked for unloading",
+                     "Security seal cut failed: seal number mismatch alert logged"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Cut security seal with matching seal number and photo evidence",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  136,
+        "code":  "DEL004",
+        "func_name":  "Handle",
+        "cls_name":  "ApplySealCommandHandler",
+        "requirement":  "Driver applies and records new security bolt seal before departing delivery stop for next stop",
+        "description":  "Validates that stop unloading is complete, records new bolt seal number applied to reefer doors, uploads seal verification photo, and updates vehicle security chain of custody.",
+        "sheet_name":  "DEL004_applySeal",
+        "preconditions":  [
+                              "Unloading at current stop is completed",
+                              "Additional downstream delivery stops remain on trip",
+                              "New security seal is physically locked on doors"
+                          ],
+        "inputs":  {
+                       "Input1":  [
+                                      "582b7823-1f34-4947-8279-775421e771f6 (all stops completed)",
+                                      "00000000-0000-0000-0000-000000000000 (not found)",
+                                      "582b7823-1f34-4947-8279-775421e771f6 (trip still has pending unvisited stops)"
+                                  ],
+                       "Input2":  [
+                                      "FinalOdometer=85350, ReturnWarehouseId=\u002787b07384-d113-46c6-950c-619f7e5b32cd\u0027, Note=\u0027Chuyến đi hoàn thành tốt\u0027 (valid)",
+                                      "FinalOdometer=85000 (invalid FinalOdometer \u003c StartOdometer 85200)",
+                                      "ReturnWarehouseId=\u002700000000-0000-0000-0000-000000000000\u0027 (warehouse not found)"
+                                  ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cApplySealResultDto\u003e with Status=SEALED, NewSealNumber=\u0027SEAL-CCX-90813\u0027, RecordedAt",
+                        "HTTP 404 Not Found - Delivery stop not found",
+                        "HTTP 400 Bad Request - New seal number and photo evidence URL are required"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Delivery stop not found",
+                           "ValidationException: New seal number and photo URL cannot be blank"
+                       ],
+        "logs":  [
+                     "New security seal recorded for remaining trip legs",
+                     "Apply seal failed: validation error or stop not found"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Apply new security seal after multi-stop partial unloading",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  137,
+        "code":  "DEL005",
+        "func_name":  "Handle",
+        "cls_name":  "ConfirmLpnDeliveryCommandHandler",
+        "requirement":  "Customer signs electronic ePOD, confirms cargo temperature compliance, and completes LPN delivery",
+        "description":  "Verifies pallet LPN arrival temperature against product thresholds, captures consignee digital signature and recipient name, generates electronic Proof of Delivery (ePOD), and transitions order to DELIVERED.",
+        "sheet_name":  "DEL005_confirmLpnDelivery",
+        "preconditions":  [
+                              "Pallet LPN is at destination stop in ARRIVED status",
+                              "Arrival temperature probe reading recorded",
+                              "Consignee present to accept cargo"
+                          ],
+        "inputs":  {
+                       "Input1":  [
+                                      "30000000-0000-0000-0000-000000000101 (active stop)",
+                                      "00000000-0000-0000-0000-000000000000 (not found)"
+                                  ],
+                       "Input2":  [
+                                      "IssueType=\u0027CARGO_DAMAGED\u0027, Description=\u0027Hộp carton bị móp và rách bao bì\u0027, AffectedLpnIds=[\u00276decac0d-8ac5-47b3-96c1-2713efc3dcd4\u0027], PhotoFiles=[\u0027evidence.jpg\u0027] (valid)",
+                                      "IssueType=\u0027UNKNOWN_TYPE\u0027, Description=\u0027Lỗi không xác định\u0027 (unrecognized issue type enum)",
+                                      "IssueType=\u0027CARGO_DAMAGED\u0027, Description=\u0027\u0027 (empty required description)"
+                                  ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cEpodResultDto\u003e with Status=DELIVERED, EpodId, SignedAt, TemperatureCompliant=true",
+                        "HTTP 404 Not Found - Pallet LPN or stop not found",
+                        "HTTP 409 Conflict - Pallet already in DELIVERED status or temperature exceeds threshold without deviation approval",
+                        "HTTP 400 Bad Request - Signer name and digital signature are required"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Pallet LPN or stop not found",
+                           "ConflictException: LPN is already marked delivered or temperature violation prevents direct handover",
+                           "ValidationException: Signer name and signature image must be provided"
+                       ],
+        "logs":  [
+                     "Pallet LPN delivery confirmed; ePOD generated and customer signature stored",
+                     "LPN delivery confirmation rejected: temperature non-compliance or missing signature"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Confirm LPN delivery with compliant temperature and valid digital customer signature",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  140,
+        "code":  "DEL008",
+        "func_name":  "Handle",
+        "cls_name":  "ProcessDynamicCodCommandHandler",
+        "requirement":  "Record customer COD payment collection (Cash or Bank Transfer) upon pallet handover",
+        "description":  "Records driver collection of COD payment at delivery stop, specifying payment method (CASH / VIETQR_TRANSFER), transaction reference, and updating order COD payment status to COLLECTED.",
+        "sheet_name":  "DEL008_processDynamicCod",
+        "preconditions":  [
+                              "Order has pending COD collection status",
+                              "Driver is at delivery stop with consignee",
+                              "Payment amount matches or exceeds order total"
+                          ],
+        "inputs":  {
+                       "Input1":  [
+                                      "orderId=\u0027d3b07384-d113-46c6-950c-619f7e5b32cf\u0027, stopId=\u002730000000-0000-0000-0000-000000000101\u0027",
+                                      "00000000-0000-0000-0000-000000000000, drv-01"
+                                  ],
+                       "Input2":  [
+                                      "paymentMethod=\u0027CASH\u0027, amountCollected=1500000 (valid cash payment)",
+                                      "paymentMethod=\u0027VIETQR_TRANSFER\u0027, amountCollected=1500000, bankTxnId=\u0027TXN-998822\u0027 (valid transfer)",
+                                      "paymentMethod=\u0027CASH\u0027, amountCollected=500000 (underpayment: expected 1,500,000)",
+                                      "paymentMethod=\u0027CASH\u0027, amountCollected=-1000 (negative amount)"
+                                  ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cCodPaymentResultDto\u003e with Status=\u0027COLLECTED\u0027, Amount=1500000, ReceiptNumber, CollectedAt",
+                        "HTTP 404 Not Found - Order not found",
+                        "HTTP 400 Bad Request - Collected amount is less than total payable COD amount or negative"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Order not found",
+                           "ValidationException: Collected amount does not match required COD balance"
+                       ],
+        "logs":  [
+                     "COD payment collected and recorded against driver trip shift balance",
+                     "COD processing failed: underpayment or order not found"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Process full cash COD payment collection at delivery stop",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           },
+                           {
+                               "id":  "UTCID02",
+                               "type":  "N",
+                               "desc":  "Process electronic VietQR transfer COD payment with bank transaction reference",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  1
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  141,
+        "code":  "DEL009",
+        "func_name":  "Handle",
+        "cls_name":  "VerifyQrPaymentCommandHandler",
+        "requirement":  "Verify customer electronic QR payment transaction via banking gateway webhook/polling",
+        "description":  "Queries banking partner gateway / webhook transaction log, validates payment reference code and settled amount, and marks payment transaction as SETTLED.",
+        "sheet_name":  "DEL009_verifyQrPayment",
+        "preconditions":  [
+                              "Payment transaction record exists in PENDING status",
+                              "Banking gateway connectivity is online",
+                              "User is authorized"
+                          ],
+        "inputs":  {
+                       "Input1":  [
+                                      "orderId=\u0027d3b07384-d113-46c6-950c-619f7e5b32cf\u0027, stopId=\u002730000000-0000-0000-0000-000000000101\u0027",
+                                      "ref-999-notfound (non-existent transaction reference)"
+                                  ],
+                       "Input2":  [
+                                      "bankStatus=\u0027SUCCESS\u0027, settledAmount=2500000 (gateway verified)",
+                                      "bankStatus=\u0027PENDING\u0027 (payment not yet received at bank)",
+                                      "bankStatus=\u0027FAILED\u0027 (payment failed at bank)"
+                                  ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cPaymentVerificationDto\u003e with Status=\u0027SETTLED\u0027, SettledAmount=2500000, BankReference, VerifiedAt",
+                        "HTTP 200 OK - ApiResponse with Status=\u0027PENDING\u0027 (bank transaction still in flight)",
+                        "HTTP 404 Not Found - Payment reference not found",
+                        "HTTP 400 Bad Request - Bank transaction was rejected or failed"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Payment transaction reference not found",
+                           "ValidationException: Banking gateway reported transaction failure"
+                       ],
+        "logs":  [
+                     "Electronic QR payment verified and settled with banking gateway",
+                     "QR payment verification failed: transaction pending or invalid reference"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Verify QR payment successfully settled with bank gateway",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           },
+                           {
+                               "id":  "UTCID02",
+                               "type":  "N",
+                               "desc":  "Poll QR payment that is still pending at bank gateway",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  1
+                                       },
+                               "ret":  [
+                                           1
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  142,
+        "code":  "DEL010",
+        "func_name":  "Handle",
+        "cls_name":  "HandoverCodCommandHandler",
+        "requirement":  "Driver hands over collected COD cash to warehouse cashier at end of shift",
+        "description":  "Verifies driver trip cash balance, matches physical cash counted by warehouse cashier, generates cash handover receipt, and resets driver trip cash liability to zero.",
+        "sheet_name":  "DEL010_handoverCod",
+        "preconditions":  [
+                              "Driver has collected cash COD balance \u003e 0",
+                              "Driver has returned to warehouse facility",
+                              "Cashier user is authenticated"
+                          ],
+        "inputs":  {
+                       "Input1":  [
+                                      "orderId=\u0027d3b07384-d113-46c6-950c-619f7e5b32cf\u0027, stopId=\u002730000000-0000-0000-0000-000000000101\u0027",
+                                      "00000000-0000-0000-0000-000000000000",
+                                      "trip-zero-cod (driver holds 0 VND cash liability)"
+                                  ],
+                       "Input2":  [
+                                      "cashierUserId=user-cashier-01, amountCounted=5000000 (exact match: valid)",
+                                      "cashierUserId=user-cashier-01, amountCounted=4500000 (cash shortage mismatch)",
+                                      "cashierUserId=user-cashier-01, amountCounted=-1000 (negative amount)"
+                                  ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cCodHandoverReceiptDto\u003e with ReceiptId, DriverName, CashierName, SettledAmount=5000000, RemainingLiability=0",
+                        "HTTP 404 Not Found - Trip or driver not found",
+                        "HTTP 409 Conflict - Counted cash does not match driver trip COD liability (shortage/overage discrepancy)",
+                        "HTTP 400 Bad Request - Driver has zero pending cash COD balance to hand over"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Trip or cashier user not found",
+                           "ConflictException: Cash count discrepancy between physical cash and system balance",
+                           "ValidationException: Driver has zero outstanding cash balance"
+                       ],
+        "logs":  [
+                     "COD cash handed over to warehouse cashier; receipt generated and liability cleared",
+                     "COD handover rejected: cash shortage discrepancy or invalid trip"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Hand over exact matching collected COD cash to warehouse cashier",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  143,
+        "code":  "DEL011",
+        "func_name":  "Handle",
+        "cls_name":  "ReportNoShowCommandHandler",
+        "requirement":  "Driver reports consignee absent or destination closed after waiting threshold",
+        "description":  "Verifies driver has arrived at stop and waited required minimum duration (e.g. \u003e= 15 minutes), records no-show reason and photos, updates stop status to NO_SHOW, and flags cargo for reverse logistics.",
+        "sheet_name":  "DEL011_reportNoShow",
+        "preconditions":  [
+                              "Driver has arrived at stop (Status=ARRIVED)",
+                              "Wait time at destination \u003e= 15 minutes",
+                              "Photo evidence of closed shop / call log attempt uploaded"
+                          ],
+        "inputs":  {
+                       "Input1":  [
+                                      "orderId=\u0027d3b07384-d113-46c6-950c-619f7e5b32cf\u0027, stopId=\u002730000000-0000-0000-0000-000000000101\u0027",
+                                      "stop-del-143-waited-5m (waited only 5 mins \u003c 15 mins: wait violation)",
+                                      "00000000-0000-0000-0000-000000000000"
+                                  ],
+                       "Input2":  [
+                                      "reason=\u0027Customer store closed, phone unreachable after 3 attempts\u0027, photoUrl=\u0027https://s3/evidence/noshow.jpg\u0027 (valid)",
+                                      "reason=\u0027\u0027 (empty reason)",
+                                      "photoUrl=\u0027\u0027 (missing photo evidence)"
+                                  ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cNoShowResultDto\u003e with Status=NO_SHOW, ReturnRoutingInitiated=true, ReportedAt",
+                        "HTTP 404 Not Found - Delivery stop not found",
+                        "HTTP 409 Conflict - Driver has not fulfilled minimum 15-minute wait dwell time",
+                        "HTTP 400 Bad Request - Reason and photo evidence are required"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Delivery stop not found in database",
+                           "ConflictException: Minimum wait time requirement not satisfied",
+                           "ValidationException: No-show reason and photo evidence required"
+                       ],
+        "logs":  [
+                     "Consignee no-show recorded; cargo scheduled for reverse return logistics",
+                     "No-show report rejected: wait time threshold not met or missing photo"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Report consignee no-show after 20 minutes wait with call attempt photos",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  146,
+        "code":  "DEL014",
+        "func_name":  "Handle",
+        "cls_name":  "GetTripDocumentsQueryHandler",
+        "requirement":  "Retrieve digital dispatch documents, electronic manifests, and signed ePODs for trip",
+        "description":  "Aggregates all digital PDF documents associated with delivery trip: Loading Manifest, Dispatch Permit, Hazardous/Perishable Cargo Certificates, and completed ePODs.",
+        "sheet_name":  "DEL014_getTripDocuments",
+        "preconditions":  [
+                              "Trip exists in database",
+                              "User is authorized"
+                          ],
+        "inputs":  {
+                       "Input":  [
+                                     "orderId=\u0027d3b07384-d113-46c6-950c-619f7e5b32cf\u0027 (TRK-DEMO-QCFAIL in DB)",
+                                     "orderId=\u002700000000-0000-0000-0000-000000000000\u0027 (non-existent GUID)",
+                                     "empty string (\"\")",
+                                     "invalid format (\"###-invalid-id\")"
+                                 ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cTripDocumentsDto\u003e with ManifestPdfUrl, WaybillUrls, SignedEpodUrlsList, TotalDocumentsCount",
+                        "HTTP 404 Not Found - Trip not found",
+                        "HTTP 400 Bad Request - Identifier or filter parameter is required or invalid format",
+                        "HTTP 200 OK - Empty dataset matching boundary criteria"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Trip not found in database",
+                           "ValidationException: Parameter is required or invalid format"
+                       ],
+        "logs":  [
+                     "Digital dispatch documents and ePOD archive retrieved for trip",
+                     "Trip documents query failed: trip not found"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Retrieve Handle successfully with valid existing parameters",
+                               "pre":  [
+                                           0,
+                                           1
+                                       ],
+                               "inp":  {
+                                           "Input":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           },
+                           {
+                               "id":  "UTCID04",
+                               "type":  "B",
+                               "desc":  "Retrieve Handle at boundary range with 0 matching records",
+                               "pre":  [
+                                           0,
+                                           1
+                                       ],
+                               "inp":  {
+                                           "Input":  3
+                                       },
+                               "ret":  [
+                                           3
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  148,
+        "code":  "RET001",
+        "func_name":  "Handle",
+        "cls_name":  "RejectEntireLpnCommandHandler",
+        "requirement":  "Customer rejects entire pallet LPN due to temperature violation or physical cargo damage",
+        "description":  "Records consignee refusal to accept pallet LPN, capturing rejection reason code (TEMP_EXCURSION, PACKAGING_DAMAGED, EXPIRED, WRONG_SKU), photos of damaged cargo, updates LPN status to REJECTED, and generates return shipment slip.",
+        "sheet_name":  "RET001_rejectEntireLpn",
+        "preconditions":  [
+                              "Driver has arrived at stop with pallet LPN",
+                              "Consignee inspects cargo and rejects handover",
+                              "Photo evidence and recorded temperature are provided"
+                          ],
+        "inputs":  {
+                       "Input1":  [
+                                      "lpn-ret-148-valid, stop-ret-148 (valid)",
+                                      "00000000-0000-0000-0000-000000000000, stop-ret-148",
+                                      "lpn-already-delivered (cannot reject delivered cargo)"
+                                  ],
+                       "Input2":  [
+                                      "reasonCode=\u0027TEMP_EXCURSION\u0027, measuredTemp=+14.0C (frozen threshold -18C violated), notes=\u0027Product thawed during transit\u0027, photoUrls=[\u0027https://s3/evidence/thaw.jpg\u0027] (valid)",
+                                      "reasonCode=\u0027PACKAGING_DAMAGED\u0027, notes=\u0027Crushed bottom boxes\u0027, photoUrls=[] (missing required photo evidence)",
+                                      "reasonCode=\u0027\u0027 (empty reason code)"
+                                  ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cLpnRejectionResultDto\u003e with Status=REJECTED, ReturnSlipCode, ReturnRoutingRequired=true, RecordedAt",
+                        "HTTP 404 Not Found - Pallet LPN or stop not found",
+                        "HTTP 409 Conflict - Cannot reject pallet LPN that is already DELIVERED",
+                        "HTTP 400 Bad Request - Reason code and photo evidence URLs are required"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Pallet LPN not found",
+                           "ConflictException: Cannot reject already delivered pallet",
+                           "ValidationException: Rejection reason and photo evidence required"
+                       ],
+        "logs":  [
+                     "Customer rejected pallet LPN; return slip created and reverse logistics routing initiated",
+                     "Pallet rejection rejected: missing photo evidence or state conflict"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Customer rejects frozen pallet due to temperature excursion with photo evidence",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  150,
+        "code":  "RET003",
+        "func_name":  "Handle",
+        "cls_name":  "ProcessInboundReverseCommandHandler",
+        "requirement":  "Warehouse operator receives returned cargo and places pallet into cold quarantine zone",
+        "description":  "Scans returned pallet LPN and return slip barcode at receiving dock, verifies received temperature, allocates quarantine storage bin, and updates LPN status to QUARANTINE_INSPECT.",
+        "sheet_name":  "RET003_processInboundReverse",
+        "preconditions":  [
+                              "Return slip exists and is in PENDING_RECEIVING status",
+                              "Warehouse operator is authenticated at receiving dock",
+                              "Quarantine bin is available in warehouse"
+                          ],
+        "inputs":  {
+                       "Input1":  [
+                                      "slip-ret-150-valid, scannedLpn=\u0027LPN-VN-90812\u0027 (valid matching return slip)",
+                                      "slip-999-notfound, scannedLpn=\u0027LPN-VN-90812\u0027",
+                                      "slip-ret-150-valid, scannedLpn=\u0027LPN-WRONG-999\u0027 (mismatched LPN barcode)"
+                                  ],
+                       "Input2":  [
+                                      "quarantineBinId=\u0027BIN-QUAR-01\u0027, receivingTemp=-16.0C, inspectionNotes=\u0027Received thawed boxes\u0027 (valid)",
+                                      "quarantineBinId=\u0027BIN-FULL\u0027, receivingTemp=-16.0C (quarantine bin at max capacity)"
+                                  ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cReverseInboundResultDto\u003e with Status=QUARANTINED, QuarantineBinLocation, ReceivedAt, DiscrepancyTicketCreated=true",
+                        "HTTP 404 Not Found - Return slip or quarantine bin not found",
+                        "HTTP 409 Conflict - Scanned LPN does not match return slip or quarantine bin is full",
+                        "HTTP 400 Bad Request - Receiving temperature and quarantine bin ID are required"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Return slip or bin not found",
+                           "ConflictException: Scanned LPN barcode does not match return slip manifest",
+                           "ValidationException: Quarantine bin is full or receiving temperature missing"
+                       ],
+        "logs":  [
+                     "Returned cargo received at warehouse and placed in quarantine storage bin",
+                     "Reverse inbound receiving rejected: LPN mismatch or bin full"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Receive returned pallet into warehouse cold quarantine bin with inspection notes",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  151,
+        "code":  "RET004",
+        "func_name":  "Handle",
+        "cls_name":  "GetPendingReturnSlipsQueryHandler",
+        "requirement":  "Retrieve pending return slips awaiting warehouse inbound receiving and quarantine inspection",
+        "description":  "Queries all active return slips destined for a specific warehouse facility that have not yet been checked in by warehouse operators.",
+        "sheet_name":  "RET004_getPendingReturnSlips",
+        "preconditions":  [
+                              "Warehouse entity exists in database",
+                              "User has WarehouseWorker or Manager role"
+                          ],
+        "inputs":  {
+                       "Input":  [
+                                     "lpnId=\u00276decac0d-8ac5-47b3-96c1-2713efc3dcd4\u0027 (LPN-20260716094002-3229 in DB)",
+                                     "id=\u002700000000-0000-0000-0000-000000000000\u0027 (non-existent GUID)",
+                                     "87b07384-d113-46c6-950c-619f7e5b32cd (0 pending returns) (warehouse with 0 pending return slips)",
+                                     "empty string (\"\")"
+                                 ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cList\u003cReturnSlipSummaryDto\u003e\u003e with SlipCode, OrderCode, LpnCode, RejectionReason, DriverName, EstimatedArrival",
+                        "HTTP 404 Not Found - Warehouse entity not found",
+                        "HTTP 200 OK - ApiResponse with Empty List (0 pending returns)",
+                        "HTTP 200 OK - Empty dataset matching boundary criteria"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Warehouse not found in database",
+                           "ValidationException: Parameter is required or invalid format"
+                       ],
+        "logs":  [
+                     "Pending return slips queried for warehouse facility",
+                     "Pending return slips query returned 0 records"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Retrieve Handle successfully with valid existing parameters",
+                               "pre":  [
+                                           0,
+                                           1
+                                       ],
+                               "inp":  {
+                                           "Input":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           },
+                           {
+                               "id":  "UTCID04",
+                               "type":  "B",
+                               "desc":  "Retrieve Handle at boundary range with 0 matching records",
+                               "pre":  [
+                                           0,
+                                           1
+                                       ],
+                               "inp":  {
+                                           "Input":  3
+                                       },
+                               "ret":  [
+                                           3
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  154,
+        "code":  "RET007",
+        "func_name":  "Handle",
+        "cls_name":  "ResolveDiscrepancyCommandHandler",
+        "requirement":  "Warehouse worker resolves cargo discrepancy with final disposition action (Restock, Scrap, Return)",
+        "description":  "Applies QA disposition decision to quarantined cargo: RESTOCK_TO_INVENTORY (passed re-inspection), SCRAP_DESTROY (total thermal spoilage), or RETURN_TO_VENDOR, updating inventory balances and closing ticket.",
+        "sheet_name":  "RET007_resolveDiscrepancy",
+        "preconditions":  [
+                              "Discrepancy ticket is in OPEN or UNDER_INSPECTION status",
+                              "Warehouse QA inspector is authenticated",
+                              "Disposition action is valid"
+                          ],
+        "inputs":  {
+                       "Input1":  [
+                                      "disc-ticket-154-open (valid open ticket)",
+                                      "disc-ticket-999-notfound",
+                                      "disc-ticket-already-closed (already resolved)"
+                                  ],
+                       "Input2":  [
+                                      "action=\u0027SCRAP_DESTROY\u0027, destructionCertUrl=\u0027https://s3/certs/destruct.pdf\u0027, notes=\u0027Spoiled due to +15C heat excursion\u0027 (valid scrap)",
+                                      "action=\u0027RESTOCK_TO_INVENTORY\u0027, targetBinId=\u0027BIN-FROZ-04\u0027, notes=\u0027Inspected core temp -19C compliant\u0027 (valid restock)",
+                                      "action=\u0027INVALID_DISPOSITION_ACTION\u0027"
+                                  ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cDiscrepancyResolutionResultDto\u003e with Status=RESOLVED, ActionApplied, ResolvedAt, InventoryUpdated=true",
+                        "HTTP 404 Not Found - Discrepancy ticket not found",
+                        "HTTP 409 Conflict - Discrepancy ticket is already in RESOLVED status",
+                        "HTTP 400 Bad Request - Invalid disposition action or missing required disposition parameters"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Discrepancy ticket not found",
+                           "ConflictException: Ticket is already resolved",
+                           "ValidationException: Invalid disposition action code"
+                       ],
+        "logs":  [
+                     "Cargo discrepancy resolved; final disposition action executed and inventory adjusted",
+                     "Discrepancy resolution rejected: ticket already closed or invalid action"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Resolve discrepancy with SCRAP_DESTROY disposition and destruction certificate",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           },
+                           {
+                               "id":  "UTCID02",
+                               "type":  "N",
+                               "desc":  "Resolve discrepancy with RESTOCK_TO_INVENTORY disposition into storage bin",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  1
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  159,
+        "code":  "CLM004",
+        "func_name":  "ResolveClaim",
+        "cls_name":  "ClaimService",
+        "requirement":  "Dispatcher or Claims Adjuster resolves claim with approval, partial compensation, or rejection",
+        "description":  "Reviews claim evidence and telemetry audit, renders resolution decision (APPROVED, PARTIALLY_APPROVED, REJECTED), records approved settlement amount, and notifies customer.",
+        "sheet_name":  "CLM004_resolveClaim",
+        "preconditions":  [
+                              "Claim is in PENDING or UNDER_INVESTIGATION status",
+                              "Authenticated user has ClaimsAdjuster or Admin role",
+                              "Approved amount does not exceed claimed amount"
+                          ],
+        "inputs":  {
+                       "Input1":  [
+                                      "clm-id-159-pending (valid pending claim, claimed 20,000,000 VND)",
+                                      "clm-999-notfound",
+                                      "clm-already-paid (claim already closed and paid)"
+                                  ],
+                       "Input2":  [
+                                      "decision=\u0027APPROVED\u0027, approvedAmount=20000000, notes=\u0027Carrier thermal failure verified; full compensation approved\u0027 (valid full)",
+                                      "decision=\u0027PARTIALLY_APPROVED\u0027, approvedAmount=12000000, notes=\u0027Salvageable goods deducted\u0027 (valid partial)",
+                                      "decision=\u0027APPROVED\u0027, approvedAmount=30000000 (approved amount \u003e claimed amount: invalid)",
+                                      "decision=\u0027REJECTED\u0027, approvedAmount=0, notes=\u0027Cargo within temperature tolerance\u0027 (valid reject)"
+                                  ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cClaimDetailDto\u003e with Status=\u0027APPROVED\u0027, ApprovedAmount=20000000, ResolvedAt, PayoutReady=true",
+                        "HTTP 404 Not Found - Claim not found",
+                        "HTTP 409 Conflict - Claim is already resolved or paid",
+                        "HTTP 400 Bad Request - Approved compensation amount cannot exceed original claimed amount"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Claim not found",
+                           "ConflictException: Claim is not in a resolvable status",
+                           "ValidationException: ApprovedAmount cannot exceed ClaimedAmount"
+                       ],
+        "logs":  [
+                     "Compensation claim resolved; decision and settlement amount recorded",
+                     "Claim resolution rejected: amount exceeds claimed total or claim already resolved"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Resolve claim with full approval of claimed compensation amount",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           },
+                           {
+                               "id":  "UTCID02",
+                               "type":  "N",
+                               "desc":  "Resolve claim with partial approval deducting salvageable goods",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  1
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  160,
+        "code":  "CLM005",
+        "func_name":  "CompleteClaimPayout",
+        "cls_name":  "ClaimService",
+        "requirement":  "Accountant executes approved claim compensation payout transaction to customer bank account",
+        "description":  "Verifies claim is in APPROVED status, records bank transfer transaction reference and disbursement date, generates payment voucher, and transitions claim status to PAID/COMPLETED.",
+        "sheet_name":  "CLM005_completeClaimPayout",
+        "preconditions":  [
+                              "Claim is in APPROVED or PARTIALLY_APPROVED status",
+                              "Approved compensation amount \u003e 0",
+                              "Authenticated user has Accountant role"
+                          ],
+        "inputs":  {
+                       "Input1":  [
+                                      "clm-id-160-approved (approved claim, 15,000,000 VND)",
+                                      "clm-999-notfound",
+                                      "clm-pending-approval (claim not yet approved by adjuster)"
+                                  ],
+                       "Input2":  [
+                                      "bankTransferRef=\u0027FT2617088921\u0027, paymentMethod=\u0027BANK_TRANSFER\u0027, paidAmount=15000000 (valid)",
+                                      "bankTransferRef=\u0027\u0027, paymentMethod=\u0027BANK_TRANSFER\u0027 (missing bank transfer reference)",
+                                      "paidAmount=10000000 (payout amount mismatch: expected 15,000,000)"
+                                  ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cClaimPayoutResultDto\u003e with Status=\u0027PAID\u0027, PaidAmount=15000000, BankTransferRef=\u0027FT2617088921\u0027, PaidAt",
+                        "HTTP 404 Not Found - Claim not found",
+                        "HTTP 409 Conflict - Claim is not in APPROVED status (cannot payout unapproved claim)",
+                        "HTTP 400 Bad Request - Bank transfer reference required or payout amount does not match approved amount"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Claim not found in database",
+                           "ConflictException: Claim must be in APPROVED status to execute payout",
+                           "ValidationException: Bank transfer reference required or paid amount mismatch"
+                       ],
+        "logs":  [
+                     "Claim compensation payout executed successfully; voucher generated and status updated to PAID",
+                     "Claim payout failed: unapproved claim or bank reference missing"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Execute bank transfer payout for approved compensation claim",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  174,
+        "code":  "INC003",
+        "func_name":  "ReportIncident",
+        "cls_name":  "IncidentReportService",
+        "requirement":  "Driver reports reefer breakdown emergency with live GPS location and current chamber temperature",
+        "description":  "Creates emergency Incident entity from driver mobile app: captures current vehicle GPS coordinates, sensor temperature reading, incident severity (CRITICAL/HIGH), creates high-priority alert for dispatch team, and sets status to REPORTED.",
+        "sheet_name":  "INC003_reportIncident",
+        "preconditions":  [
+                              "Trip is in IN_TRANSIT status",
+                              "Driver is authenticated on active trip",
+                              "GPS coordinates and emergency description provided"
+                          ],
+        "inputs":  {
+                       "Input1":  [
+                                      "tripId=\u0027582b7823-1f34-4947-8279-775421e771f6\u0027, vehicleId=\u0027b8c4c37f-5d1f-4b08-8e6c-0e782d8db1a1\u0027",
+                                      "00000000-0000-0000-0000-000000000000, drv-01",
+                                      "trip-completed (trip already finished)"
+                                  ],
+                       "Input2":  [
+                                      "incidentType=\u0027REEFER_BREAKDOWN\u0027, severity=\u0027CRITICAL\u0027, currentTemp=+5.0C, lat=10.9502, lng=106.8201, description=\u0027Refrigeration compressor belt snapped on highway\u0027 (valid)",
+                                      "incidentType=\u0027REEFER_BREAKDOWN\u0027, description=\u0027\u0027 (missing description)",
+                                      "lat=null, lng=null (missing GPS coordinates)"
+                                  ]
+                   },
+        "returns":  [
+                        "HTTP 201 Created - ApiResponse\u003cIncidentDetailDto\u003e with IncidentCode, Status=\u0027REPORTED\u0027, DispatchAlertBroadcast=true, CreatedAt",
+                        "HTTP 404 Not Found - Trip not found",
+                        "HTTP 409 Conflict - Cannot report transit incident on COMPLETED trip",
+                        "HTTP 400 Bad Request - Description and valid GPS coordinates are required"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Trip not found in database",
+                           "ConflictException: Trip is not in IN_TRANSIT state",
+                           "ValidationException: Description and GPS coordinates are required"
+                       ],
+        "logs":  [
+                     "Emergency reefer breakdown reported; dispatch rescue alert broadcasted immediately",
+                     "Incident reporting failed: missing GPS or completed trip"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Driver reports reefer compressor breakdown with GPS coordinates and temperature reading",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  175,
+        "code":  "INC004",
+        "func_name":  "AddEvidence",
+        "cls_name":  "IncidentReportService",
+        "requirement":  "Upload photo evidence, mechanic repair receipts, and dry ice purchase invoices to incident case",
+        "description":  "Attaches photographic evidence and receipt documents to an existing incident report, recording image URL, caption, timestamp, and optional expense reimbursement claim.",
+        "sheet_name":  "INC004_addEvidence",
+        "preconditions":  [
+                              "Incident entity exists in database",
+                              "User is authorized"
+                          ],
+        "inputs":  {
+                       "Input1":  [
+                                      "tripId=\u0027582b7823-1f34-4947-8279-775421e771f6\u0027, vehicleId=\u0027b8c4c37f-5d1f-4b08-8e6c-0e782d8db1a1\u0027",
+                                      "inc-999-notfound (non-existent GUID)",
+                                      "empty string (\"\")",
+                                      "invalid boundary value / duplicate record"
+                                  ],
+                       "Input2":  [
+                                      "photoUrl=\u0027https://s3/evidence/mechanic-receipt.jpg\u0027, caption=\u0027Emergency compressor belt replacement invoice\u0027, expenseAmount=1200000 (valid)",
+                                      "photoUrl=\u0027\u0027, caption=\u0027Missing photo URL\u0027 (empty photo URL)",
+                                      "expenseAmount=-50000 (invalid negative expense amount)",
+                                      "invalid boundary value / duplicate record"
+                                  ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cIncidentEvidenceDto\u003e with EvidenceId, PhotoUrl, Caption, ExpenseClaimCreated=true, AddedAt",
+                        "HTTP 404 Not Found - Incident not found",
+                        "HTTP 400 Bad Request - PhotoUrl is required or expense amount is negative",
+                        "HTTP 400 Bad Request - Required field is missing or invalid format"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Incident entity not found",
+                           "ValidationException: PhotoUrl is required and expense amount cannot be negative",
+                           "ValidationException: Required parameters missing or invalid"
+                       ],
+        "logs":  [
+                     "Incident photo evidence and expense attachment uploaded successfully"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Execute AddEvidence successfully with valid request data",
+                               "pre":  [
+                                           0,
+                                           1
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  176,
+        "code":  "INC005",
+        "func_name":  "ApproveExpense",
+        "cls_name":  "IncidentReportService",
+        "requirement":  "Operations Manager approves emergency repair and dry ice purchase expense reimbursement",
+        "description":  "Reviews attached emergency receipts (dry ice, roadside mechanic repair, tow truck), validates expense legitimacy, and approves reimbursement voucher for driver.",
+        "sheet_name":  "INC005_approveExpense",
+        "preconditions":  [
+                              "Incident expense record exists in PENDING status",
+                              "User has OperationsManager or Admin role"
+                          ],
+        "inputs":  {
+                       "Input1":  [
+                                      "tripId=\u0027582b7823-1f34-4947-8279-775421e771f6\u0027, vehicleId=\u0027b8c4c37f-5d1f-4b08-8e6c-0e782d8db1a1\u0027",
+                                      "exp-999-notfound",
+                                      "exp-already-approved (already in APPROVED status)"
+                                  ],
+                       "Input2":  [
+                                      "approved=true, approvedAmount=1200000, notes=\u0027Emergency repair approved\u0027 (valid full approval)",
+                                      "approved=false, approvedAmount=0, notes=\u0027Unverified invoice rejected\u0027 (valid rejection)",
+                                      "approved=true, approvedAmount=2500000 (approved amount \u003e submitted expense: invalid)"
+                                  ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cExpenseApprovalDto\u003e with Status=\u0027APPROVED\u0027, ApprovedAmount=1200000, ApprovedBy, ApprovedAt",
+                        "HTTP 404 Not Found - Incident expense record not found",
+                        "HTTP 409 Conflict - Expense is already in APPROVED status",
+                        "HTTP 400 Bad Request - Approved amount cannot exceed submitted expense amount"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Expense record not found in database",
+                           "ConflictException: Expense has already been approved or rejected",
+                           "ValidationException: ApprovedAmount cannot exceed original expense amount"
+                       ],
+        "logs":  [
+                     "Emergency incident expense approved; reimbursement voucher queued for accounting",
+                     "Expense approval rejected: amount exceeds invoice or expense already processed"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Approve emergency roadside repair expense with full amount",
+                               "pre":  [
+                                           0,
+                                           1
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  177,
+        "code":  "INC006",
+        "func_name":  "ReimburseExpense",
+        "cls_name":  "IncidentReportService",
+        "requirement":  "Accountant executes reimbursement payout of approved emergency expenses to driver bank account",
+        "description":  "Executes bank transfer payout for approved incident expense voucher, records payment transaction reference, and marks expense status as REIMBURSED.",
+        "sheet_name":  "INC006_reimburseExpense",
+        "preconditions":  [
+                              "Expense is in APPROVED status",
+                              "User has Accountant role",
+                              "Driver bank details registered"
+                          ],
+        "inputs":  {
+                       "Input1":  [
+                                      "tripId=\u0027582b7823-1f34-4947-8279-775421e771f6\u0027, vehicleId=\u0027b8c4c37f-5d1f-4b08-8e6c-0e782d8db1a1\u0027",
+                                      "exp-999-notfound",
+                                      "exp-pending (expense not yet approved by operations manager)"
+                                  ],
+                       "Input2":  [
+                                      "bankTransferRef=\u0027TXN-DRV-REIMB-881\u0027, paymentDate=\u00272026-06-05\u0027 (valid)",
+                                      "bankTransferRef=\u0027\u0027 (empty bank reference)"
+                                  ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cExpenseReimbursementDto\u003e with Status=\u0027REIMBURSED\u0027, ReimbursedAmount=1200000, BankTransferRef=\u0027TXN-DRV-REIMB-881\u0027, PaidAt",
+                        "HTTP 404 Not Found - Expense record not found",
+                        "HTTP 409 Conflict - Expense is not in APPROVED status (cannot reimburse unapproved expense)",
+                        "HTTP 400 Bad Request - Bank transfer reference is required"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Expense record not found in database",
+                           "ConflictException: Expense must be in APPROVED status to be reimbursed",
+                           "ValidationException: Bank transfer reference cannot be blank"
+                       ],
+        "logs":  [
+                     "Emergency expense reimbursement paid to driver bank account successfully",
+                     "Reimbursement failed: unapproved expense or missing bank reference"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Reimburse approved emergency expense via bank transfer",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  178,
+        "code":  "INC007",
+        "func_name":  "ContinueTripAsync",
+        "cls_name":  "IncidentRescueService",
+        "requirement":  "Driver confirms roadside mechanic repair resolved and resumes in-transit delivery trip",
+        "description":  "Verifies reefer unit is restored and chamber temperature has dropped back within allowable threshold (e.g. \u003c= -18°C for frozen), closes roadside pause, and resumes active trip route.",
+        "sheet_name":  "INC007_continueTrip",
+        "preconditions":  [
+                              "Incident is in REPORTED or IN_PROGRESS status",
+                              "Reefer temperature restored within product threshold",
+                              "Driver is authenticated on trip"
+                          ],
+        "inputs":  {
+                       "Input1":  [
+                                      "tripId=\u0027582b7823-1f34-4947-8279-775421e771f6\u0027, vehicleId=\u0027b8c4c37f-5d1f-4b08-8e6c-0e782d8db1a1\u0027",
+                                      "inc-999-notfound, trip-178",
+                                      "empty string (\"\")",
+                                      "invalid boundary value / duplicate record"
+                                  ],
+                       "Input2":  [
+                                      "currentChamberTemp=-18.5C (compliant frozen), notes=\u0027Compressor belt replaced by roadside mobile service\u0027 (valid)",
+                                      "currentChamberTemp=+6.0C (non-compliant warm temperature: cannot resume transit)",
+                                      "empty string (\"\")",
+                                      "invalid boundary value / duplicate record"
+                                  ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cTripResumeResultDto\u003e with Status=\u0027IN_TRANSIT\u0027, IncidentResolved=true, ResumedAt, ChamberTemp=-18.5C",
+                        "HTTP 404 Not Found - Incident or trip not found",
+                        "HTTP 409 Conflict - Chamber temperature is still out of compliant range (cannot resume transit with warm reefer)",
+                        "HTTP 400 Bad Request - Required field is missing or invalid format"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Incident or trip not found in database",
+                           "ConflictException: Chamber temperature exceeds allowable threshold to resume trip",
+                           "ValidationException: Required parameters missing or invalid"
+                       ],
+        "logs":  [
+                     "Roadside incident resolved by driver; trip resumed in transit with compliant temperature",
+                     "Resume trip rejected: chamber temperature still non-compliant"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Execute ContinueTripAsync successfully with valid request data",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  179,
+        "code":  "INC008",
+        "func_name":  "ResolveIncident",
+        "cls_name":  "IncidentReportService",
+        "requirement":  "Dispatcher or Operations Admin formally closes incident case with post-mortem root cause analysis",
+        "description":  "Records root cause analysis category (EQUIPMENT_FAILURE, TRAFFIC_ACCIDENT, SENSOR_FAULT, DRIVER_ERROR), logs corrective actions, closes incident case, and archives dossier.",
+        "sheet_name":  "INC008_resolveIncident",
+        "preconditions":  [
+                              "Incident is in REPORTED, RESCUE_COMPLETED, or IN_PROGRESS status",
+                              "All transload or repair actions completed",
+                              "User has Dispatcher or Admin role"
+                          ],
+        "inputs":  {
+                       "Input1":  [
+                                      "22b89e86-5475-4f6d-8edf-b4074403cf62 (active incident in DB)",
+                                      "00000000-0000-0000-0000-000000000000 (not found)",
+                                      "22b89e86-5475-4f6d-8edf-b4074403cf62 (already resolved incident)"
+                                  ],
+                       "Input2":  [
+                                      "ResolutionNote=\u0027Đã điều phối xe cứu hộ sang hàng thành công, bảo quản toàn vẹn chất lượng nhiệt độ\u0027 (valid)",
+                                      "ResolutionNote=\u0027\u0027 (empty resolution note)"
+                                  ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cIncidentDetailDto\u003e with Status=\u0027RESOLVED\u0027, RootCause=\u0027EQUIPMENT_FAILURE\u0027, ResolvedBy, ClosedAt",
+                        "HTTP 404 Not Found - Incident not found",
+                        "HTTP 409 Conflict - Incident case is already closed",
+                        "HTTP 400 Bad Request - Root cause and resolution notes are required"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Incident not found in database",
+                           "ConflictException: Incident is already in RESOLVED status",
+                           "ValidationException: RootCause and ClosedNotes are required"
+                       ],
+        "logs":  [
+                     "Transit incident case resolved and closed with root cause analysis",
+                     "Incident resolution failed: incident not found or already closed"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Formally resolve incident with root cause category and corrective action notes",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  180,
+        "code":  "INC009",
+        "func_name":  "GetRescueCandidatesAsync",
+        "cls_name":  "IncidentRescueService",
+        "requirement":  "Query nearest available rescue refrigerated trucks with compatible payload and thermal capacity",
+        "description":  "Calculates driving distance and estimated time of arrival (ETA) for available nearby empty or underutilized refrigerated trucks, matching thermal zone compatibility (Frozen/Chilled) and pallet capacity for emergency transload.",
+        "sheet_name":  "INC009_getRescueCandidates",
+        "preconditions":  [
+                              "Incident exists in REPORTED status with breakdown GPS coordinates",
+                              "Fleet vehicles exist in repository",
+                              "User is authorized"
+                          ],
+        "inputs":  {
+                       "Input1":  [
+                                      "22b89e86-5475-4f6d-8edf-b4074403cf62 (active reefer breakdown incident)",
+                                      "00000000-0000-0000-0000-000000000000 (not found)"
+                                  ],
+                       "Input2":  [
+                                      "radiusKm=50.0 (search within 50 km radius)",
+                                      "radiusKm=10.0 (search within 10 km: 0 candidates found)",
+                                      "radiusKm=-5.0 (invalid negative radius)"
+                                  ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cList\u003cRescueCandidateDto\u003e\u003e with VehiclePlate, DriverName, DistanceKm, EtaMinutes, AvailablePalletCapacity, ReeferTempZone",
+                        "HTTP 404 Not Found - Incident not found",
+                        "HTTP 400 Bad Request - Search radius must be a positive integer"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Incident not found in database",
+                           "ValidationException: Search radius must be positive"
+                       ],
+        "logs":  [
+                     "Candidate rescue refrigerated vehicles calculated with ETA and thermal capacity",
+                     "Rescue candidates query failed: incident not found"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Find nearest rescue refrigerated trucks within 50km radius with matching frozen capacity",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           },
+                           {
+                               "id":  "UTCID02",
+                               "type":  "N",
+                               "desc":  "Find rescue candidates with extended 100km search radius",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  1,
+                                           "Input2":  1
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  181,
+        "code":  "INC010",
+        "func_name":  "DispatchRescueAsync",
+        "cls_name":  "IncidentRescueService",
+        "requirement":  "Operations Supervisor dispatches rescue vehicle and creates emergency roadside transload mission",
+        "description":  "Assigns rescue vehicle and driver to emergency mission, generates navigation route to breakdown GPS coordinates, creates emergency transload mission link, and updates incident status to RESCUE_DISPATCHED.",
+        "sheet_name":  "INC010_dispatchRescue",
+        "preconditions":  [
+                              "Incident exists in REPORTED status",
+                              "Selected rescue vehicle and driver are available",
+                              "User has Dispatcher or OperationsManager role"
+                          ],
+        "inputs":  {
+                       "Input1":  [
+                                      "22b89e86-5475-4f6d-8edf-b4074403cf62 (active incident)",
+                                      "00000000-0000-0000-0000-000000000000 (not found)"
+                                  ],
+                       "Input2":  [
+                                      "ReplacementVehicleId=\u0027b8c4c37f-5d1f-4b08-8e6c-0e782d8db1a1\u0027, TransloadMinutes=30, Note=\u0027Điều xe cứu hộ sang hàng tại trạm Sóng Thần\u0027 (valid)",
+                                      "ReplacementVehicleId=\u002700000000-0000-0000-0000-000000000000\u0027, TransloadMinutes=30 (replacement vehicle not found)",
+                                      "ReplacementVehicleId=\u0027b8c4c37f-5d1f-4b08-8e6c-0e782d8db1a1\u0027, TransloadMinutes=-10 (invalid negative transload time)"
+                                  ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cRescueDispatchResultDto\u003e with IncidentCode, RescueTripId, RescueVehiclePlate, Status=\u0027RESCUE_DISPATCHED\u0027, EtaMinutes=35",
+                        "HTTP 404 Not Found - Incident or rescue vehicle not found",
+                        "HTTP 409 Conflict - Incident already has an active rescue dispatched or vehicle is unavailable",
+                        "HTTP 400 Bad Request - RescueVehicleId and DriverId are required"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Incident or rescue vehicle not found",
+                           "ConflictException: Rescue mission already dispatched or vehicle busy",
+                           "ValidationException: Invalid rescue assignment parameters"
+                       ],
+        "logs":  [
+                     "Emergency rescue truck dispatched to breakdown location; driver alerted",
+                     "Rescue dispatch rejected: vehicle unavailable or duplicate rescue mission"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Dispatch available refrigerated rescue truck to breakdown scene",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input1":  0,
+                                           "Input2":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  185,
+        "code":  "FLT003",
+        "func_name":  "DeleteFleetTruck",
+        "cls_name":  "FleetManagementService",
+        "requirement":  "Retire and soft delete fleet vehicle that is not currently assigned to active trip",
+        "description":  "Verifies that vehicle is not actively assigned to any ongoing in-transit trip, marks vehicle status as RETIRED, and performs soft delete.",
+        "sheet_name":  "FLT003_deleteFleetTruck",
+        "preconditions":  [
+                              "Vehicle exists in database",
+                              "Vehicle is not on an active delivery trip (Status != ON_TRIP)",
+                              "User has FleetAdmin role"
+                          ],
+        "inputs":  {
+                       "Input":  [
+                                     "a3f5b741-2b0e-43dc-8e54-5a9e623194a3 (51D-201.33 Isuzu 2T - unassigned)",
+                                     "b8c4c37f-5d1f-4b08-8e6c-0e782d8db1a1 (51C-101.11 assigned to active trip 582b7823...)",
+                                     "00000000-0000-0000-0000-000000000000 (not found)",
+                                     "invalid-guid-format"
+                                 ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cbool\u003e with Success=true, Status=\u0027RETIRED\u0027",
+                        "HTTP 404 Not Found - Vehicle not found",
+                        "HTTP 409 Conflict - Cannot delete vehicle currently in transit on active trip",
+                        "HTTP 400 Bad Request - Entity ID is required"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Vehicle not found",
+                           "ConflictException: Vehicle is currently assigned to an active trip",
+                           "ConflictException: Entity has active dependencies"
+                       ],
+        "logs":  [
+                     "Fleet truck retired and removed from active roster",
+                     "Vehicle deletion rejected: active trip assignment or vehicle not found"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID01",
+                               "type":  "N",
+                               "desc":  "Delete DeleteFleetTruck successfully when no active constraints exist",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input":  0
+                                       },
+                               "ret":  [
+                                           0
+                                       ],
+                               "exc":  -1,
+                               "log":  [
+                                           0
+                                       ]
+                           }
+                       ]
+    },
+    {
+        "no":  196,
+        "code":  "DRV005",
+        "func_name":  "Delete",
+        "cls_name":  "DriversController",
+        "requirement":  "Deactivate and soft delete driver record that is not currently assigned to active trip",
+        "description":  "Verifies driver has no active in-transit delivery trips, marks driver status as TERMINATED, and performs soft delete.",
+        "sheet_name":  "DRV005_deleteDriver",
+        "preconditions":  [
+                              "Driver exists in database",
+                              "Driver is not currently assigned to active trip (Status != ON_TRIP)",
+                              "User has Admin role"
+                          ],
+        "inputs":  {
+                       "Input":  [
+                                     "55555555-5555-5555-5555-555555555555 (inactive driver with 0 active trips)",
+                                     "3e635455-7491-4ea1-87bb-3ac35ad6c867 (driver currently assigned to active trip 582b7823...)",
+                                     "00000000-0000-0000-0000-000000000000 (not found)",
+                                     "invalid-guid-format"
+                                 ]
+                   },
+        "returns":  [
+                        "HTTP 200 OK - ApiResponse\u003cbool\u003e with Success=true, Status=\u0027TERMINATED\u0027",
+                        "HTTP 404 Not Found - Driver not found",
+                        "HTTP 409 Conflict - Cannot delete driver currently in transit on active trip",
+                        "HTTP 400 Bad Request - Entity ID is required"
+                    ],
+        "exceptions":  [
+                           "NotFoundException: Driver not found",
+                           "ConflictException: Driver is currently assigned to an active trip",
+                           "ConflictException: Entity has active dependencies"
+                       ],
+        "logs":  [
+                     "Driver deactivated and soft deleted successfully",
+                     "Driver deletion rejected: active trip assignment or driver not found"
+                 ],
+        "test_cases":  [
+                           {
+                               "id":  "UTCID03",
+                               "type":  "A",
+                               "desc":  "Delete Delete when entity has active business dependencies in database",
+                               "pre":  [
+                                           0,
+                                           1,
+                                           2
+                                       ],
+                               "inp":  {
+                                           "Input":  2
+                                       },
+                               "ret":  [
+                                           2
+                                       ],
+                               "exc":  1,
+                               "log":  [
+                                           1
+                                       ]
+                           }
+                       ]
+    }
+]
+    </script>
+    <script>
+        const specsData = JSON.parse(document.getElementById('specsData').textContent);
+    </script>
+
+    <!-- UI Rendering Logic -->
+    <script>
+        let activeCategory = 'ALL';
+        let filteredSpecs = [...specsData];
+        let currentIndex = 0;
+        let isViewAll = false;
+
+        function selectCategory(cat) {
+            activeCategory = cat;
+            document.querySelectorAll('.pill-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.textContent.startsWith(cat + ' ') || (cat === 'ALL' && btn.textContent.startsWith('ALL')));
+            });
+            filterAndRenderList();
+        }
+
+        function filterAndRenderList() {
+            const query = document.getElementById('searchInput').value.toLowerCase().trim();
+            
+            filteredSpecs = specsData.filter(s => {
+                const matchCat = activeCategory === 'ALL' || s.code.startsWith(activeCategory);
+                const matchQuery = !query || 
+                    s.code.toLowerCase().includes(query) || 
+                    s.func_name.toLowerCase().includes(query) || 
+                    s.cls_name.toLowerCase().includes(query) || 
+                    (s.requirement && s.requirement.toLowerCase().includes(query)) ||
+                    (s.description && s.description.toLowerCase().includes(query));
+                return matchCat && matchQuery;
+            });
+
+            const listEl = document.getElementById('functionList');
+            listEl.innerHTML = '';
+
+            if (filteredSpecs.length === 0) {
+                listEl.innerHTML = `<div style="text-align:center; color:#64748b; padding:20px; font-size:12px;">No matching functions found.</div>`;
+                document.getElementById('workspaceContainer').innerHTML = '';
+                updateNavControls(0, 0);
+                return;
+            }
+
+            if (currentIndex >= filteredSpecs.length) {
+                currentIndex = 0;
+            }
+
+            filteredSpecs.forEach((s, idx) => {
+                const card = document.createElement('div');
+                card.className = 'function-card' + (idx === currentIndex && !isViewAll ? ' active' : '');
+                card.setAttribute('data-code', s.code);
+                card.onclick = () => {
+                    currentIndex = idx;
+                    isViewAll = false;
+                    updateViewAllButton();
+                    renderWorkspace();
+                    highlightActiveCard();
+                };
+
+                card.innerHTML = `
+                    <div class="card-top">
+                        <span class="card-code">${s.code}</span>
+                        <span class="card-tcs">${(s.test_cases || []).length} TCs</span>
+                    </div>
+                    <div class="card-name">${s.cls_name}.${s.func_name}</div>
+                    <div class="card-req">${s.requirement || ''}</div>
+                `;
+                listEl.appendChild(card);
+            });
+
+            renderWorkspace();
+            highlightActiveCard();
+        }
+
+        function highlightActiveCard() {
+            document.querySelectorAll('.function-card').forEach((card, idx) => {
+                if (!isViewAll && idx === currentIndex) {
+                    card.classList.add('active');
+                    card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                } else {
+                    card.classList.remove('active');
+                }
+            });
+        }
+
+        function navigate(direction) {
+            if (filteredSpecs.length === 0 || isViewAll) return;
+            currentIndex = (currentIndex + direction + filteredSpecs.length) % filteredSpecs.length;
+            renderWorkspace();
+            highlightActiveCard();
+        }
+
+        function toggleViewAll() {
+            isViewAll = !isViewAll;
+            updateViewAllButton();
+            renderWorkspace();
+            highlightActiveCard();
+        }
+
+        function updateViewAllButton() {
+            const btn = document.getElementById('viewAllBtn');
+            const txt = document.getElementById('viewAllText');
+            if (isViewAll) {
+                btn.style.background = '#eff6ff';
+                btn.style.borderColor = '#2563eb';
+                txt.textContent = 'Single Sheet View';
+            } else {
+                btn.style.background = '#ffffff';
+                btn.style.borderColor = '#cbd5e1';
+                txt.textContent = `View All (${filteredSpecs.length})`;
+            }
+        }
+
+        function updateNavControls(curr, total) {
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            const counter = document.getElementById('navCounter');
+
+            if (isViewAll || total === 0) {
+                prevBtn.disabled = true;
+                nextBtn.disabled = true;
+                counter.textContent = isViewAll ? `ALL (${total})` : '0 / 0';
+            } else {
+                prevBtn.disabled = false;
+                nextBtn.disabled = false;
+                counter.textContent = `${curr + 1} / ${total}`;
+            }
+        }
+
+        function renderWorkspace() {
+            const ws = document.getElementById('workspaceContainer');
+            ws.innerHTML = '';
+
+            if (filteredSpecs.length === 0) return;
+
+            updateNavControls(currentIndex, filteredSpecs.length);
+            document.getElementById('viewAllText').textContent = isViewAll ? 'Single Sheet View' : `View All (${filteredSpecs.length})`;
+
+            const toRender = isViewAll ? filteredSpecs : [filteredSpecs[currentIndex]];
+            
+            toRender.forEach(s => {
+                ws.appendChild(createSpecificationSheet(s));
+            });
+        }
+
+        function createSpecificationSheet(s) {
+            const sheet = document.createElement('div');
+            sheet.className = 'specification-sheet';
+
+            const tcs = s.test_cases || [];
+            const tcCount = tcs.length;
+            const n_count = tcs.filter(t => t.type === 'N').length;
+            const a_count = tcs.filter(t => t.type === 'A').length;
+            const b_count = tcs.filter(t => t.type === 'B').length;
+
+            const preCount = (s.preconditions || []).length;
+            let inpRowsCount = 0;
+            const inpKeys = Object.keys(s.inputs || {});
+            inpKeys.forEach(k => {
+                inpRowsCount += 1 + (s.inputs[k] || []).length;
+            });
+            const conditionRowSpan = (preCount > 0 ? 1 + preCount : 0) + inpRowsCount;
+            
+            const retCount = (s.returns || []).length;
+            const excCount = (s.exceptions || []).length;
+            const logCount = (s.logs || []).length;
+            const confirmRowSpan = (1 + retCount) + (excCount > 0 ? (1 + excCount) : 0) + (logCount > 0 ? (1 + logCount) : 0);
+
+            // Headers for Test Case IDs
+            let tcIdHeaders = '';
+            tcs.forEach(tc => {
+                tcIdHeaders += `<th class="th-tc-id" title="Type: ${tc.type} - ${tc.desc}"><span class="vertical-text">${tc.id}</span></th>`;
+            });
+
+            // Condition Section
+            let conditionHtml = '';
+            let isFirstConditionRow = true;
+
+            if (preCount > 0) {
+                conditionHtml += `
+                <tr>
+                    <td class="td-cat-navy" rowspan="${conditionRowSpan}">Condition</td>
+                    <td class="section-divider" colspan="${1 + tcCount}">Precondition</td>
+                </tr>`;
+                isFirstConditionRow = false;
+
+                s.preconditions.forEach((item, idx) => {
+                    let cells = '';
+                    tcs.forEach(tc => {
+                        const mark = (tc.pre && tc.pre.includes(idx)) ? 'O' : '';
+                        cells += `<td class="tc-mark-cell">${mark}</td>`;
+                    });
+                    conditionHtml += `
+                    <tr>
+                        <td class="item-text-cell">${item}</td>
+                        ${cells}
+                    </tr>`;
+                });
+            }
+
+            inpKeys.forEach((inpName, kIdx) => {
+                const firstCol = (isFirstConditionRow && kIdx === 0) ? `<td class="td-cat-navy" rowspan="${conditionRowSpan}">Condition</td>` : '';
+                if (firstCol) isFirstConditionRow = false;
+
+                conditionHtml += `
+                <tr>
+                    ${firstCol}
+                    <td class="section-divider" colspan="${1 + tcCount}">${inpName}</td>
+                </tr>`;
+
+                s.inputs[inpName].forEach((valText, vIdx) => {
+                    let cells = '';
+                    tcs.forEach(tc => {
+                        let isSelected = false;
+                        if (tc.inp) {
+                            if (tc.inp[inpName] !== undefined && tc.inp[inpName] === vIdx) {
+                                isSelected = true;
+                            } else {
+                                for (const [k, v] of Object.entries(tc.inp)) {
+                                    if (k === inpName && v === vIdx) isSelected = true;
+                                }
+                            }
+                        }
+                        const mark = isSelected ? 'O' : '';
+                        cells += `<td class="tc-mark-cell">${mark}</td>`;
+                    });
+                    conditionHtml += `
+                    <tr>
+                        <td class="item-text-cell">${valText}</td>
+                        ${cells}
+                    </tr>`;
+                });
+            });
+
+            // Confirm Section (Empty by default for tester to mark after test execution)
+            let confirmHtml = `
+            <tr>
+                <td class="td-cat-navy" rowspan="${confirmRowSpan}">Confirm</td>
+                <td class="section-divider" colspan="${1 + tcCount}">Return</td>
+            </tr>`;
+            (s.returns || []).forEach((item, idx) => {
+                let cells = '';
+                tcs.forEach(tc => {
+                    let mark = '';
+                    if (typeof testResults !== 'undefined' && testResults[s.code] && testResults[s.code][tc.id]) {
+                        const tr = testResults[s.code][tc.id];
+                        if (tr.ret && tr.ret.includes(idx)) mark = 'O';
+                    }
+                    cells += `<td class="tc-mark-cell">${mark}</td>`;
+                });
+                confirmHtml += `
+                <tr>
+                    <td class="item-text-cell item-text-right">${item}</td>
+                    ${cells}
+                </tr>`;
+            });
+
+            if (excCount > 0) {
+                confirmHtml += `
+                <tr>
+                    <td class="section-divider" colspan="${1 + tcCount}">Exception</td>
+                </tr>`;
+                s.exceptions.forEach((item, idx) => {
+                    let cells = '';
+                    tcs.forEach(tc => {
+                        let mark = '';
+                        if (typeof testResults !== 'undefined' && testResults[s.code] && testResults[s.code][tc.id]) {
+                            const tr = testResults[s.code][tc.id];
+                            if (tr.exc === idx) mark = 'O';
+                        }
+                        cells += `<td class="tc-mark-cell">${mark}</td>`;
+                    });
+                    confirmHtml += `
+                    <tr>
+                        <td class="item-text-cell item-text-right">${item}</td>
+                        ${cells}
+                    </tr>`;
+                });
+            }
+
+            if (logCount > 0) {
+                confirmHtml += `
+                <tr>
+                    <td class="section-divider" colspan="${1 + tcCount}">Log message</td>
+                </tr>`;
+                s.logs.forEach((item, idx) => {
+                    let cells = '';
+                    tcs.forEach(tc => {
+                        let mark = '';
+                        if (typeof testResults !== 'undefined' && testResults[s.code] && testResults[s.code][tc.id]) {
+                            const tr = testResults[s.code][tc.id];
+                            if (tr.log && tr.log.includes(idx)) mark = 'O';
+                        }
+                        cells += `<td class="tc-mark-cell">${mark}</td>`;
+                    });
+                    confirmHtml += `
+                    <tr>
+                        <td class="item-text-cell item-text-right">${item}</td>
+                        ${cells}
+                    </tr>`;
+                });
+            }
+
+            sheet.innerHTML = `
+                <table class="meta-table">
+                    <tbody>
+                        <tr>
+                            <td class="meta-label">Function Code</td>
+                            <td class="meta-value meta-value-code">${s.code}</td>
+                            <td class="meta-label">Function Name</td>
+                            <td class="meta-value" colspan="2"><strong>${s.cls_name} - ${s.func_name}</strong></td>
+                        </tr>
+                        <tr>
+                            <td class="meta-label">Created By</td>
+                            <td class="meta-value">Le Huy Vu</td>
+                            <td class="meta-label">Executed By</td>
+                            <td class="meta-value" colspan="2">Le Huy Vu</td>
+                        </tr>
+                        <tr>
+                            <td class="meta-label">Lines of code</td>
+                            <td class="meta-value">45</td>
+                            <td class="meta-label">Lack of test cases</td>
+                            <td class="meta-value" colspan="2">0</td>
+                        </tr>
+                        <tr>
+                            <td class="meta-label">Test requirement</td>
+                            <td class="meta-value meta-req" colspan="4">${s.requirement || ''}</td>
+                        </tr>
+                        <tr class="stats-row-header">
+                            <td>Passed</td>
+                            <td>Failed</td>
+                            <td>Untested</td>
+                            <td>N / A / B</td>
+                            <td>Total Test Cases</td>
+                        </tr>
+                        <tr class="stats-row-value">
+                            <td class="val-passed">0</td>
+                            <td style="color: #dc2626; font-weight: bold;">0</td>
+                            <td style="color: #d97706; font-weight: bold;">${tcCount}</td>
+                            <td>${n_count} | ${a_count} | ${b_count}</td>
+                            <td class="val-total">${tcCount}</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div style="height: 6px;"></div>
+
+                <table class="matrix-table">
+                    <thead>
+                        <tr>
+                            <th colspan="2" class="th-func-title">${s.code} - ${s.cls_name}.${s.func_name}</th>
+                            ${tcIdHeaders}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${conditionHtml}
+                        ${confirmHtml}
+                    </tbody>
+                </table>
+            `;
+
+            return sheet;
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            filterAndRenderList();
+        });
+    </script>
+</body>
+</html>
+
+

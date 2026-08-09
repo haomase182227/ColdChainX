@@ -19,8 +19,11 @@ public sealed class IotDevicesController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
+    public async Task<IActionResult> GetAll([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10, CancellationToken cancellationToken = default)
     {
+        if (pageNumber <= 0 || pageSize <= 0)
+            return BadRequest(new { Success = false, Error = "PageNumber and PageSize must be greater than zero." });
+
         var devices = await _db.IotDevices
             .Select(d => new
             {
@@ -73,6 +76,19 @@ public sealed class IotDevicesController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.DeviceCode))
             return BadRequest(new { Success = false, Error = "DeviceCode is required." });
 
+        if ((request.SamplingRate.HasValue && request.SamplingRate.Value <= 0) ||
+            (request.SamplingRateSeconds.HasValue && request.SamplingRateSeconds.Value <= 0))
+        {
+            return BadRequest(new { Success = false, Error = "Sampling rate must be greater than zero (Missing required hardware identifiers or invalid sampling rate)." });
+        }
+
+        if (request.VehicleId.HasValue && request.VehicleId.Value != Guid.Empty)
+        {
+            var vehicleExists = await _db.Vehicles.AnyAsync(v => v.VehicleId == request.VehicleId.Value, cancellationToken);
+            if (!vehicleExists)
+                return NotFound(new { Success = false, Error = "Vehicle not found." });
+        }
+
         var exists = await _db.IotDevices.AnyAsync(d => d.DeviceCode == request.DeviceCode, cancellationToken);
         if (exists)
             return Conflict(new { Success = false, Error = $"Device with code '{request.DeviceCode}' already exists." });
@@ -81,9 +97,9 @@ public sealed class IotDevicesController : ControllerBase
         {
             DeviceId = Guid.NewGuid(),
             DeviceCode = request.DeviceCode.Trim(),
-            VehicleId = null,
+            VehicleId = request.VehicleId == Guid.Empty ? null : request.VehicleId,
             BatteryLevel = 100,
-            Status = "AVAILABLE",
+            Status = string.IsNullOrWhiteSpace(request.Status) ? "AVAILABLE" : request.Status.Trim(),
             CreatedAt = DateTime.UtcNow
         };
 
@@ -129,6 +145,14 @@ public sealed class IotDevicesController : ControllerBase
         if (device == null)
             return NotFound(new { Success = false, Error = "IoT Device not found." });
 
+        var logs = await _db.TelemetryLogs
+            .Where(t => t.DeviceId == id)
+            .ToListAsync(cancellationToken);
+        if (logs.Count > 0)
+        {
+            _db.TelemetryLogs.RemoveRange(logs);
+        }
+
         _db.IotDevices.Remove(device);
         await _db.SaveChangesAsync(cancellationToken);
 
@@ -139,6 +163,11 @@ public sealed class IotDevicesController : ControllerBase
 public sealed class CreateIotDeviceRequest
 {
     public string DeviceCode { get; set; } = string.Empty;
+    public string? DeviceType { get; set; }
+    public Guid? VehicleId { get; set; }
+    public int? SamplingRate { get; set; }
+    public int? SamplingRateSeconds { get; set; }
+    public string? Status { get; set; }
 }
 
 public sealed class UpdateIotDeviceRequest

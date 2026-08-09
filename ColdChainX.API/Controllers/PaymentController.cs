@@ -13,9 +13,6 @@ using System;
 
 namespace ColdChainX.API.Controllers;
 
-/// <summary>
-/// Handle payment webhooks from PayOS.
-/// </summary>
 [ApiController]
 [Route("api/[controller]")]
 public class PaymentController : ControllerBase
@@ -27,22 +24,14 @@ public class PaymentController : ControllerBase
         _mediator = mediator;
     }
 
-    /// <summary>
-    /// Receive PayOS payment webhook notification.
-    /// </summary>
     [HttpPost("/api/payments/bank-webhook")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ReceivePaymentWebhook([FromBody] PaymentWebhookRequest request)
     {
-        // Read raw body for HMAC verification (must be done before model binding, but we use EnableBuffering)
         string? rawBody = null;
         string? payOsSignature = Request.Headers["x-payos-signature"].FirstOrDefault();
 
-        // Re-read body if buffered (requires app.Use(EnableBuffering) middleware or UseBufferedBodyReading)
         if (Request.Body.CanSeek)
         {
             Request.Body.Seek(0, SeekOrigin.Begin);
@@ -61,9 +50,6 @@ public class PaymentController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Lấy tất cả lịch sử giao dịch thanh toán COD, PayOS QR và chi bồi thường OS&D trong toàn bộ hệ thống.
-    /// </summary>
     [HttpGet("/api/payments/transactions")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
@@ -76,6 +62,9 @@ public class PaymentController : ControllerBase
         [FromQuery] int pageNumber = 1,
         [FromQuery] int pageSize = 10)
     {
+        if (pageNumber <= 0 || pageSize <= 0)
+            return BadRequest(ApiResponse<object>.Failure("PageNumber and PageSize must be greater than zero."));
+
         var result = await _mediator.Send(new ColdChainX.Application.Features.Payment.Queries.GetAllPaymentTransactionsQuery
         {
             PageNumber = pageNumber,
@@ -89,31 +78,34 @@ public class PaymentController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Lấy lịch sử giao dịch thanh toán và bồi thường của riêng một Khách hàng (Customer).
-    /// </summary>
     [HttpGet("/api/payments/transactions/customer/me")]
+    [HttpGet("/api/payments/transactions/customer/{customerId:guid}")]
     [Authorize]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetCustomerPaymentTransactions()
+    public async Task<IActionResult> GetCustomerPaymentTransactions([FromRoute] Guid? customerId = null)
     {
-        var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (string.IsNullOrEmpty(userIdString) || !Guid.TryParse(userIdString, out var customerId))
+        var targetId = customerId;
+        if (!targetId.HasValue || targetId.Value == Guid.Empty)
         {
-            return Unauthorized(ApiResponse<object>.Failure("Không thể xác thực danh tính khách hàng từ token."));
+            var customerIdClaim = User.FindFirst("CustomerId")?.Value ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(customerIdClaim) || !Guid.TryParse(customerIdClaim, out var parsedId))
+            {
+                return Unauthorized(ApiResponse<object>.Failure("Không thể xác thực danh tính khách hàng từ token."));
+            }
+            targetId = parsedId;
         }
 
-        var result = await _mediator.Send(new ColdChainX.Application.Features.Payment.Queries.GetCustomerPaymentTransactionsQuery { CustomerId = customerId });
+        var result = await _mediator.Send(new ColdChainX.Application.Features.Payment.Queries.GetCustomerPaymentTransactionsQuery { CustomerId = targetId.Value });
+        if (!result.Success)
+        {
+            return StatusCode(result.StatusCode != 0 ? result.StatusCode : StatusCodes.Status404NotFound, result);
+        }
         return Ok(result);
     }
 
-    /// <summary>
-    /// Lấy thông tin hóa đơn (e-Invoice / COD Receipt) theo ID cụ thể (InvoiceId, OrderId, hoặc EpodId).
-    /// </summary>
     [HttpGet("/api/payments/invoices/{referenceId:guid}")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPaymentInvoiceById(Guid referenceId)
     {
         var result = await _mediator.Send(new ColdChainX.Application.Features.Payment.Queries.GetPaymentInvoiceQuery { ReferenceId = referenceId });

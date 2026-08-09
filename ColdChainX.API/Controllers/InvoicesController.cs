@@ -12,9 +12,6 @@ using ColdChainX.Shared.Responses;
 
 namespace ColdChainX.API.Controllers
 {
-    /// <summary>
-    /// Manages client and system invoices. Modeled after RESTful sub-resource patterns (similar to Shopify).
-    /// </summary>
     [ApiController]
     [Route("api/v1/invoices")]
     [Authorize]
@@ -27,27 +24,19 @@ namespace ColdChainX.API.Controllers
             _invoiceService = invoiceService;
         }
 
-        /// <summary>
-        /// Retrieve list of invoices, filtered by status, with paging.
-        /// </summary>
-        /// <remarks>
-        /// For Customer role: Only returns invoices belonging to the authenticated customer.
-        /// For Admin/WarehouseWorker roles: Returns all invoices across customers, with optional customerId filter.
-        /// </remarks>
-        /// <param name="status">Optional status filter (e.g. UNPAID, PAID).</param>
-        /// <param name="customerId">Optional customer filter (available only to Admin/WarehouseWorker).</param>
-        /// <param name="pageNumber">Page index (1-based).</param>
-        /// <param name="pageSize">Size of each page.</param>
-        /// <returns>A paginated list of invoices.</returns>
         [HttpGet]
         [ProducesResponseType(typeof(ApiResponse<PagedResult<InvoiceResponse>>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> GetInvoices(
             [FromQuery] string? status,
             [FromQuery] Guid? customerId = null,
             [FromQuery] int pageNumber = 1,
             [FromQuery] int pageSize = 10)
         {
+            if (pageNumber <= 0 || pageSize <= 0)
+            {
+                return BadRequest(ApiResponse<object>.Failure("PageNumber and PageSize must be greater than zero."));
+            }
+
             var userRole = User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
             Guid? finalCustomerId = null;
 
@@ -62,7 +51,6 @@ namespace ColdChainX.API.Controllers
             }
             else
             {
-                // Admin or WarehouseWorker can optionally filter by customerId
                 finalCustomerId = customerId;
             }
 
@@ -70,18 +58,8 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>
-        /// Retrieve detailed invoice metadata and line items by Invoice ID.
-        /// </summary>
-        /// <remarks>
-        /// Validates user permissions before returning detailed invoice lines.
-        /// </remarks>
-        /// <param name="invoiceId">The unique identifier of the invoice.</param>
-        /// <returns>The detailed invoice response.</returns>
         [HttpGet("{invoiceId:guid}")]
         [ProducesResponseType(typeof(ApiResponse<InvoiceResponse>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetInvoiceById([FromRoute] Guid invoiceId)
         {
             var userRole = User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
@@ -100,25 +78,14 @@ namespace ColdChainX.API.Controllers
             var result = await _invoiceService.GetInvoiceByIdAsync(invoiceId, customerId, userRole);
             if (!result.Success)
             {
-                return NotFound(result);
+                return StatusCode(result.StatusCode != 0 ? result.StatusCode : StatusCodes.Status404NotFound, result);
             }
 
             return Ok(result);
         }
 
-        /// <summary>
-        /// Retrieve all invoices associated with a specific Transport Order ID.
-        /// </summary>
-        /// <remarks>
-        /// Modeled after Shopify's sub-resource pattern.
-        /// Matches: GET /api/v1/orders/{orderId}/invoices
-        /// </remarks>
-        /// <param name="orderId">The unique identifier of the transport order.</param>
-        /// <returns>A list of invoices linked to the order.</returns>
         [HttpGet("~/api/v1/orders/{orderId:guid}/invoices")]
         [ProducesResponseType(typeof(ApiResponse<List<InvoiceResponse>>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetInvoicesByOrder([FromRoute] Guid orderId)
         {
             var userRole = User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
@@ -143,10 +110,6 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>
-        /// Manually trigger the generation of periodic invoices for COMPLETED orders.
-        /// </summary>
-        /// <returns>Result of the operation.</returns>
         [HttpPost("generate-periodic")]
         [Authorize(Roles = "Accountant,Admin,WarehouseWorker")]
         [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]

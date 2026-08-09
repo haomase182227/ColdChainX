@@ -29,7 +29,6 @@ public class UpdateLocationCommandHandler : IRequestHandler<UpdateLocationComman
 
     public async Task<ApiResponse<bool>> Handle(UpdateLocationCommand request, CancellationToken cancellationToken)
     {
-        // 1. Update vehicle location if trip has vehicle assigned
         var trip = await _context.MasterTrips
             .Include(t => t.TripStops)
             .ThenInclude(ts => ts.Location)
@@ -47,7 +46,6 @@ public class UpdateLocationCommandHandler : IRequestHandler<UpdateLocationComman
             }
         }
 
-        // 2. Identify the next upcoming stop
         var nextStop = trip.TripStops
             .Where(ts => ts.ActualArrivalTime == null)
             .OrderBy(ts => ts.StopSequence)
@@ -55,7 +53,6 @@ public class UpdateLocationCommandHandler : IRequestHandler<UpdateLocationComman
 
         if (nextStop != null && nextStop.Location != null)
         {
-            // 3. Calculate Haversine Distance in meters
             double distance = CalculateDistanceInMeters(
                 (double)request.Latitude,
                 (double)request.Longitude,
@@ -63,16 +60,13 @@ public class UpdateLocationCommandHandler : IRequestHandler<UpdateLocationComman
                 (double)nextStop.Location.Longitude
             );
 
-            // 4. Geofence Check (5000m)
             if (distance <= 5000)
             {
-                // Check if already notified
                 var alreadyNotified = await _context.TripStopEvents
                     .AnyAsync(e => e.StopId == nextStop.StopId && e.EventType == "GEOFENCE_NOTIFIED", cancellationToken);
 
                 if (!alreadyNotified)
                 {
-                    // Create Notification Event
                     _context.TripStopEvents.Add(new TripStopEvent
                     {
                         EventId = Guid.NewGuid(),
@@ -82,7 +76,6 @@ public class UpdateLocationCommandHandler : IRequestHandler<UpdateLocationComman
                         MetaData = $"Triggered at distance {distance:F0}m"
                     });
 
-                    // Send actual Notification to Customer
                     var customerId = await _context.TransportOrders
                         .Where(o => o.MasterTripId == trip.TripId && o.DestLocation == nextStop.LocationId)
                         .Select(o => o.CustomerId)
@@ -93,7 +86,6 @@ public class UpdateLocationCommandHandler : IRequestHandler<UpdateLocationComman
                         var vehicle = trip.VehicleId.HasValue ? await _context.Vehicles.FirstOrDefaultAsync(v => v.VehicleId == trip.VehicleId, cancellationToken) : null;
                         string truckPlate = vehicle?.TruckPlate ?? "Không xác định";
 
-                        // Ensure GEOFENCE_ETA template has clean Shopee-style notification without specific time details or URLs
                         var existingTemplate = await _context.NotificationTemplates.FirstOrDefaultAsync(t => t.TemplateId == "GEOFENCE_ETA", cancellationToken);
                         string shopeeTitle = "📦 Đơn hàng chuỗi lạnh của bạn sắp được giao tới!";
                         string shopeeBody = "Xe vận chuyển {{TruckPlate}} đang di chuyển ở sát khu vực giao hàng của bạn. Vui lòng chuẩn bị sẵn nhân sự KCS và súng bắn nhiệt để tiếp nhận hàng hoá theo quy trình LIFO nhé!";

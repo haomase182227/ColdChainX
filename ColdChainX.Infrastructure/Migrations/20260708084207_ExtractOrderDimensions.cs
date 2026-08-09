@@ -5,15 +5,11 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace ColdChainX.Infrastructure.Migrations
 {
-    /// <inheritdoc />
     public partial class ExtractOrderDimensions : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // removed DropForeignKey fk_transport_orders_dropoff_stop
 
-            // removed DropForeignKey fk_transport_orders_schedule
 
             migrationBuilder.DropColumn(
                 name: "actual_cbm",
@@ -107,12 +103,9 @@ namespace ColdChainX.Infrastructure.Migrations
                         onDelete: ReferentialAction.Cascade);
                 });
 
-            // removed AddForeignKey fk_transport_orders_route_schedule
 
-            // removed AddForeignKey fk_transport_orders_route_stop
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropForeignKey(

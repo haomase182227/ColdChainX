@@ -5,51 +5,11 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace ColdChainX.Infrastructure.Migrations
 {
-    /// <inheritdoc />
     public partial class AddAsnAndQcFields : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // migrationBuilder.DropForeignKey(
-            //     name: "fk_att_adjustment",
-            //     schema: "public",
-            //     table: "warehouse_evidence_attachments");
 
-            // Already dropped in previous migration
-            /*
-            migrationBuilder.DropTable(
-                name: "cycle_count_entries",
-                schema: "public");
-
-            migrationBuilder.DropTable(
-                name: "inventory_allocations",
-                schema: "public");
-
-            migrationBuilder.DropTable(
-                name: "inventory_holds",
-                schema: "public");
-
-            migrationBuilder.DropTable(
-                name: "cycle_count_plans",
-                schema: "public");
-
-            migrationBuilder.DropTable(
-                name: "inventory_adjustments",
-                schema: "public");
-
-            migrationBuilder.DropTable(
-                name: "inventory_movements",
-                schema: "public");
-
-            migrationBuilder.DropTable(
-                name: "inventory_stocks",
-                schema: "public");
-
-            migrationBuilder.DropTable(
-                name: "inventory_batches",
-                schema: "public");
-            */
 
             migrationBuilder.DropIndex(
                 name: "idx_att_adjustment",
@@ -139,7 +99,6 @@ namespace ColdChainX.Infrastructure.Migrations
                 onDelete: ReferentialAction.SetNull);
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropForeignKey(

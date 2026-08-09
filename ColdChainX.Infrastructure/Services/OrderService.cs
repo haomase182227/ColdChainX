@@ -133,7 +133,15 @@ namespace ColdChainX.Infrastructure.Services
 
         public async Task<ApiResponse<CreateOrderResponse>> CreateOrderAsync(CreateOrderRequest request, Guid customerId)
         {
-            
+            if (request.ExpectedWeightKg <= 0)
+                return ApiResponse<CreateOrderResponse>.Failure("Expected weight must be greater than 0", 400);
+            if (request.Quantity <= 0)
+                return ApiResponse<CreateOrderResponse>.Failure("Quantity must be greater than 0", 400);
+            if (request.LengthCm <= 0 || request.WidthCm <= 0 || request.HeightCm <= 0)
+                return ApiResponse<CreateOrderResponse>.Failure("Dimensions must be greater than 0", 400);
+            if (string.IsNullOrWhiteSpace(request.ItemName) || string.IsNullOrWhiteSpace(request.Category))
+                return ApiResponse<CreateOrderResponse>.Failure("Item name and category are required", 400);
+
             var strategy = _db.Database.CreateExecutionStrategy();
 
             return await strategy.ExecuteAsync(async () =>
@@ -147,7 +155,7 @@ namespace ColdChainX.Infrastructure.Services
                     .Include(s => s.Route)
                     .FirstOrDefaultAsync(s => s.ScheduleId == request.ScheduleId);
                     
-                if (schedule == null || schedule.Route?.Status != "ACTIVE")
+                if (schedule == null || !string.Equals(schedule.Route?.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
                     return ApiResponse<CreateOrderResponse>.Failure("Schedule_ID or Route is invalid or inactive");
 
                 var vietnamNow = DateTime.SpecifyKind(DateTime.UtcNow.AddHours(7), DateTimeKind.Unspecified);
@@ -300,7 +308,22 @@ namespace ColdChainX.Infrastructure.Services
                     .FirstOrDefaultAsync(o => o.OrderId == orderId);
 
                 if (order == null)
-                    return ApiResponse<CreateOrderResponse>.Failure("Order not found");
+                    return ApiResponse<CreateOrderResponse>.Failure("Order not found", 404);
+
+                if (request.ExpectedWeightKg.HasValue && request.ExpectedWeightKg.Value <= 0)
+                    return ApiResponse<CreateOrderResponse>.Failure("Expected weight must be greater than 0", 400);
+
+                if (request.Quantity.HasValue && request.Quantity.Value <= 0)
+                    return ApiResponse<CreateOrderResponse>.Failure("Quantity must be greater than 0", 400);
+
+                if (request.LengthCm.HasValue && request.LengthCm.Value <= 0)
+                    return ApiResponse<CreateOrderResponse>.Failure("Length must be greater than 0", 400);
+
+                if (request.WidthCm.HasValue && request.WidthCm.Value <= 0)
+                    return ApiResponse<CreateOrderResponse>.Failure("Width must be greater than 0", 400);
+
+                if (request.HeightCm.HasValue && request.HeightCm.Value <= 0)
+                    return ApiResponse<CreateOrderResponse>.Failure("Height must be greater than 0", 400);
 
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
@@ -384,13 +407,11 @@ namespace ColdChainX.Infrastructure.Services
                     }
                 }
 
-                // If dimension/destination changed and it's already approved/quoted, regenerate quotation
                 if (dimensionChanged && order.Schedule?.Route != null && order.DestLocationNavigation != null)
                 {
                     var existingQuotations = await _db.Quotations.Where(q => q.OrderId == orderId).ToListAsync();
                     if (existingQuotations.Any())
                     {
-                        // Set them as Obsolete (using string constant or just deleting them, here we change status if string, or simply delete)
                         _db.Quotations.RemoveRange(existingQuotations);
                         
                         var draftQuotation = await BuildAutoDraftQuotationAsync(order, order.Schedule.Route, order.DestLocationNavigation);
@@ -422,6 +443,13 @@ namespace ColdChainX.Infrastructure.Services
 
         public async Task<ApiResponse<CreateOrderResponse>> UpdateOrderAsync(Guid orderId, UpdateOrderRequest request, Guid customerId)
         {
+            if (request.ExpectedWeightKg.HasValue && request.ExpectedWeightKg <= 0)
+                return ApiResponse<CreateOrderResponse>.Failure("Expected weight must be greater than 0", 400);
+            if (request.Quantity.HasValue && request.Quantity <= 0)
+                return ApiResponse<CreateOrderResponse>.Failure("Quantity must be greater than 0", 400);
+            if ((request.LengthCm.HasValue && request.LengthCm <= 0) || (request.WidthCm.HasValue && request.WidthCm <= 0) || (request.HeightCm.HasValue && request.HeightCm <= 0))
+                return ApiResponse<CreateOrderResponse>.Failure("Dimensions must be greater than 0", 400);
+
             var strategy = _db.Database.CreateExecutionStrategy();
             return await strategy.ExecuteAsync(async () =>
             {
@@ -541,21 +569,6 @@ namespace ColdChainX.Infrastructure.Services
             });
         }
 
-        public async Task<ApiResponse<bool>> DeleteOrderAsync(Guid orderId, Guid customerId)
-        {
-            var order = await _db.TransportOrders
-                .FirstOrDefaultAsync(o => o.OrderId == orderId && o.CustomerId == customerId);
-                
-            if (order == null) return ApiResponse<bool>.Failure("Order not found or permission denied");
-            
-            if (order.Status != PendingReview && order.Status != "NEEDS_UPDATE")
-                return ApiResponse<bool>.Failure("Cannot delete order at this stage");
-
-            _db.TransportOrders.Remove(order);
-            await _db.SaveChangesAsync();
-            return ApiResponse<bool>.SuccessResponse(true, "Order deleted successfully");
-        }
-
         public async Task<ApiResponse<bool>> UploadPhysicalPodAsync(Guid orderId, string physicalPodImageUrl)
         {
             var strategy = _db.Database.CreateExecutionStrategy();
@@ -575,17 +588,17 @@ namespace ColdChainX.Infrastructure.Services
                     if (epod == null)
                         return ApiResponse<bool>.Failure("Epod not found for order");
 
+                    var firstUserId = (await _db.Users.FirstOrDefaultAsync())?.UserId ?? Guid.Empty;
                     _db.TransportDocuments.Add(new ColdChainX.Core.Entities.TransportDocument
                     {
                         DocId = Guid.NewGuid(),
                         OrderId = orderId,
                         DocType = "PHYSICAL_POD",
                         ImageUrl = physicalPodImageUrl,
-                        UploadedBy = Guid.Empty, // System or default driver ID
+                        UploadedBy = firstUserId,
                         CreatedAt = DateTime.UtcNow
                     });
                     
-                    // Trigger inventory deduction logic (mark state as DELIVERED)
                     var lpns = await _db.Lpns.Where(l => l.OrderId == orderId).ToListAsync();
                     foreach (var lpn in lpns)
                     {
@@ -596,7 +609,6 @@ namespace ColdChainX.Infrastructure.Services
                         }
                     }
 
-                    // Set order status
                     order.Status = "COMPLETED";
 
                     await _db.SaveChangesAsync();
@@ -1218,6 +1230,11 @@ namespace ColdChainX.Infrastructure.Services
 
         public async Task<ApiResponse<object>> GetPublicTemperatureChartAsync(string trackingCode, int maxPoints = 200)
         {
+            if (maxPoints <= 0 || maxPoints > 10000)
+            {
+                return ApiResponse<object>.Failure("Invalid max points parameter.", 400);
+            }
+
             var order = await _db.TransportOrders
                 .Include(o => o.MasterTrip)
                 .Include(o => o.DeliveryEpods)
@@ -1298,7 +1315,6 @@ namespace ColdChainX.Infrastructure.Services
             using var memoryStream = new System.IO.MemoryStream();
             using (var archive = new System.IO.Compression.ZipArchive(memoryStream, System.IO.Compression.ZipArchiveMode.Create, true))
             {
-                // Add POD Images
                 if (order.DeliveryEpods != null && order.DeliveryEpods.Any())
                 {
                     foreach (var epod in order.DeliveryEpods)
@@ -1312,7 +1328,6 @@ namespace ColdChainX.Infrastructure.Services
                     }
                 }
 
-                // Add Invoices
                 var invoices = order.InvoiceLines?.Select(il => il.Invoice).Where(i => i != null).Distinct().ToList();
                 if (invoices != null && invoices.Any())
                 {
@@ -1327,7 +1342,6 @@ namespace ColdChainX.Infrastructure.Services
                     }
                 }
 
-                // Add Claims
                 if (order.Claims != null && order.Claims.Any())
                 {
                     foreach (var claim in order.Claims)

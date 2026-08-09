@@ -2,9 +2,6 @@ using ColdChainX.TestRunner.Models;
 
 namespace ColdChainX.TestRunner.Reports;
 
-/// <summary>
-/// Prints test results as a formatted table to console.
-/// </summary>
 public static class ConsoleReporter
 {
     public static void Print(List<TestResult> results)
@@ -51,7 +48,6 @@ public static class ConsoleReporter
 
         Console.WriteLine("╠══════════╬═════════════╩═════════╩═══════╩════════════════════════════════════════════════════════════╣");
 
-        // Summary
         var passed = results.Count(r => r.Status == TestStatus.Passed);
         var failed = results.Count(r => r.Status == TestStatus.Failed);
         var skipped = results.Count(r => r.Status == TestStatus.Skipped);
@@ -74,7 +70,6 @@ public static class ConsoleReporter
 
         Console.WriteLine("╚══════════╩═══════════════════════════════════════════════════════════════════════════════════════════╝");
 
-        // Print failed tests details
         if (failed > 0)
         {
             Console.ForegroundColor = ConsoleColor.Red;

@@ -28,6 +28,7 @@ public class ProcessInboundQcCommand : IRequest<ProcessInboundQcResponse>
 public class ProcessInboundQcRequest
 {
     public Guid AsnId { get; set; }
+    public Guid? WarehouseId { get; set; }
     public decimal ActualWeightKg { get; set; }
     public decimal LengthCm { get; set; }
     public decimal WidthCm { get; set; }

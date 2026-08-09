@@ -42,7 +42,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "Admin,WarehouseWorker")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> CreateWeightTier([FromBody] CreateUpdateWeightTierRequest request)
         {
             var result = await _weightTierService.CreateAsync(request);
@@ -67,7 +67,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPut("{id:guid}")]
-        [Authorize(Roles = "Admin,WarehouseWorker")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> UpdateWeightTier(Guid id, [FromBody] CreateUpdateWeightTierRequest request)
         {
             var result = await _weightTierService.UpdateAsync(id, request);
@@ -76,7 +76,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpDelete("{id:guid}")]
-        [Authorize(Roles = "Admin,WarehouseWorker")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteWeightTier(Guid id)
         {
             var result = await _weightTierService.DeleteAsync(id);

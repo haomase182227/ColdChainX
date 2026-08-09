@@ -356,7 +356,6 @@ namespace ColdChainX.Infrastructure.Services
                     }).ToList();
                 }
 
-                // Calculate Final Numbers
                 var baseFreightAndMandatory = quotation.BaseFreight + (quotation.LastMileSurcharge ?? 0m) + (quotation.ManualAdjustment ?? 0m);
                 var selectedOptionalTotal = matchedSelectedServices.Sum(s => s.Price);
                 
@@ -364,7 +363,6 @@ namespace ColdChainX.Infrastructure.Services
                 var calculatedVat = Math.Round(subtotal * (quotation.VatPercentage ?? 8m) / 100m, 0);
                 var newContractTotalAmount = subtotal + calculatedVat;
 
-                // Cập nhật lại Báo giá gốc để hiển thị cho Customer
                 if (matchedSelectedServices.Any())
                 {
                     var existingCharges = DeserializeAdditionalCharges(quotation.AdditionalCharges).ToList();

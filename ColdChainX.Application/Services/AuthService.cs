@@ -20,14 +20,16 @@ namespace ColdChainX.Application.Services
         private readonly IPasswordHasher<User> _passwordHasher;
         private readonly IMapper _mapper;
         private readonly IDriverRepository _driverRepository;
+        private readonly IWarehouseRepository _warehouseRepository;
 
-        public AuthService(IUserRepository userRepository, IJwtService jwtService, IPasswordHasher<User> passwordHasher, IMapper mapper, IDriverRepository driverRepository)
+        public AuthService(IUserRepository userRepository, IJwtService jwtService, IPasswordHasher<User> passwordHasher, IMapper mapper, IDriverRepository driverRepository, IWarehouseRepository warehouseRepository)
         {
             _userRepository = userRepository;
             _jwtService = jwtService;
             _passwordHasher = passwordHasher;
             _mapper = mapper;
             _driverRepository = driverRepository;
+            _warehouseRepository = warehouseRepository;
         }
 
         public async Task<ApiResponse<AuthResponseDto>> RegisterAsync(RegisterRequest request)
@@ -285,7 +287,6 @@ namespace ColdChainX.Application.Services
             if (existingUsername != null)
                 return ApiResponse<AuthResponseDto>.Failure("Username already in use");
 
-            // Get Customer role (ID should be 2 in the database)
             var role = await _userRepository.GetRoleByNameAsync("Customer");
             if (role == null)
                 return ApiResponse<AuthResponseDto>.Failure("Customer role not found in the system");
@@ -305,7 +306,6 @@ namespace ColdChainX.Application.Services
             user.PasswordHash = _passwordHasher.HashPassword(user, request.Password);
 
 
-            // Create Customer entity with provided information
             var customer = new Customer
             {
                 CustomerId = Guid.NewGuid(),
@@ -356,7 +356,6 @@ namespace ColdChainX.Application.Services
             if (existingUsername != null)
                 return ApiResponse<AuthResponseDto>.Failure("Username already in use");
 
-            // Get Driver role
             var role = await _userRepository.GetRoleByNameAsync("Driver");
             if (role == null)
                 return ApiResponse<AuthResponseDto>.Failure("Driver role not found in the system");
@@ -382,15 +381,16 @@ namespace ColdChainX.Application.Services
             user.RefreshToken = refreshToken;
             user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
 
-            // 1. Save user account first to satisfy foreign key constraints on the drivers table
             await _userRepository.AddAsync(user);
             await _userRepository.SaveChangesAsync();
 
-            // 2. Create Driver entity linked to the saved user
             var driver = new Driver
             {
                 DriverId = Guid.NewGuid(),
                 UserId = user.UserId,
+                FullName = request.FullName.Trim(),
+                IdentityNumber = string.Empty,
+                PhoneNumber = request.Phone?.Trim() ?? string.Empty,
                 DateOfBirth = request.DateOfBirth,
                 Status = "AVAILABLE",
                 CreatedAt = DbNow()
@@ -398,7 +398,6 @@ namespace ColdChainX.Application.Services
 
             await _driverRepository.AddAsync(driver);
 
-            // 3. Create Driver License if provided
             if (!string.IsNullOrWhiteSpace(request.LicenseNumber) &&
                 !string.IsNullOrWhiteSpace(request.LicenseClass) &&
                 request.IssueDate.HasValue &&
@@ -420,7 +419,6 @@ namespace ColdChainX.Application.Services
                 await _driverRepository.AddLicenseAsync(license);
             }
 
-            // 4. Save driver and driver license records
             await _userRepository.SaveChangesAsync();
 
             var dto = _mapper.Map<AuthResponseDto>(user);
@@ -434,6 +432,16 @@ namespace ColdChainX.Application.Services
 
         public async Task<ApiResponse<AuthResponseDto>> CreateWarehouseWorkerAsync(CreateWarehouseWorkerRequest request)
         {
+            if (string.IsNullOrWhiteSpace(request.FullName) ||
+                string.IsNullOrWhiteSpace(request.Password) ||
+                string.IsNullOrWhiteSpace(request.Phone))
+            {
+                return ApiResponse<AuthResponseDto>.Failure("FullName, Password and Phone are required", 400);
+            }
+
+            if (request.WarehouseId == Guid.Empty || await _warehouseRepository.GetByIdAsync(request.WarehouseId) == null)
+                return ApiResponse<AuthResponseDto>.Failure("Warehouse facility not found", 404);
+
             var email = request.Email?.Trim().ToLowerInvariant();
             var username = string.IsNullOrWhiteSpace(request.Username)
                 ? (email ?? Guid.NewGuid().ToString("N")[..10])
@@ -497,7 +505,6 @@ namespace ColdChainX.Application.Services
             if (driver == null)
                 return ApiResponse<DriverDto>.Failure("Driver not found");
 
-            // Update User fields if the driver has a linked user account
             if (driver.UserId.HasValue && driver.User != null)
             {
                 var user = driver.User;
@@ -515,7 +522,6 @@ namespace ColdChainX.Application.Services
                 await _userRepository.UpdateAsync(user);
             }
 
-            // Update Driver-specific fields
             if (request.DateOfBirth.HasValue)
                 driver.DateOfBirth = request.DateOfBirth.Value;
 
@@ -531,7 +537,6 @@ namespace ColdChainX.Application.Services
                 driver.Status = request.Status.Trim().ToUpperInvariant();
             }
 
-            // Update or create Driver License
             if (!string.IsNullOrWhiteSpace(request.LicenseNumber) &&
                 !string.IsNullOrWhiteSpace(request.LicenseClass) &&
                 request.IssueDate.HasValue &&

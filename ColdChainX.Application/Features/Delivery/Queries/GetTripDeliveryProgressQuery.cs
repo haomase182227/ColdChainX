@@ -32,35 +32,29 @@ public class GetTripDeliveryProgressQueryHandler : IRequestHandler<GetTripDelive
 
     public async Task<ApiResponse<TripDeliveryProgressResponse>> Handle(GetTripDeliveryProgressQuery request, CancellationToken cancellationToken)
     {
-        // 1. Check if Trip exists
         var tripExists = await _context.MasterTrips
             .AnyAsync(t => t.TripId == request.TripId, cancellationToken);
         if (!tripExists)
             throw new NotFoundException($"Trip with ID '{request.TripId}' was not found.");
 
-        // 2. Fetch all LPNs of the trip
         var lpns = await _context.Lpns
             .Include(l => l.Order)
             .Where(l => l.TripId == request.TripId)
             .ToListAsync(cancellationToken);
 
-        // 3. Fetch all delivery confirmations for this trip
         var confirmations = await _context.LpnDeliveryConfirmations
             .Where(c => c.TripId == request.TripId)
             .ToDictionaryAsync(c => c.LpnId, cancellationToken);
 
-        // Read bank configurations for VietQR
         var bankId = _configuration?["PaymentSettings:BankId"] ?? "vietinbank";
         var bankAccount = _configuration?["PaymentSettings:BankAccount"] ?? "1111111111";
         var bankAccountName = _configuration?["PaymentSettings:BankAccountName"] ?? "NGUYEN VAN A";
 
-        // 4. Map to LpnStatuses
         var lpnStatuses = new List<LpnDeliveryStatusResponse>();
         foreach (var lpn in lpns)
         {
             confirmations.TryGetValue(lpn.LpnId, out var conf);
 
-            // Default COD amount is 0 if not confirmed yet
             var codAmount = conf != null ? conf.CodAmount : 0m;
 
             string? vietQrUrl = null;
@@ -96,7 +90,6 @@ public class GetTripDeliveryProgressQueryHandler : IRequestHandler<GetTripDelive
             });
         }
 
-        // 5. Aggregate counts
         var totalLpns = lpns.Count;
         var deliveredCount = lpns.Count(l => l.State == LpnState.DELIVERED);
         var rejectedCount = lpns.Count(l => l.State == LpnState.DELIVERY_RETURNED);

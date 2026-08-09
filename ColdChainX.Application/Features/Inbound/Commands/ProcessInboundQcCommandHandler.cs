@@ -51,12 +51,23 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
         if (receiver == null)
             return Failure("Receiver user was not found.");
 
+        var asn = await _context.InboundAsns
+            .Include(a => a.Order)
+                .ThenInclude(o => o.OrderDimension)
+            .FirstOrDefaultAsync(a => a.AsnId == request.AsnId, cancellationToken);
+
+        if (asn?.Order == null)
+            return Failure("ASN or linked order was not found.");
+
         var warehouseId = request.WarehouseId != Guid.Empty
             ? request.WarehouseId
-            : receiver.WarehouseId;
+            : (receiver.WarehouseId ?? asn.WarehouseId);
 
         if (!warehouseId.HasValue || warehouseId.Value == Guid.Empty)
             return Failure("WarehouseId is required and could not be determined.");
+
+        if (receiver.WarehouseId.HasValue && receiver.WarehouseId.Value != Guid.Empty && asn.WarehouseId.HasValue && asn.WarehouseId.Value != warehouseId.Value)
+            return Failure("ASN does not belong to current receiver warehouse.");
 
         var uploadedUrls = new List<string>();
         if (request.EvidenceImages != null && request.EvidenceImages.Any())
@@ -72,7 +83,6 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
                 uploadedUrls.Add(url);
             }
         }
-
         var evidenceImageUrl = uploadedUrls.Any() ? string.Join(",", uploadedUrls) : null;
 
         var asn = await _context.InboundAsns
@@ -82,15 +92,6 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
 
         if (asn?.Order == null)
             return Failure("ASN or linked order was not found.");
-
-        if (asn.Order.OrderDimension == null)
-            return Failure("Expected order measurements were not found. QC cannot be calculated.");
-
-        if (asn.Order.OrderDimension.ExpectedWeightKg <= 0
-            || asn.Order.OrderDimension.LengthCm <= 0
-            || asn.Order.OrderDimension.WidthCm <= 0
-            || asn.Order.OrderDimension.HeightCm <= 0)
-            return Failure("Expected weight and dimensions must be greater than 0 before QC.");
 
         if (asn.WarehouseId.HasValue && asn.WarehouseId.Value != warehouseId.Value)
             return Failure("ASN does not belong to current receiver warehouse.");
@@ -173,7 +174,6 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
             OrderId = order.OrderId,
             CustomerId = order.CustomerId,
             ReceiptId = receipt.ReceiptId,
-            // RouteId = order.RouteId, // TransportOrder does not have RouteId
             TripId = order.MasterTripId,
             Quantity = order.Quantity,
             ActualWeightKg = request.ActualWeightKg,
@@ -227,7 +227,6 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
             await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
             try
             {
-                // Save changes to generate ReceiptId in DB before generating PDF
                 await _context.SaveChangesAsync(cancellationToken);
 
                 string? pdfUrl = null;
@@ -240,7 +239,6 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
 
                     receipt.PdfUrl = pdfUrl;
 
-                    // Create or update TransportDocument for discrepancy report
                     var existingDoc = await _context.TransportDocuments
                         .FirstOrDefaultAsync(d => d.OrderId == order.OrderId && d.DocType == "DISCREPANCY_REPORT", cancellationToken);
 
@@ -265,7 +263,6 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
 
                     await _context.SaveChangesAsync(cancellationToken);
 
-                    // Automatically generate a pre-tax contract appendix in DRAFT status
                     var salesUserId = await _context.Users
                         .Include(u => u.Role)
                         .Where(u => u.Role != null && u.Role.RoleName.ToLower() == "sales")
@@ -318,7 +315,7 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
                     var appendixIdStr = appendixResult.Success ? appendixResult.Data!.AppendixId.ToString() : "";
                     var appendixNumberStr = appendixResult.Success ? appendixResult.Data!.AppendixNumber : "";
 
-                    // Send notification to Sales, Admin, and WarehouseWorker
+                    // Send notification to Sales, Admin, and WarehouseOperator
                     await EnsureNotificationTemplateAsync("NOTI_QC_DISCREPANCY", cancellationToken);
                     var salesUsers = await _context.Users
                         .Include(u => u.Role)

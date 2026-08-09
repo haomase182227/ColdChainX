@@ -5,9 +5,6 @@ using ColdChainX.Shared.Responses;
 
 namespace ColdChainX.Application.Features.Payment.Queries;
 
-/// <summary>
-/// Returns the unified payment transaction ledger with optional dashboard filters.
-/// </summary>
 public class GetAllPaymentTransactionsQuery : IRequest<ApiResponse<object>>
 {
     public int PageNumber { get; set; } = 1;
@@ -32,11 +29,8 @@ public class GetAllPaymentTransactionsQueryHandler : IRequestHandler<GetAllPayme
         GetAllPaymentTransactionsQuery request,
         CancellationToken cancellationToken)
     {
-        var status = Normalize(request.Status);
-        var transactionType = Normalize(request.TransactionType);
-        var paymentMethod = Normalize(request.PaymentMethod);
-
-        var transactionQuery = _context.PaymentTransactions
+        // 1. Lấy danh sách giao dịch chính thức trong bảng PaymentTransactions
+        var dbTransactions = await _context.PaymentTransactions
             .Include(t => t.Order)
                 .ThenInclude(o => o!.Customer)
             .Include(t => t.Customer)
@@ -91,8 +85,7 @@ public class GetAllPaymentTransactionsQueryHandler : IRequestHandler<GetAllPayme
             };
         }).ToList();
 
-        // Include completed ePOD collections that predate ledger persistence.
-        var existingOrderIds = persistedOrderIds.ToHashSet();
+        var existingOrderIds = dbTransactions.Where(x => x.OrderId.HasValue).Select(x => x.OrderId!.Value).ToHashSet();
 
         var epodQuery = _context.DeliveryEpods
             .Include(e => e.Order)
@@ -146,26 +139,25 @@ public class GetAllPaymentTransactionsQueryHandler : IRequestHandler<GetAllPayme
             });
         }
 
-        var sortedResults = results.OrderByDescending(r => r.CreatedAt).ToList();
-        var totalInFlow = sortedResults.Where(r => r.TransactionType == "IN").Sum(r => r.Amount);
-        var totalOutFlow = sortedResults.Where(r => r.TransactionType == "OUT").Sum(r => r.Amount);
-        var pageNumber = Math.Max(1, request.PageNumber);
-        var pageSize = Math.Clamp(request.PageSize <= 0 ? 10 : request.PageSize, 1, 100);
-        var paginatedResults = sortedResults
-            .Skip((pageNumber - 1) * pageSize)
-            .Take(pageSize)
-            .ToList();
+        var sortedResults = results.OrderByDescending(r => ((dynamic)r).CreatedAt).ToList();
+
+        decimal totalInFlow = sortedResults.Where(r => ((dynamic)r).TransactionType == "IN").Sum(r => (decimal)((dynamic)r).Amount);
+        decimal totalOutFlow = sortedResults.Where(r => ((dynamic)r).TransactionType == "OUT").Sum(r => (decimal)((dynamic)r).Amount);
+
+        var summary = new
+        {
+            TotalTransactionsCount = sortedResults.Count,
+            TotalCodReceived = totalInFlow,
+            TotalClaimOutflow = totalOutFlow,
+            NetCashFlow = totalInFlow - totalOutFlow,
+            Timestamp = DateTime.UtcNow
+        };
+
+        var paginatedResults = sortedResults.Skip((request.PageNumber - 1) * request.PageSize).Take(request.PageSize).ToList();
 
         return ApiResponse<object>.SuccessResponse(new
         {
-            Summary = new
-            {
-                TotalTransactionsCount = sortedResults.Count,
-                TotalCodReceived = totalInFlow,
-                TotalClaimOutflow = totalOutFlow,
-                NetCashFlow = totalInFlow - totalOutFlow,
-                Timestamp = DateTime.UtcNow
-            },
+            Summary = summary,
             TotalCount = sortedResults.Count,
             PageNumber = pageNumber,
             PageSize = pageSize,

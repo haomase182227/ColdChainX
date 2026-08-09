@@ -11,7 +11,6 @@ namespace ColdChainX.API.Controllers
 {
     [Route("api/service-catalogs")]
     [ApiController]
-    // [Authorize] // Tạm tắt phân quyền
     public class ServiceCatalogsController : ControllerBase
     {
         private readonly IServiceCatalogService _serviceCatalogService;

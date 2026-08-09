@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ColdChainX.Application.DTOs.SystemConfigs;
 using ColdChainX.Application.Interfaces;
+using ColdChainX.Shared.Responses;
 
 namespace ColdChainX.API.Controllers
 {
@@ -18,8 +19,11 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAllConfigs()
+        public async Task<IActionResult> GetAllConfigs([FromQuery] string? category = null)
         {
+            if (category != null && string.IsNullOrWhiteSpace(category))
+                return BadRequest(ApiResponse<object>.Failure("Category parameter cannot be empty."));
+
             var result = await _systemConfigService.GetAllConfigsAsync();
             return Ok(result);
         }

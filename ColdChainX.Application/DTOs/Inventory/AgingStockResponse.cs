@@ -2,9 +2,6 @@ using System;
 
 namespace ColdChainX.Application.DTOs.Inventory
 {
-    /// <summary>
-    /// Response model for inventory stocks that have been stored for too long (aging inventory).
-    /// </summary>
     public class AgingStockResponse
     {
         public Guid StockId { get; set; }

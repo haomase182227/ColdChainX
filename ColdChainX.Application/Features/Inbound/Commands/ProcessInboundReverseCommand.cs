@@ -13,18 +13,17 @@ using ColdChainX.Core.Enums;
 
 namespace ColdChainX.Application.Features.Inbound.Commands;
 
-public class ProcessInboundReverseCommand : IRequest<ApiResponse<WarehouseReceipt>>
+public class ProcessInboundReverseCommand : IRequest<ApiResponse<object>>
 {
     public Guid WarehouseId { get; set; }
     public Guid UserId { get; set; } // The Hub User scanning the items
     public List<string> LpnCodes { get; set; } = new List<string>();
     
-    // Optional: Identify which driver/vehicle returned them to update location
     public Guid? DriverId { get; set; }
     public Guid? VehicleId { get; set; }
 }
 
-public class ProcessInboundReverseCommandHandler : IRequestHandler<ProcessInboundReverseCommand, ApiResponse<WarehouseReceipt>>
+public class ProcessInboundReverseCommandHandler : IRequestHandler<ProcessInboundReverseCommand, ApiResponse<object>>
 {
     private readonly IApplicationDbContext _context;
 
@@ -33,7 +32,7 @@ public class ProcessInboundReverseCommandHandler : IRequestHandler<ProcessInboun
         _context = context;
     }
 
-    public async Task<ApiResponse<WarehouseReceipt>> Handle(ProcessInboundReverseCommand request, CancellationToken cancellationToken)
+    public async Task<ApiResponse<object>> Handle(ProcessInboundReverseCommand request, CancellationToken cancellationToken)
     {
         if (request.LpnCodes == null || !request.LpnCodes.Any())
             throw new ValidationException("List of LpnCodes is required.");
@@ -58,14 +57,18 @@ public class ProcessInboundReverseCommandHandler : IRequestHandler<ProcessInboun
             throw new ValidationException($"The following LPNs are not in a valid return state (must be RETURN_PENDING or DELIVERY_RETURNED): {invalidCodes}");
         }
 
+        var distinctOrderIds = lpns.Select(l => l.OrderId).Distinct().ToList();
+        if (distinctOrderIds.Count != 1)
+            throw new ValidationException("Inbound reverse can only process LPNs from one transport order at a time.");
+
         using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
         try
         {
-            // Create Reverse Warehouse Receipt
             var receipt = new WarehouseReceipt
             {
                 ReceiptId = Guid.NewGuid(),
                 ReceiptCode = $"WR-REV-{DateTime.UtcNow:yyyyMMddHHmmss}",
+                OrderId = distinctOrderIds[0],
                 WarehouseId = request.WarehouseId,
                 ReceiptType = "REVERSE_LOGISTICS",
                 ReceiverId = request.UserId,
@@ -75,19 +78,16 @@ public class ProcessInboundReverseCommandHandler : IRequestHandler<ProcessInboun
             
             _context.WarehouseReceipts.Add(receipt);
 
-            // Update LPNs to IN_STOCK at the Hub
             foreach (var lpn in lpns)
             {
                 lpn.State = LpnState.IN_STOCK;
                 lpn.WarehouseId = request.WarehouseId;
                 lpn.ReceiptId = receipt.ReceiptId;
                 lpn.UpdatedAt = DateTime.UtcNow;
-                // Optionally clear routing data if they were on a trip
                 lpn.RouteId = null;
                 lpn.TripId = null;
             }
 
-            // Update Vehicle and Driver Location
             if (request.VehicleId.HasValue)
             {
                 var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.VehicleId == request.VehicleId.Value, cancellationToken);
@@ -106,7 +106,6 @@ public class ProcessInboundReverseCommandHandler : IRequestHandler<ProcessInboun
                 }
             }
 
-            // Update associated Transport Orders if all LPNs are reversed
             var orderIds = lpns.Select(l => l.OrderId).Distinct().ToList();
             var orders = await _context.TransportOrders
                 .Where(o => orderIds.Contains(o.OrderId))
@@ -116,8 +115,6 @@ public class ProcessInboundReverseCommandHandler : IRequestHandler<ProcessInboun
             {
                 var allLpnsForOrder = await _context.Lpns.Where(l => l.OrderId == order.OrderId).ToListAsync(cancellationToken);
                 
-                // If all LPNs of this order are now in stock (meaning they failed delivery and came back)
-                // We should change order status to RETURNED_TO_HUB or similar. For now we use RETURNED
                 if (allLpnsForOrder.All(l => l.State == LpnState.IN_STOCK))
                 {
                     order.Status = "RETURNED_TO_HUB";
@@ -127,7 +124,18 @@ public class ProcessInboundReverseCommandHandler : IRequestHandler<ProcessInboun
             await _context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
 
-            return ApiResponse<WarehouseReceipt>.SuccessResponse(receipt, "Inbound reverse processed successfully.");
+            var response = new
+            {
+                receipt.ReceiptId,
+                receipt.ReceiptCode,
+                receipt.OrderId,
+                receipt.WarehouseId,
+                receipt.ReceiptType,
+                receipt.CreatedAt,
+                LpnCodes = lpns.Select(l => l.LpnCode).ToList()
+            };
+
+            return ApiResponse<object>.SuccessResponse(response, "Inbound reverse processed successfully.");
         }
         catch
         {

@@ -1,0 +1,2724 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>ColdChainX.Application</name>
+    </assembly>
+    <members>
+        <member name="T:ColdChainX.Application.DTOs.Attachment.AttachmentResponse">
+            <summary>
+            Response model representing uploaded attachment metadata.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.AttachmentResponse.AttachmentId">
+            <summary>
+            Unique system identifier of the attachment.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.AttachmentResponse.FileName">
+            <summary>
+            Original name of the uploaded file.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.AttachmentResponse.FilePath">
+            <summary>
+            File path in storage.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.AttachmentResponse.FileUrl">
+            <summary>
+            Download URL path to access the file.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.AttachmentResponse.FileSize">
+            <summary>
+            Size of the file in bytes.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.AttachmentResponse.ContentType">
+            <summary>
+            MIME Content type (e.g. image/png, application/pdf).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.AttachmentResponse.Format">
+            <summary>
+            Format file extension.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.AttachmentResponse.Category">
+            <summary>
+            Category (e.g., Compliance, InboundEvidence).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.AttachmentResponse.SubCategory">
+            <summary>
+            Sub-category detailing document type (e.g. TemperatureLog, Phytosanitary).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.AttachmentResponse.Status">
+            <summary>
+            Verification status of the document (e.g. PENDING, APPROVED, REJECTED).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.AttachmentResponse.DocumentNumber">
+            <summary>
+            Optional official document/permit reference number.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.AttachmentResponse.Issuer">
+            <summary>
+            Optional issuer authority of the document.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.AttachmentResponse.IssueDate">
+            <summary>
+            Optional official issue date.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.AttachmentResponse.ExpiryDate">
+            <summary>
+            Optional official expiration date.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.AttachmentResponse.CapturedValue">
+            <summary>
+            Optional numeric value captured from the document (e.g. verified temperature).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.AttachmentResponse.SealNumber">
+            <summary>
+            Optional container seal number verified on the document.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.AttachmentResponse.RejectionReason">
+            <summary>
+            Reason text if the supervisor rejected the document.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.AttachmentResponse.VerifiedBy">
+            <summary>
+            Unique identifier of the supervisor who verified the document.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.AttachmentResponse.VerifiedAt">
+            <summary>
+            Timestamp when the verification occurred.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.AttachmentResponse.WarehouseReceiptId">
+            <summary>
+            Linked warehouse receipt identifier (if applicable).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.AttachmentResponse.WarehouseReceiptItemId">
+            <summary>
+            Linked warehouse receipt item identifier (if applicable).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.AttachmentResponse.InventoryAdjustmentId">
+            <summary>
+            Linked inventory adjustment identifier (if applicable).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.AttachmentResponse.OutboundOrderId">
+            <summary>
+            Linked outbound order identifier (if applicable).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.AttachmentResponse.CreatedAt">
+            <summary>
+            Timestamp when the attachment record was created.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.AttachmentResponse.CreatedBy">
+            <summary>
+            Unique identifier of the user who uploaded the attachment.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Attachment.UploadAttachmentRequest">
+            <summary>
+            Request payload for uploading a compliance/evidence attachment.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.UploadAttachmentRequest.File">
+            <summary>
+            Raw binary file form-data content.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.UploadAttachmentRequest.Category">
+            <summary>
+            General category of the attachment (e.g. COMPLIANCE, INBOUND_EVIDENCE).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.UploadAttachmentRequest.SubCategory">
+            <summary>
+            Detail sub-category (e.g. TEMPERATURE_LOG, PHYTOSANITARY_CERTIFICATE).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.UploadAttachmentRequest.WarehouseReceiptId">
+            <summary>
+            Unique identifier of the associated Warehouse Receipt (optional polymorphic link).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.UploadAttachmentRequest.WarehouseReceiptItemId">
+            <summary>
+            Unique identifier of the associated Warehouse Receipt Item (optional polymorphic link).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.UploadAttachmentRequest.InventoryAdjustmentId">
+            <summary>
+            Unique identifier of the associated Inventory Adjustment (optional polymorphic link).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.UploadAttachmentRequest.OutboundOrderId">
+            <summary>
+            Unique identifier of the associated Outbound Order (optional polymorphic link).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.UploadAttachmentRequest.DocumentNumber">
+            <summary>
+            Official document/permit registration number (optional).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.UploadAttachmentRequest.Issuer">
+            <summary>
+            Issuing agency or body name (optional).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.UploadAttachmentRequest.IssueDate">
+            <summary>
+            Date when the document was issued (optional).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.UploadAttachmentRequest.ExpiryDate">
+            <summary>
+            Expiration date of the document/permit (optional).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.UploadAttachmentRequest.CapturedValue">
+            <summary>
+            Numeric value captured from the document, e.g., temperature reading (optional).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.UploadAttachmentRequest.SealNumber">
+            <summary>
+            Container seal ID or number written on the document (optional).
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Attachment.VerifyAttachmentRequest">
+            <summary>
+            Request payload for verifying/auditing an uploaded attachment.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.VerifyAttachmentRequest.Status">
+            <summary>
+            Audited document verification status (e.g. APPROVED, REJECTED).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Attachment.VerifyAttachmentRequest.RejectionReason">
+            <summary>
+            Explanation details if the document status is marked as REJECTED.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Common.PagedResult`1">
+            <summary>
+            Generic paginated result wrapper for list-based API responses.
+            </summary>
+            <typeparam name="T">The type of items contained in the result page.</typeparam>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Common.PagedResult`1.TotalRecords">
+            <summary>
+            Total number of records matching the query across all pages.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Common.PagedResult`1.TotalPages">
+            <summary>
+            Total number of pages available.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Common.PagedResult`1.CurrentPage">
+            <summary>
+            Index of the currently returned page (1-based).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Common.PagedResult`1.PageSize">
+            <summary>
+            Number of records per page.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Common.PagedResult`1.Data">
+            <summary>
+            Records in the current page.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.Application.DTOs.Common.PagedResult`1.Create(System.Collections.Generic.IReadOnlyCollection{`0},System.Int32,System.Int32,System.Int32)">
+            <summary>
+            Creates a new <see cref="T:ColdChainX.Application.DTOs.Common.PagedResult`1"/> from data and pagination parameters.
+            </summary>
+            <param name="data">The records for this page.</param>
+            <param name="totalRecords">Total matching records.</param>
+            <param name="pageNumber">Requested page number.</param>
+            <param name="pageSize">Requested page size.</param>
+            <returns>A populated <see cref="T:ColdChainX.Application.DTOs.Common.PagedResult`1"/>.</returns>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Contracts.ContractInfoResponse">
+            <summary>
+            Thông tin hợp đồng (không bao gồm nội dung HTML).
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Contracts.UploadSignedContractResponse">
+            <summary>
+            Response sau khi customer upload bản hợp đồng đã ký.
+            Không bao gồm fileUrl (PDF nháp) và draftHtmlContent.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.CycleCount.CreateCycleCountPlanDto">
+            <summary>
+            Request payload to create a new cycle count audit plan.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CreateCycleCountPlanDto.WarehouseId">
+            <summary>
+            Unique system identifier of the target warehouse.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CreateCycleCountPlanDto.AssignedToUserId">
+            <summary>
+            Unique identifier of the user/operator assigned to perform the counting (optional).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CreateCycleCountPlanDto.Notes">
+            <summary>
+            Description notes or guidelines for the counting team.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CreateCycleCountPlanDto.ZoneIds">
+            <summary>
+            List of specific zone IDs to audit. If null or empty, the system targets the whole warehouse.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CreateCycleCountPlanDto.LocationIds">
+            <summary>
+            List of specific location IDs to audit. If null or empty, targets all locations within specified zones.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.CycleCount.CycleCountEntryResponse">
+            <summary>
+            Response model representing a line item entry within a cycle count plan.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountEntryResponse.EntryId">
+            <summary>
+            Unique system identifier of the cycle count entry.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountEntryResponse.PlanId">
+            <summary>
+            Unique identifier of the parent cycle count plan.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountEntryResponse.LocationId">
+            <summary>
+            Unique identifier of the target storage location to check.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountEntryResponse.LocationCode">
+            <summary>
+            Code of the target storage location.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountEntryResponse.StockId">
+            <summary>
+            Unique identifier of the expected stock record (null if location is expected to be empty).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountEntryResponse.ItemCode">
+            <summary>
+            Expected item code.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountEntryResponse.BatchId">
+            <summary>
+            Unique identifier of the expected batch.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountEntryResponse.BatchNumber">
+            <summary>
+            Expected batch/lot number.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountEntryResponse.SystemQuantity">
+            <summary>
+            Stock quantity recorded by the system before counting.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountEntryResponse.SystemPallets">
+            <summary>
+            Pallets recorded by the system before counting.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountEntryResponse.CountedQuantity">
+            <summary>
+            Quantity physically counted by the operator.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountEntryResponse.CountedPallets">
+            <summary>
+            Pallets physically counted by the operator.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountEntryResponse.VarianceQuantity">
+            <summary>
+            Discrepancy quantity (CountedQuantity - SystemQuantity).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountEntryResponse.VariancePallets">
+            <summary>
+            Discrepancy pallets (CountedPallets - SystemPallets).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountEntryResponse.Status">
+            <summary>
+            Counting status of this entry (e.g. PENDING, COUNTED, RECONCILED).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountEntryResponse.CountedAt">
+            <summary>
+            Timestamp when the physical count was submitted.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountEntryResponse.CountedBy">
+            <summary>
+            Unique identifier of the operator who counted the stock.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountEntryResponse.ReviewedAt">
+            <summary>
+            Timestamp when the manager reviewed the variance discrepancy.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountEntryResponse.ReviewedBy">
+            <summary>
+            Unique identifier of the manager who reviewed the entry.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountEntryResponse.ManagerNotes">
+            <summary>
+            Verification or resolution notes added by the manager.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountEntryResponse.AdjustmentId">
+            <summary>
+            Unique identifier of the resulting inventory adjustment (if approved with a variance).
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.CycleCount.CycleCountPlanResponse">
+            <summary>
+            Response model representing a cycle count plan containing audit targets and status.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountPlanResponse.PlanId">
+            <summary>
+            Unique system identifier of the cycle count plan.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountPlanResponse.PlanCode">
+            <summary>
+            System-generated plan business code.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountPlanResponse.Status">
+            <summary>
+            Status of the cycle count plan (e.g. DRAFT, IN_PROGRESS, COMPLETED).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountPlanResponse.AssignedToUserId">
+            <summary>
+            Unique identifier of the assigned operator.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountPlanResponse.AssignedToUsername">
+            <summary>
+            Username of the assigned operator.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountPlanResponse.WarehouseId">
+            <summary>
+            Unique identifier of the warehouse being audited.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountPlanResponse.WarehouseName">
+            <summary>
+            Name of the warehouse.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountPlanResponse.Notes">
+            <summary>
+            Description guidelines or instructions.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountPlanResponse.CreatedAt">
+            <summary>
+            Timestamp when the plan was created.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountPlanResponse.CreatedBy">
+            <summary>
+            Unique identifier of the manager who created the plan.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountPlanResponse.CompletedAt">
+            <summary>
+            Timestamp when the audit plan was completed/closed.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountPlanResponse.CompletedBy">
+            <summary>
+            Unique identifier of the user who completed the plan.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.CycleCountPlanResponse.Entries">
+            <summary>
+            List of locations and expected stock target entries to count.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.CycleCount.ReviewVarianceDto">
+            <summary>
+            Request payload for a manager to review and resolve a cycle count variance discrepancy.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.ReviewVarianceDto.Approve">
+            <summary>
+            Flag indicating whether the counted variance is approved (true) or rejected/requires recount (false).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.ReviewVarianceDto.ManagerNotes">
+            <summary>
+            Resolution notes added by the manager.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.CycleCount.SubmitCycleCountsDto">
+            <summary>
+            Request payload to submit physical counts for entries in a cycle count plan.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.SubmitCycleCountsDto.Counts">
+            <summary>
+            List of submitted location counts.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.CycleCount.SubmitEntryCountDto">
+            <summary>
+            Physical count submission details for a specific location entry.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.SubmitEntryCountDto.EntryId">
+            <summary>
+            Unique system identifier of the cycle count entry.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.SubmitEntryCountDto.CountedQuantity">
+            <summary>
+            Physically verified product quantity at this location.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.SubmitEntryCountDto.CountedPallets">
+            <summary>
+            Physically verified pallet count at this location.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.SubmitEntryCountDto.FoundItemCode">
+            <summary>
+            Optional product code (used if an unexpected/found item is stored here).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.CycleCount.SubmitEntryCountDto.FoundBatchId">
+            <summary>
+            Optional batch ID (used if an unexpected/found batch is stored here).
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Delivery.HandoverConfirmLpnInput">
+            <summary>
+            Thông tin từng kiện hàng (LPN) trong quá trình nghiệm thu.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.HandoverConfirmLpnInput.LpnId">
+            <summary>ID của kiện hàng cần xác nhận.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.HandoverConfirmLpnInput.IsAccepted">
+            <summary>true = Khách chấp nhận nhận hàng; false = Khách từ chối.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.HandoverConfirmLpnInput.RejectionReason">
+            <summary>Lý do từ chối (bắt buộc khi IsAccepted = false). Ví dụ: DAMAGED, WRONG_ITEM, QUANTITY_MISMATCH.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.HandoverConfirmLpnInput.RejectionNotes">
+            <summary>Ghi chú bổ sung khi từ chối. Ví dụ: "Thùng carton bị móp góc, ướt đáy".</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.HandoverConfirmLpnInput.EvidencePhotoFile">
+            <summary>
+            Ảnh bằng chứng hàng lỗi (BẮT BUỘC khi IsAccepted = false).
+            Upload trực tiếp file ảnh — không cần upload riêng lấy URL.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.HandoverConfirmLpnInput.ConditionPhotoFile">
+            <summary>Ảnh tình trạng kiện hàng khi nhận (tùy chọn, ngay cả khi chấp nhận).</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.HandoverConfirmLpnInput.EvidenceImageUrl">
+            <summary>Đường dẫn ảnh bằng chứng (sử dụng khi đã upload trước lấy URL).</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.HandoverConfirmLpnInput.ConditionImageUrl">
+            <summary>Đường dẫn ảnh tình trạng (sử dụng khi đã upload trước lấy URL).</summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Delivery.HandoverConfirmRequest">
+            <summary>
+            Request nghiệm thu hàng và xác nhận chữ ký khách tại điểm dừng.
+            Gửi dưới dạng multipart/form-data để upload ảnh chữ ký và ảnh bằng chứng trực tiếp.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.HandoverConfirmRequest.OrderId">
+            <summary>ID Đơn hàng cần nghiệm thu.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.HandoverConfirmRequest.ReceiverName">
+            <summary>Tên người nhận hàng.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.HandoverConfirmRequest.ReceiverPhone">
+            <summary>Số điện thoại người nhận (tùy chọn).</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.HandoverConfirmRequest.SignatureFile">
+            <summary>
+            File ảnh chữ ký tay của khách hàng ký trên màn hình.
+            BẮT BUỘC — Sẽ được upload lên Cloudinary tự động.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.HandoverConfirmRequest.HandoverPhotoFile">
+            <summary>
+            File ảnh tổng thể lúc bàn giao hàng (hàng đang trên xe/sàn nhà) — Tùy chọn.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.HandoverConfirmRequest.DeliveryRating">
+            <summary>Đánh giá chất lượng dịch vụ giao hàng (1–5 sao, mặc định 5).</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.HandoverConfirmRequest.Note">
+            <summary>Ghi chú thêm của tài xế hoặc khách hàng.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.HandoverConfirmRequest.Lpns">
+            <summary>
+            Danh sách trạng thái từng kiện hàng (LPN).
+            Nếu để trống, hệ thống tự động chấp nhận toàn bộ LPN (auto-accept all).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.HandoverConfirmRequest.EvidencePhotos">
+            <summary>
+            Danh sách ảnh bằng chứng hỏng hóc (dành cho kiểm thử Swagger / lách giới hạn array upload).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.HandoverConfirmRequest.ConditionPhotos">
+            <summary>
+            Danh sách ảnh tình trạng nhận hàng (dành cho kiểm thử Swagger / lách giới hạn array upload).
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Delivery.HandoverConfirmResponse">
+            <summary>
+            Kết quả nghiệm thu hàng và xác nhận chữ ký khách.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.HandoverConfirmResponse.EpodId">
+            <summary>ID của ePOD vừa được tạo. Dùng để gọi bước thu tiền COD tiếp theo.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.HandoverConfirmResponse.HandoverConfirmedAt">
+            <summary>Thời điểm khách ký nhận hàng (UTC).</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.HandoverConfirmResponse.OrderStatus">
+            <summary>Trạng thái tổng quát của đơn hàng: DELIVERED / RETURNED / PARTIALLY_DELIVERED.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.HandoverConfirmResponse.CodAmountDue">
+            <summary>Số tiền COD cần thu từ khách dựa trên các kiện đã nhận.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.HandoverConfirmResponse.HandoverPdfUrl">
+            <summary>Link PDF Biên bản giao nhận hàng (có chữ ký + danh sách kiện).</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.HandoverConfirmResponse.NextStep">
+            <summary>
+            Bước tiếp theo cần thực hiện.
+            Ví dụ: "POST /api/epods/{epodId}/payments để thu tiền COD"
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Delivery.RecordCodPaymentRequest">
+            <summary>
+            Request thu tiền COD sau khi đã bàn giao hàng và khách ký nhận.
+            Gửi dưới dạng multipart/form-data.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.RecordCodPaymentRequest.PaymentMethod">
+            <summary>Phương thức thanh toán: CASH (tiền mặt) hoặc QR (chuyển khoản).</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.RecordCodPaymentRequest.CodAmountPaid">
+            <summary>
+            Số tiền COD tài xế thực tế thu được từ khách.
+            Phải khớp với CodAmountDue trong Bước 2. Nếu sai sẽ bị từ chối 400.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.RecordCodPaymentRequest.PaymentEvidenceFile">
+            <summary>
+            File ảnh biên lai thu tiền (BẮT BUỘC với CASH, khuyến nghị với QR).
+            Ví dụ: ảnh chụp màn hình giao dịch thành công, ảnh biên nhận tiền mặt.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Delivery.RecordCodPaymentResponse">
+            <summary>
+            Kết quả thu tiền COD và hoàn tất quy trình giao nhận.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.RecordCodPaymentResponse.EpodId">
+            <summary>ID của ePOD.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.RecordCodPaymentResponse.PaymentStatus">
+            <summary>Trạng thái thanh toán: PAID hoặc AWAITING_QR (chờ webhook ngân hàng).</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.RecordCodPaymentResponse.PaymentConfirmedAt">
+            <summary>Thời điểm xác nhận thu tiền (UTC). Null nếu đang chờ QR.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.RecordCodPaymentResponse.EpodPdfUrl">
+            <summary>
+            Link PDF ePOD hoàn chỉnh (có chữ ký + ảnh bằng chứng + nhiệt độ IoT + COD).
+            Null nếu đang chờ webhook QR — sẽ được sinh sau khi ngân hàng xác nhận.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.RecordCodPaymentResponse.NextStep">
+            <summary>
+            Bước tiếp theo cần thực hiện.
+            Ví dụ: "POST /api/stops/{stopId}/departures để xuất phát điểm tiếp theo"
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.RecordCodPaymentResponse.QrCodeUrl">
+            <summary>
+            [QR only] URL ảnh mã QR PayOS để hiển thị trực tiếp trên màn hình driver app.
+            Null nếu thanh toán CASH hoặc chưa tạo link.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Delivery.RecordCodPaymentResponse.CheckoutUrl">
+            <summary>
+            [QR only] URL trang thanh toán PayOS (có thể mở trên trình duyệt hoặc webview).
+            Null nếu thanh toán CASH.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.PlanLoadRequest.LpnIds">
+            <summary>Danh sách LPN cần ghép chuyến (phải đang ở trạng thái IN_STOCK).</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.PlanLoadRequest.VehicleId">
+            <summary>Xe tải được chỉ định.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.PlanLoadRequest.OriginWarehouseLocationId">
+            <summary>LocationId của kho xuất phát (điểm đầu của lộ trình).</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.PlanLoadRequest.PlannedStartTime">
+            <summary>Thời gian dự kiến xuất phát.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.PlanLoadRequest.PlannedEndTime">
+            <summary>Thời gian dự kiến hoàn thành chuyến.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.PlanLoadRequest.DispatchCoordinatorId">
+            <summary>
+            UserId của điều phối viên sẽ nhận thông báo.
+            Nếu null, hệ thống tự tìm tất cả users có role Dispatcher.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.PlanLoadResult.TripId">
+            <summary>MasterTrip vừa được tạo.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.PlanLoadResult.RouteDetails">
+            <summary>Chi tiết lộ trình tối ưu và hướng dẫn đường đi.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.PlanLoadResult.LoadPlan">
+            <summary>Kế hoạch xếp hàng theo thuật toán LIFO nội bộ.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.PlanLoadResult.DispatchInstructions">
+            <summary>Lệnh điều động — thay đổi trạng thái hàng trong kho.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.PlanLoadResult.NotifiedCoordinators">
+            <summary>Số lượng điều phối viên đã được thông báo.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.StopDto.DistanceFromPreviousKm">
+            <summary>Khoảng cách từ điểm trước (km).</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.StopDto.LpnsToUnload">
+            <summary>Danh sách LPN sẽ được dỡ tại điểm này.</summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Dispatch.LoadInstruction">
+            <summary>
+            Một mục trong kế hoạch xếp hàng. LoadOrder = 1 nghĩa là xếp LÊN ĐẦU TIÊN (nằm sâu trong xe).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.LoadInstruction.LoadOrder">
+            <summary>Thứ tự xếp hàng lên xe (1 = xếp trước nhất, ở sâu nhất trong thùng).</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.LoadInstruction.Zone">
+            <summary>Vị trí trong thùng xe: REAR (đuôi), MID (giữa), FRONT (đầu).</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.LoadInstruction.DeliveryLocationId">
+            <summary>Điểm dỡ hàng tương ứng.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.LoadInstruction.DeliveryStopSequence">
+            <summary>Thứ tự giao trong lộ trình (1 = giao đầu tiên).</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.LoadInstruction.Reason">
+            <summary>Lý do xếp tại vị trí này.</summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Dispatch.DispatchInstruction">
+            <summary>Lệnh điều động — yêu cầu nhân viên kho thực hiện.</summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Dispatch.ManualDispatchRequest">
+            <summary>
+            Request cho API manual-dispatch.
+            Thay thế hoàn toàn auto-dispatch. Người dùng tự chọn đơn hàng và xe.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Dispatch.ManualDispatchFormRequest">
+            <summary>Form request cho manual-dispatch endpoint (multipart/form-data).</summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Dispatch.ManualDispatchResult">
+            <summary>Kết quả manual-dispatch — mở rộng từ PlanLoadResult.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.ManualDispatchResult.Drivers">
+            <summary>Tài xế được gán cho chuyến (1–2 người). Với 2 tài xế, thời lượng chuyến được chia đều.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.ManualDispatchResult.EstimatedDurationHours">
+            <summary>Tổng thời lượng lái xe ước tính của chuyến (giờ), lấy từ Goong route.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.ManualDispatchResult.SelectedLpns">
+            <summary>Danh sách LPN được chọn.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.ManualDispatchResult.RouteDetails">
+            <summary>Chi tiết lộ trình tối ưu và hướng dẫn đường đi.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.ManualDispatchResult.LoadPlan">
+            <summary>Kế hoạch xếp hàng LIFO.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.ManualDispatchResult.DispatchInstructions">
+            <summary>Lệnh điều động.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.ManualDispatchResult.LifoPdfUrl">
+            <summary>URL đến file PDF Sơ đồ gộp chuyến (Lệnh điều động + LIFO Load Plan)</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.ManualDispatchResult.SlaWarning">
+            <summary>Cảnh báo khi có LPN đã quá SLA deadline — không chặn dispatch.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.ManualDispatchResult.LateLpnCount">
+            <summary>Số LPN đã quá SLA deadline.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.ManualDispatchResult.SuggestedMaxPayloadKg">
+            <summary>Tải trọng xe tối đa được khuyến nghị khi có LPN trễ SLA (kg).</summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Dispatch.StartPickingResult">
+            <summary>Kết quả bắt đầu picking — trip chuyển sang PICKING.</summary>
+        </member>
+        <member name="M:ColdChainX.Application.DTOs.Dispatch.StartPickingResult.#ctor(System.Guid,System.String,System.Int32)">
+            <summary>Kết quả bắt đầu picking — trip chuyển sang PICKING.</summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Dispatch.CancelTripResult">
+            <summary>
+            Kết quả hủy chuyến (cancel/un-plan). Đưa toàn bộ trạng thái về như trước khi manual-dispatch:
+            LPN → IN_STOCK (về kho), đơn hàng → IN_STOCK, xe/tài xế → ACTIVE, seal → CANCELLED.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.CancelTripResult.ResetLpnCount">
+            <summary>Số LPN đã được đưa về IN_STOCK (trở lại kho).</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.CancelTripResult.ResetOrderCount">
+            <summary>Số đơn hàng đã được đưa về IN_STOCK và gỡ khỏi chuyến.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.CancelTripResult.CancelledSealCount">
+            <summary>Số seal đã bị hủy.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.CancelTripResult.VoidedDocumentCount">
+            <summary>Số chứng từ (E-Waybill) đã bị vô hiệu.</summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Dispatch.DriverInfo">
+            <summary>Thông tin tài xế được chọn cho chuyến.</summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Dispatch.WarehouseOrderResult">
+            <summary>Kết quả tạo/duyệt/từ chối lệnh kho.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.WarehouseOrderResult.Orders">
+            <summary>Danh sách đơn hàng trong chuyến.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.WarehouseOrderResult.LoadPlan">
+            <summary>Kế hoạch xếp hàng LIFO (gửi kèm cho kho).</summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Dispatch.RejectWarehouseOrderRequest">
+            <summary>Request từ chối lệnh kho.</summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Dispatch.VehicleIoTStatus">
+            <summary>Trạng thái tổng hợp IoT của xe.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.VehicleIoTStatus.Devices">
+            <summary>Danh sách thiết bị IoT gắn trên xe.</summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Dispatch.IoTDeviceStatus">
+            <summary>Trạng thái chi tiết 1 thiết bị IoT.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.IoTDeviceStatus.LatestTelemetry">
+            <summary>Dữ liệu telemetry gần nhất.</summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Dispatch.LatestTelemetry">
+            <summary>Dữ liệu telemetry gần nhất từ thiết bị.</summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Dispatch.SealAndDispatchRequest">
+            <summary>Request kẹp chì và dispatch.</summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Dispatch.SealAndDispatchResult">
+            <summary>Kết quả kẹp chì và dispatch.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.SealAndDispatchResult.WaybillUrl">
+            <summary>URL tài liệu E-Waybill đã phát hành.</summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Dispatch.ProcessBacklogRequest">
+            <summary>Request xử lý hàng tồn.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.ProcessBacklogRequest.BacklogDays">
+            <summary>Số ngày tồn kho tối thiểu để được xử lý. Default = 1.</summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Dispatch.BacklogDispatchResult">
+            <summary>Kết quả xử lý hàng tồn.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.BacklogDispatchResult.DispatchedTrips">
+            <summary>Các chuyến đã tạo cho hàng tồn.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Dispatch.BacklogDispatchResult.SkippedOrders">
+            <summary>Đơn hàng không ghép được (không có xe phù hợp).</summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Dispatch.BacklogTripSummary">
+            <summary>Tóm tắt 1 chuyến hàng tồn đã tạo.</summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Dispatch.GoongDirectionsResult">
+            <summary>Kết quả nội bộ từ Goong Directions API.</summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Dispatch.TripRouteResponse">
+            <summary>Response route tối ưu cho frontend vẽ bản đồ và danh sách điểm giao.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Fleet.CreateVehicleRequest.TruckPlate">
+            <summary>Biển số xe (bắt buộc)</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Fleet.SyncOdometerRequest.TruckPlate">
+            <summary>
+            Biển số xe cần đồng bộ (ví dụ: "29C-12345").
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Fleet.SyncOdometerRequest.Odometer">
+            <summary>
+            Chỉ số công tơ mét hiện tại của xe (km).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Fleet.SyncOdometerRequest.LocationText">
+            <summary>
+            Địa điểm đồng bộ odometer (ví dụ: tên kho bãi, địa chỉ thực tế).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Fleet.SyncOdometerRequest.Reason">
+            <summary>
+            Lý do đồng bộ công tơ mét. Các giá trị chấp nhận:
+            - ROUTINE_SYNC (Đồng bộ định kỳ)
+            - PRE_TRIP_INSPECTION (Kiểm tra trước chuyến đi)
+            - POST_TRIP_REPORT (Báo cáo sau chuyến đi)
+            - MANUAL_CORRECTION (Điều chỉnh thủ công)
+            - OTHER (Lý do khác, ghi chú ở trường Note)
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Fleet.SyncOdometerRequest.Note">
+            <summary>
+            Ghi chú/chi tiết thêm về lý do đồng bộ (Bắt buộc nhập nếu lý do là OTHER).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Fleet.SyncOdometerRequest.OdometerPhoto">
+            <summary>
+            Tệp ảnh minh chứng chụp công tơ mét thực tế (upload trực tiếp từ thiết bị).
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Incident.DispatchRescueRequest">
+            <summary>
+            [Luồng 8 — Bước 2] Yêu cầu điều xe lạnh thay thế đến hiện trường sự cố (Sang xe).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Incident.DispatchRescueRequest.ReplacementVehicleId">
+            <summary>Xe lạnh thay thế được điều đến hiện trường (bắt buộc, phải ACTIVE).</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Incident.DispatchRescueRequest.TransloadMinutes">
+            <summary>Thời gian dự kiến bốc chuyển toàn bộ hàng sang xe mới (phút). Mặc định 45 phút.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Incident.DispatchRescueRequest.Note">
+            <summary>Ghi chú lệnh điều động (hiển thị cho đội bốc xếp tại hiện trường).</summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Incident.RescueCandidateResponse">
+            <summary>Xe đủ điều kiện thay thế cho chuyến gặp sự cố (đúng dải nhiệt và đủ tải).</summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Incident.StopEtaChange">
+            <summary>ETA mới của một điểm dừng phía trước sau khi hệ thống tính lại.</summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Incident.IncidentRescueResult">
+            <summary>
+            [Luồng 8 — Bước 2 + 3] Kết quả xử lý sự cố: sang xe, chuyến DELAYED,
+            ETA mới cho các trạm phía trước và số khách hàng đã được thông báo.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Incident.IncidentRescueResult.TransloadLpnCount">
+            <summary>Số LPN cần bốc chuyển sang xe mới tại hiện trường.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Incident.IncidentRescueResult.EtaMethod">
+            <summary>Cách tính ETA mới: GOONG | HAVERSINE_FALLBACK | SHIFT_FALLBACK.</summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Inventory.AgingStockResponse">
+            <summary>
+            Response model for inventory stocks that have been stored for too long (aging inventory).
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Inventory.AllocateInventoryRequest">
+            <summary>
+            Request payload to allocate stock items to a document (e.g., outbound shipment, order).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AllocateInventoryRequest.ReferenceDocumentId">
+            <summary>
+            Unique identifier of the associated reference document (e.g., outbound transport order).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AllocateInventoryRequest.Items">
+            <summary>
+            List of items to allocate.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Inventory.AllocateInventoryItemRequest">
+            <summary>
+            Details of a specific item requested for allocation.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AllocateInventoryItemRequest.ItemCode">
+            <summary>
+            Unique code identifying the product.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AllocateInventoryItemRequest.Quantity">
+            <summary>
+            Requested quantity to allocate.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Inventory.AllocationResultResponse">
+            <summary>
+            Response model representing the outcome of an inventory allocation request.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AllocationResultResponse.ReferenceDocumentId">
+            <summary>
+            Unique identifier of the associated reference document.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AllocationResultResponse.Items">
+            <summary>
+            Detailed results for each requested item.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Inventory.AllocatedItemDetailDto">
+            <summary>
+            Outcome detail for a requested item allocation.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AllocatedItemDetailDto.ItemCode">
+            <summary>
+            Unique product code.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AllocatedItemDetailDto.RequestedQuantity">
+            <summary>
+            Original quantity requested.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AllocatedItemDetailDto.Allocations">
+            <summary>
+            Allocated stock locations and batches.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Inventory.AllocatedBatchDetailDto">
+            <summary>
+            Detail of a single stock allocation chunk (location and batch).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AllocatedBatchDetailDto.StockId">
+            <summary>
+            Unique system identifier of the stock record.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AllocatedBatchDetailDto.BatchId">
+            <summary>
+            Unique identifier of the batch.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AllocatedBatchDetailDto.BatchNumber">
+            <summary>
+            Batch number string.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AllocatedBatchDetailDto.LocationId">
+            <summary>
+            Unique identifier of the allocated warehouse location.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AllocatedBatchDetailDto.LocationCode">
+            <summary>
+            Code of the allocated location.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AllocatedBatchDetailDto.AllocatedQuantity">
+            <summary>
+            Allocated quantity from this location/batch.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Inventory.AvailableStockResponse">
+            <summary>
+            Response model representing available stock in warehouse locations.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AvailableStockResponse.StockId">
+            <summary>
+            Unique system identifier of the stock record.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AvailableStockResponse.ItemCode">
+            <summary>
+            Unique code of the product.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AvailableStockResponse.ItemName">
+            <summary>
+            Display name of the product.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AvailableStockResponse.Unit">
+            <summary>
+            Unit of measure.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AvailableStockResponse.LocationId">
+            <summary>
+            Unique identifier of the storage location.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AvailableStockResponse.LocationCode">
+            <summary>
+            Location code where the stock resides.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AvailableStockResponse.BatchId">
+            <summary>
+            Unique identifier of the inventory batch.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AvailableStockResponse.BatchNumber">
+            <summary>
+            Batch/Lot number.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AvailableStockResponse.ExpiryDate">
+            <summary>
+            Expiration date of the batch.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AvailableStockResponse.InboundDate">
+            <summary>
+            Timestamp when the stock arrived/was received.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AvailableStockResponse.QuantityOnHand">
+            <summary>
+            Total quantity currently on hand in the location.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AvailableStockResponse.QuantityAllocated">
+            <summary>
+            Quantity allocated to outbound orders (locked).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.AvailableStockResponse.QuantityAvailable">
+            <summary>
+            Quantity available to allocate or pick (QuantityOnHand - QuantityAllocated).
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Inventory.CreateInventoryHoldDto">
+            <summary>
+            Request payload to create a lock/hold on stock (quarantine, QA inspection).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.CreateInventoryHoldDto.StockId">
+            <summary>
+            Unique system identifier of the stock record.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.CreateInventoryHoldDto.Quantity">
+            <summary>
+            Quantity to place on hold.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.CreateInventoryHoldDto.ReasonCode">
+            <summary>
+            Reason code explaining why the stock is held (e.g. TEMP_DEVIATION, DAMAGED, QA_PENDING).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.CreateInventoryHoldDto.Notes">
+            <summary>
+            Optional detail notes.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.CreateInventoryHoldDto.TargetQuarantineLocationId">
+            <summary>
+            Target quarantine location identifier (required if holding a partial quantity to separate physical stock).
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Inventory.ExpiryAlertResponse">
+            <summary>
+            Response model for inventory batches that are close to their expiration date.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Inventory.HoldResponseDto">
+            <summary>
+            Response model representing active or historical inventory hold details.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.HoldResponseDto.HoldId">
+            <summary>
+            Unique system identifier of the inventory hold record.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.HoldResponseDto.StockId">
+            <summary>
+            Unique system identifier of the associated stock.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.HoldResponseDto.ItemCode">
+            <summary>
+            Code of the product.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.HoldResponseDto.ItemName">
+            <summary>
+            Display name of the product.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.HoldResponseDto.LocationCode">
+            <summary>
+            Code of the location where the held stock resides.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.HoldResponseDto.Quantity">
+            <summary>
+            Quantity on hold.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.HoldResponseDto.ReasonCode">
+            <summary>
+            Reason code for the hold (e.g. TEMP_DEVIATION).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.HoldResponseDto.Status">
+            <summary>
+            Status of the hold (e.g., ACTIVE, RELEASED, ADJUSTED_OUT).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.HoldResponseDto.CreatedAt">
+            <summary>
+            Timestamp when the hold was placed.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.HoldResponseDto.CreatedBy">
+            <summary>
+            Unique identifier of the operator who placed the hold.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.HoldResponseDto.ReleasedAt">
+            <summary>
+            Timestamp when the hold was released.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.HoldResponseDto.ReleasedBy">
+            <summary>
+            Unique identifier of the supervisor who authorized release.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.HoldResponseDto.ReleaseNotes">
+            <summary>
+            Notes explaining the release or QA resolution.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentRequest">
+            <summary>
+            Request payload to adjust inventory quantities (cycle counts, damages, losses, expirations, quality holds).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentRequest.StockId">
+            <summary>
+            Unique system identifier of the stock record.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentRequest.AdjustmentType">
+            <summary>
+            Type of physical adjustment (e.g., CycleCount, Damage, Loss, Expiration, QualityHold, InboundQC).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentRequest.IsAbsoluteCount">
+            <summary>
+            Mode flag to determine how to apply quantities:
+            - If true, Quantity and Pallets are absolute counts.
+            - If false, they are relative delta changes (+/- deltas).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentRequest.Quantity">
+            <summary>
+            Adjustment quantity (either relative delta or absolute count depending on IsAbsoluteCount).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentRequest.Pallets">
+            <summary>
+            Adjustment pallets (either relative delta or absolute count depending on IsAbsoluteCount).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentRequest.Reason">
+            <summary>
+            Detailed description or reason for the adjustment.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentResponse">
+            <summary>
+            Response model representing a recorded stock adjustment request.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentResponse.AdjustmentId">
+            <summary>
+            Unique system identifier of the adjustment record.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentResponse.StockId">
+            <summary>
+            Unique system identifier of the stock record.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentResponse.ItemCode">
+            <summary>
+            Code of the product.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentResponse.ItemName">
+            <summary>
+            Display name of the product.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentResponse.BatchNumber">
+            <summary>
+            Lot/Batch number.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentResponse.LocationCode">
+            <summary>
+            Code of the storage location.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentResponse.AdjustmentType">
+            <summary>
+            Type of physical adjustment (e.g. Damage).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentResponse.QuantityBefore">
+            <summary>
+            Quantity before the adjustment was applied.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentResponse.QuantityChanged">
+            <summary>
+            Quantity variation applied.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentResponse.QuantityAfter">
+            <summary>
+            Quantity after the adjustment was applied.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentResponse.PalletsBefore">
+            <summary>
+            Pallets count before the adjustment.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentResponse.PalletsChanged">
+            <summary>
+            Pallets variation applied.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentResponse.PalletsAfter">
+            <summary>
+            Pallets count after adjustment.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentResponse.ReasonNotes">
+            <summary>
+            Notes explaining the adjustment details or reasons.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentResponse.Status">
+            <summary>
+            Approval status (e.g., PENDING_APPROVAL, APPROVED, REJECTED).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentResponse.MovementId">
+            <summary>
+            Unique identifier of the associated stock movement (if approved).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentResponse.CreatedAt">
+            <summary>
+            Timestamp when the adjustment request was created.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentResponse.CreatedBy">
+            <summary>
+            Unique identifier of the user who requested the adjustment.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentResponse.CreatedByUsername">
+            <summary>
+            Username of the user who requested the adjustment.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentResponse.ApprovedBy">
+            <summary>
+            Unique identifier of the manager who approved the adjustment.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentResponse.ApprovedByUsername">
+            <summary>
+            Username of the manager who approved the adjustment.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentResponse.ApprovedAt">
+            <summary>
+            Timestamp when the adjustment was approved.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.InventoryAdjustmentResponse.RejectionReason">
+            <summary>
+            Explanation details if the adjustment request was rejected.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Inventory.PutawaySuggestionResponse">
+            <summary>
+            Response model representing a single putaway location suggestion.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.PutawaySuggestionResponse.LocationId">
+            <summary>
+            Unique identifier of the suggested target location.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.PutawaySuggestionResponse.LocationCode">
+            <summary>
+            Code of the suggested target location.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.PutawaySuggestionResponse.ZoneCode">
+            <summary>
+            Code of the zone where the suggested location resides.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.PutawaySuggestionResponse.CurrentPallets">
+            <summary>
+            Pallets currently stored in the location.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.PutawaySuggestionResponse.MaxCapacityPallets">
+            <summary>
+            Maximum capacity in pallets of the location.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.PutawaySuggestionResponse.RemainingCapacity">
+            <summary>
+            Remaining capacity in pallets (MaxCapacityPallets - CurrentPallets).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.PutawaySuggestionResponse.SuitabilityScore">
+            <summary>
+            Suitability score (higher is better) determined by temperature compatibility and item matching rules.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.PutawaySuggestionResponse.MatchType">
+            <summary>
+            Match criteria type (e.g., SAME_BATCH, SAME_ITEM, EMPTY, COMPATIBLE).
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Inventory.StockPutawaySuggestionsResponse">
+            <summary>
+            Response model grouping putaway location suggestions for a stock item.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.StockPutawaySuggestionsResponse.StockId">
+            <summary>
+            Unique system identifier of the stock record.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.StockPutawaySuggestionsResponse.ItemCode">
+            <summary>
+            Code of the product.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.StockPutawaySuggestionsResponse.BatchNumber">
+            <summary>
+            Lot/Batch number.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.StockPutawaySuggestionsResponse.PalletCount">
+            <summary>
+            Count of pallets needing storage.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.StockPutawaySuggestionsResponse.Suggestions">
+            <summary>
+            List of recommended locations sorted by suitability.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Inventory.RejectAdjustmentRequest">
+            <summary>
+            Request payload for rejecting a pending stock adjustment.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.RejectAdjustmentRequest.RejectionReason">
+            <summary>
+            Explanation details of why the adjustment was rejected.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Inventory.ReleaseAllocationRequest">
+            <summary>
+            Request payload to release active stock allocations.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.ReleaseAllocationRequest.ReferenceDocumentId">
+            <summary>
+            Unique identifier of the associated reference document (e.g. outbound transport order) to free stock from.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Inventory.ReleaseInventoryHoldDto">
+            <summary>
+            Request payload to release a held inventory record.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.ReleaseInventoryHoldDto.ReleaseNotes">
+            <summary>
+            Explanation details of the hold resolution.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Inventory.ReleaseInventoryHoldDto.TargetReleaseLocationId">
+            <summary>
+            Optional target location to relocate the stock back into (e.g. bulk storage or picking area).
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Inventory.TempAuditResponse">
+            <summary>
+            Response model representing stocks stored in locations with mismatched temperature settings.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Invoices.InvoiceLineResponse">
+            <summary>
+            Response model for a single invoice line item.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Invoices.InvoiceResponse">
+            <summary>
+            Response model for an invoice, including its line details.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Outbound.AllocationItemDto">
+            <summary>
+            Details of a single stock allocation unit for an outbound item.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.AllocationItemDto.AllocationId">
+            <summary>
+            Unique system identifier of the allocation record.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.AllocationItemDto.StockId">
+            <summary>
+            Unique system identifier of the stock record.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.AllocationItemDto.ItemCode">
+            <summary>
+            Unique code of the product.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.AllocationItemDto.ItemName">
+            <summary>
+            Display name of the product.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.AllocationItemDto.BatchNumber">
+            <summary>
+            Lot/Batch number of the allocated stock.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.AllocationItemDto.ExpiryDate">
+            <summary>
+            Expiration date of the batch (sorted for FEFO).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.AllocationItemDto.LocationCode">
+            <summary>
+            Code of the warehouse location from which to pick the stock.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.AllocationItemDto.ZoneCode">
+            <summary>
+            Code of the zone where the location resides.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.AllocationItemDto.AllocatedQuantity">
+            <summary>
+            Quantity allocated from this location/batch.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.AllocationItemDto.AvailableQuantity">
+            <summary>
+            Quantity remaining available at this location/batch.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.AllocationItemDto.Status">
+            <summary>
+            Status of the allocation (e.g. ALLOCATED, PICKED).
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Outbound.AllocationResponse">
+            <summary>
+            Response model representing all stock allocations for an outbound order.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.AllocationResponse.OutboundOrderId">
+            <summary>
+            Unique system identifier of the outbound order.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.AllocationResponse.OrderCode">
+            <summary>
+            Code identifying the outbound order.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.AllocationResponse.Allocations">
+            <summary>
+            List of allocated stock chunks.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Outbound.CreateOutboundOrderRequest">
+            <summary>
+            Request payload for creating a new outbound order.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.CreateOutboundOrderRequest.CustomerId">
+            <summary>
+            Unique system identifier of the ordering customer.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.CreateOutboundOrderRequest.ReceiverName">
+            <summary>
+            Name of the cargo receiver.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.CreateOutboundOrderRequest.ReceiverPhone">
+            <summary>
+            Contact phone number of the receiver.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.CreateOutboundOrderRequest.DestinationAddress">
+            <summary>
+            Target destination delivery address.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.CreateOutboundOrderRequest.Items">
+            <summary>
+            List of requested products and quantities.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Outbound.CreateOutboundOrderItemRequest">
+            <summary>
+            Detailed request for a single outbound order line item.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.CreateOutboundOrderItemRequest.ItemCode">
+            <summary>
+            Unique product code.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.CreateOutboundOrderItemRequest.ItemName">
+            <summary>
+            Display name of the product.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.CreateOutboundOrderItemRequest.Unit">
+            <summary>
+            Unit of measure (e.g. BOX, PALLET).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.CreateOutboundOrderItemRequest.Quantity">
+            <summary>
+            Quantity requested for dispatch.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Outbound.OutboundOrderResponse">
+            <summary>
+            Response model representing outbound order properties and lines.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.OutboundOrderResponse.OutboundOrderId">
+            <summary>
+            Unique system identifier of the outbound order.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.OutboundOrderResponse.OrderCode">
+            <summary>
+            Unique business code for the outbound order.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.OutboundOrderResponse.CustomerId">
+            <summary>
+            Unique identifier of the customer.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.OutboundOrderResponse.CustomerName">
+            <summary>
+            Name of the customer.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.OutboundOrderResponse.ReceiverName">
+            <summary>
+            Name of the cargo receiver.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.OutboundOrderResponse.ReceiverPhone">
+            <summary>
+            Contact phone number of the receiver.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.OutboundOrderResponse.DestinationAddress">
+            <summary>
+            Target destination address.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.OutboundOrderResponse.Status">
+            <summary>
+            Operational status of the order (e.g., DRAFT, ALLOCATED, PICKING, COMPLETED, CANCELLED).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.OutboundOrderResponse.AssignedPickerId">
+            <summary>
+            Unique identifier of the assigned picker operator.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.OutboundOrderResponse.AssignedPickerName">
+            <summary>
+            Name of the assigned picker.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.OutboundOrderResponse.AllocatedAt">
+            <summary>
+            Timestamp when stock was allocated.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.OutboundOrderResponse.CreatedAt">
+            <summary>
+            Timestamp when the order was created.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.OutboundOrderResponse.Items">
+            <summary>
+            Line items in the outbound order.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Outbound.OutboundOrderItemResponse">
+            <summary>
+            Line item details in the outbound order response.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.OutboundOrderItemResponse.OutboundOrderItemId">
+            <summary>
+            Unique system identifier of the order line item.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.OutboundOrderItemResponse.ItemCode">
+            <summary>
+            Unique product code.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.OutboundOrderItemResponse.ItemName">
+            <summary>
+            Product display name.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.OutboundOrderItemResponse.Unit">
+            <summary>
+            Unit of measure.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.OutboundOrderItemResponse.Quantity">
+            <summary>
+            Quantity of product requested.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Outbound.PickingListItemDto">
+            <summary>
+            Represents a single line item in a warehouse picking list.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.PickingListItemDto.ItemCode">
+            <summary>
+            Unique code of the product to pick.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.PickingListItemDto.ItemName">
+            <summary>
+            Display name of the product.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.PickingListItemDto.LocationId">
+            <summary>
+            Unique identifier of the source storage location to pick from.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.PickingListItemDto.LocationCode">
+            <summary>
+            Code of the source location.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.PickingListItemDto.ZoneCode">
+            <summary>
+            Code of the zone where the source location resides.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.PickingListItemDto.BatchNumber">
+            <summary>
+            Lot/Batch number of the stock to pick.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.PickingListItemDto.ExpiryDate">
+            <summary>
+            Expiration date of the batch (FEFO sorted).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.PickingListItemDto.QuantityToPick">
+            <summary>
+            Total quantity to pick from this location/batch.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Outbound.PickingListResponse">
+            <summary>
+            Response model representing the picking list for an outbound order.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.PickingListResponse.OutboundOrderId">
+            <summary>
+            Unique system identifier of the outbound order.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.PickingListResponse.OrderCode">
+            <summary>
+            Unique business code for the outbound order.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.PickingListResponse.AssignedPickerId">
+            <summary>
+            Unique identifier of the picker assigned to this order.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.PickingListResponse.AssignedPickerName">
+            <summary>
+            Username of the picker assigned to this order.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.PickingListResponse.Items">
+            <summary>
+            List of picking instructions per stock location/batch.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Outbound.UpdateOutboundOrderRequest">
+            <summary>
+            Request payload for updating an existing outbound order.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.UpdateOutboundOrderRequest.ReceiverName">
+            <summary>
+            Name of the cargo receiver.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.UpdateOutboundOrderRequest.ReceiverPhone">
+            <summary>
+            Contact phone number of the receiver.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.UpdateOutboundOrderRequest.DestinationAddress">
+            <summary>
+            Target destination delivery address.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Outbound.UpdateOutboundOrderRequest.Items">
+            <summary>
+            Updated list of requested products and quantities.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.UpdateDriverInfoRequest">
+            <summary>
+            Full request DTO for updating all driver information at once (used internally by service).
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.UpdateDriverFullNameRequest">
+            <summary>
+            Update driver's display name only.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.UpdateDriverPasswordRequest">
+            <summary>
+            Update driver's login password only.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.UpdateDriverDobRequest">
+            <summary>
+            Update driver's date of birth only.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.UpdateDriverStatusRequest">
+            <summary>
+            Update driver's operational status only.
+            Allowed values: AVAILABLE, ON_TRIP, OFFLINE, INACTIVE
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.UpdateDriverLicenseRequest">
+            <summary>
+            Update or create driver license information.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.VehicleCreateRequest.VehicleType">
+            <summary>Loại xe: Truck, Van, Refrigerated, Flatbed, Container, Tanker</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.VehicleCreateRequest.Status">
+            <summary>Trạng thái: Active, Inactive, UnderMaintenance, OnTrip</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.VehicleCreateRequest.VehicleImage">
+            <summary>Ảnh / tài liệu đính kèm (tuỳ chọn)</summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseFlow.PutawayLpnRequest.WarehouseId">
+            <summary>Kho được chọn để cất hàng — lấy từ danh sách kho hiện có.</summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.WarehouseReceipt.InboundQCRequest">
+            <summary>
+            Request payload for processing inbound Quality Control (QC) check at receiving.
+            All fields are submitted as a flat JSON body.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.InboundQCRequest.OrderId">
+            <summary>
+            The unique identifier of the transport order being received.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.InboundQCRequest.WarehouseId">
+            <summary>
+            The unique identifier of the warehouse where cargo is being dropped off.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.InboundQCRequest.RecordedTemperature">
+            <summary>
+            Temperature (Celsius) recorded at the time of delivery/drop-off.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.InboundQCRequest.DelivererName">
+            <summary>
+            Name of the delivery personnel/driver dropping off the cargo.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.InboundQCRequest.Note">
+            <summary>
+            Optional quality control notes or observations.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.WarehouseReceipt.StockRelocationRequest">
+            <summary>
+            Request payload for relocating stock between locations.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.StockRelocationRequest.SourceLocationId">
+            <summary>
+            Source location unique identifier.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.StockRelocationRequest.DestinationLocationId">
+            <summary>
+            Destination location unique identifier.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.StockRelocationRequest.ItemCode">
+            <summary>
+            Business code representing the item.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.StockRelocationRequest.BatchId">
+            <summary>
+            Unique identifier of the inventory batch.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.StockRelocationRequest.Quantity">
+            <summary>
+            Quantity of stock unit to move.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.StockRelocationRequest.Pallets">
+            <summary>
+            Number of pallets to occupy in the destination and release from the source.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.WarehouseReceipt.UpdateMeasurementsRequest">
+            <summary>
+            Request payload to update verified inbound physical measurements of items.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.UpdateMeasurementsRequest.Items">
+            <summary>
+            List of item measurements verified at receiving.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.WarehouseReceipt.InboundItemMeasurement">
+            <summary>
+            Details of the physical dimensions and quality parameters for a received item.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.InboundItemMeasurement.ItemName">
+            <summary>
+            Display name of the item.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.InboundItemMeasurement.ItemCode">
+            <summary>
+            Unique code of the item.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.InboundItemMeasurement.Unit">
+            <summary>
+            Unit of measure (e.g. PALLET, BOX, UNIT).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.InboundItemMeasurement.ActualQty">
+            <summary>
+            Actual quantity received.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.InboundItemMeasurement.LengthCm">
+            <summary>
+            Length in centimeters.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.InboundItemMeasurement.WidthCm">
+            <summary>
+            Width in centimeters.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.InboundItemMeasurement.HeightCm">
+            <summary>
+            Height in centimeters.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.InboundItemMeasurement.WeightKg">
+            <summary>
+            Physical weight in kilograms.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.InboundItemMeasurement.ConditionStatus">
+            <summary>
+            Verified quality condition status (e.g., INTACT, DAMAGED).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.InboundItemMeasurement.Note">
+            <summary>
+            Optional notes.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.InboundItemMeasurement.BatchNumber">
+            <summary>
+            Batch number assigned to the product lot.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.InboundItemMeasurement.ManufacturedDate">
+            <summary>
+            Date when the product batch was manufactured.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.InboundItemMeasurement.ExpiryDate">
+            <summary>
+            Expiration date of the product lot.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.InboundItemMeasurement.CountryOfOrigin">
+            <summary>
+            Country where the product was manufactured/produced.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.InboundItemMeasurement.ProductCategory">
+            <summary>
+            Product classification category.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptResponse">
+            <summary>
+            Response model representing a warehouse receipt.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptResponse.ReceiptId">
+            <summary>
+            Unique system identifier of the receipt.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptResponse.ReceiptCode">
+            <summary>
+            System-generated receipt business code.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptResponse.ReferenceDocNo">
+            <summary>
+            Optional reference number of an external document (e.g. delivery note).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptResponse.OrderId">
+            <summary>
+            Unique identifier of the associated transport order.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptResponse.OrderTrackingCode">
+            <summary>
+            Tracking code of the corresponding transport order.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptResponse.WarehouseId">
+            <summary>
+            Unique identifier of the destination warehouse.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptResponse.WarehouseName">
+            <summary>
+            Name of the receiving warehouse.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptResponse.ReceiptType">
+            <summary>
+            Type of receipt (e.g. StandardInbound).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptResponse.Reason">
+            <summary>
+            Optional reason notes.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptResponse.TotalExpectedQty">
+            <summary>
+            Total expected quantity of items based on the order.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptResponse.TotalActualQty">
+            <summary>
+            Total actual quantity recorded upon arrival.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptResponse.RecordedTemperature">
+            <summary>
+            Quality control recorded temperature (Celsius) of the cargo environment on arrival.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptResponse.DelivererName">
+            <summary>
+            Name of the driver/deliverer.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptResponse.ReceiverId">
+            <summary>
+            Unique identifier of the warehouse operator who received the cargo.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptResponse.Note">
+            <summary>
+            Inbound notes.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptResponse.PdfUrl">
+            <summary>
+            URL path to the generated PDF receipt document.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptResponse.Status">
+            <summary>
+            Processing status of the receipt (e.g., DRAFT, QC_COMPLETED, COMPLETED).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptResponse.WarningMessage">
+            <summary>
+            Warn message generated by compliance rules (e.g., temperature deviation).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptResponse.CreatedAt">
+            <summary>
+            Timestamp when the receipt was created.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptResponse.Items">
+            <summary>
+            List of line items included in this receipt.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptItemDto">
+            <summary>
+            Line item detail of a warehouse receipt.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptItemDto.ItemId">
+            <summary>
+            Unique identifier of the receipt line item.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptItemDto.ItemName">
+            <summary>
+            Name of the received product.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptItemDto.ItemCode">
+            <summary>
+            Unique code of the received product.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptItemDto.Unit">
+            <summary>
+            Unit of measure.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptItemDto.ExpectedQty">
+            <summary>
+            Quantity expected from the transport order.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptItemDto.ActualQty">
+            <summary>
+            Actual quantity verified physically at receipt.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptItemDto.ActualWeightKg">
+            <summary>
+            Actual weight in kilograms.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptItemDto.LengthCm">
+            <summary>
+            Verified packaging length in centimeters.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptItemDto.WidthCm">
+            <summary>
+            Verified packaging width in centimeters.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptItemDto.HeightCm">
+            <summary>
+            Verified packaging height in centimeters.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptItemDto.Barcode">
+            <summary>
+            Product barcode scanner value.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptItemDto.QrCode">
+            <summary>
+            Product QR code scanner value.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptItemDto.ConditionStatus">
+            <summary>
+            Quality condition code (e.g., INTACT, LEAKING).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptItemDto.Note">
+            <summary>
+            Notes regarding the condition of this item.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptItemDto.BatchNumber">
+            <summary>
+            Lot/Batch number of the product.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptItemDto.ManufacturedDate">
+            <summary>
+            Date when this batch was manufactured.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.WarehouseReceipt.WarehouseReceiptItemDto.ExpiryDate">
+            <summary>
+            Expiration date of the batch.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Warehouse.CreateWarehouseRequest">
+            <summary>
+            Request payload for creating a new warehouse.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.CreateWarehouseRequest.WarehouseCode">
+            <summary>
+            Unique code identifying the warehouse (e.g., WH-001).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.CreateWarehouseRequest.WarehouseName">
+            <summary>
+            Name of the warehouse.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.CreateWarehouseRequest.WarehouseType">
+            <summary>
+            Type/classification of the warehouse (e.g., ColdStorage, DryStorage).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.CreateWarehouseRequest.Address">
+            <summary>
+            Physical address of the warehouse.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.CreateWarehouseRequest.MaxPallets">
+            <summary>
+            Maximum pallet capacity of the warehouse.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.CreateWarehouseRequest.DefaultMinTemp">
+            <summary>
+            Default minimum allowed temperature (Celsius) for cold chain compliance.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.CreateWarehouseRequest.DefaultMaxTemp">
+            <summary>
+            Default maximum allowed temperature (Celsius) for cold chain compliance.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.CreateWarehouseRequest.Status">
+            <summary>
+            Operational status of the warehouse (e.g., ACTIVE, INACTIVE). Defaults to ACTIVE.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Warehouse.UpdateWarehouseRequest">
+            <summary>
+            Request payload for updating an existing warehouse.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.UpdateWarehouseRequest.WarehouseCode">
+            <summary>
+            Unique code identifying the warehouse (e.g., WH-001).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.UpdateWarehouseRequest.WarehouseName">
+            <summary>
+            Name of the warehouse.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.UpdateWarehouseRequest.WarehouseType">
+            <summary>
+            Type/classification of the warehouse (e.g., ColdStorage, DryStorage).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.UpdateWarehouseRequest.Address">
+            <summary>
+            Physical address of the warehouse.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.UpdateWarehouseRequest.MaxPallets">
+            <summary>
+            Maximum pallet capacity of the warehouse.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.UpdateWarehouseRequest.DefaultMinTemp">
+            <summary>
+            Default minimum allowed temperature (Celsius) for cold chain compliance.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.UpdateWarehouseRequest.DefaultMaxTemp">
+            <summary>
+            Default maximum allowed temperature (Celsius) for cold chain compliance.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.UpdateWarehouseRequest.Status">
+            <summary>
+            Operational status of the warehouse (e.g., ACTIVE, INACTIVE).
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Warehouse.WarehouseResponse">
+            <summary>
+            Response model representing a warehouse detail.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.WarehouseResponse.WarehouseId">
+            <summary>
+            Unique system identifier of the warehouse.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.WarehouseResponse.WarehouseCode">
+            <summary>
+            Unique business code for the warehouse.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.WarehouseResponse.WarehouseName">
+            <summary>
+            Name of the warehouse.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.WarehouseResponse.WarehouseType">
+            <summary>
+            Type of storage (e.g., ColdStorage, DryStorage).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.WarehouseResponse.Address">
+            <summary>
+            Physical address details.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.WarehouseResponse.MaxPallets">
+            <summary>
+            Maximum capacity in pallets.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.WarehouseResponse.CurrentPallets">
+            <summary>
+            Current capacity in pallets currently utilized.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.WarehouseResponse.DefaultMinTemp">
+            <summary>
+            Standard minimum temperature setting.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.WarehouseResponse.DefaultMaxTemp">
+            <summary>
+            Standard maximum temperature setting.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.WarehouseResponse.Status">
+            <summary>
+            Warehouse operational status (e.g. ACTIVE).
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.WarehouseResponse.CreatedAt">
+            <summary>
+            Timestamp when the warehouse record was created.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.WarehouseResponse.CreatedBy">
+            <summary>
+            Unique identifier of the user who created the warehouse.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.WarehouseResponse.UpdatedAt">
+            <summary>
+            Timestamp when the warehouse record was last updated.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.DTOs.Warehouse.WarehouseResponse.UpdatedBy">
+            <summary>
+            Unique identifier of the user who last updated the warehouse.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.DTOs.Warehouse.WarehouseUtilizationResponse">
+            <summary>
+            Response model for warehouse capacity and zone utilization statistics.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.Features.Delivery.Commands.ConfirmHandoverCommand">
+            <summary>
+            Bước 2 — Nghiệm thu hàng + Ký nhận tại điểm dừng (Handover Confirmation).
+            Xử lý: upload chữ ký khách + ảnh bằng chứng, cập nhật trạng thái LPN/Order,
+            sinh Biên bản Giao nhận PDF (handover receipt) và gửi thông báo SignalR.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.Application.Features.Delivery.Commands.ConfirmHandoverCommandHandler.CalculateExpectedCod(ColdChainX.Core.Entities.TransportOrder,System.Collections.Generic.List{ColdChainX.Core.Entities.Lpn},System.Collections.Generic.List{ColdChainX.Application.DTOs.Delivery.HandoverConfirmLpnInput})">
+            <summary>
+            COD tính theo tỷ lệ số lượng hàng được nhận / tổng số lượng đơn hàng.
+            Guard: nếu CargoValue = 0 hoặc Quantity = 0 → COD = 0 (không thu hộ).
+            </summary>
+        </member>
+        <member name="M:ColdChainX.Application.Features.Delivery.Commands.ConfirmHandoverCommandHandler.UpdateLpnStates(ColdChainX.Core.Entities.TransportOrder,System.Collections.Generic.List{ColdChainX.Core.Entities.Lpn},System.Collections.Generic.List{ColdChainX.Application.DTOs.Delivery.HandoverConfirmLpnInput},System.Collections.Generic.Dictionary{System.Guid,System.ValueTuple{System.String,System.String}},System.Decimal,System.Guid)">
+            <summary>
+            Cập nhật trạng thái từng LPN, gán nhiệt độ ghi nhận, tạo ReturnedItem nếu từ chối.
+            Cập nhật Order.Status tổng quát: DELIVERED / RETURNED / PARTIALLY_DELIVERED.
+            Trả về true nếu có hàng trả lại.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.Features.Delivery.Commands.RecordCodPaymentCommand">
+            <summary>
+            Bước 3 — Thu tiền COD sau khi bàn giao hàng và khách đã ký nhận.
+            Chỉ được gọi sau khi ConfirmHandoverCommand đã hoàn tất (HandoverConfirmedAt != null).
+            Sinh ePOD hoàn chỉnh (có chữ ký + ảnh bằng chứng + COD) và thông báo Admin/Sales.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.Features.Inbound.Commands.PutawayLpnCommand.WarehouseId">
+            <summary>Kho được chọn để cất hàng — lấy từ danh sách kho hiện có.</summary>
+        </member>
+        <member name="M:ColdChainX.Application.Features.Inventory.Commands.DeleteLpnCommandHandler.Handle(ColdChainX.Application.Features.Inventory.Commands.DeleteLpnCommand,System.Threading.CancellationToken)">
+             <summary>
+             Danh dau LPN la DELETED (soft-delete) — khong xoa du lieu khoi database.
+            
+             Precondition : LPN.State phai la EXPECTED / IN_STOCK / DISCREPANCY_HOLD / RETURN_PENDING
+             Postcondition: LPN.State = DELETED (van con trong DB, khong the dung trong bat ky quy trinh nao)
+            
+             Tu choi neu LPN dang trong quy trinh xuat kho
+             (ALLOCATED / LOADING / LOADING_COMPLETED / RELEASED / SHIPPING).
+             </summary>
+        </member>
+        <member name="M:ColdChainX.Application.Features.Outbound.Commands.CompleteTripLoadingCommandHandler.Handle(ColdChainX.Application.Features.Outbound.Commands.CompleteTripLoadingCommand,System.Threading.CancellationToken)">
+             <summary>
+             Xac nhan toan bo chuyen da len xe — chuyen LPN tu LOADING_COMPLETED sang RELEASED.
+            
+             Precondition  : TAT CA LPN cua TripId phai o trang thai LOADING_COMPLETED
+                             (moi LPN da duoc goi POST /api/Outbound/pick truoc do)
+             Postcondition : LPN.State == RELEASED
+                             Trip.Status == LOADING_COMPLETED
+            
+             Sau buoc nay, goi POST /api/Dispatch/seal-and-dispatch/{tripId} de kep chi.
+             </summary>
+        </member>
+        <member name="M:ColdChainX.Application.Features.Outbound.Commands.PickLpnCommandHandler.Handle(ColdChainX.Application.Features.Outbound.Commands.PickLpnCommand,System.Threading.CancellationToken)">
+             <summary>
+             Xác nhận một LPN đã được bốc lên xe.
+            
+             Precondition  : LPN.State == LOADING  (set bởi start-picking)
+             Postcondition : LPN.State == LOADING_COMPLETED
+            
+             Goi tung LPN mot lan. Sau khi tat ca LPN cua chuyen deu LOADING_COMPLETED,
+             goi POST /api/Outbound/load-trip de xac nhan toan bo chuyen.
+             </summary>
+        </member>
+        <member name="T:ColdChainX.Application.Features.Outbound.DTOs.AvailableLpnDto">
+            <summary>
+            LPN dang o trang thai LOADING — san sang de goi POST /api/Outbound/pick.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.Features.Outbound.DTOs.AvailableTripDto">
+            <summary>
+            Chuyen dang o trang thai PICKING kem tat ca LPN/don hang —
+            dung de chuan bi du lieu cho POST /api/Outbound/pick va POST /api/Outbound/load-trip.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.Features.Outbound.DTOs.AvailableTripDto.ReadyToLoad">
+            <summary>True khi tat ca LPN da LOADING_COMPLETED — co the goi load-trip.</summary>
+        </member>
+        <member name="T:ColdChainX.Application.Features.Outbound.Queries.GetAvailableLpnsQuery">
+            <summary>
+            Lay danh sach LPN dang o trang thai LOADING — san sang de goi POST /api/Outbound/pick.
+            Co the loc theo TripId (tuy chon).
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.Features.Outbound.Queries.GetAvailableTripsQuery">
+            <summary>
+            Lay danh sach chuyen dang o trang thai PICKING kem tat ca LPN/don hang ben trong —
+            dung de chuan bi du lieu cho POST /api/Outbound/pick va POST /api/Outbound/load-trip.
+            Co the loc theo TripId (tuy chon) de xem chi tiet mot chuyen.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.Features.Payment.Commands.ReceivePaymentWebhookCommand">
+            <summary>
+            Xử lý webhook từ PayOS sau khi khách hàng thanh toán QR thành công.
+            PayOS gửi HTTP POST với payload JSON và header x-payos-signature.
+            Handler này: (1) Verify HMAC, (2) Tìm ePOD qua PayOS orderCode, (3) Sinh ePOD PDF, (4) Cập nhật trạng thái đơn hàng.
+            </summary>
+        </member>
+        <member name="P:ColdChainX.Application.Features.Payment.Commands.ReceivePaymentWebhookCommand.PayOsSignature">
+            <summary>Chữ ký HMAC-SHA256 từ header x-payos-signature. Null nếu không có.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.Features.Payment.Commands.ReceivePaymentWebhookCommand.RawBody">
+            <summary>Raw webhook body (JSON string) để verify HMAC.</summary>
+        </member>
+        <member name="T:ColdChainX.Application.Interfaces.IDeliveryEventService">
+            <summary>
+            Abstraction for real-time delivery event notifications via SignalR.
+            Commands in Application layer call this service; the Infrastructure layer
+            implements it using IHubContext&lt;NotificationHub&gt;.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.Application.Interfaces.IDeliveryEventService.NotifyHandoverPartialReturnAsync(System.Guid,System.String,System.Guid,System.Int32,System.Int32,System.String,System.String,System.Threading.CancellationToken)">
+            <summary>
+            Gửi thông báo khi có hàng trả lại sau nghiệm thu.
+            Notify: Group_Dispatcher, Group_WarehouseMonitor, Group_Admin.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.Application.Interfaces.IDeliveryEventService.NotifyCodPaymentConfirmedAsync(System.Guid,System.String,System.Guid,System.Decimal,System.String,System.String,System.String,System.String,System.Threading.CancellationToken)">
+            <summary>
+            Gửi thông báo khi thu tiền COD thành công.
+            Notify: Group_Admin, Group_Sales, Group_Dispatcher.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.Application.Interfaces.IDeliveryEventService.NotifyTripCompletedAsync(System.Guid,System.String,System.DateTime,System.Threading.CancellationToken)">
+            <summary>
+            Gửi thông báo khi tài xế hoàn thành toàn bộ chuyến đi (tất cả stop đã DEPARTED).
+            Notify: Group_Admin, Group_Dispatcher, Group_Driver.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.Application.Interfaces.IDispatchService.ManualDispatchAsync(ColdChainX.Application.DTOs.Dispatch.ManualDispatchRequest)">
+            <summary>
+            Thủ công chọn đơn hàng IN_WAREHOUSE,
+            nhóm theo nhiệt độ + điểm đến, chọn xe/tài xế (giấy tờ còn hạn),
+            tính lộ trình TSP + Goong, sinh LIFO load plan, sinh hướng dẫn navigation.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.Application.Interfaces.IDispatchService.StartPickingAsync(System.Guid)">
+            <summary>Chuyển trip PLANNED → PICKING, thông báo loader bắt đầu lấy hàng.</summary>
+        </member>
+        <member name="M:ColdChainX.Application.Interfaces.IDispatchService.CancelTripAsync(System.Guid)">
+            <summary>
+            Hủy chuyến đã ghép (ở bất kỳ giai đoạn nào trước khi hàng SHIPPING):
+            reset LPN về IN_STOCK (hàng về kho), đơn hàng về IN_STOCK, xe/tài xế về ACTIVE,
+            hủy seal và vô hiệu giấy đi đường. Chặn nếu có LPN đã ở trạng thái SHIPPING.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.Application.Interfaces.IDispatchService.CheckVehicleIoTAsync(System.Guid,System.Guid)">
+            <summary>Kiểm tra tín hiệu IoT (GPS, nhiệt độ, battery) của xe.</summary>
+        </member>
+        <member name="M:ColdChainX.Application.Interfaces.IDispatchService.SealAndDispatchAsync(System.Guid,System.String,System.Guid)">
+            <summary>
+            Kiểm tra tất cả đơn hàng đã chất lên xe chưa → kẹp chì → cấp E-Waybill.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.Interfaces.IDriverAvailabilityService">
+            <summary>
+            Enforces legal driving-hour limits (10h/day, 48h/week) using calendar windows
+            (day = UTC midnight, week = Mon–Sun). Drivers exceeding a limit are placed in
+            the RELAX status and cannot be assigned until the window rolls over.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.Application.Interfaces.IDriverAvailabilityService.CheckAsync(System.Guid,System.Decimal,System.DateOnly)">
+            <summary>
+            Check whether <paramref name="additionalHours"/> can be added to the driver's
+            schedule on <paramref name="day"/> without breaching the daily or weekly limit.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.Application.Interfaces.IDriverAvailabilityService.RecordWorkAsync(System.Guid,System.Guid,System.Decimal,System.DateOnly)">
+            <summary>Insert a work-hour record for the given driver/trip/day.</summary>
+        </member>
+        <member name="M:ColdChainX.Application.Interfaces.IDriverAvailabilityService.ReconcileStatusAsync(ColdChainX.Core.Entities.Driver)">
+            <summary>
+            Recompute the driver's RELAX state against the current calendar day/week and
+            adjust <see cref="P:ColdChainX.Core.Entities.Driver.Status"/> in place (RELAX ⇄ Available) so the
+            restriction auto-clears once the window expires. Does not call SaveChanges.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.Interfaces.DriverAvailability">
+            <summary>Outcome of a driving-hour availability check.</summary>
+        </member>
+        <member name="T:ColdChainX.Application.Interfaces.IIncidentRescueService">
+            <summary>
+            Luồng 8 — Xử lý sự cố &amp; cập nhật lộ trình (Incident Routing Flow).
+            Điều xe lạnh thay thế đến hiện trường, sang toàn bộ hàng, chuyển chuyến
+            sang DELAYED, tính lại ETA và chủ động thông báo cho khách hàng phía trước.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.Application.Interfaces.IIncidentRescueService.GetRescueCandidatesAsync(System.Guid)">
+            <summary>
+            [Bước 2 — Lookup] Danh sách xe ACTIVE đủ điều kiện thay thế cho chuyến
+            gặp sự cố: giữ được nhiệt độ mục tiêu của chuyến và đủ tải trọng/thể tích
+            cho toàn bộ LPN đang trên xe.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.Application.Interfaces.IIncidentRescueService.DispatchRescueAsync(System.Guid,ColdChainX.Application.DTOs.Incident.DispatchRescueRequest,System.Guid)">
+            <summary>
+            [Bước 2 + 3] Xuất lệnh điều xe thay thế đến hiện trường (Sang xe):
+            xe hỏng → MAINTENANCE (kèm phiếu sửa chữa), xe mới gán vào chuyến → OnTrip,
+            chuyến → DELAYED, tính lại ETA các trạm phía trước và gửi thông báo
+            xin lỗi/cập nhật cho tất cả khách hàng đang chờ.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.Interfaces.IInventoryAnalysisService">
+            <summary>
+            Service interface for advanced inventory reports and capacity analysis.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.Application.Interfaces.IInventoryAnalysisService.GetExpiryAlertsAsync(System.Nullable{System.Guid},System.Int32,System.Int32,System.Int32)">
+            <summary>
+            Retrieves items that are close to their expiration dates.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.Application.Interfaces.IInventoryAnalysisService.GetAgingInventoryAsync(System.Nullable{System.Guid},System.Int32,System.Int32,System.Int32)">
+            <summary>
+            Retrieves items that have been in storage longer than a threshold number of days.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.Application.Interfaces.IInventoryAnalysisService.GetTemperatureAuditsAsync(System.Nullable{System.Guid},System.Int32,System.Int32)">
+            <summary>
+            Identifies inventory stocks stored in zones that do not match the required product temperature ranges.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.Application.Interfaces.IInventoryAnalysisService.GetWarehouseUtilizationAsync(System.Guid)">
+            <summary>
+            Generates a warehouse utilization and occupancy report per zone.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.Interfaces.IInvoiceService">
+            <summary>
+            Contract for invoice-related business logic.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.Application.Interfaces.ILocationService.GetDirectionsAsync(System.Collections.Generic.List{System.ValueTuple{System.Decimal,System.Decimal,System.String}})">
+            <summary>
+            Gọi Goong Directions API để lấy hướng dẫn đường đi (turn-by-turn) qua danh sách waypoints.
+            Waypoints[0] = origin, Waypoints[last] = destination, giữa là các điểm dừng.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.Interfaces.IPaymentGatewayService">
+            <summary>
+            Abstraction over payment gateway (PayOS) for creating QR payment links
+            and verifying incoming webhooks.
+            </summary>
+        </member>
+        <member name="M:ColdChainX.Application.Interfaces.IPaymentGatewayService.CreatePaymentLinkAsync(System.Int64,System.Int32,System.String,System.Threading.CancellationToken)">
+            <summary>
+            Tạo link thanh toán QR trên PayOS.
+            </summary>
+            <param name="orderCode">Mã đơn hàng dạng số (long) — PayOS yêu cầu số nguyên dương.</param>
+            <param name="amount">Số tiền cần thanh toán (VND, nguyên).</param>
+            <param name="description">Mô tả giao dịch, tối đa 25 ký tự.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+            <returns>
+            <see cref="T:ColdChainX.Application.Interfaces.CreateQrResult"/> chứa URL trang thanh toán PayOS và URL ảnh QR code.
+            </returns>
+        </member>
+        <member name="M:ColdChainX.Application.Interfaces.IPaymentGatewayService.VerifyWebhookSignature(System.String,System.String)">
+            <summary>
+            Xác thực chữ ký HMAC của webhook payload từ PayOS.
+            Trả về true nếu chữ ký hợp lệ, false nếu không.
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.Interfaces.CreateQrResult">
+            <summary>Kết quả tạo link thanh toán QR từ PayOS.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.Interfaces.CreateQrResult.CheckoutUrl">
+            <summary>URL trang thanh toán PayOS mà driver/khách mở trên trình duyệt.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.Interfaces.CreateQrResult.QrCodeUrl">
+            <summary>URL ảnh QR code để hiển thị trực tiếp trên màn hình driver app.</summary>
+        </member>
+        <member name="P:ColdChainX.Application.Interfaces.CreateQrResult.OrderCode">
+            <summary>Mã đơn hàng trên PayOS (dạng số).</summary>
+        </member>
+        <member name="M:ColdChainX.Application.Interfaces.IPdfService.SaveLifoMapPdfAsync(System.String,System.String)">
+            <summary>LÆ°u PDF SÆ¡ Ä‘á»“ gá»™p chuyáº¿n / LIFO (prefix "lifo_") â€” KHÃ”NG trÃ¹ng tÃªn vá»›i giáº¥y Ä‘i Ä‘Æ°á»ng.</summary>
+        </member>
+        <member name="M:ColdChainX.Application.Interfaces.IPdfService.GenerateManifestPdfAsync(System.Guid)">
+            <summary>Sinh Manifest PDF (biÃªn báº£n hÃ ng ghÃ©p / LIFO diagram) theo tripId vÃ  upload lÃªn Cloudinary.</summary>
+        </member>
+        <member name="M:ColdChainX.Application.Interfaces.IPdfService.GenerateOutboundTicketPdfAsync(System.Guid)">
+            <summary>Sinh Phiáº¿u Xuáº¥t Kho PDF theo tripId vÃ  upload lÃªn Cloudinary.</summary>
+        </member>
+        <member name="T:ColdChainX.Application.ModelBinders.HandoverLpnsModelBinder">
+            <summary>
+            Model Binder hỗ trợ cả việc bind từ chuỗi JSON (trong Swagger UI) 
+            và bind từ form-data dạng index như Lpns[0].LpnId (trong Postman / Mobile App).
+            </summary>
+        </member>
+        <member name="T:ColdChainX.Application.Services.InvoiceService">
+            <summary>
+            Service for querying invoices and checking client permissions.
+            </summary>
+        </member>
+    </members>
+</doc>

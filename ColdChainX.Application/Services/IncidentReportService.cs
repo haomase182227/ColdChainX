@@ -190,9 +190,6 @@ public class IncidentReportService : IIncidentReportService
                 }
             }
 
-            // =================================================================================
-            // THÔNG BÁO SỰ CỐ / KẸT XE TRỌNG QUÁ TRÌNH GIAO HÀNG CHO KHÁCH HÀNG (ĐƠN GIẢN HÓA)
-            // =================================================================================
             if (incident.TripId.HasValue)
             {
                 var remainingStops = await _db.TripStops
@@ -907,8 +904,6 @@ public class IncidentReportService : IIncidentReportService
         var description = incident.Description;
         var resolutionNote = incident.ResolutionNote;
 
-        // Backward compatibility for incidents resolved before ResolutionNote had
-        // its own database column.
         if (resolutionNote == null && description.Contains(" | Resolution: "))
         {
             var parts = description.Split(

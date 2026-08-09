@@ -3,7 +3,6 @@ using ColdChainX.Application.DTOs.Common;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Shared.Responses;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Security.Claims;
@@ -22,27 +21,8 @@ namespace ColdChainX.API.Controllers
             _asnService = asnService;
         }
 
-        /// <summary>
-        /// Retrieve list of scheduled inbound deliveries (ASNs), with filtering and paging.
-        /// </summary>
-        /// <remarks>
-        /// For Customer role: Only returns ASNs belonging to the authenticated customer.
-        /// For Admin/WarehouseWorker roles: Returns all ASNs with optional filters.
-        /// </remarks>
-        /// <param name="status">Optional status filter (e.g. SCHEDULED, ARRIVED).</param>
-        /// <param name="dateFrom">Optional start date range for requested drop-off time.</param>
-        /// <param name="dateTo">Optional end date range for requested drop-off time.</param>
-        /// <param name="searchQuery">Optional search term matching code, tracking code, item name, customer name, or address.</param>
-        /// <param name="warehouseId">Optional warehouse filter matching link or destination address.</param>
-        /// <param name="orderId">Optional order filter.</param>
-        /// <param name="customerId">Optional customer filter (available only to Admin/WarehouseWorker).</param>
-        /// <param name="pageNumber">Page index (1-based).</param>
-        /// <param name="pageSize">Size of each page.</param>
-        /// <returns>A paginated list of scheduled inbound deliveries.</returns>
         [HttpGet]
         [Authorize]
-        [ProducesResponseType(typeof(ApiResponse<PagedResult<InboundScheduleResponse>>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> GetInboundSchedules(
             [FromQuery] string? status,
             [FromQuery] DateTime? dateFrom,
@@ -68,7 +48,6 @@ namespace ColdChainX.API.Controllers
             }
             else
             {
-                // Admin and WarehouseWorker can optionally filter by customerId
                 finalCustomerId = customerId;
             }
 

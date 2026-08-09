@@ -32,19 +32,16 @@ public class HandoverCodCommandHandler : IRequestHandler<HandoverCodCommand, Api
     {
         var request = command.Request;
 
-        // 1. Fetch Trip and validate existence
         var trip = await _context.MasterTrips
             .FirstOrDefaultAsync(t => t.TripId == command.TripId, cancellationToken);
         if (trip == null)
             throw new NotFoundException($"Trip with ID '{command.TripId}' was not found.");
 
-        // 2. Fetch all DeliveryEpods for orders on this trip
         var epods = await _context.DeliveryEpods
             .Include(e => e.Order)
             .Where(e => e.Order != null && e.Order.MasterTripId == command.TripId)
             .ToListAsync(cancellationToken);
 
-        // 3. Reconcile cash and QR payments
         decimal expectedCash = epods
             .Where(e => e.PaymentMethod != null && e.PaymentMethod.ToUpper() == "CASH")
             .Sum(e => e.CodAmountPaid ?? 0);
@@ -62,7 +59,6 @@ public class HandoverCodCommandHandler : IRequestHandler<HandoverCodCommand, Api
             using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
             try
             {
-                // 4. Update ePOD payment statuses and note details
                 foreach (var epod in epods)
                 {
                     epod.PaymentStatus = "COD_SETTLED";

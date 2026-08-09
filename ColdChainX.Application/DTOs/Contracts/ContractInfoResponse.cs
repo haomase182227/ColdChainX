@@ -1,8 +1,5 @@
 namespace ColdChainX.Application.DTOs.Contracts
 {
-    /// <summary>
-    /// Thông tin hợp đồng (không bao gồm nội dung HTML).
-    /// </summary>
     public class ContractInfoResponse
     {
         public Guid ContractId { get; set; }

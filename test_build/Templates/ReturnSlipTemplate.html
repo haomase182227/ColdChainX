@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: 'Times New Roman', Times, serif; font-size: 13pt; line-height: 1.5; margin: 0 auto; max-width: 800px; padding: 20px 40px; color: #000; }
+        .header-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        .header-table td { border: none; vertical-align: top; }
+        .info-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; margin-left: 20px; }
+        .info-table td { border: none; padding: 3px 0; vertical-align: top; }
+        .col-label { width: 160px; font-weight: bold; }
+        .title { text-align: center; font-size: 16pt; font-weight: bold; margin: 30px 0 15px 0; }
+        .italic-text { font-style: italic; }
+        .bold { font-weight: bold; }
+        .justify { text-align: justify; }
+        .section-title { font-weight: bold; margin-top: 20px; margin-bottom: 5px; }
+        .section-content { margin-left: 20px; text-align: justify; }
+        .section-content p { margin: 5px 0; }
+        .data-table { width: 100%; border-collapse: collapse; margin-top: 15px; margin-bottom: 15px; }
+        .data-table th, .data-table td { border: 1px solid #000; padding: 8px; text-align: left; }
+        .data-table th { background-color: #f2f2f2; font-weight: bold; text-align: center; }
+    </style>
+</head>
+<body>
+    <table class="header-table">
+        <tr>
+            <td style="width: 40%; text-align: center; vertical-align: top;"><img src="/images/logo.png" alt="Logo" style="height: 55px;" /></td>
+            <td style="width: 60%; text-align: center; vertical-align: top;">
+                <div style="font-weight: bold; font-size: 13pt;">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
+                <div style="font-style: italic; font-size: 13pt;">Độc Lập - Tự Do - Hạnh Phúc</div><div>***********</div>
+            </td>
+        </tr>
+        <tr>
+            <td style="text-align: center; vertical-align: bottom; padding-top: 20px;">Mã phiếu: {{Slip_Code}}</td>
+            <td style="text-align: center; vertical-align: bottom; padding-top: 20px; font-style: italic;">TP. Hồ Chí Minh, Ngày {{Day}} tháng {{Month}} năm {{Year}}</td>
+        </tr>
+    </table>
+
+    <div class="title">PHIẾU XUẤT TRẢ HÀNG HÓA</div>
+    <div style="text-align: center; font-style: italic; margin-bottom: 20px;">(Do không thống nhất được phụ lục hợp đồng chênh lệch hàng hóa)</div>
+
+    <div class="justify" style="margin-bottom: 20px;">
+        Hôm nay, ngày {{Day}}/{{Month}}/{{Year}}, tại Kho <strong>{{Warehouse_Name}}</strong>, chúng tôi tiến hành bàn giao trả lại hàng hóa cho Khách hàng dưới đây do việc thỏa thuận điều chỉnh giá cước (phụ lục hợp đồng) bị từ chối.
+    </div>
+
+    <div style="margin-bottom: 10px;"><span class="bold">Thông tin bên nhận (Khách hàng):</span></div>
+    <table class="info-table">
+        <tr><td class="col-label">Tên khách hàng:</td><td>{{Customer_Name}}</td></tr>
+        <tr><td class="col-label">Mã đơn hàng gốc:</td><td>{{Tracking_Code}}</td></tr>
+        <tr><td class="col-label">Mã nhãn LPN:</td><td>{{Lpn_Code}}</td></tr>
+    </table>
+
+    <div style="margin-bottom: 10px; margin-top: 15px;"><span class="bold">Thông tin hàng hóa xuất trả:</span></div>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>STT</th>
+                <th>Tên Hàng Hóa</th>
+                <th>Mã LPN</th>
+                <th>Số lượng xuất trả</th>
+                <th>Trọng lượng (KG)</th>
+                <th>Thể tích (CBM)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td style="text-align: center;">1</td>
+                <td>{{Item_Name}}</td>
+                <td style="text-align: center;">{{Lpn_Code}}</td>
+                <td style="text-align: center;">{{Returned_Qty}} kiện</td>
+                <td style="text-align: center;">{{Returned_Weight}} KG</td>
+                <td style="text-align: center;">{{Returned_Cbm}} CBM</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="section-title">Chi phí phát sinh hoàn hàng (Penalty Bill):</div>
+    <div class="section-content">
+        <p>Theo quy định, Khách hàng phải thanh toán phí bốc xếp và xử lý hoàn trả hàng hóa tại kho do khai báo chênh lệch sai thực tế:</p>
+        <p><strong>Phí xử lý & bốc xếp hoàn trả (Handling Fee):</strong> <strong style="color: red;">{{Handling_Fee}} VNĐ</strong></p>
+        <p>Lý do xuất trả: <i>{{Reason}}</i></p>
+    </div>
+
+    <div class="justify" style="margin-top: 20px;">
+        Hai bên đồng ý bàn giao đầy đủ số lượng và chất lượng hàng hóa như trạng thái nhận vào. Mọi trách nhiệm liên quan đến hàng hóa sau khi ra khỏi kho Proship sẽ thuộc về Khách hàng.
+    </div>
+
+    <table style="width: 100%; margin-top: 40px; text-align: center;">
+        <tr>
+            <td style="width: 50%; vertical-align: top;"><span class="bold">ĐẠI DIỆN KHÁCH HÀNG / TÀI XẾ</span><br/><i>(Ký và ghi rõ họ tên)</i></td>
+            <td style="width: 50%; vertical-align: top;"><span class="bold">ĐẠI DIỆN KHO PROSHIP</span><br/><i>(Ký và ghi rõ họ tên)</i></td>
+        </tr>
+    </table>
+</body>
+</html>

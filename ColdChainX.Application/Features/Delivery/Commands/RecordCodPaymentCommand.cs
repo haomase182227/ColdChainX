@@ -12,11 +12,6 @@ using ColdChainX.Shared.Responses;
 
 namespace ColdChainX.Application.Features.Delivery.Commands;
 
-/// <summary>
-/// Bước 3 — Thu tiền COD sau khi bàn giao hàng và khách đã ký nhận.
-/// Chỉ được gọi sau khi ConfirmHandoverCommand đã hoàn tất (HandoverConfirmedAt != null).
-/// Sinh ePOD hoàn chỉnh (có chữ ký + ảnh bằng chứng + COD) và thông báo Admin/Sales.
-/// </summary>
 public class RecordCodPaymentCommand : IRequest<ApiResponse<RecordCodPaymentResponse>>
 {
     public Guid EpodId { get; set; }
@@ -51,7 +46,6 @@ public class RecordCodPaymentCommandHandler : IRequestHandler<RecordCodPaymentCo
     {
         var request = command.Request;
 
-        // 1. Load ePOD with full order/trip data
         var epod = await _context.DeliveryEpods
             .Include(e => e.Order)
                 .ThenInclude(o => o!.Customer)
@@ -61,29 +55,23 @@ public class RecordCodPaymentCommandHandler : IRequestHandler<RecordCodPaymentCo
         if (epod == null)
             throw new NotFoundException($"ePOD '{command.EpodId}' was not found.");
 
-        // 2. Guard: Handover must have been confirmed first (Step 2)
         if (epod.HandoverConfirmedAt == null)
             throw new ValidationException("Cannot record payment. Handover has not been confirmed yet (Step 2 is required first).");
 
-        // 3. Guard: Idempotency — do not allow double payment
         if (epod.PaymentStatus == "PAID" || epod.PaymentConfirmedAt != null)
             throw new ValidationException("Payment for this ePOD has already been recorded.");
 
-        // 4. Validate payment method
         var method = request.PaymentMethod?.ToUpper();
         if (method != "CASH" && method != "QR")
             throw new ValidationException("Payment method must be 'CASH' or 'QR'.");
 
-        // 5. Automatically adopt exact Dynamic COD amount from ePOD if not specified or set to 0
         var expectedCod = epod.CodAmount ?? 0m;
         if (request.CodAmountPaid <= 0 && expectedCod > 0)
         {
             request.CodAmountPaid = expectedCod;
         }
         var codDiscrepancy = request.CodAmountPaid - expectedCod;
-        // Will be appended to note for accountant review during COD handover reconciliation
 
-        // 6. Validate driver is on this trip
         var order = epod.Order!;
         if (order.MasterTripId == null)
             throw new ValidationException("Order has no assigned trip.");
@@ -98,7 +86,6 @@ public class RecordCodPaymentCommandHandler : IRequestHandler<RecordCodPaymentCo
         if (!isAssigned)
             throw new ForbiddenException("You are not authorized to record payment for this trip.");
 
-        // 7. Upload payment evidence photo (if provided)
         string? paymentEvidenceUrl = null;
         if (request.PaymentEvidenceFile != null)
             paymentEvidenceUrl = await _fileService.UploadFileAsync(request.PaymentEvidenceFile);
@@ -107,13 +94,10 @@ public class RecordCodPaymentCommandHandler : IRequestHandler<RecordCodPaymentCo
 
         var now = DateTime.UtcNow;
 
-        // 8. For QR payments: create real PayOS payment link, return QR URL to driver
         if (method == "QR")
         {
-            // Generate a unique numeric orderCode for PayOS (use timestamp + epodId suffix)
             var payosOrderCode = Math.Abs((long)(epod.EpodId.GetHashCode()) % 9_000_000_000L + 1_000_000_000L);
 
-            // Description max 25 chars for PayOS
             var trackingCode = epod.Order?.TrackingCode ?? epod.EpodId.ToString("N")[..8];
             var description = $"COD {trackingCode}"[..Math.Min(25, $"COD {trackingCode}".Length)];
 
@@ -136,7 +120,6 @@ public class RecordCodPaymentCommandHandler : IRequestHandler<RecordCodPaymentCo
             epod.CodAmountPaid = request.CodAmountPaid;
             epod.PaymentStatus = "AWAITING_QR";
             epod.PaymentEvidenceImageUrl = paymentEvidenceUrl;
-            // Store PayOS orderCode in note so webhook handler can look it up
             var discrepancyNote = Math.Abs(codDiscrepancy) > 0.01m
                 ? $" [COD discrepancy: {codDiscrepancy:+0.##;-0.##} VND]" : "";
             epod.Note = $"{epod.Note} [PayOS:{payosOrderCode}]{discrepancyNote}".Trim();
@@ -154,7 +137,6 @@ public class RecordCodPaymentCommandHandler : IRequestHandler<RecordCodPaymentCo
             }, "Đã tạo mã QR PayOS thành công. Vui lòng hiển thị cho khách quét.");
         }
 
-        // 9. CASH payment — confirm immediately and generate final ePOD PDF
         var strategy = _context.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync(async () =>
         {
@@ -170,7 +152,6 @@ public class RecordCodPaymentCommandHandler : IRequestHandler<RecordCodPaymentCo
                 if (Math.Abs(codDiscrepancy) > 0.01m)
                     epod.Note = $"{epod.Note} [COD discrepancy: {codDiscrepancy:+0.##;-0.##} VND — verify at handover]".Trim();
 
-                // Record formal PaymentTransaction in financial ledger
                 var cashTx = new ColdChainX.Core.Entities.PaymentTransaction
                 {
                     TransactionId = Guid.NewGuid(),
@@ -192,7 +173,6 @@ public class RecordCodPaymentCommandHandler : IRequestHandler<RecordCodPaymentCo
 
                 await _context.SaveChangesAsync(cancellationToken);
 
-                // Fetch LPNs for ePOD PDF
                 var trip = await _context.MasterTrips
                     .Include(t => t.Vehicle)
                     .FirstOrDefaultAsync(t => t.TripId == order.MasterTripId, cancellationToken);
@@ -209,7 +189,6 @@ public class RecordCodPaymentCommandHandler : IRequestHandler<RecordCodPaymentCo
                     ? await _context.Locations.FirstOrDefaultAsync(l => l.LocationId == stop.LocationId, cancellationToken)
                     : null;
 
-                // Generate final ePOD PDF
                 var pdfData = BuildEpodPdfData(epod, order, trip, driver, location, lpns, paymentEvidenceUrl, now);
 
                 byte[] pdfBytes;
@@ -224,7 +203,6 @@ public class RecordCodPaymentCommandHandler : IRequestHandler<RecordCodPaymentCo
                 await _context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
 
-                // 10. SignalR via IDeliveryEventService
                 await _deliveryEvents.NotifyCodPaymentConfirmedAsync(
                     order.OrderId, order.TrackingCode, epod.EpodId,
                     request.CodAmountPaid, "CASH",
@@ -260,27 +238,22 @@ public class RecordCodPaymentCommandHandler : IRequestHandler<RecordCodPaymentCo
     {
         return new
         {
-            // Header
             EpodId = epod.EpodId.ToString("N"),
             DeliveryDate = now.ToString("dd/MM/yyyy HH:mm"),
             CompanyName = "ColdChainX Logistics",
 
-            // Điểm giao hàng
             DestinationAddress = location?.Address ?? "Địa điểm giao hàng",
             VehiclePlateNumber = trip?.Vehicle?.TruckPlate ?? "N/A",
             DriverName = driver.FullName,
             CustomerName = order.Customer?.CompanyName ?? "Khách hàng",
 
-            // Người nhận
             ReceiverName = epod.ReceiverName,
             ReceiverPhone = epod.ReceiverPhone,
             SignatureUrl = epod.SignImageUrl,
             HandoverTime = epod.HandoverConfirmedAt?.ToString("dd/MM/yyyy HH:mm"),
 
-            // Nhiệt độ (từ IoT sensor)
             RecordedTemperatureCelsius = lpns.FirstOrDefault()?.RecordedTemperature ?? 4.5m,
 
-            // Danh sách kiện hàng
             Items = lpns.Select((l, idx) => new
             {
                 Index = idx + 1,
@@ -294,7 +267,6 @@ public class RecordCodPaymentCommandHandler : IRequestHandler<RecordCodPaymentCo
                 EvidencePhotoUrl = l.EvidenceImageUrl
             }).ToList(),
 
-            // COD & Thanh toán
             OrderCode = order.TrackingCode,
             CodAmountDue = epod.CodAmount ?? 0m,
             CodAmountPaid = epod.CodAmountPaid ?? 0m,
@@ -303,7 +275,6 @@ public class RecordCodPaymentCommandHandler : IRequestHandler<RecordCodPaymentCo
             PaymentConfirmedAt = now.ToString("dd/MM/yyyy HH:mm"),
             PaymentEvidenceUrl = paymentEvidenceUrl,
 
-            // Trả hàng
             ReturnedItems = epod.ReturnedItems.Select(ri => new
             {
                 ItemName = ri.ItemName,

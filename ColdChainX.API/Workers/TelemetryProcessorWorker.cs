@@ -88,7 +88,6 @@ public sealed class TelemetryProcessorWorker : BackgroundService
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
-            // Normal host shutdown.
         }
 
         if (batch.Count > 0)

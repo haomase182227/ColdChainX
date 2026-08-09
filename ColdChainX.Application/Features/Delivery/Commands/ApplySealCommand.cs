@@ -57,10 +57,8 @@ public class ApplySealCommandHandler : IRequestHandler<ApplySealCommand, ApiResp
 
         _context.Seals.Add(newSeal);
 
-        // Cập nhật lại số chì hiện tại trên chuyến xe
         trip.SealNumber = newSeal.SealCode;
 
-        // Chuyển các thiết bị IoT trên xe trở lại trạng thái Stream on (STREAMING) để khôi phục gửi tín hiệu cho chặng mới
         if (trip.VehicleId.HasValue)
         {
             var iotDevices = await _context.IotDevices
@@ -79,9 +77,6 @@ public class ApplySealCommandHandler : IRequestHandler<ApplySealCommand, ApiResp
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        // TẠM DỪNG CẢNH BÁO AI TRONG 15 PHÚT ĐẦU (Cooling Recovery Window)
-        // Khi mới đóng cửa xe và kẹp chì mới, nhiệt độ trong thùng xe chưa ổn định do không khí nóng bên ngoài tràn vào lúc mở cửa.
-        // Dù cảm biến IoT đã được kích hoạt START_STREAMING gửi tín hiệu nhiệt độ liên tục, hệ thống AI tạm dừng gửi thông báo/cảnh báo trong 15 phút đầu để chờ nhiệt độ thùng xe hạ xuống và ổn định trở lại.
         int coolingBufferMinutes = 15;
         string bufferReason = $"Đã đóng chì seal mới [{newSeal.SealCode}] cho chặng tiếp theo. Thiết bị IoT bắt đầu START_STREAMING, tuy nhiên hệ thống AI tạm ngừng phát cảnh báo nhiệt trong {coolingBufferMinutes} phút đầu để chờ thùng bảo ôn hạ nhiệt độ và ổn định trở lại.";
         _aiControlService.MuteTripAiAlerting(trip.TripId, TimeSpan.FromMinutes(coolingBufferMinutes), bufferReason);

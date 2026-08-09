@@ -23,11 +23,9 @@ namespace ColdChainX.API.Controllers
 
         private Guid GetCustomerId()
         {
-            // CustomerId is stored in a separate "CustomerId" claim, NOT in NameIdentifier (which holds UserId)
             var customerIdClaim = User.FindFirst("CustomerId");
             if (customerIdClaim != null && Guid.TryParse(customerIdClaim.Value, out var customerId)) return customerId;
             
-            // Fallback: try NameIdentifier in case the user IS a customer
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier) ?? User.FindFirst("sub");
             if (userIdClaim != null && Guid.TryParse(userIdClaim.Value, out var id)) return id;
             throw new UnauthorizedAccessException("Invalid or missing token.");
@@ -44,14 +42,7 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
-        // ═══════════════════════════════════════════════════════
-        // BY-CATEGORY: Danh sách tóm tắt theo tab (giống Shopee)
-        // ═══════════════════════════════════════════════════════
 
-        /// <summary>
-        /// Lấy danh sách đơn hàng theo tab. Trả về thông tin tóm tắt.
-        /// Bấm vào đơn cụ thể → gọi tracking-detail để xem chi tiết đầy đủ.
-        /// </summary>
         [HttpGet("by-category")]
         public async Task<IActionResult> GetOrdersByCategory(
             [FromQuery] string category = "IN_STOCK")
@@ -59,7 +50,6 @@ namespace ColdChainX.API.Controllers
             var customerId = GetCustomerId();
             category = category?.Trim()?.ToUpperInvariant() ?? "IN_STOCK";
 
-            // Map category → list of DB statuses
             var statusList = category switch
             {
                 "IN_STOCK" or "0" => new[] { "IN_WAREHOUSE", "IN_STOCK" },
@@ -97,7 +87,6 @@ namespace ColdChainX.API.Controllers
                     o.Status,
                     o.CreatedAt,
                     DestinationAddress = o.DestLocationNavigation != null ? o.DestLocationNavigation.Address : null,
-                    // Chỉ thêm ETA nhẹ cho TRANSIT/WAITING
                     EstimatedArrival = o.MasterTrip != null ? (DateTime?)o.MasterTrip.PlannedEndTime : null
                 })
                 .ToListAsync();
@@ -105,15 +94,7 @@ namespace ColdChainX.API.Controllers
             return Ok(new { success = true, category = normalizedCategory, data = orders });
         }
 
-        // ═══════════════════════════════════════════════════════
-        // TRACKING DETAIL: Chi tiết đầy đủ 1 đơn hàng
-        // (khi user bấm vào 1 đơn từ danh sách by-category)
-        // ═══════════════════════════════════════════════════════
 
-        /// <summary>
-        /// Xem chi tiết đầy đủ 1 đơn hàng: thông tin kho, xe, tài xế, ETA, ePOD, lý do trả/hủy...
-        /// Response thay đổi tùy theo status hiện tại của đơn.
-        /// </summary>
         [HttpGet("{orderId:guid}/tracking-detail")]
         public async Task<IActionResult> GetOrderTrackingDetail(Guid orderId)
         {
@@ -137,7 +118,6 @@ namespace ColdChainX.API.Controllers
             if (order == null)
                 return NotFound(new { success = false, message = "Không tìm thấy đơn hàng" });
 
-            // ── Thông tin cơ bản (luôn trả về) ──
             var result = new Dictionary<string, object?>
             {
                 ["orderId"] = order.OrderId,
@@ -155,7 +135,6 @@ namespace ColdChainX.API.Controllers
                 ["destinationAddress"] = order.DestLocationNavigation?.Address,
             };
 
-            // ── Kho (IN_WAREHOUSE / IN_STOCK) ──
             var latestReceipt = order.WarehouseReceipts
                 .OrderByDescending(wr => wr.CreatedAt)
                 .FirstOrDefault();
@@ -173,7 +152,6 @@ namespace ColdChainX.API.Controllers
                 };
             }
 
-            // ── Xe & Tài xế & Chuyến đi (LOADING / SEALED / DISPATCHED / IN_TRANSIT / DELIVERED) ──
             if (order.MasterTrip != null)
             {
                 var trip = order.MasterTrip;
@@ -229,7 +207,6 @@ namespace ColdChainX.API.Controllers
                 result["estimatedArrival"] = order.Schedule.DepartureDate;
             }
 
-            // ── ePOD - Chứng từ giao hàng (DELIVERED) ──
             var latestEpod = order.DeliveryEpods
                 .OrderByDescending(e => e.CreatedAt)
                 .FirstOrDefault();
@@ -243,7 +220,6 @@ namespace ColdChainX.API.Controllers
                     latestEpod.SignedAt
                 };
 
-                // Hàng trả về (RETURNED / REJECTED)
                 var returnedItems = latestEpod.ReturnedItems;
                 if (returnedItems?.Any() == true)
                 {
@@ -259,7 +235,6 @@ namespace ColdChainX.API.Controllers
                 }
             }
 
-            // ── Khiếu nại (RETURNED / CANCELLED) ──
             if (order.Claims?.Any() == true)
             {
                 result["claims"] = order.Claims.Select(c => new

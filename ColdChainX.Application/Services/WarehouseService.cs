@@ -23,10 +23,14 @@ namespace ColdChainX.Application.Services
 
         public async Task<ApiResponse<WarehouseResponse>> CreateAsync(CreateWarehouseRequest request, Guid currentUserId)
         {
+            var validationError = ValidateWarehouseRequest(request.WarehouseCode, request.WarehouseName, request.WarehouseType, request.MaxPallets, request.DefaultMinTemp, request.DefaultMaxTemp, request.Status);
+            if (validationError != null)
+                return ApiResponse<WarehouseResponse>.Failure(validationError, 400);
+
             var exists = await _repository.ExistsByCodeAsync(request.WarehouseCode);
             if (exists)
             {
-                return ApiResponse<WarehouseResponse>.Failure($"Warehouse Code '{request.WarehouseCode}' is already in use.");
+                return ApiResponse<WarehouseResponse>.Failure($"Warehouse Code '{request.WarehouseCode}' is already in use.", 409);
             }
 
             var warehouse = new Warehouse
@@ -54,6 +58,10 @@ namespace ColdChainX.Application.Services
 
         public async Task<ApiResponse<WarehouseResponse>> UpdateAsync(Guid warehouseId, UpdateWarehouseRequest request, Guid currentUserId)
         {
+            var validationError = ValidateWarehouseRequest(request.WarehouseCode, request.WarehouseName, request.WarehouseType, request.MaxPallets, request.DefaultMinTemp, request.DefaultMaxTemp, request.Status);
+            if (validationError != null)
+                return ApiResponse<WarehouseResponse>.Failure(validationError, 400);
+
             var warehouse = await _repository.GetByIdAsync(warehouseId);
             if (warehouse == null)
             {
@@ -63,7 +71,7 @@ namespace ColdChainX.Application.Services
             var exists = await _repository.ExistsByCodeAsync(request.WarehouseCode, warehouseId);
             if (exists)
             {
-                return ApiResponse<WarehouseResponse>.Failure($"Warehouse Code '{request.WarehouseCode}' is already in use by another warehouse.");
+                return ApiResponse<WarehouseResponse>.Failure($"Warehouse Code '{request.WarehouseCode}' is already in use by another warehouse.", 409);
             }
 
             warehouse.WarehouseCode = request.WarehouseCode.Trim().ToUpperInvariant();
@@ -143,6 +151,17 @@ namespace ColdChainX.Application.Services
                 UpdatedAt = warehouse.UpdatedAt,
                 UpdatedBy = warehouse.UpdatedBy
             };
+        }
+
+        private static string? ValidateWarehouseRequest(string? code, string? name, string? type, int maxPallets, decimal? minTemp, decimal? maxTemp, string? status)
+        {
+            if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(type) || string.IsNullOrWhiteSpace(status))
+                return "Warehouse code, name, type and status are required.";
+            if (maxPallets <= 0)
+                return "MaxPallets must be greater than zero.";
+            if (minTemp.HasValue && maxTemp.HasValue && minTemp.Value > maxTemp.Value)
+                return "DefaultMinTemp must be less than or equal to DefaultMaxTemp.";
+            return null;
         }
 
         public async Task<ApiResponse<PagedResult<LpnResponse>>> GetLpnsInWarehouseAsync(Guid warehouseId, int page, int pageSize)

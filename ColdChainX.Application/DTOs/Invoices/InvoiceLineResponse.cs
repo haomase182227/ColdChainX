@@ -2,9 +2,6 @@ using System;
 
 namespace ColdChainX.Application.DTOs.Invoices
 {
-    /// <summary>
-    /// Response model for a single invoice line item.
-    /// </summary>
     public class InvoiceLineResponse
     {
         public Guid LineId { get; set; }

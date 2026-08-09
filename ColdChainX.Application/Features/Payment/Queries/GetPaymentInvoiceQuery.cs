@@ -11,11 +11,6 @@ using ColdChainX.Shared.Responses;
 
 namespace ColdChainX.Application.Features.Payment.Queries;
 
-/// <summary>
-/// Lấy thông tin Hóa đơn (e-Invoice / COD Receipt) theo ID Hóa đơn, Mã đơn hàng (OrderId), 
-/// hoặc lọc theo Khách hàng (CustomerId) / Chuyến xe (TripId).
-/// Tự động sinh báo cáo hóa đơn chi tiết kể cả với các đơn COD hiện trường chưa ký xuất VAT.
-/// </summary>
 public class GetPaymentInvoiceQuery : IRequest<ApiResponse<object>>
 {
     public Guid? ReferenceId { get; set; } // Có thể là InvoiceId, OrderId, EpodId hoặc TransactionId
@@ -35,12 +30,10 @@ public class GetPaymentInvoiceQueryHandler : IRequestHandler<GetPaymentInvoiceQu
 
     public async Task<ApiResponse<object>> Handle(GetPaymentInvoiceQuery request, CancellationToken cancellationToken)
     {
-        // 1. Trường hợp truyền ReferenceId cụ thể (InvoiceId / OrderId / EpodId)
         if (request.ReferenceId.HasValue)
         {
             var refId = request.ReferenceId.Value;
 
-            // Kiểm tra trong bảng Invoices trước
             var invoice = await _context.Invoices
                 .Include(i => i.Customer)
                 .Include(i => i.InvoiceLines)
@@ -84,7 +77,6 @@ public class GetPaymentInvoiceQueryHandler : IRequestHandler<GetPaymentInvoiceQu
                 }, "Lấy thông tin hóa đơn thành công.");
             }
 
-            // Nếu không thuộc bảng Invoices, kiểm tra xem ReferenceId là OrderId hay EpodId để trả về Hóa đơn COD
             var order = await _context.TransportOrders
                 .Include(o => o.Customer)
                 .Include(o => o.DeliveryEpods)
@@ -143,7 +135,6 @@ public class GetPaymentInvoiceQueryHandler : IRequestHandler<GetPaymentInvoiceQu
             throw new NotFoundException($"Không tìm thấy hóa đơn hay vận đơn tương ứng với mã '{refId}'.");
         }
 
-        // 2. Trường hợp truy vấn danh sách hóa đơn (theo Khách Hàng, Đơn Hàng hoặc Chuyến Xe)
         var query = _context.Invoices
             .Include(i => i.Customer)
             .Include(i => i.InvoiceLines)
@@ -180,7 +171,6 @@ public class GetPaymentInvoiceQueryHandler : IRequestHandler<GetPaymentInvoiceQu
             });
         }
 
-        // Nếu danh sách từ bảng Invoices trống mà có CustomerId hoặc TripId, tự động tra cứu từ TransportOrders để hiển thị danh sách e-Invoice cho chuyến / khách
         if (!responseList.Any() && (request.CustomerId.HasValue || request.TripId.HasValue || request.OrderId.HasValue))
         {
             var orderQuery = _context.TransportOrders

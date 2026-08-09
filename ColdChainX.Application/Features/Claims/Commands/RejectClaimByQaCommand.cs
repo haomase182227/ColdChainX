@@ -39,7 +39,6 @@ public class RejectClaimByQaCommandHandler : IRequestHandler<RejectClaimByQaComm
         if (claim == null)
             throw new NotFoundException($"Không tìm thấy yêu cầu bồi thường '{request.ClaimId}'.");
 
-        // Bước 2: Dispatcher / QA đánh giá lỗi IoT Log, ePOD -> Quyết định TỪ CHỐI BỒI THƯỜNG
         claim.Status = "REJECTED";
         claim.ResolutionNote = $"[Bước 2 - Dispatcher/QA Rejected by {request.QaUserId}]: TỪ CHỐI BỒI THƯỜNG. Lý do: {request.Note}";
         claim.ResolvedAt = DateTime.UtcNow;

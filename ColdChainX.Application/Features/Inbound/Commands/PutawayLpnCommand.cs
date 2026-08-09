@@ -6,7 +6,6 @@ public class PutawayLpnCommand : IRequest<PutawayLpnResponse>
 {
     public Guid LpnId { get; set; }
 
-    /// <summary>Kho được chọn để cất hàng — lấy từ danh sách kho hiện có.</summary>
     public Guid WarehouseId { get; set; }
 
     public string StorageLocation { get; set; } = string.Empty;

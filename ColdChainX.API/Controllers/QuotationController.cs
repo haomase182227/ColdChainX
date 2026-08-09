@@ -60,7 +60,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "Sales,Admin,Dispatcher")]
+        [Authorize(Roles = "Sales,Customer")]
         public async Task<IActionResult> CreateQuotation([FromBody] CreateQuotationRequest request)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -73,7 +73,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPut("{quoteId:guid}")]
-        [Authorize(Roles = "Sales,Admin,Dispatcher")]
+        [Authorize(Roles = "Sales,Customer")]
         public async Task<IActionResult> EditQuotation(Guid quoteId, [FromBody] EditQuotationRequest request)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -86,7 +86,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("{quoteId:guid}/send")]
-        [Authorize(Roles = "Sales,Admin,Dispatcher")]
+        [Authorize(Roles = "Sales,Customer")]
         public async Task<IActionResult> SendQuotation(Guid quoteId)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;

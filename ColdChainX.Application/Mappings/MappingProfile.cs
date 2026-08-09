@@ -19,9 +19,6 @@ namespace ColdChainX.Application.Mappings
                 .ForMember(d => d.Role, o => o.MapFrom(s => s.Role != null ? s.Role.RoleName : null))
                 .ForMember(d => d.WarehouseName, o => o.MapFrom(s => s.Warehouse != null ? s.Warehouse.WarehouseName : null));
 
-            // Dispatch — Vehicle + TripDriver architecture.
-            // (DispatchService uses manual projections; these maps document the shape and
-            //  are available for any consumer that prefers AutoMapper.)
             CreateMap<Driver, DriverInfo>()
                 .ForMember(d => d.LicenseClass, o => o.Ignore())
                 .ForMember(d => d.LicenseExpiry, o => o.Ignore())
@@ -45,9 +42,6 @@ namespace ColdChainX.Application.Mappings
                 .ForMember(d => d.WeightUtilizationPct, o => o.Ignore())
                 .ForMember(d => d.CbmUtilizationPct, o => o.Ignore());
 
-            // LPN inventory projection — includes the warehouse the LPN was put away into.
-            // (Queries use manual projections; this map documents the shape and is available
-            //  for any consumer that prefers AutoMapper.)
             CreateMap<Lpn, LpnDto>()
                 .ForMember(d => d.ItemName, o => o.MapFrom(s => s.Order != null ? s.Order.ItemName : null))
                 .ForMember(d => d.ExpectedWeightKg, o => o.MapFrom(s => (s.Order != null && s.Order.OrderDimension != null) ? s.Order.OrderDimension.ExpectedWeightKg : 0))
