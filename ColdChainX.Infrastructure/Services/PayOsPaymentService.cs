@@ -10,11 +10,6 @@ using ColdChainX.Application.Interfaces;
 
 namespace ColdChainX.Infrastructure.Services;
 
-/// <summary>
-/// PayOS payment gateway service implementation.
-/// Uses the official payOS NuGet SDK v2.1.0.
-/// Namespace: PayOS | Class: PayOSClient | Types: CreatePaymentLinkRequest, CreatePaymentLinkResponse
-/// </summary>
 public class PayOsPaymentService : IPaymentGatewayService
 {
     private readonly PayOSClient _payOsClient;
@@ -56,14 +51,12 @@ public class PayOsPaymentService : IPaymentGatewayService
         });
     }
 
-    /// <inheritdoc/>
     public async Task<CreateQrResult> CreatePaymentLinkAsync(
         long orderCode,
         int amount,
         string description,
         CancellationToken cancellationToken = default)
     {
-        // PayOS v2 uses CreatePaymentLinkRequest model
         var paymentRequest = new CreatePaymentLinkRequest
         {
             OrderCode = orderCode,
@@ -75,7 +68,6 @@ public class PayOsPaymentService : IPaymentGatewayService
 
         if (_checksumKey.Contains("REPLACE_ME"))
         {
-            // Mock fallback for local development/testing when keys are placeholder values
             return new CreateQrResult
             {
                 CheckoutUrl = $"https://checkout-mock.payos.vn/payment/{orderCode}",
@@ -84,7 +76,6 @@ public class PayOsPaymentService : IPaymentGatewayService
             };
         }
 
-        // PayOS v2.1.0 CreateAsync accepts CreatePaymentLinkRequest directly (no CancellationToken overload)
         var response = await _payOsClient.PaymentRequests.CreateAsync(paymentRequest);
 
         return new CreateQrResult
@@ -95,17 +86,8 @@ public class PayOsPaymentService : IPaymentGatewayService
         };
     }
 
-    /// <inheritdoc/>
-    /// <remarks>
-    /// PayOS v2 HMAC-SHA256 signature verification.
-    /// The webhookBody is the raw JSON body sent by PayOS.
-    /// The signature is the PAYOS-SIGNATURE header value.
-    /// We verify by computing HMAC-SHA256 of the sorted query string of the webhook data body.
-    /// </remarks>
     public bool VerifyWebhookSignature(string webhookBody, string signature)
     {
-        // Manual HMAC-SHA256 verification against the raw body
-        // PayOS signs the sorted query string of webhook data using checksumKey
         if (string.IsNullOrEmpty(webhookBody) || string.IsNullOrEmpty(signature))
             return false;
 

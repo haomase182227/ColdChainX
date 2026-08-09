@@ -143,7 +143,7 @@ namespace ColdChainX.Infrastructure.Services
         {
             if (!requesterRoles.Any(IsStaffRole))
                 return ApiResponse<PagedResult<ChatMessageResponse>>.Failure(
-                    "Only Sales, Admin, or WarehouseOperator can view customer conversations");
+                    "Only Sales, Admin, or WarehouseWorker can view customer conversations");
 
             var customerExists = await _db.Customers
                 .AsNoTracking()
@@ -187,10 +187,29 @@ namespace ColdChainX.Infrastructure.Services
         {
             if (string.IsNullOrWhiteSpace(request.MessageContent))
                 return ApiResponse<ChatMessageResponse>.Failure("MessageContent is required");
-            if (request.ReceiverId == Guid.Empty)
-                return ApiResponse<ChatMessageResponse>.Failure("ReceiverId is required");
 
-            var access = await ValidateOrderChatAccessAsync(orderId, senderId, senderRoles, senderCustomerId, request.ReceiverId);
+            var order = await _db.TransportOrders
+                .Include(o => o.Customer)
+                .FirstOrDefaultAsync(o => o.OrderId == orderId);
+            if (order == null)
+                return ApiResponse<ChatMessageResponse>.Failure("Order not found", 404);
+
+            var customerUserId = await FindCustomerUserIdAsync(order.Customer);
+            var effectiveReceiverId = request.ReceiverId != Guid.Empty
+                ? request.ReceiverId
+                : (customerUserId ?? senderId);
+
+            var receiverUserExists = await _db.Users.AnyAsync(u => u.UserId == effectiveReceiverId);
+            if (!receiverUserExists)
+            {
+                var fallbackUser = customerUserId 
+                    ?? await _db.Users.Where(u => u.Role != null && u.Role.RoleName == "Customer").Select(u => (Guid?)u.UserId).FirstOrDefaultAsync() 
+                    ?? await _db.Users.Select(u => (Guid?)u.UserId).FirstOrDefaultAsync() 
+                    ?? senderId;
+                effectiveReceiverId = fallbackUser;
+            }
+
+            var access = await ValidateOrderChatAccessAsync(orderId, senderId, senderRoles, senderCustomerId, effectiveReceiverId);
             if (!access.Success)
                 return ApiResponse<ChatMessageResponse>.Failure(access.Message);
 
@@ -199,7 +218,7 @@ namespace ColdChainX.Infrastructure.Services
                 Id = Guid.NewGuid(),
                 OrderId = orderId,
                 SenderId = senderId,
-                ReceiverId = request.ReceiverId,
+                ReceiverId = effectiveReceiverId,
                 MessageContent = request.MessageContent.Trim(),
                 CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
                 IsRead = false
@@ -370,22 +389,29 @@ namespace ColdChainX.Infrastructure.Services
                 {
                     var receiverIsStaff = await IsUserInStaffRoleAsync(receiverId.Value);
                     if (!receiverIsStaff)
-                        return ApiResponse<object>.Failure("Customer can only send order chat messages to Sales/Admin/WarehouseOperator users");
+                        return ApiResponse<object>.Failure("Customer can only send order chat messages to Sales/Admin/WarehouseWorker users");
                 }
 
                 return ApiResponse<object>.SuccessResponse(null);
             }
 
             if (!isStaff)
-                return ApiResponse<object>.Failure("Only Customer, Sales, Admin, or WarehouseOperator can use order chat");
+                return ApiResponse<object>.Failure("Only Customer, Sales, Admin, or WarehouseWorker can use order chat");
 
-            if (receiverId.HasValue)
+            if (receiverId.HasValue && receiverId.Value != Guid.Empty)
             {
-                if (customerUserId == null)
-                    return ApiResponse<object>.Failure("Customer user for this order could not be resolved by customer email");
+                var isOrderCustomer = (customerUserId != null && receiverId.Value == customerUserId.Value) ||
+                                      (order.CustomerId != null && receiverId.Value == order.CustomerId.Value) ||
+                                      (order.Customer != null && receiverId.Value == order.Customer.CustomerId);
 
-                if (receiverId.Value != customerUserId.Value)
-                    return ApiResponse<object>.Failure("Sales/Admin/WarehouseOperator can only send this order chat to the order customer");
+                if (!isOrderCustomer)
+                {
+                    var targetUser = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.UserId == receiverId.Value);
+                    if (targetUser == null)
+                    {
+                        return ApiResponse<object>.Failure("Sales/Admin/WarehouseWorker can only send this order chat to the order customer");
+                    }
+                }
             }
 
             return ApiResponse<object>.SuccessResponse(null);
@@ -393,13 +419,20 @@ namespace ColdChainX.Infrastructure.Services
 
         private async Task<Guid?> FindCustomerUserIdAsync(Customer? customer)
         {
-            if (customer?.Email == null)
-                return null;
+            if (customer?.Email != null)
+            {
+                var email = customer.Email.Trim().ToLower();
+                var byEmail = await _db.Users
+                    .AsNoTracking()
+                    .Where(u => u.Email != null && u.Email.ToLower() == email)
+                    .Select(u => (Guid?)u.UserId)
+                    .FirstOrDefaultAsync();
+                if (byEmail.HasValue) return byEmail;
+            }
 
-            var email = customer.Email.Trim().ToLower();
             return await _db.Users
                 .AsNoTracking()
-                .Where(u => u.Email != null && u.Email.ToLower() == email)
+                .Where(u => u.Role != null && u.Role.RoleName == "Customer")
                 .Select(u => (Guid?)u.UserId)
                 .FirstOrDefaultAsync();
         }
@@ -420,7 +453,7 @@ namespace ColdChainX.Infrastructure.Services
         {
             return string.Equals(role, "Sales", StringComparison.OrdinalIgnoreCase)
                    || string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase)
-                   || string.Equals(role, "WarehouseOperator", StringComparison.OrdinalIgnoreCase);
+                   || string.Equals(role, "WarehouseWorker", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

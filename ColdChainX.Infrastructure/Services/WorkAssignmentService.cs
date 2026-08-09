@@ -156,6 +156,21 @@ public sealed class WorkAssignmentService : IWorkAssignmentService
         return items.Select(ToDto).ToArray();
     }
 
+    public async Task<WorkAssignmentDto> GetByIdAsync(
+        Guid assignmentId,
+        CancellationToken cancellationToken = default)
+    {
+        var assignment = await _db.WorkAssignments
+            .AsNoTracking()
+            .Include(a => a.AssignedToUser)
+            .FirstOrDefaultAsync(a => a.AssignmentId == assignmentId, cancellationToken);
+
+        if (assignment == null)
+            throw new NotFoundException($"Work assignment '{assignmentId}' was not found.");
+
+        return ToDto(assignment);
+    }
+
     public Task<WorkAssignmentDto> StartAsync(
         Guid assignmentId,
         Guid userId,

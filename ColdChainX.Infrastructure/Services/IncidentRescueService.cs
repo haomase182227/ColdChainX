@@ -18,15 +18,6 @@ using ColdChainX.Shared.Responses;
 
 namespace ColdChainX.Infrastructure.Services;
 
-/// <summary>
-/// Luồng 8 — Xử lý sự cố &amp; cập nhật lộ trình (Incident Routing Flow).
-///
-/// Bước 1 (đã có ở IncidentReportService): tài xế gửi Incident Report khẩn cấp.
-/// Bước 2 (DispatchRescueAsync): điều phối viên xuất lệnh điều xe lạnh khác đến
-///         hiện trường, đội bốc xếp sang toàn bộ hàng qua xe mới (Sang xe).
-/// Bước 3 (tự động trong cùng lệnh): chuyến → DELAYED, tính lại ETA các trạm
-///         phía trước và gửi tin nhắn xin lỗi/cập nhật cho tất cả khách hàng đang chờ.
-/// </summary>
 public class IncidentRescueService : IIncidentRescueService
 {
     private readonly ApplicationDbContext _db;
@@ -36,7 +27,6 @@ public class IncidentRescueService : IIncidentRescueService
     private readonly ILogger<IncidentRescueService> _logger;
     private readonly INotificationService? _notificationService;
 
-    // Trạng thái chuyến cho phép điều xe cứu hộ — hàng phải đang trên đường
     private static readonly string[] OnRoadTripStatuses = { "SEALED", "DISPATCHED", "IN_TRANSIT", "DELAYED" };
 
     private const string RescueDispatchedStatus = "RESCUE_DISPATCHED";
@@ -62,9 +52,6 @@ public class IncidentRescueService : IIncidentRescueService
         _notificationService = notificationService;
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  [BƯỚC 2 - LOOKUP] Danh sách xe đủ điều kiện thay thế
-    // ═══════════════════════════════════════════════════════════════════════
 
     public async Task<ApiResponse<List<RescueCandidateResponse>>> GetRescueCandidatesAsync(Guid incidentId)
     {
@@ -84,7 +71,6 @@ public class IncidentRescueService : IIncidentRescueService
             if (trip == null)
                 return ApiResponse<List<RescueCandidateResponse>>.Failure("Không tìm thấy chuyến hàng của sự cố.");
 
-            // Tổng hàng đang trên xe (LPN ở trạng thái SHIPPING) — xe thay thế phải chở đủ
             var load = await _db.Lpns
                 .Where(l => l.TripId == trip.TripId && l.State == LpnState.SHIPPING)
                 .GroupBy(l => 1)
@@ -133,9 +119,6 @@ public class IncidentRescueService : IIncidentRescueService
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  [NHÁNH KHÔNG ĐỔI XE] Tài xế xử lý tại chỗ và tự tiếp tục chuyến
-    // ═══════════════════════════════════════════════════════════════════════
 
     public async Task<ApiResponse<IncidentWorkflowResult>> ContinueTripAsync(
         Guid incidentId,
@@ -248,9 +231,6 @@ public class IncidentRescueService : IIncidentRescueService
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  [BƯỚC 2 + 3] Điều xe thay thế (Sang xe) → DELAYED → tính lại ETA → báo khách
-    // ═══════════════════════════════════════════════════════════════════════
 
     public async Task<ApiResponse<IncidentRescueResult>> DispatchRescueAsync(
         Guid incidentId, DispatchRescueRequest request, Guid dispatcherId)
@@ -320,7 +300,6 @@ public class IncidentRescueService : IIncidentRescueService
                 return ApiResponse<IncidentRescueResult>.Failure(
                     $"Xe {rescueVehicle.TruckPlate} chưa có thiết bị IoT riêng và không thể được điều cứu hộ.");
 
-            // Toàn bộ hàng đang trên xe hỏng — phải sang hết qua xe mới
             var shippingLpns = await _db.Lpns
                 .Where(l => l.TripId == trip.TripId && l.State == LpnState.SHIPPING)
                 .ToListAsync();
@@ -333,7 +312,6 @@ public class IncidentRescueService : IIncidentRescueService
 
             var now = DbNow();
 
-            // ── BƯỚC 2a: xe hỏng rời chuyến → MAINTENANCE + mở phiếu sửa chữa ──
             brokenVehicle.Status = "MAINTENANCE";
             if (incident.CurrentLatitude.HasValue && incident.CurrentLongitude.HasValue)
                 brokenVehicle.CurrentLocation = GoongMapService.FormatCoordinate(
@@ -355,11 +333,9 @@ public class IncidentRescueService : IIncidentRescueService
             };
             _db.MaintenanceTickets.Add(ticket);
 
-            // ── BƯỚC 2b: gán xe thay thế vào chuyến (Sang xe — hàng giữ nguyên LPN/seal flow) ──
             trip.VehicleId = rescueVehicle.VehicleId;
             rescueVehicle.Status = "ONTRIP";
 
-            // ── BƯỚC 3a: chuyến → DELAYED ──
             trip.Status = "DELAYED";
             incident.Status = RescueDispatchedStatus;
             incident.HandledBy = dispatcherId;
@@ -370,7 +346,6 @@ public class IncidentRescueService : IIncidentRescueService
             incident.MaintenanceTicketId = ticket.TicketId;
             incident.RescueDispatchedAt = now;
 
-            // ── BƯỚC 3b: tính lại ETA cho các trạm phía trước ──
             var transloadMinutes = request.TransloadMinutes is > 0 ? request.TransloadMinutes.Value : DefaultTransloadMinutes;
             var departFromScene = now.AddMinutes(transloadMinutes);
 
@@ -384,11 +359,9 @@ public class IncidentRescueService : IIncidentRescueService
 
             var (etaMethod, stopChanges) = await RecalculateEtaAsync(incident, remainingStops, departFromScene);
 
-            // Cập nhật giờ kết thúc dự kiến của chuyến theo trạm cuối cùng
             if (remainingStops.Count > 0)
                 trip.PlannedEndTime = remainingStops[^1].PlannedDepartureTime;
 
-            // ── BƯỚC 3c: gửi thông báo xin lỗi/cập nhật ETA cho khách hàng phía trước ──
             var tripOrders = await _db.TransportOrders
                 .Include(o => o.Customer)
                 .Where(o => o.MasterTripId == trip.TripId)
@@ -467,11 +440,9 @@ public class IncidentRescueService : IIncidentRescueService
                 dispatcherId,
                 customerPushTargets);
 
-            // ── Realtime (best-effort, không block API nếu SignalR lỗi) ──
             try
             {
-                // Lệnh sang xe cho đội bốc xếp + điều phối + admin
-                await _hubContext.Clients.Groups("Group_Dispatcher", "Group_WarehouseOperator", "Group_Admin")
+                await _hubContext.Clients.Groups("Group_Dispatcher", "Group_WarehouseWorker", "Group_Admin")
                     .SendAsync("IncidentRescueDispatched", new
                     {
                         IncidentId = incident.IncidentId,
@@ -485,7 +456,6 @@ public class IncidentRescueService : IIncidentRescueService
                         Message = $"Sang toàn bộ {shippingLpns.Count} LPN từ xe {brokenVehicle.TruckPlate} sang xe {rescueVehicle.TruckPlate} tại hiện trường."
                     });
 
-                // Đẩy realtime cho từng khách hàng đang chờ
                 foreach (var userId in notifiedUserIds.Distinct())
                 {
                     await _hubContext.Clients.User(userId.ToString()).SendAsync("TripDelayed", new
@@ -604,9 +574,6 @@ public class IncidentRescueService : IIncidentRescueService
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  [XÁC NHẬN SANG HÀNG] IoT xe mới phải online, MQTT thành công rồi mới chạy
-    // ═══════════════════════════════════════════════════════════════════════
 
     public async Task<ApiResponse<IncidentWorkflowResult>> ConfirmTransloadAsync(
         Guid incidentId,
@@ -719,7 +686,7 @@ public class IncidentRescueService : IIncidentRescueService
                     incident.TransloadNote
                 };
 
-                await _hubContext.Clients.Groups("Group_Dispatcher", "Group_Admin", "Group_WarehouseOperator")
+                await _hubContext.Clients.Groups("Group_Dispatcher", "Group_Admin", "Group_WarehouseWorker")
                     .SendAsync("IncidentTransloadCompleted", payload);
                 foreach (var userId in customerUserIds)
                     await _hubContext.Clients.User(userId.ToString()).SendAsync("TripResumed", payload);
@@ -749,16 +716,7 @@ public class IncidentRescueService : IIncidentRescueService
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  Thuật toán tính lại ETA
-    // ═══════════════════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// Tính ETA mới cho các trạm phía trước, xuất phát từ hiện trường sự cố sau khi sang xe.
-    /// Ưu tiên gọi Goong (thời gian lái thực tế), lỗi thì ước lượng theo khoảng cách
-    /// Haversine với tốc độ trung bình; không có tọa độ sự cố thì dời toàn bộ lịch theo độ trễ.
-    /// ETA mới không bao giờ sớm hơn kế hoạch cũ (sự cố chỉ làm trễ, không làm sớm).
-    /// </summary>
     private async Task<(string EtaMethod, List<StopEtaChange> Changes)> RecalculateEtaAsync(
         IncidentReport incident,
         List<TripStop> remainingStops,
@@ -777,7 +735,6 @@ public class IncidentRescueService : IIncidentRescueService
 
         if (hasCoords)
         {
-            // Quãng đường cộng dồn từ hiện trường qua từng trạm theo thứ tự StopSequence
             var cumulativeKm = new decimal[remainingStops.Count];
             var prevLat = incident.CurrentLatitude!.Value;
             var prevLon = incident.CurrentLongitude!.Value;
@@ -813,14 +770,12 @@ public class IncidentRescueService : IIncidentRescueService
 
             if (goongTotalSeconds is > 0 && totalKm > 0)
             {
-                // Phân bổ tổng thời gian Goong cho từng trạm theo tỉ lệ quãng đường cộng dồn
                 etaMethod = "GOONG";
                 for (var i = 0; i < remainingStops.Count; i++)
                     travelSeconds[i] = (double)(cumulativeKm[i] / totalKm) * goongTotalSeconds.Value;
             }
             else
             {
-                // Ước lượng theo tốc độ trung bình
                 etaMethod = "HAVERSINE_FALLBACK";
                 for (var i = 0; i < remainingStops.Count; i++)
                     travelSeconds[i] = (double)(cumulativeKm[i] / FallbackAvgSpeedKmh) * 3600d;
@@ -828,7 +783,6 @@ public class IncidentRescueService : IIncidentRescueService
         }
         else
         {
-            // Không có tọa độ hiện trường — dời toàn bộ lịch còn lại theo độ trễ so với trạm kế tiếp
             etaMethod = "SHIFT_FALLBACK";
             var shift = departFromScene - remainingStops[0].PlannedArrivalTime;
             if (shift < TimeSpan.Zero) shift = TimeSpan.Zero;
@@ -849,7 +803,6 @@ public class IncidentRescueService : IIncidentRescueService
             return (etaMethod, changes);
         }
 
-        // Áp ETA mới = giờ rời hiện trường + thời gian di chuyển + thời gian dừng ở các trạm trước đó
         var cumulativeDwell = TimeSpan.Zero;
         foreach (var (stop, index) in remainingStops.Select((s, i) => (s, i)))
         {
@@ -883,11 +836,7 @@ public class IncidentRescueService : IIncidentRescueService
         };
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  Helpers
-    // ═══════════════════════════════════════════════════════════════════════
 
-    /// <summary>Tìm tài khoản người dùng của khách hàng qua email (giống OrderService).</summary>
     private async Task<Guid?> ResolveCustomerUserIdAsync(Guid? customerId, Dictionary<Guid, Guid?> cache)
     {
         if (!customerId.HasValue) return null;
@@ -938,7 +887,6 @@ public class IncidentRescueService : IIncidentRescueService
             return templateId;
         }
 
-        // Fallback: dùng bất kỳ template đang active
         return await _db.NotificationTemplates
             .Where(t => t.Status == null || t.Status == "ACTIVE")
             .Select(t => t.TemplateId)

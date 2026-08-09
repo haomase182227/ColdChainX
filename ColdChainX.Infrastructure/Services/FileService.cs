@@ -16,7 +16,6 @@ namespace ColdChainX.Infrastructure.Services
 
         public FileService(IConfiguration configuration)
         {
-            // Ưu tiên đọc từ CLOUDINARY_URL env var (format: cloudinary://API_KEY:API_SECRET@CLOUD_NAME)
             var cloudinaryUrl = Environment.GetEnvironmentVariable("CLOUDINARY_URL");
             if (!string.IsNullOrWhiteSpace(cloudinaryUrl))
             {
@@ -24,7 +23,6 @@ namespace ColdChainX.Infrastructure.Services
                 return;
             }
 
-            // Fallback: đọc từ appsettings / environment variables (Cloudinary__CloudName, ...)
             var cloudName = configuration["Cloudinary:CloudName"] 
                 ?? throw new InvalidOperationException("Cloudinary:CloudName is not configured.");
             var apiKey = configuration["Cloudinary:ApiKey"] 
@@ -67,7 +65,6 @@ namespace ColdChainX.Infrastructure.Services
             var isLifo = fileName.StartsWith("lifo_", StringComparison.OrdinalIgnoreCase) || 
                             (fileName.EndsWith(".pdf") && fileName.Contains("-"));
 
-            // Strip invalid characters from fileName for safety
             var sanitizedFileName = string.Concat(fileName.Split(Path.GetInvalidFileNameChars()));
             var cleanFileName = Path.GetFileNameWithoutExtension(sanitizedFileName);
 
@@ -85,7 +82,6 @@ namespace ColdChainX.Infrastructure.Services
                 if (uploadResult.Error != null)
                     throw new InvalidOperationException($"Cloudinary upload failed: {uploadResult.Error.Message}");
                 
-                // Trả về Signed URL cho file PDF để bypass lỗi 401
                 return GetSignedUrl($"{folder}/{publicId}");
             }
             else
@@ -105,7 +101,6 @@ namespace ColdChainX.Infrastructure.Services
 
         public string GetSignedUrl(string publicId)
         {
-            // publicId dạng: "coldchainx/lifo_123"
             return _cloudinary.Api.UrlImgUp
                 .Secure(true)
                 .Signed(true)

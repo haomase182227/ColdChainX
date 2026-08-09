@@ -34,13 +34,10 @@ public class DispatchService : IDispatchService
     private readonly ICargoCompatibilityService _cargoCompatibilityService;
     private readonly INotificationService? _notificationService;
 
-    // Tên role điều phối viên
     private const string CoordinatorRoleName = "Dispatcher";
 
-    // TemplateId thông báo lệnh điều động (phải tồn tại trong bảng notification_templates)
     private const string LoadingOrderTemplateId = "DISPATCH_LOADING_ORDER";
 
-    // Chỉ sử dụng tối đa 80% thể tích thùng xe để bảo đảm lưu thông khí lạnh.
     private const decimal MaxColdAirflowVolumeUtilization = 0.80m;
 
     private static readonly string[] BusyTripStatuses =
@@ -82,13 +79,9 @@ public class DispatchService : IDispatchService
         _notificationService = notificationService;
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  MAIN: PlanLoadFromWarehouseAsync
-    // ═══════════════════════════════════════════════════════════════════════
 
     public async Task<PlanLoadResult> PlanLoadFromWarehouseAsync(PlanLoadRequest request)
     {
-        // ── STEP 1: Validate vehicle ─────────────────────────────────────────
         var vehicle = await _context.Vehicles.FindAsync(request.VehicleId)
             ?? throw new InvalidOperationException("Xe không tồn tại.");
 
@@ -96,7 +89,6 @@ public class DispatchService : IDispatchService
             vehicle.Status.Equals("MAINTENANCE", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException($"Xe {vehicle.TruckPlate} đang trong trạng thái bảo dưỡng.");
 
-        // ── STEP 2: Lấy LPNs đang ở kho ────────────────────────────────
         var lpns = await _context.Lpns
             .Include(l => l.Order)
                 .ThenInclude(o => o.DestLocationNavigation)
@@ -130,7 +122,6 @@ public class DispatchService : IDispatchService
             .Select(g => g.First().Order)
             .ToList();
 
-        // ── STEP 3: Kiểm tra tải trọng & thể tích ──────────────────────────
         var totalWeight = lpns.Sum(l => l.ActualWeightKg);
         var totalCbm    = lpns.Sum(l => l.ActualCbm);
 
@@ -142,18 +133,14 @@ public class DispatchService : IDispatchService
             throw new InvalidOperationException(
                 $"Quá thể tích: Tổng CBM ({totalCbm:F2}m³) vượt dung tích xe ({vehicle.MaxCbm}m³).");
 
-        // ── STEP 4: Lấy Location xuất phát (kho) ───────────────────────────
         var originLocation = await _context.Locations.FindAsync(request.OriginWarehouseLocationId)
             ?? throw new InvalidOperationException("LocationId kho xuất phát không tồn tại.");
 
-        // ── STEP 5: Tính lộ trình bằng Nearest Neighbor TSP + Goong API ────
         var routeResult = await BuildOptimalRouteAsync(
             originLocation, orders, vehicle);
 
-        // ── STEP 6: Thuật toán LIFO container loading nội bộ ───────────────
         var loadPlan = BuildLpnLIFOLoadPlan(lpns, routeResult.StopSequence);
 
-        // ── STEP 7: Tạo MasterTrip ──────────────────────────────────────────
         var lastDestId = routeResult.StopSequence.Last().LocationId;
         var masterTrip = new MasterTrip
         {
@@ -170,7 +157,6 @@ public class DispatchService : IDispatchService
         };
         _context.MasterTrips.Add(masterTrip);
 
-        // ── STEP 8: Tạo TripStops ───────────────────────────────────────────
         var stopGapHours = (request.PlannedEndTime - request.PlannedStartTime).TotalHours
                            / Math.Max(routeResult.StopSequence.Count, 1);
 
@@ -193,7 +179,6 @@ public class DispatchService : IDispatchService
             });
         }
 
-        // ── STEP 9: Cập nhật trạng thái đơn hàng & LPN → ALLOCATED / LOADING ─────────────────
         foreach (var lpn in lpns)
         {
             lpn.TripId = masterTrip.TripId;
@@ -205,7 +190,6 @@ public class DispatchService : IDispatchService
             }
         }
 
-        // ── STEP 10: Gửi thông báo cho Điều phối viên (Dispatcher) ─────────
         var notifiedCount = await SendLoadingNotificationsAsync(
             masterTrip, orders, vehicle, loadPlan,
             request.DispatchCoordinatorId);
@@ -213,7 +197,6 @@ public class DispatchService : IDispatchService
 
         await _context.SaveChangesAsync();
 
-        // ── STEP 11: Build kết quả trả về ──────────────────────────────────
         var routeStops = routeResult.StopSequence.Select(s =>
         {
             var stopLpns = lpns
@@ -291,16 +274,12 @@ public class DispatchService : IDispatchService
         };
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  ALGORITHM 1: Nearest Neighbor TSP — tối ưu thứ tự điểm dừng
-    // ═══════════════════════════════════════════════════════════════════════
 
     private async Task<RouteCalculationResult> BuildOptimalRouteAsync(
         Location origin,
         List<TransportOrder> orders,
         Vehicle vehicle)
     {
-        // Lấy danh sách điểm đến duy nhất (nhiều đơn có thể cùng điểm giao)
         var destinations = orders
             .Where(o => o.DestLocation.HasValue && o.DestLocationNavigation != null)
             .GroupBy(o => o.DestLocation!.Value)
@@ -312,8 +291,6 @@ public class DispatchService : IDispatchService
                 "Không có đơn hàng nào có tọa độ điểm giao. " +
                 "Hãy đảm bảo DestLocation đã được gán cho tất cả đơn hàng.");
 
-        // ── Nearest Neighbor TSP ─────────────────────────────────────────────
-        // Xuất phát từ kho (origin), tại mỗi bước chọn điểm gần nhất chưa thăm.
         var visited     = new HashSet<Guid>();
         var orderedStops = new List<StopInfo>();
         var totalDistKm  = 0m;
@@ -339,7 +316,6 @@ public class DispatchService : IDispatchService
                 }
                 catch
                 {
-                    // Goong API lỗi → fallback Haversine
                     distKm = HaversineKm(currentLat, currentLon, dest.Latitude, dest.Longitude);
                 }
 
@@ -375,27 +351,11 @@ public class DispatchService : IDispatchService
         };
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  ALGORITHM 2: LIFO Container Loading Plan
-    // ═══════════════════════════════════════════════════════════════════════
-    //
-    //  Nguyên tắc:
-    //  1. Điểm giao CUỐI cùng trong lộ trình → xếp VÀO TRƯỚC (nằm sâu trong xe, đuôi)
-    //  2. Điểm giao ĐẦU tiên → xếp VÀO SAU (gần cửa xe, đầu)
-    //  3. Trong cùng điểm dừng: hàng NẶNG hơn xếp DƯỚI (ưu tiên trước)
-    //  4. Phân vùng nhiệt độ:
-    //       FROZEN (< -10°C)  → REAR   (ngăn đông, sâu nhất)
-    //       CHILLED (0–8°C)   → MID    (ngăn mát, giữa)
-    //       AMBIENT (> 8°C)   → FRONT  (nhiệt độ thường, gần cửa)
-    //
-    //  Kết quả: LoadOrder=1 = xếp lên đầu tiên (đặt sâu vào đuôi xe)
-    // ═══════════════════════════════════════════════════════════════════════
 
     private static List<LoadInstruction> BuildLIFOLoadPlan(
         List<TransportOrder> orders,
         List<StopInfo> stopSequence)
     {
-        // Map locationId → stop sequence (1 = giao trước)
         var stopSeqMap = stopSequence.ToDictionary(s => s.LocationId, s => s.Sequence);
 
         var enriched = orders
@@ -409,10 +369,6 @@ public class DispatchService : IDispatchService
             })
             .ToList();
 
-        // Xếp theo LIFO:
-        //  - Điểm giao sau (StopSeq DESC) → xếp vào trước (LoadOrder nhỏ)
-        //  - Cùng điểm: hàng nặng hơn → xếp vào trước
-        //  - Cùng điểm & trọng lượng: zone đông → xếp trước
         var sorted = enriched
             .OrderByDescending(x => x.StopSeq)          // điểm cuối vào xe trước
             .ThenByDescending(x => (x.Order.OrderDimension?.ExpectedWeightKg ?? 0m))  // nặng dưới
@@ -426,7 +382,6 @@ public class DispatchService : IDispatchService
             var order  = item.Order;
             var zone   = item.TempZone;
 
-            // Nếu là FROZEN, luôn ở REAR bất kể stop sequence
             if (item.TempZoneOrd == 0) zone = "REAR";
 
             var reason = BuildLoadReason(item.StopSeq, stopSequence.Count,
@@ -508,11 +463,9 @@ public class DispatchService : IDispatchService
         return result;
     }
 
-    // ── Helpers cho LIFO ────────────────────────────────────────────────────
 
     private static string ClassifyTempZone(string tempCondition)
     {
-        // Phân tích TempCondition dạng: "-18C", "2-8C", "15-25C", "AMBIENT", "FROZEN", "CHILLED"
         var t = (tempCondition ?? "").ToUpperInvariant().Trim();
         if (t.Contains("FROZEN") || t.StartsWith("-") || t.Contains("-18"))
             return "REAR";
@@ -556,9 +509,6 @@ public class DispatchService : IDispatchService
         return string.Join("; ", parts);
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  Gửi Notification cho Dispatcher
-    // ═══════════════════════════════════════════════════════════════════════
 
 
     private const string CustomerEtaTemplateId = "DISPATCH_CUSTOMER_ETA";
@@ -656,7 +606,6 @@ public class DispatchService : IDispatchService
         }
         else
         {
-            // Tìm tất cả users có role Dispatcher
             targetUserIds = await _context.Users
                 .Include(u => u.Role)
                 .Where(u => u.Role != null
@@ -668,7 +617,6 @@ public class DispatchService : IDispatchService
 
         if (targetUserIds.Count == 0) return 0;
 
-        // Kiểm tra template tồn tại
         var templateExists = await _context.NotificationTemplates
             .AnyAsync(t => t.TemplateId == LoadingOrderTemplateId
                         && (t.Status == null || t.Status == "ACTIVE"));
@@ -676,7 +624,6 @@ public class DispatchService : IDispatchService
         var count = 0;
         foreach (var userId in targetUserIds)
         {
-            // Params cho template render
             var notifParams = JsonSerializer.Serialize(new Dictionary<string, string>
             {
                 { "tripId",      trip.TripId.ToString() },
@@ -687,7 +634,6 @@ public class DispatchService : IDispatchService
                 { "startTime",   trip.PlannedStartTime.ToString("dd/MM/yyyy HH:mm") }
             });
 
-            // Dùng template DISPATCH_LOADING_ORDER nếu có, fallback template đơn giản
             var actualTemplateId = templateExists
                 ? LoadingOrderTemplateId
                 : await GetFallbackTemplateIdAsync();
@@ -713,21 +659,15 @@ public class DispatchService : IDispatchService
 
     private async Task<string?> GetFallbackTemplateIdAsync()
     {
-        // Lấy bất kỳ template nào đang active để dùng fallback
         return await _context.NotificationTemplates
             .Where(t => t.Status == null || t.Status == "ACTIVE")
             .Select(t => t.TemplateId)
             .FirstOrDefaultAsync();
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  Helpers
-    // ═══════════════════════════════════════════════════════════════════════
 
-    /// <summary>Tính nhiệt độ mục tiêu chuyến: lấy min của tất cả đơn hàng (đảm bảo an toàn nhất).</summary>
     private static decimal GetTargetTemperature(List<TransportOrder> orders)
     {
-        // Phân tích TempCondition để lấy nhiệt độ thấp nhất (an toàn nhất cho cả chuyến)
         var minTemp = orders
             .Select(o => ParseMinTemp(o.TempCondition))
             .DefaultIfEmpty(4m)
@@ -744,7 +684,6 @@ public class DispatchService : IDispatchService
         if (t.Contains("0-4")) return 0m;
         if (t.Contains("AMBIENT")) return 15m;
 
-        // Cố parse số đầu tiên
         var firstPart = t.Split(new[] { '-', '~', ' ' }, StringSplitOptions.RemoveEmptyEntries)
                          .FirstOrDefault();
         if (decimal.TryParse(firstPart?.Replace("C", ""), NumberStyles.Any,
@@ -754,7 +693,6 @@ public class DispatchService : IDispatchService
         return 4m; // default
     }
 
-    /// <summary>Haversine formula — fallback khi Goong API không khả dụng.</summary>
     private static decimal HaversineKm(decimal lat1, decimal lon1, decimal lat2, decimal lon2)
     {
         const double R = 6371.0;
@@ -802,7 +740,6 @@ public class DispatchService : IDispatchService
             };
             Array.Sort(lpnDimensions);
 
-            // Cho phép xoay kiện hàng; sau khi sắp xếp, từng chiều vẫn phải lọt thùng xe.
             return lpnDimensions[0] > vehicleDimensions[0]
                 || lpnDimensions[1] > vehicleDimensions[1]
                 || lpnDimensions[2] > vehicleDimensions[2];
@@ -823,7 +760,6 @@ public class DispatchService : IDispatchService
 
 
 
-    // ── Internal result types ────────────────────────────────────────────────
 
     private class RouteCalculationResult
     {
@@ -840,9 +776,6 @@ public class DispatchService : IDispatchService
         public decimal Longitude              { get; set; }
         public decimal DistanceFromPreviousKm { get; set; }
     }
-    // ═══════════════════════════════════════════════════════════════════════
-    //  API 1: MANUAL DISPATCH — Ghép chuyến thủ công
-    // ═══════════════════════════════════════════════════════════════════════
 
     public async Task<ManualDispatchResult> ManualDispatchAsync(ManualDispatchRequest request)
     {
@@ -855,11 +788,9 @@ public class DispatchService : IDispatchService
             .FirstOrDefaultAsync(s => s.ScheduleId == selectedScheduleId)
             ?? throw new InvalidOperationException($"ScheduleId '{selectedScheduleId}' does not exist.");
 
-        // 1. Validate kho xuất phát
         var originLocation = await _context.Locations.FindAsync(request.OriginWarehouseLocationId)
             ?? throw new InvalidOperationException("LocationId kho xuất phát không tồn tại.");
 
-        // 2. Validate LPNs
         var lpns = await _context.Lpns
             .Include(l => l.Order)
                 .ThenInclude(o => o.DestLocationNavigation)
@@ -889,8 +820,6 @@ public class DispatchService : IDispatchService
         if (lpns.Any(l => l.State != LpnState.IN_STOCK))
             throw new InvalidOperationException("Chỉ được ghép chuyến các LPN có trạng thái IN_STOCK.");
 
-        // 2b. Ràng buộc kho — phải chọn kho trước, và mọi LPN phải cùng thuộc kho đã chọn.
-        // Không cho phép trộn LPN từ nhiều kho khác nhau vào một chuyến.
 
 
         var distinctWarehouses = lpns.Select(l => l.WarehouseId).Distinct().ToList();
@@ -904,10 +833,7 @@ public class DispatchService : IDispatchService
             .Select(g => g.First().Order)
             .ToList();
 
-        // 3. Check nhiệt độ — cho phép nhiều nhóm nhiệt độ khác nhau vì LIFO chia 3 vùng:
-        // REAR (frozen) / MID (chilled) / FRONT (ambient)
 
-        // 4. Validate xe (mỗi chuyến đúng 1 xe)
         var vehicle = await _context.Vehicles
             .FirstOrDefaultAsync(v => v.VehicleId == request.VehicleId)
             ?? throw new InvalidOperationException("Không tìm thấy xe (Vehicle) đã chọn.");
@@ -926,7 +852,6 @@ public class DispatchService : IDispatchService
             throw new InvalidOperationException($"Vehicle temperature is not compatible with selected LPNs. {string.Join("; ", messages)}");
         }
 
-        // 4b. Validate tài xế (1–2 người, gán theo chuyến qua TripDriver)
         var driverIds = request.DriverIds.Distinct().ToList();
         if (driverIds.Count < 1 || driverIds.Count > 2)
             throw new InvalidOperationException("Phải chọn 1 hoặc 2 tài xế cho chuyến (mỗi chuyến tối đa 2 tài xế).");
@@ -939,16 +864,19 @@ public class DispatchService : IDispatchService
         var missingDrivers = driverIds.Except(drivers.Select(d => d.DriverId)).ToList();
         if (missingDrivers.Any())
             throw new InvalidOperationException($"Không tìm thấy tài xế: {string.Join(", ", missingDrivers)}");
-        // Giữ nguyên thứ tự người dùng chọn (tài xế đầu = PRIMARY)
         drivers = driverIds.Select(id => drivers.First(d => d.DriverId == id)).ToList();
 
-        // 4c. Validate Vehicle and Driver location against originLocation (must be same warehouse)
         var lpnWarehouseIdStr = lpns.FirstOrDefault(l => l.WarehouseId.HasValue)?.WarehouseId?.ToString();
 
         bool IsLocationOk(string? currentLocation) {
             if (string.IsNullOrWhiteSpace(currentLocation)) return false;
             if (lpnWarehouseIdStr != null && currentLocation.Equals(lpnWarehouseIdStr, StringComparison.OrdinalIgnoreCase)) return true;
             return false;
+        }
+
+        bool IsDriverLocationOk(string? currentLocation) {
+            if (string.IsNullOrWhiteSpace(currentLocation)) return true;
+            return IsLocationOk(currentLocation);
         }
 
         if (!IsLocationOk(vehicle.CurrentLocation))
@@ -958,7 +886,7 @@ public class DispatchService : IDispatchService
 
         foreach (var d in drivers)
         {
-            if (!IsLocationOk(d.CurrentLocation))
+            if (!IsDriverLocationOk(d.CurrentLocation))
             {
                 throw new InvalidOperationException($"Tài xế {d.FullName} không nằm tại kho xuất phát này.");
             }
@@ -968,16 +896,12 @@ public class DispatchService : IDispatchService
         var driverLicenses = new Dictionary<Guid, DriverLicense>();
         foreach (var driver in drivers)
         {
-            // Tự động cập nhật giờ nghỉ (nếu có)
             await _driverAvailability.ReconcileStatusAsync(driver);
 
-            // Chặn nếu trạng thái tài xế không phải ACTIVE hoặc AVAILABLE (ví dụ: SUSPENDED_DOCS, RELAX, MAINTENANCE...)
-            // NOTE (DEC-017): Chấp nhận cả ACTIVE (luồng Compliance của Thắng) và AVAILABLE (luồng Availability của Hào) hoạt động song song.
             if (driver.Status != "ACTIVE" && driver.Status?.ToUpperInvariant() != "AVAILABLE")
                 throw new InvalidOperationException(
                     $"Tài xế {driver.FullName} không thể ghép chuyến — trạng thái hiện tại: '{driver.Status}'.");
 
-            // Bằng lái còn hạn
             var activeLicense = driver.DriverLicenses
                 .Where(l => l.ExpiryDate >= today && (l.Status == null || l.Status == "ACTIVE"))
                 .OrderByDescending(l => l.ExpiryDate)
@@ -985,7 +909,6 @@ public class DispatchService : IDispatchService
                 ?? throw new InvalidOperationException($"Tài xế {driver.FullName} không có bằng lái còn hạn.");
             driverLicenses[driver.DriverId] = activeLicense;
 
-            // Chặn double-book: tài xế đang gắn với một chuyến khác còn hoạt động
             var driverBusy = await _context.TripDrivers
                 .AnyAsync(td => td.DriverId == driver.DriverId
                     && td.Trip.Status != null
@@ -994,10 +917,8 @@ public class DispatchService : IDispatchService
                 throw new InvalidOperationException($"Tài xế {driver.FullName} hiện đang bận một chuyến khác.");
         }
 
-        // SLA check — không chặn, chỉ cảnh báo
         var lateLpns = lpns.Where(l => l.SlaDeadline.HasValue && l.SlaDeadline.Value < DateTime.UtcNow).ToList();
 
-        // Kiểm tra xe bận — bao gồm PLANNED để tránh double-book
         var isBusy = await _context.MasterTrips
             .AnyAsync(t => t.VehicleId == request.VehicleId
                         && t.Status != null
@@ -1006,7 +927,6 @@ public class DispatchService : IDispatchService
         if (isBusy)
             throw new InvalidOperationException($"Xe {vehicle.TruckPlate} hiện đang bận một chuyến khác.");
 
-        // 5. Kiểm tra tải trọng dựa trên LPNs
         var totalWeight = lpns.Sum(l => l.ActualWeightKg);
         var totalCbm = lpns.Sum(l => l.ActualCbm);
         var requiredMinTemp = GetTargetTemperature(orders);
@@ -1017,10 +937,8 @@ public class DispatchService : IDispatchService
             throw new InvalidOperationException(
                 $"Quá tải: Tổng khối lượng {totalWeight:F1}kg vượt tải trọng tối đa {vehicle.MaxWeight:F1}kg của xe {vehicle.TruckPlate}.");
 
-        // 6. Tính lộ trình (TSP + Goong)
         var routeResult = await BuildOptimalRouteAsync(originLocation, orders, vehicle);
 
-        // 6b. Thuật toán 3D Packing (C# Engine)
         decimal vLength = vehicle.InnerLengthCm ?? (vehicle.VehicleType == "TRUCK_1T" ? 300m : 200m);
         decimal vWidth = vehicle.InnerWidthCm ?? (vehicle.VehicleType == "TRUCK_1T" ? 180m : 140m);
         decimal vHeight = vehicle.InnerHeightCm ?? (vehicle.VehicleType == "TRUCK_1T" ? 190m : 140m);
@@ -1066,10 +984,8 @@ public class DispatchService : IDispatchService
             }
         }
 
-        // 7. LIFO load plan dựa trên LPNs
         var loadPlan = BuildLpnLIFOLoadPlan(lpns, routeResult.StopSequence);
 
-        // 8. Navigation (Goong)
         var navigationWaypoints = new List<(decimal Lat, decimal Lon, string Address)>
         {
             (originLocation.Latitude, originLocation.Longitude, originLocation.Address)
@@ -1094,12 +1010,10 @@ public class DispatchService : IDispatchService
             };
         }
 
-        // 8b. Thời lượng lái xe ước tính (giờ) — lấy từ Goong route, fallback theo quãng đường / 40 km/h
         var estimatedDurationHours = directionsResult.TotalDurationSeconds > 0
             ? Math.Round((decimal)directionsResult.TotalDurationSeconds / 3600m, 2)
             : Math.Round(routeResult.TotalDistanceKm / 40m, 2);
 
-        // 9. Tạo Trip và lưu DB
         var masterTrip = new MasterTrip
         {
             TripId              = Guid.NewGuid(),
@@ -1119,7 +1033,6 @@ public class DispatchService : IDispatchService
         };
         _context.MasterTrips.Add(masterTrip);
 
-        // TripStops
         var stopGapHours = (request.PlannedEndTime - request.PlannedStartTime).TotalHours
                            / Math.Max(routeResult.StopSequence.Count, 1);
         foreach (var stop in routeResult.StopSequence)
@@ -1139,7 +1052,6 @@ public class DispatchService : IDispatchService
             });
         }
 
-        // Liên kết LPNs và đơn hàng với chuyến đi
         foreach (var lpn in lpns)
         {
             lpn.TripId = masterTrip.TripId;
@@ -1151,7 +1063,6 @@ public class DispatchService : IDispatchService
             }
         }
 
-        // Phân bổ thời lượng lái xe đều cho các tài xế (1–2 người) và kiểm tra giới hạn giờ lái
         var perDriverHours = Math.Round(estimatedDurationHours / driverIds.Count, 2);
         var startDay = DateOnly.FromDateTime(request.PlannedStartTime);
 
@@ -1160,7 +1071,6 @@ public class DispatchService : IDispatchService
             var availability = await _driverAvailability.CheckAsync(driver.DriverId, perDriverHours, startDay);
             if (!availability.CanAssign)
             {
-                // Vượt giới hạn → chuyển RELAX và chặn gán chuyến
                 driver.Status = "RELAX";
                 await _context.SaveChangesAsync();
                 throw new InvalidOperationException(
@@ -1169,7 +1079,6 @@ public class DispatchService : IDispatchService
             }
         }
 
-        // Tạo TripDriver + ghi nhận giờ lái + cập nhật trạng thái
         var assignedDrivers = new List<(Driver Driver, string Role)>();
         for (int i = 0; i < drivers.Count; i++)
         {
@@ -1191,7 +1100,6 @@ public class DispatchService : IDispatchService
             assignedDrivers.Add((driver, role));
         }
 
-        // Cập nhật trạng thái xe → Planning (đã ghép chuyến, chờ xuất phát)
         vehicle.Status = "PLANNING";
         await _context.SaveChangesAsync();
 
@@ -1312,9 +1220,6 @@ public class DispatchService : IDispatchService
         return "AMBIENT";
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    //  API 2: START PICKING — Bat dau lay hang tu kho
-    // ══════════════════════════════════════════════════════════════════════
 
     public async Task<StartPickingResult> StartPickingAsync(Guid tripId)
     {
@@ -1329,7 +1234,6 @@ public class DispatchService : IDispatchService
 
         trip.Status = "PICKING";
 
-        // Chuyển tất cả LPN của chuyến từ ALLOCATED → LOADING
         var allocatedLpns = await _context.Lpns
             .Where(l => l.TripId == tripId && l.State == LpnState.ALLOCATED)
             .ToListAsync();
@@ -1343,7 +1247,7 @@ public class DispatchService : IDispatchService
 
         try
         {
-            await _hubContext.Clients.Group("Group_WarehouseOperator")
+            await _hubContext.Clients.Group("Group_WarehouseWorker")
                 .SendAsync("PickingStarted", new
                 {
                     TripId = tripId,
@@ -1353,15 +1257,11 @@ public class DispatchService : IDispatchService
         }
         catch (Exception)
         {
-            // Fail-safe — không block API nếu SignalR lỗi
         }
 
         return new StartPickingResult(tripId, "PICKING", lpnCount);
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    //  CANCEL TRIP — Hủy chuyến đã ghép, reset toàn bộ về trạng thái free
-    // ══════════════════════════════════════════════════════════════════════
 
     public async Task<CancelTripResult> CancelTripAsync(Guid tripId)
     {
@@ -1379,13 +1279,11 @@ public class DispatchService : IDispatchService
         if (trip.Status == "CANCELLED")
             throw new InvalidOperationException("Chuyến hàng đã bị hủy trước đó.");
 
-        // Lấy toàn bộ LPN của chuyến
         var lpns = await _context.Lpns
             .Include(l => l.Order)
             .Where(l => l.TripId == tripId)
             .ToListAsync();
 
-        // ĐIỀU KIỆN HỦY: không được có LPN nào đang ở trạng thái SHIPPING (hàng đã xuất phát)
         var shippingLpns = lpns.Where(l => l.State == LpnState.SHIPPING).ToList();
         if (shippingLpns.Any())
             throw new InvalidOperationException(
@@ -1396,7 +1294,6 @@ public class DispatchService : IDispatchService
         var previousStatus = trip.Status ?? "UNKNOWN";
         var now = DateTime.UtcNow;
 
-        // 1. Reset LPN → IN_STOCK, gỡ khỏi chuyến (hàng trở về kho)
         foreach (var lpn in lpns)
         {
             lpn.State = LpnState.IN_STOCK;
@@ -1404,7 +1301,6 @@ public class DispatchService : IDispatchService
             lpn.UpdatedAt = now;
         }
 
-        // 2. Reset đơn hàng → IN_STOCK, gỡ khỏi chuyến
         var resetOrderCount = 0;
         var orders = lpns.Where(l => l.Order != null).Select(l => l.Order!).Distinct().ToList();
         foreach (var order in orders)
@@ -1413,14 +1309,12 @@ public class DispatchService : IDispatchService
             order.MasterTripId = null;
             resetOrderCount++;
         }
-        // Bao gồm cả các TransportOrder gắn trực tiếp với trip (nếu có khác biệt)
         foreach (var order in trip.TransportOrders)
         {
             order.Status = "IN_STOCK";
             order.MasterTripId = null;
         }
 
-        // 3. Hủy seal
         var cancelledSealCount = 0;
         foreach (var seal in trip.Seals.Where(s => s.Status != "CANCELLED"))
         {
@@ -1430,9 +1324,7 @@ public class DispatchService : IDispatchService
         }
         trip.SealNumber = null;
 
-        // 4. Removed E-Waybill invalidation because TransportDocument no longer has Status
 
-        // 5. Hủy các OutboundOrder đã sinh ra (chỉ tồn tại nếu đã từng seal — best-effort)
         var lpnCodes = lpns.Select(l => l.LpnCode).ToList();
         if (lpnCodes.Count > 0)
         {
@@ -1456,15 +1348,12 @@ public class DispatchService : IDispatchService
             }
         }
 
-        // 6. Hủy các điểm dừng
         foreach (var stop in trip.TripStops.Where(s => s.Status != "CANCELLED"))
             stop.Status = "CANCELLED";
 
-        // 7. Giải phóng xe, tài xế và giờ lái đã ghi nhận cho chuyến
         if (trip.Vehicle != null)
             trip.Vehicle.Status = "ACTIVE";
 
-        // Xóa các bản ghi giờ lái của chuyến này để trả lại quota cho tài xế
         var workLogs = await _context.DriverWorkLogs
             .Where(w => w.TripId == tripId)
             .ToListAsync();
@@ -1477,14 +1366,13 @@ public class DispatchService : IDispatchService
                 await ReleaseDriverAsync(td.Driver, tripId);
         }
 
-        // 8. Đánh dấu chuyến CANCELLED
         trip.Status = "CANCELLED";
 
         await _context.SaveChangesAsync();
 
         try
         {
-            await _hubContext.Clients.Groups("Group_WarehouseOperator", "Group_Admin")
+            await _hubContext.Clients.Groups("Group_WarehouseWorker", "Group_Admin")
                 .SendAsync("TripCancelled", new
                 {
                     TripId = tripId,
@@ -1495,7 +1383,6 @@ public class DispatchService : IDispatchService
         }
         catch (Exception)
         {
-            // Fail-safe — không block API nếu SignalR lỗi
         }
 
         return new CancelTripResult
@@ -1517,9 +1404,6 @@ public class DispatchService : IDispatchService
         };
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  API 3: IOT CHECK — Kiểm tra tín hiệu IoT xe
-    // ═══════════════════════════════════════════════════════════════════════
 
     public async Task<VehicleIoTStatus> CheckVehicleIoTAsync(Guid vehicleId, Guid tripId)
     {
@@ -1547,7 +1431,6 @@ public class DispatchService : IDispatchService
 
         foreach (var device in devices)
         {
-            // Lấy telemetry gần nhất
             var latestTelemetry = await _context.TelemetryLogs
                 .Where(t => t.DeviceId == device.DeviceId)
                 .OrderByDescending(t => t.Timestamp)
@@ -1579,7 +1462,6 @@ public class DispatchService : IDispatchService
 
         if (hasOffline)
         {
-            // Nếu có thiết bị offline, cảnh báo tài xế
             _logger.LogWarning("Vehicle {VehicleId} has offline IoT devices.", vehicleId);
             try
             {
@@ -1589,7 +1471,6 @@ public class DispatchService : IDispatchService
         }
         else
         {
-            // Tất cả đều online -> bật streaming thành công rồi mới cho chuyến chạy.
             var trip = await _context.MasterTrips
                 .Include(t => t.TripDrivers)
                     .ThenInclude(td => td.Driver)
@@ -1639,9 +1520,6 @@ public class DispatchService : IDispatchService
         };
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  API 4: SEAL & DISPATCH — Kẹp chì + kiểm tra chất hàng
-    // ═══════════════════════════════════════════════════════════════════════
 
     public async Task<SealAndDispatchResult> SealAndDispatchAsync(
         Guid tripId, string sealCode, Guid sealedBy)
@@ -1661,19 +1539,16 @@ public class DispatchService : IDispatchService
             .FirstOrDefaultAsync(t => t.TripId == tripId)
             ?? throw new KeyNotFoundException("Không tìm thấy chuyến hàng.");
 
-        // Kiểm tra trạng thái: phải là LOADING_COMPLETED (kho đã xếp xong)
         if (trip.Status != "LOADING_COMPLETED")
             throw new InvalidOperationException(
                 $"Không thể kẹp chì — chuyến đang ở trạng thái '{trip.Status}'. " +
                 $"Chỉ kẹp chì được khi trạng thái là LOADING_COMPLETED (kho đã xếp xong).");
 
-        // Kiểm tra đã kẹp chì chưa
         if (trip.Seals.Any(s => s.Status == "APPLIED") || !string.IsNullOrEmpty(trip.SealNumber))
             throw new InvalidOperationException("Chuyến hàng đã được kẹp chì trước đó.");
 
         EnsureDriversCanDepart(trip);
 
-        // Lấy tất cả LPN của chuyến này kèm thông tin để tạo OutboundOrder
         var lpns = await _context.Lpns
             .Include(l => l.Order)
                 .ThenInclude(o => o.DestLocationNavigation)
@@ -1684,7 +1559,6 @@ public class DispatchService : IDispatchService
         if (lpns.Count == 0)
             throw new InvalidOperationException("Chuyến đi không có LPN nào.");
 
-        // Kiểm tra tất cả LPN đã rời kho (RELEASED)
         var totalLpns = lpns.Count;
         var loadedLpns = lpns.Count(l => l.State == LpnState.RELEASED);
         var allLoaded = loadedLpns == totalLpns;
@@ -1701,7 +1575,6 @@ public class DispatchService : IDispatchService
                 $"Tất cả LPN phải ở trạng thái RELEASED trước khi kẹp chì.");
         }
 
-        // Tạo Seal record
         _context.Seals.Add(new Seal
         {
             SealId    = Guid.NewGuid(),
@@ -1712,22 +1585,16 @@ public class DispatchService : IDispatchService
             CreatedAt = DateTime.UtcNow
         });
 
-        // Cập nhật LPN → SHIPPING (đang trên xe, chưa giao)
         foreach (var lpn in lpns)
             lpn.State = LpnState.SHIPPING;
 
-        // Gán SealNumber cho trip
         trip.SealNumber = sealCode;
 
-        // Chuyển trip → SEALED
         trip.Status = "SEALED";
 
-        // Cập nhật tất cả TransportOrder → SEALED
         foreach (var order in trip.TransportOrders)
             order.Status = "SEALED";
 
-        // Tạo OutboundOrder từ LPN: group theo CustomerId
-        // → 1 OutboundOrder / khách hàng, mỗi LPN là 1 OutboundOrderItem
         var now = DateTime.UtcNow;
         var lpnsByCustomer = lpns.GroupBy(l => l.CustomerId ?? Guid.Empty);
 
@@ -1764,13 +1631,11 @@ public class DispatchService : IDispatchService
             }
         }
 
-        // Issue E-Waybill
         string? waybillUrl = null;
         try
         {
             waybillUrl = await GenerateWaybillPdfAsync(trip);
             var documentUploader = sealedBy;
-            // Người tải chứng từ = tài khoản User của tài xế chính (nếu có), fallback người kẹp chì
             var primaryDriverUserId = trip.TripDrivers
                 .OrderBy(td => td.DriverRole == "PRIMARY" ? 0 : 1)
                 .Select(td => td.Driver?.User?.UserId)
@@ -1819,9 +1684,6 @@ public class DispatchService : IDispatchService
         };
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  Helper: Tạo/lấy notification template
-    // ═══════════════════════════════════════════════════════════════════════
 
     private async Task<string> GetOrCreateTemplateAsync(
         string templateId, string titleTemplate, string bodyTemplate)
@@ -1846,16 +1708,12 @@ public class DispatchService : IDispatchService
                 await _context.SaveChangesAsync();
                 return templateId;
             }
-            // Fallback
             return await GetFallbackTemplateIdAsync() ?? templateId;
         }
 
         return templateId;
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  LEGACY methods (kept for backward compatibility)
-    // ═══════════════════════════════════════════════════════════════════════
 
     public async Task<string> SuggestLoadPlanAsync(List<Guid> orderIds, Guid vehicleId)
     {
@@ -2018,7 +1876,6 @@ public class DispatchService : IDispatchService
             no++;
         }
 
-        // Tài xế lấy từ junction TripDriver (1–2 người); tài xế chính (PRIMARY) ưu tiên cho SĐT/CCCD.
         var tripDriversOrdered = trip.TripDrivers
             .OrderBy(td => td.DriverRole == "PRIMARY" ? 0 : 1)
             .ToList();
@@ -2107,7 +1964,6 @@ public class DispatchService : IDispatchService
 
         var loadPlan = BuildLpnLIFOLoadPlan(lpns, stopInfos);
 
-        // Build stop address mapping
         var stopAddresses = stops.ToDictionary(s => s.LocationId ?? Guid.Empty, s => s.Location?.Address ?? "N/A");
 
         var html = GenerateLoadPlanHtml(trip, loadPlan, stopAddresses);
@@ -2144,7 +2000,6 @@ public class DispatchService : IDispatchService
         var totalCbm    = loadPlan.Sum(l => l.Cbm);
         var issueDate   = DateTime.UtcNow.AddHours(7).ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
 
-        // Build container visual (3 rows: REAR | MID | FRONT)
         var grouped = loadPlan.GroupBy(l => l.Zone ?? "FRONT").ToDictionary(g => g.Key, g => g.ToList());
         var zones = new[] { "REAR", "MID", "FRONT" };
 
@@ -2173,14 +2028,12 @@ public class DispatchService : IDispatchService
             </tr>";
         }
 
-        // Door indicator
         var doorRow = @"<tr>
             <td colspan='2' style='background:#fef3c7;border:2px dashed #f59e0b;padding:10px;text-align:center;font-size:13px;font-weight:700;color:#92400e;border-radius:0 0 8px 8px;'>
                 🚪 CỬA XE — HÀNG XẾP SAU CÙNG SẼ ĐƯỢC DỠ TRƯỚC TIÊN
             </td>
         </tr>";
 
-        // Build instruction rows
         var instructionRows = "";
         foreach (var item in loadPlan)
         {
@@ -2207,7 +2060,6 @@ public class DispatchService : IDispatchService
 <meta name='viewport' content='width=device-width, initial-scale=1.0'>
 <title>Sơ Đồ Xếp Hàng LIFO — {trip.TripId}</title>
 <style>
-  * {{ margin:0; padding:0; box-sizing:border-box; }}
   body {{ font-family:'Segoe UI',Arial,sans-serif; background:#f8fafc; color:#1e293b; padding:20px; }}
   .header {{ background:linear-gradient(135deg,#1e3a5f,#2563eb); color:#fff; border-radius:12px; padding:24px 30px; margin-bottom:20px; }}
   .header h1 {{ font-size:22px; font-weight:700; margin-bottom:6px; }}
@@ -2304,12 +2156,9 @@ public class DispatchService : IDispatchService
         return documents;
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  Warehouse operator notifications — Gửi thông báo khi LIFO sẵn sàng
-    // ═══════════════════════════════════════════════════════════════════════
 
-    private const string WarehouseOperatorRoleName = "WarehouseOperator";
-    private const string WarehouseOperatorNotificationTemplateId = "DISPATCH_WAREHOUSE_OPERATOR_READY";
+    private const string WarehouseWorkerRoleName = "WarehouseWorker";
+    private const string WarehouseWorkerNotificationTemplateId = "DISPATCH_WAREHOUSE_WORKER_READY";
 
     public async Task NotifyLoadersAsync(Guid tripId)
     {
@@ -2319,30 +2168,27 @@ public class DispatchService : IDispatchService
             .FirstOrDefaultAsync(t => t.TripId == tripId)
             ?? throw new KeyNotFoundException("Không tìm thấy chuyến đi.");
 
-        // Tìm tất cả users có role WarehouseOperator
         var loaderUserIds = await _context.Users
             .Include(u => u.Role)
             .Where(u => u.Role != null
-                     && u.Role.RoleName == WarehouseOperatorRoleName
+                     && u.Role.RoleName == WarehouseWorkerRoleName
                      && (u.Status == null || u.Status == "ACTIVE"))
             .Select(u => u.UserId)
             .ToListAsync();
 
         if (loaderUserIds.Count == 0) return;
 
-        // Tạo template nếu chưa có
         var templateExists = await _context.NotificationTemplates
-            .AnyAsync(t => t.TemplateId == WarehouseOperatorNotificationTemplateId);
+            .AnyAsync(t => t.TemplateId == WarehouseWorkerNotificationTemplateId);
 
         if (!templateExists)
         {
-            // Tìm MessageType bất kỳ để gắn vào template
             var msgType = await _context.Messagetypes.FirstOrDefaultAsync();
             if (msgType != null)
             {
                 _context.NotificationTemplates.Add(new NotificationTemplate
                 {
-                    TemplateId = WarehouseOperatorNotificationTemplateId,
+                    TemplateId = WarehouseWorkerNotificationTemplateId,
                     TypeId = msgType.TypeId,
                     TitleTemplate = "Sơ đồ LIFO sẵn sàng — Xe {vehicle}",
                     BodyTemplate = "Chuyến hàng {tripId} đã có sơ đồ xếp hàng LIFO. " +
@@ -2355,11 +2201,10 @@ public class DispatchService : IDispatchService
             }
         }
 
-        // Kiểm tra template tồn tại
         var actualTemplateId = await _context.NotificationTemplates
-            .AnyAsync(t => t.TemplateId == WarehouseOperatorNotificationTemplateId
+            .AnyAsync(t => t.TemplateId == WarehouseWorkerNotificationTemplateId
                         && (t.Status == null || t.Status == "ACTIVE"))
-            ? WarehouseOperatorNotificationTemplateId
+            ? WarehouseWorkerNotificationTemplateId
             : await GetFallbackTemplateIdAsync();
 
         if (actualTemplateId == null) return;
@@ -2392,7 +2237,7 @@ public class DispatchService : IDispatchService
 
         try
         {
-            await _hubContext.Clients.Groups("Group_WarehouseOperator", "Group_Admin")
+            await _hubContext.Clients.Groups("Group_WarehouseWorker", "Group_Admin")
                 .SendAsync("WarehouseOrderApproved", new
                 {
                     TripId = tripId,
@@ -2404,7 +2249,6 @@ public class DispatchService : IDispatchService
         }
         catch (Exception)
         {
-            // Fail-safe to avoid blocking API if SignalR fails
         }
     }
 

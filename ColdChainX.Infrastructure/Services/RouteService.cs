@@ -109,7 +109,6 @@ namespace ColdChainX.Infrastructure.Services
 
             var originCity = route.OriginCity;
             
-            // Find warehouses in the origin city
             var warehouses = await _db.Warehouses
                 .Where(w => w.WarehouseName.Contains(originCity) || 
                             w.WarehouseCode.Contains(originCity) || 

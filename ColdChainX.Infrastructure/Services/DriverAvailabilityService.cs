@@ -7,13 +7,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ColdChainX.Infrastructure.Services;
 
-/// <summary>
-/// Driving-hour limit enforcement using calendar windows:
-///   - Daily limit:  10h within a UTC calendar day.
-///   - Weekly limit: 48h within a Mon–Sun calendar week.
-/// When a limit is exceeded the driver is moved to RELAX; the restriction lifts
-/// automatically once the calendar day/week rolls over (see <see cref="ReconcileStatusAsync"/>).
-/// </summary>
 public class DriverAvailabilityService : IDriverAvailabilityService
 {
     private readonly ApplicationDbContext _context;
@@ -92,12 +85,10 @@ public class DriverAvailabilityService : IDriverAvailabilityService
         }
         else if (driver.Status == StatusRelax)
         {
-            // The restriction window has rolled over — driver may be assigned again.
             driver.Status = StatusAvailable;
         }
     }
 
-    /// <summary>Sum a driver's logged hours for the calendar day and the Mon–Sun week containing <paramref name="day"/>.</summary>
     private async Task<(decimal dayHours, decimal weekHours)> SumHoursAsync(
         Guid driverId,
         DateOnly day,
@@ -124,10 +115,8 @@ public class DriverAvailabilityService : IDriverAvailabilityService
         return (dayHours, weekHours);
     }
 
-    /// <summary>Monday-to-Sunday calendar week containing <paramref name="day"/>.</summary>
     private static (DateOnly start, DateOnly end) CalendarWeek(DateOnly day)
     {
-        // DayOfWeek: Sunday=0 ... Saturday=6. We want Monday as the first day.
         int daysFromMonday = ((int)day.DayOfWeek + 6) % 7;
         var start = day.AddDays(-daysFromMonday);
         return (start, start.AddDays(6));

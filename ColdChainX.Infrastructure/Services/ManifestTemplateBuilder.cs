@@ -27,9 +27,6 @@ namespace ColdChainX.Infrastructure.Services
             var issuedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm");
             var tripShortId = result.TripId.ToString()[..8].ToUpper();
 
-            // ══════════════════════════════════════════════════════════════════
-            //  TOP VIEW (Minimalist Table for Load Plan)
-            // ══════════════════════════════════════════════════════════════════
             var topSb = new StringBuilder();
             topSb.Append("<table class='layout-table'>");
             topSb.Append("<tr><td class='axis' style='border:none;'></td><td colspan='2' style='text-align:center;font-size:10px;border:none;'>← Trái &nbsp;|&nbsp; Phải →</td></tr>");
@@ -56,9 +53,6 @@ namespace ColdChainX.Infrastructure.Services
             }
             topSb.Append("</table>");
 
-            // ══════════════════════════════════════════════════════════════════
-            //  DATA TABLE (Formal Document Style)
-            // ══════════════════════════════════════════════════════════════════
             var tableSb = new StringBuilder();
             tableSb.Append(@"<table class='data-table'>
 <thead><tr>
@@ -101,9 +95,6 @@ namespace ColdChainX.Infrastructure.Services
 </tr>");
             tableSb.Append("</tbody></table>");
 
-            // ══════════════════════════════════════════════════════════════════
-            //  ROUTE INFORMATION
-            // ══════════════════════════════════════════════════════════════════
             var routeSb = new StringBuilder();
             var rd = result.RouteDetails;
             if (rd != null)
@@ -129,9 +120,6 @@ namespace ColdChainX.Infrastructure.Services
                 routeSb.Append("</ul>");
             }
 
-            // ══════════════════════════════════════════════════════════════════
-            //  FULL HTML DOCUMENT (A4 Portrait, Formal)
-            // ══════════════════════════════════════════════════════════════════
             return $@"<!DOCTYPE html>
 <html lang='vi'>
 <head>
@@ -148,7 +136,6 @@ namespace ColdChainX.Infrastructure.Services
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }}
-  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
   
   .header-table {{ width: 100%; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }}
   .header-left {{ width: 50%; vertical-align: top; }}

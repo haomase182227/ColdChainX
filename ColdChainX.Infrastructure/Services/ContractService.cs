@@ -133,7 +133,6 @@ namespace ColdChainX.Infrastructure.Services
 
                 var contractNumber = await GenerateUniqueContractNumberAsync();
 
-                // Nếu không có HTML hoặc là giá trị placeholder mặc định, tự render từ template
                 var htmlContent = IsValidHtml(request.EditedHtmlContent)
                     ? request.EditedHtmlContent!
                     : RenderTemplate(await LoadTemplateAsync(), data, contractNumber);
@@ -285,7 +284,6 @@ namespace ColdChainX.Infrastructure.Services
             if (!string.Equals(contract.Status, PendingCustomerSignature, StringComparison.OrdinalIgnoreCase))
                 return ApiResponse<UploadSignedContractResponse>.Failure("Contract is not waiting for customer signature");
 
-            // Lưu file và ghi full URL vào DB (bao gồm scheme + host)
             contract.SignedFileUrl = await SaveSignedContractFileAsync(request.SignedFile, contract.ContractNumber, baseUrl);
             contract.UploadedSignedAt = DbNow();
             contract.Status = PendingSalesVerification;
@@ -386,7 +384,6 @@ namespace ColdChainX.Infrastructure.Services
 
         public async Task<ApiResponse<ApproveContractResponse>> VerifyContractAsync(Guid contractId, Guid salesUserId)
         {
-            // Pre-check trước khi vào transaction
             var contract = await _db.CustomerContracts
                 .Include(c => c.Order)
                 .FirstOrDefaultAsync(c => c.ContractId == contractId);
@@ -396,7 +393,6 @@ namespace ColdChainX.Infrastructure.Services
             if (!string.Equals(contract.Status, PendingSalesVerification, StringComparison.OrdinalIgnoreCase))
                 return ApiResponse<ApproveContractResponse>.Failure("Contract is not pending sales verification");
 
-            // Bọc transaction trong ExecutionStrategy để tương thích với NpgsqlRetryingExecutionStrategy
             var strategy = _db.Database.CreateExecutionStrategy();
             return await strategy.ExecuteAsync(async () =>
             {
@@ -570,7 +566,6 @@ namespace ColdChainX.Infrastructure.Services
                 ["Day"] = now.Day.ToString("00", CultureInfo.InvariantCulture),
                 ["Month"] = now.Month.ToString("00", CultureInfo.InvariantCulture),
                 ["Year"] = now.Year.ToString(CultureInfo.InvariantCulture),
-                // Bên A - Thông tin khách hàng
                 ["Customer_CompanyName"] = data.Customer.CompanyName,
                 ["Customer_Address"] = data.Customer.Address ?? string.Empty,
                 ["Customer_TaxCode"] = data.Customer.TaxCode,
@@ -579,13 +574,11 @@ namespace ColdChainX.Infrastructure.Services
                 ["Customer_Phone"] = string.Empty,
                 ["Customer_Email"] = data.Customer.Email ?? string.Empty,
                 ["Customer_BankAcc"] = string.Empty,   // Không có trong DB — Sales điền khi edit preview
-                // Thông tin hàng hóa
                 ["Item_Name"] = data.Order.ItemName,
                 ["Category"] = data.Order.Category,
                 ["Actual_Weight_KG"] = (data.Order.OrderDimension?.ActualWeightKg ?? 0m).ToString("0.##", CultureInfo.InvariantCulture),
                 ["Actual_CBM"] = ((data.Order.OrderDimension?.ActualCbm ?? 0m) > 0 ? (data.Order.OrderDimension?.ActualCbm ?? 0m) : (data.Order.OrderDimension?.ExpectedCbm ?? 0m)).ToString("0.####", CultureInfo.InvariantCulture),
                 ["Temp_Condition"] = data.Order.TempCondition,
-                // Địa điểm
                 ["Origin_Address"] = data.Order.PickupLocationNavigation?.Address ?? "Kho Proship - 602/45D Điện Biên Phủ, P.22, Bình Thạnh, Tp. HCM",
                 ["Dest_Address"] = data.Order.DestLocationNavigation?.Address ?? string.Empty,
                 ["Route_Code"] = data.Order.Schedule?.Route?.RouteCode ?? string.Empty,
@@ -594,7 +587,6 @@ namespace ColdChainX.Infrastructure.Services
                 ["ETD"] = string.Empty,
                 ["ETA"] = data.Order.Schedule?.Route?.TransitTime ?? string.Empty,
                 ["Cut_Off_Time"] = data.Order.Schedule?.Route?.CutOffTime.ToString(@"hh\:mm", CultureInfo.InvariantCulture) ?? string.Empty,
-                // Tài chính
                 ["Final_Amount"] = data.Quotation.FinalAmount.ToString("N0", CultureInfo.InvariantCulture),
                 ["Payment_Term"] = data.Customer.PaymentTerm?.ToString(CultureInfo.InvariantCulture) ?? "30",
             };
@@ -716,7 +708,6 @@ namespace ColdChainX.Infrastructure.Services
 
         private async Task<string> SaveSignedContractFileAsync(IFormFile file, string contractNumber, string baseUrl)
         {
-            // Upload directly to Cloudinary using _fileService
             return await _fileService.UploadFileAsync(file);
         }
 
@@ -808,9 +799,6 @@ namespace ColdChainX.Infrastructure.Services
             });
         }
 
-        /// <summary>
-        /// Kiểm tra chuỗi có phải HTML thật không (phân biệt với Swagger default "string").
-        /// </summary>
         private static bool IsValidHtml(string? value)
             => !string.IsNullOrWhiteSpace(value) && value.TrimStart().StartsWith('<');
 

@@ -103,58 +103,70 @@ namespace ColdChainX.Infrastructure.Services
             var existingAppendix = await _db.ContractAppendices
                 .FirstOrDefaultAsync(a => a.OrderId == orderId && (a.Status == Draft || a.Status == Sent));
 
-            if (existingAppendix != null)
+            if (existingAppendix != null && existingAppendix.Status == Sent)
                 return ApiResponse<ContractAppendixResponse>.Failure($"An active contract appendix already exists for this order (Status: {existingAppendix.Status})");
 
-                decimal resolvedAdjustedPrice = 0m;
-                if (adjustedPrice.HasValue)
-                {
-                    resolvedAdjustedPrice = adjustedPrice.Value;
-                }
-                else
-                {
-                    var volumetricRate = await GetSystemConfigDecimalAsync("VolumetricConversionRate", 250m);
-                    var actualCbmVal = (data.Order.OrderDimension?.ActualCbm ?? 0m);
-                    var expectedCbmVal = (data.Order.OrderDimension?.ExpectedCbm ?? 0m);
-                    var actualCbm = actualCbmVal > 0 ? actualCbmVal : expectedCbmVal;
-                    var volumetricWeight = Math.Round(actualCbm * volumetricRate, 2);
-                    var chargeableWeight = Math.Max(Math.Max((data.Order.OrderDimension?.ActualWeightKg ?? 0m), volumetricWeight), MinChargeableWeightKg);
+            decimal resolvedAdjustedPrice = 0m;
+            if (adjustedPrice.HasValue)
+            {
+                resolvedAdjustedPrice = adjustedPrice.Value;
+            }
+            else
+            {
+                var volumetricRate = await GetSystemConfigDecimalAsync("VolumetricConversionRate", 250m);
+                var actualCbmVal = (data.Order.OrderDimension?.ActualCbm ?? 0m);
+                var expectedCbmVal = (data.Order.OrderDimension?.ExpectedCbm ?? 0m);
+                var actualCbm = actualCbmVal > 0 ? actualCbmVal : expectedCbmVal;
+                var volumetricWeight = Math.Round(actualCbm * volumetricRate, 2);
+                var chargeableWeight = Math.Max(Math.Max((data.Order.OrderDimension?.ActualWeightKg ?? 0m), volumetricWeight), MinChargeableWeightKg);
 
-                    var routeId = data.Order.Schedule?.RouteId;
-                    var tier = await _db.WeightTiers
-                        .AsNoTracking()
-                        .Where(t => t.RouteId == routeId
-                                    && chargeableWeight >= t.MinWeightKg
-                                    && (!t.MaxWeightKg.HasValue || chargeableWeight <= t.MaxWeightKg.Value))
-                        .OrderByDescending(t => t.MinWeightKg)
-                        .FirstOrDefaultAsync();
+                var routeId = data.Order.Schedule?.RouteId;
+                var tier = await _db.WeightTiers
+                    .AsNoTracking()
+                    .Where(t => t.RouteId == routeId
+                                && chargeableWeight >= t.MinWeightKg
+                                && (!t.MaxWeightKg.HasValue || chargeableWeight <= t.MaxWeightKg.Value))
+                    .OrderByDescending(t => t.MinWeightKg)
+                    .FirstOrDefaultAsync();
 
-                    if (tier == null)
-                        return ApiResponse<ContractAppendixResponse>.Failure($"Weight tier is missing for route and chargeable weight {chargeableWeight} kg");
+                if (tier == null)
+                    return ApiResponse<ContractAppendixResponse>.Failure($"Weight tier is missing for route and chargeable weight {chargeableWeight} kg");
 
                 var newBaseFreight = Math.Round(chargeableWeight * tier.PricePerKg, 0);
                 var originalBaseFreight = data.Quotation.BaseFreight;
                 resolvedAdjustedPrice = newBaseFreight - originalBaseFreight;
             }
 
-            var appendixNumber = await GenerateUniqueAppendixNumberAsync();
+            var appendixNumber = existingAppendix?.AppendixNumber ?? await GenerateUniqueAppendixNumberAsync();
             var template = await LoadAppendixTemplateAsync();
             var htmlContent = await RenderAppendixTemplateAsync(template, data, appendixNumber, resolvedAdjustedPrice, reason);
 
-            var appendix = new ContractAppendix
+            ContractAppendix appendix;
+            if (existingAppendix != null && existingAppendix.Status == Draft)
             {
-                AppendixId = Guid.NewGuid(),
-                ContractId = data.Contract?.ContractId,
-                OrderId = orderId,
-                AppendixNumber = appendixNumber,
-                AdjustedPrice = resolvedAdjustedPrice,
-                Reason = reason,
-                Status = Draft,
-                DraftHtmlContent = htmlContent,
-                CreatedAt = DbNow()
-            };
+                appendix = existingAppendix;
+                appendix.AdjustedPrice = resolvedAdjustedPrice;
+                appendix.Reason = reason;
+                appendix.DraftHtmlContent = htmlContent;
+                appendix.CreatedAt = DbNow();
+            }
+            else
+            {
+                appendix = new ContractAppendix
+                {
+                    AppendixId = Guid.NewGuid(),
+                    ContractId = data.Contract?.ContractId,
+                    OrderId = orderId,
+                    AppendixNumber = appendixNumber,
+                    AdjustedPrice = resolvedAdjustedPrice,
+                    Reason = reason,
+                    Status = Draft,
+                    DraftHtmlContent = htmlContent,
+                    CreatedAt = DbNow()
+                };
+                _db.ContractAppendices.Add(appendix);
+            }
 
-            _db.ContractAppendices.Add(appendix);
             await _db.SaveChangesAsync();
 
             return ApiResponse<ContractAppendixResponse>.SuccessResponse(ToResponse(appendix), "Contract appendix draft generated");
@@ -208,7 +220,6 @@ namespace ColdChainX.Infrastructure.Services
                 appendix.OrderId,
                 new { Appendix_Number = appendix.AppendixNumber, Tracking_Code = appendix.Order.TrackingCode, File_URL = pdfUrl });
 
-            // Notify Sales as well
             await EnsureNotificationTemplateAsync("NOTI_APPENDIX_SENT");
             await AddNotificationAsync(
                 salesUserId,
@@ -217,7 +228,6 @@ namespace ColdChainX.Infrastructure.Services
                 appendix.OrderId,
                 new { Appendix_Number = appendix.AppendixNumber, Tracking_Code = appendix.Order.TrackingCode });
 
-            // Create or update TransportDocument for the order with DocType = "CONTRACT_APPENDIX"
             var existingDoc = await _db.TransportDocuments
                 .FirstOrDefaultAsync(d => d.OrderId == appendix.OrderId && d.DocType == "CONTRACT_APPENDIX");
 
@@ -291,7 +301,6 @@ namespace ColdChainX.Infrastructure.Services
                 appendix.OrderId,
                 new { Appendix_Number = appendix.AppendixNumber, Tracking_Code = appendix.Order.TrackingCode });
 
-            // Update TransportDocument status for the order with DocType = "CONTRACT_APPENDIX"
             var doc = await _db.TransportDocuments
                 .FirstOrDefaultAsync(d => d.OrderId == appendix.OrderId && d.DocType == "CONTRACT_APPENDIX");
             if (doc != null)
@@ -338,7 +347,6 @@ namespace ColdChainX.Infrastructure.Services
             {
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
-                // 1. Resolve Discrepancy (Accept = false, charge 200,000 VND handling fee)
                 const decimal PenaltyAmount = 200000m;
                 var resolveCmd = new ResolveDiscrepancyCommand
                 {
@@ -354,7 +362,6 @@ namespace ColdChainX.Infrastructure.Services
                     return ApiResponse<ContractAppendixResponse>.Failure($"Failed to resolve discrepancy: {resolveRes.Message}");
                 }
 
-                // 2. Create Inbound Return Slip
                 var returnSlip = new InboundReturnSlip
                 {
                     ReturnSlipId = Guid.NewGuid(),
@@ -369,20 +376,16 @@ namespace ColdChainX.Infrastructure.Services
                 };
                 _db.InboundReturnSlips.Add(returnSlip);
 
-                // Save slip code changes so PDF generator has data
                 await _db.SaveChangesAsync();
 
-                // Generate Inbound Return Slip PDF
                 try
                 {
                     returnSlip.PdfUrl = await GenerateReturnSlipPdfAsync(appendix.Order, lpn, returnSlip, PenaltyAmount);
                 }
                 catch (Exception ex)
                 {
-                    // Proceed
                 }
 
-                // 3. Mark appendix as EXECUTED (directly executed since it is auto-resolved)
                 appendix.Status = Executed;
                 appendix.ResolvedAt = DbNow();
 
@@ -396,7 +399,6 @@ namespace ColdChainX.Infrastructure.Services
                     appendix.OrderId,
                     new { Appendix_Number = appendix.AppendixNumber, Tracking_Code = appendix.Order.TrackingCode });
 
-                // Also notify execute to Sales
                 await EnsureNotificationTemplateAsync("NOTI_APPENDIX_EXECUTED");
                 await AddNotificationAsync(
                     salesUserId,
@@ -405,7 +407,6 @@ namespace ColdChainX.Infrastructure.Services
                     appendix.OrderId,
                     new { Appendix_Number = appendix.AppendixNumber, Tracking_Code = appendix.Order.TrackingCode });
 
-                // Update CONTRACT_APPENDIX TransportDocument to REJECTED status
                 var doc = await _db.TransportDocuments
                     .FirstOrDefaultAsync(d => d.OrderId == appendix.OrderId && d.DocType == "CONTRACT_APPENDIX");
                 if (doc != null)
@@ -419,7 +420,6 @@ namespace ColdChainX.Infrastructure.Services
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                // Retrieve the created PenaltyBill
                 var penaltyBill = await _db.PenaltyBills.FirstOrDefaultAsync(pb => pb.OrderId == appendix.OrderId);
 
                 var resp = ToResponse(appendix);
@@ -499,7 +499,6 @@ namespace ColdChainX.Infrastructure.Services
 
                 if (appendix.Status == Accepted)
                 {
-                    // 1. Resolve Discrepancy (Accept = true)
                     var resolveCmd = new ResolveDiscrepancyCommand
                     {
                         LpnId = lpn.LpnId,
@@ -512,7 +511,6 @@ namespace ColdChainX.Infrastructure.Services
                         return ApiResponse<ContractAppendixResponse>.Failure($"Failed to resolve discrepancy: {resolveRes.Message}");
                     }
 
-                    // 2. Create Adjustment Invoice
                     var invoiceCode = await GenerateUniqueInvoiceCodeAsync();
                     var invoice = new Invoice
                     {
@@ -545,19 +543,16 @@ namespace ColdChainX.Infrastructure.Services
                     };
                     _db.InvoiceLines.Add(invoiceLine);
 
-                    // Generate Invoice PDF
                     try
                     {
                         invoice.PdfUrl = await GenerateInvoicePdfAsync(appendix.Order, invoice, invoiceLine);
                     }
                     catch (Exception ex)
                     {
-                        // Log warning but proceed
                     }
                 }
                 else if (appendix.Status == Rejected)
                 {
-                    // 1. Resolve Discrepancy (Accept = false, charge 200,000 VND handling fee)
                     const decimal PenaltyAmount = 200000m;
                     var resolveCmd = new ResolveDiscrepancyCommand
                     {
@@ -573,7 +568,6 @@ namespace ColdChainX.Infrastructure.Services
                         return ApiResponse<ContractAppendixResponse>.Failure($"Failed to resolve discrepancy: {resolveRes.Message}");
                     }
 
-                    // 2. Create Inbound Return Slip
                     var returnSlip = new InboundReturnSlip
                     {
                         ReturnSlipId = Guid.NewGuid(),
@@ -588,21 +582,17 @@ namespace ColdChainX.Infrastructure.Services
                     };
                     _db.InboundReturnSlips.Add(returnSlip);
 
-                    // Save slip code changes so PDF generator has data
                     await _db.SaveChangesAsync();
 
-                    // Generate Inbound Return Slip PDF
                     try
                     {
                         returnSlip.PdfUrl = await GenerateReturnSlipPdfAsync(appendix.Order, lpn, returnSlip, PenaltyAmount);
                     }
                     catch (Exception ex)
                     {
-                        // Proceed
                     }
                 }
 
-                // 3. Mark appendix as EXECUTED
                 appendix.Status = Executed;
                 appendix.ResolvedAt = DbNow();
 
@@ -617,7 +607,6 @@ namespace ColdChainX.Infrastructure.Services
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                // SignalR
                 await _hubContext.Clients.Group("Group_Sales").SendAsync("AppendixExecuted", new
                 {
                     appendix.AppendixId,
@@ -722,7 +711,6 @@ namespace ColdChainX.Infrastructure.Services
                 }
                 catch (Exception)
                 {
-                    // Ignore and proceed
                 }
             }
             await _db.SaveChangesAsync();
@@ -766,6 +754,7 @@ namespace ColdChainX.Infrastructure.Services
         {
             var order = await _db.TransportOrders
                 .Include(o => o.Customer)
+                .Include(o => o.OrderDimension)
                 .Include(o => o.Schedule).ThenInclude(s => s.Route)
                 .Include(o => o.PickupLocationNavigation)
                 .Include(o => o.DestLocationNavigation)
@@ -1113,7 +1102,6 @@ namespace ColdChainX.Infrastructure.Services
         {
             if (!userId.HasValue) return;
 
-            // Clean up previous notifications in the discrepancy/appendix flow for this order
             var flowTemplates = new[]
             {
                 "NOTI_QC_DISCREPANCY",
