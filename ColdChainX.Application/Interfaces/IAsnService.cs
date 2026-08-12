@@ -21,7 +21,7 @@ namespace ColdChainX.Application.Interfaces
             int pageNumber,
             int pageSize);
 
-        Task<ApiResponse<List<AsnScheduleResponse>>> GetScheduleAsync(DateOnly date, string? status);
+        Task<ApiResponse<List<AsnScheduleResponse>>> GetScheduleAsync(DateOnly date, string? status, Guid? warehouseId = null);
 
         Task<ApiResponse<List<AsnResponse>>> GetAsnsByCustomerIdAsync(Guid customerId);
     }

@@ -66,7 +66,15 @@ namespace ColdChainX.Infrastructure.Services
             }
             if (dateTo.HasValue)
             {
-                query = query.Where(a => a.RequestedDropoffTime <= dateTo.Value);
+                if (dateTo.Value.TimeOfDay == TimeSpan.Zero)
+                {
+                    var exclusiveDateTo = dateTo.Value.Date.AddDays(1);
+                    query = query.Where(a => a.RequestedDropoffTime < exclusiveDateTo);
+                }
+                else
+                {
+                    query = query.Where(a => a.RequestedDropoffTime <= dateTo.Value);
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(searchQuery))
@@ -81,22 +89,7 @@ namespace ColdChainX.Infrastructure.Services
 
             if (warehouseId.HasValue)
             {
-                var warehouse = await _db.Warehouses.FindAsync(warehouseId.Value);
-                if (warehouse != null)
-                {
-                    var whName = warehouse.WarehouseName.ToLower();
-                    var whCode = warehouse.WarehouseCode.ToLower();
-                    var whAddress = warehouse.Address?.ToLower() ?? string.Empty;
-
-                    query = query.Where(a =>
-                        a.Order.WarehouseReceipts.Any(wr => wr.WarehouseId == warehouseId.Value)
-                        || (a.Order.DestLocationNavigation != null && (
-                            a.Order.DestLocationNavigation.Address.ToLower().Contains(whName)
-                            || a.Order.DestLocationNavigation.Address.ToLower().Contains(whCode)
-                            || (!string.IsNullOrEmpty(whAddress) && a.Order.DestLocationNavigation.Address.ToLower().Contains(whAddress))
-                        ))
-                    );
-                }
+                query = query.Where(a => a.WarehouseId == warehouseId.Value);
             }
 
             query = query.OrderBy(a => a.RequestedDropoffTime);
@@ -115,26 +108,22 @@ namespace ColdChainX.Infrastructure.Services
                 Guid? matchedWarehouseId = null;
                 string? matchedWarehouseName = null;
 
-                var receipt = item.Order.WarehouseReceipts.FirstOrDefault();
-                if (receipt != null)
+                if (item.WarehouseId.HasValue)
                 {
-                    matchedWarehouseId = receipt.WarehouseId;
-                    matchedWarehouseName = receipt.Warehouse?.WarehouseName 
-                        ?? warehouses.FirstOrDefault(w => w.WarehouseId == receipt.WarehouseId)?.WarehouseName;
+                    matchedWarehouseId = item.WarehouseId;
+                    matchedWarehouseName = warehouses
+                        .FirstOrDefault(w => w.WarehouseId == item.WarehouseId.Value)
+                        ?.WarehouseName;
                 }
-                else if (item.Order.DestLocationNavigation != null)
+                else
                 {
-                    var destAddress = item.Order.DestLocationNavigation.Address.ToLower();
-                    var matchedWh = warehouses.FirstOrDefault(w =>
-                        destAddress.Contains(w.WarehouseName.ToLower())
-                        || destAddress.Contains(w.WarehouseCode.ToLower())
-                        || (!string.IsNullOrEmpty(w.Address) && destAddress.Contains(w.Address.ToLower()))
-                    );
-
-                    if (matchedWh != null)
+                    var receipt = item.Order.WarehouseReceipts.FirstOrDefault();
+                    if (receipt != null)
                     {
-                        matchedWarehouseId = matchedWh.WarehouseId;
-                        matchedWarehouseName = matchedWh.WarehouseName;
+                        matchedWarehouseId = receipt.WarehouseId;
+                        matchedWarehouseName = warehouses
+                            .FirstOrDefault(w => w.WarehouseId == receipt.WarehouseId)
+                            ?.WarehouseName;
                     }
                 }
 
@@ -221,8 +210,12 @@ namespace ColdChainX.Infrastructure.Services
                 CreatedAt = DbNow()
             };
 
-            _db.InboundAsns.Add(asn);
-            await _db.SaveChangesAsync();
+            if (!await TryCreateAsnAsync(asn))
+            {
+                return ApiResponse<AsnResponse>.Failure(
+                    "Đơn hàng này đã có lịch giao kho.",
+                    409);
+            }
 
             try
             {
@@ -240,6 +233,7 @@ namespace ColdChainX.Infrastructure.Services
             {
                 AsnId = asn.AsnId,
                 AsnCode = asn.AsnCode,
+                OrderId = asn.OrderId,
                 RouteId = order.Schedule!.Route!.RouteId,
                 RouteCode = order.Schedule!.Route.RouteCode,
                 RequestedDropoffTime = asn.RequestedDropoffTime,
@@ -247,6 +241,8 @@ namespace ColdChainX.Infrastructure.Services
                 QrCodeValue = asn.QrCodeValue,
                 Status = asn.Status,
                 Phone = asn.Phone,
+                WarehouseId = asn.WarehouseId,
+                CustomerId = asn.CustomerId,
                 WarehouseName = originWarehouse.WarehouseName,
                 WarehouseAddress = originWarehouse.Address,
                 FileUrl = asn.FileUrl,
@@ -254,7 +250,10 @@ namespace ColdChainX.Infrastructure.Services
             }, "ASN created successfully");
         }
 
-        public async Task<ApiResponse<List<AsnScheduleResponse>>> GetScheduleAsync(DateOnly date, string? status)
+        public async Task<ApiResponse<List<AsnScheduleResponse>>> GetScheduleAsync(
+            DateOnly date,
+            string? status,
+            Guid? warehouseId = null)
         {
             var from = date.ToDateTime(TimeOnly.MinValue);
             var to = date.ToDateTime(TimeOnly.MaxValue);
@@ -272,6 +271,11 @@ namespace ColdChainX.Infrastructure.Services
             {
                 var normalizedStatus = status.Trim();
                 query = query.Where(a => a.Status == normalizedStatus);
+            }
+
+            if (warehouseId.HasValue)
+            {
+                query = query.Where(a => a.WarehouseId == warehouseId.Value);
             }
 
             var items = await query
@@ -306,6 +310,7 @@ namespace ColdChainX.Infrastructure.Services
                     AsnCode = a.AsnCode,
                     OrderId = a.OrderId,
                     TrackingCode = a.Order.TrackingCode,
+                    ItemName = a.Order.ItemName,
                     CustomerId = a.Order.CustomerId,
                     CustomerName = a.Order.Customer?.CompanyName,
                     CustomerEmail = a.Order.Customer?.Email,
@@ -315,7 +320,8 @@ namespace ColdChainX.Infrastructure.Services
                     RequestedDropoffTime = a.RequestedDropoffTime,
                     CutOffTime = a.Order.Schedule?.Route?.CutOffTime,
                     Status = a.Status,
-                    QrCodeValue = a.QrCodeValue
+                    QrCodeValue = a.QrCodeValue,
+                    WarehouseId = a.WarehouseId
                 };
             }).ToList();
 
@@ -334,6 +340,7 @@ namespace ColdChainX.Infrastructure.Services
                 {
                     a.AsnId,
                     a.AsnCode,
+                    a.OrderId,
                     RouteId = a.Order.Schedule != null ? a.Order.Schedule.RouteId : (Guid?)null,
                     RouteCode = (a.Order.Schedule != null && a.Order.Schedule.Route != null) ? a.Order.Schedule.Route.RouteCode : string.Empty,
                     a.RequestedDropoffTime,
@@ -341,6 +348,8 @@ namespace ColdChainX.Infrastructure.Services
                     a.QrCodeValue,
                     a.Status,
                     a.Phone,
+                    a.WarehouseId,
+                    a.CustomerId,
                     WarehouseName = _db.Warehouses.Where(w => w.WarehouseId == a.WarehouseId).Select(w => w.WarehouseName).FirstOrDefault() ?? string.Empty,
                     WarehouseAddress = _db.Warehouses.Where(w => w.WarehouseId == a.WarehouseId).Select(w => w.Address).FirstOrDefault(),
                     a.FileUrl,
@@ -352,6 +361,7 @@ namespace ColdChainX.Infrastructure.Services
             {
                 AsnId = a.AsnId,
                 AsnCode = a.AsnCode,
+                OrderId = a.OrderId,
                 RouteId = a.RouteId ?? Guid.Empty,
                 RouteCode = a.RouteCode,
                 RequestedDropoffTime = a.RequestedDropoffTime,
@@ -359,6 +369,8 @@ namespace ColdChainX.Infrastructure.Services
                 QrCodeValue = a.QrCodeValue,
                 Status = a.Status,
                 Phone = a.Phone,
+                WarehouseId = a.WarehouseId,
+                CustomerId = a.CustomerId,
                 WarehouseName = a.WarehouseName,
                 WarehouseAddress = a.WarehouseAddress,
                 FileUrl = a.FileUrl,
@@ -366,6 +378,42 @@ namespace ColdChainX.Infrastructure.Services
             }).ToList();
 
             return ApiResponse<List<AsnResponse>>.SuccessResponse(asns, "Retrieved ASNs successfully");
+        }
+
+        private async Task<bool> TryCreateAsnAsync(Core.Entities.InboundAsn asn)
+        {
+            if (!string.Equals(
+                    _db.Database.ProviderName,
+                    "Npgsql.EntityFrameworkCore.PostgreSQL",
+                    StringComparison.Ordinal))
+            {
+                if (await _db.InboundAsns.AnyAsync(a => a.OrderId == asn.OrderId))
+                    return false;
+
+                _db.InboundAsns.Add(asn);
+                await _db.SaveChangesAsync();
+                return true;
+            }
+
+            var strategy = _db.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _db.Database.BeginTransactionAsync();
+
+                await _db.Database.ExecuteSqlInterpolatedAsync(
+                    $"SELECT pg_advisory_xact_lock(hashtextextended({asn.OrderId.ToString()}, 0))");
+
+                if (await _db.InboundAsns.AnyAsync(a => a.OrderId == asn.OrderId))
+                {
+                    await transaction.CommitAsync();
+                    return false;
+                }
+
+                _db.InboundAsns.Add(asn);
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return true;
+            });
         }
 
         private async Task<string> GenerateUniqueAsnCodeAsync()

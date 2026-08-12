@@ -74,16 +74,19 @@ namespace ColdChainX.API.Controllers
                 return Unauthorized("CustomerId claim is missing from token");
 
             var result = await _asnService.CreateAsnAsync(request, customerId);
-            if (!result.Success) return BadRequest(result);
+            if (!result.Success) return StatusCode(result.StatusCode, result);
             return Ok(result);
         }
 
         [HttpGet("schedule")]
         [AllowAnonymous]
-        public async Task<IActionResult> GetSchedule([FromQuery] DateOnly? date = null, [FromQuery] string? status = null)
+        public async Task<IActionResult> GetSchedule(
+            [FromQuery] DateOnly? date = null,
+            [FromQuery] string? status = null,
+            [FromQuery] Guid? warehouseId = null)
         {
             var targetDate = date ?? DateOnly.FromDateTime(DateTime.Today);
-            var result = await _asnService.GetScheduleAsync(targetDate, status);
+            var result = await _asnService.GetScheduleAsync(targetDate, status, warehouseId);
             return Ok(result);
         }
 

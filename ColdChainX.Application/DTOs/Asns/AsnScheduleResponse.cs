@@ -10,6 +10,8 @@ public class AsnScheduleResponse
 
     public string? TrackingCode { get; set; }
 
+    public string? ItemName { get; set; }
+
     public Guid? CustomerId { get; set; }
 
     public string? CustomerName { get; set; }
@@ -29,4 +31,6 @@ public class AsnScheduleResponse
     public string Status { get; set; } = null!;
 
     public string QrCodeValue { get; set; } = null!;
+
+    public Guid? WarehouseId { get; set; }
 }
