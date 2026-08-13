@@ -85,6 +85,66 @@ public sealed class IncidentRescueFlowTests : IDisposable
     }
 
     [Fact]
+    public async Task RescueCandidates_SortVehiclesByWarehouseDistanceFromIncident()
+    {
+        await SeedRescueTripAsync(replacementOnline: true);
+
+        var nearWarehouseId = Guid.NewGuid();
+        var farWarehouseId = Guid.NewGuid();
+        _db.Warehouses.AddRange(
+            new Warehouse
+            {
+                WarehouseId = nearWarehouseId,
+                WarehouseCode = "NEAR-HUB",
+                WarehouseName = "Kho gần hiện trường",
+                WarehouseType = "HUB",
+                Address = "10.701,106.701",
+                MaxPallets = 100,
+                Status = "ACTIVE"
+            },
+            new Warehouse
+            {
+                WarehouseId = farWarehouseId,
+                WarehouseCode = "FAR-HUB",
+                WarehouseName = "Kho xa hiện trường",
+                WarehouseType = "HUB",
+                Address = "11.1,107.1",
+                MaxPallets = 100,
+                Status = "ACTIVE"
+            });
+
+        var existingReplacement = await _db.Vehicles.FindAsync(_replacementVehicleId);
+        existingReplacement!.CurrentLocation = farWarehouseId.ToString();
+        var nearVehicle = BuildVehicle(
+            Guid.NewGuid(),
+            "NEAR-TRUCK",
+            "ACTIVE",
+            3000m,
+            20m,
+            -20m,
+            10m,
+            new IotDevice
+            {
+                DeviceId = Guid.NewGuid(),
+                DeviceCode = "IOT-NEAR",
+                IsOnline = true
+            });
+        nearVehicle.CurrentLocation = nearWarehouseId.ToString();
+        _db.Vehicles.Add(nearVehicle);
+        await _db.SaveChangesAsync();
+
+        var result = await _service.GetRescueCandidatesAsync(_incidentId);
+
+        Assert.True(result.Success, result.Message);
+        Assert.Equal(2, result.Data!.Count);
+        Assert.Equal("NEAR-TRUCK", result.Data[0].TruckPlate);
+        Assert.Equal(nearWarehouseId, result.Data[0].WarehouseId);
+        Assert.Equal("Kho gần hiện trường", result.Data[0].WarehouseName);
+        Assert.NotNull(result.Data[0].DistanceKm);
+        Assert.True(result.Data[0].DistanceKm < result.Data[1].DistanceKm);
+    }
+
+    [Fact]
     public async Task DispatchAndConfirmTransload_KeepTripAndCargoIdsAndRequireOnlineMqtt()
     {
         await SeedRescueTripAsync(replacementOnline: false);

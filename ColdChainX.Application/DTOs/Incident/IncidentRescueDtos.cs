@@ -17,6 +17,10 @@ namespace ColdChainX.Application.DTOs.Incident
         public Guid VehicleId { get; set; }
         public string TruckPlate { get; set; } = null!;
         public string VehicleType { get; set; } = null!;
+        public Guid? WarehouseId { get; set; }
+        public string? WarehouseName { get; set; }
+        public string? WarehouseAddress { get; set; }
+        public decimal? DistanceKm { get; set; }
         public decimal MaxWeight { get; set; }
         public decimal MaxCbm { get; set; }
         public decimal MinTemp { get; set; }

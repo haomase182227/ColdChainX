@@ -270,7 +270,7 @@ public class DeliveryController : ControllerBase
 
 
     [HttpPost("/api/trips/{tripId:guid}/cod-handovers")]
-    [Authorize(Roles = "Admin,WarehouseWorker,Dispatcher")]
+    [Authorize(Roles = "Admin,WarehouseWorker,Dispatcher,Accountant")]
     public async Task<IActionResult> HandoverCod(Guid tripId, [FromBody] CodHandoverRequest request)
     {
         var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
