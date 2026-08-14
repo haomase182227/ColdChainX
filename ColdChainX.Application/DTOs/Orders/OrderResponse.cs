@@ -18,12 +18,40 @@ namespace ColdChainX.Application.DTOs.Orders
         public Guid? MasterTripId { get; set; }
         public DateTime? CreatedAt { get; set; }
         public OrderRouteResponse? Route { get; set; }
+        public OrderScheduleResponse? Schedule { get; set; }
         public OrderLocationResponse? Destination { get; set; }
         public IReadOnlyCollection<OrderDocumentResponse> Documents { get; set; } = Array.Empty<OrderDocumentResponse>();
 
         public Guid? CustomerId { get; set; }
         public string? CustomerName { get; set; }
         public IReadOnlyCollection<OrderQuotationResponse> Quotations { get; set; } = Array.Empty<OrderQuotationResponse>();
+    }
+
+    public class OrderScheduleResponse
+    {
+        public Guid ScheduleId { get; set; }
+        public string ScheduleName { get; set; } = null!;
+        public DateTime DepartureDate { get; set; }
+        public TimeSpan DepartureTime { get; set; }
+        public TimeSpan CutOffTime { get; set; }
+        public string Status { get; set; } = null!;
+    }
+
+    public class OrderScheduleSummaryResponse
+    {
+        public Guid ScheduleId { get; set; }
+        public string ScheduleName { get; set; } = null!;
+        public Guid RouteId { get; set; }
+        public string RouteCode { get; set; } = null!;
+        public string OriginCity { get; set; } = null!;
+        public string DestCity { get; set; } = null!;
+        public DateTime DepartureDate { get; set; }
+        public TimeSpan DepartureTime { get; set; }
+        public TimeSpan CutOffTime { get; set; }
+        public int TotalOrders { get; set; }
+        public int PendingReviewCount { get; set; }
+        public int WaitingQuotationCount { get; set; }
+        public int WaitingContractCount { get; set; }
     }
 
     public class OrderRouteResponse

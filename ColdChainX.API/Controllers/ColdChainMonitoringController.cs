@@ -346,6 +346,28 @@ public sealed class ColdChainMonitoringController : ControllerBase
         [FromQuery] int maxPoints = 200,
         CancellationToken cancellationToken = default)
     {
+        var incidents = await _db.IncidentReports
+            .AsNoTracking()
+            .Where(i =>
+                i.TripId == tripId &&
+                i.CurrentLatitude.HasValue &&
+                i.CurrentLongitude.HasValue)
+            .OrderBy(i => i.ReportedAt)
+            .Select(i => new
+            {
+                i.IncidentId,
+                i.IncidentType,
+                i.Status,
+                Latitude = i.CurrentLatitude,
+                Longitude = i.CurrentLongitude,
+                i.ReportedAt,
+                i.RescueDispatchedAt,
+                i.TransloadConfirmedAt,
+                i.BrokenVehicleId,
+                i.ReplacementVehicleId
+            })
+            .ToListAsync(cancellationToken);
+
         var rawLogs = await _db.TelemetryLogs
             .Where(t => t.TripId == tripId)
             .OrderByDescending(t => t.Timestamp)
@@ -361,6 +383,11 @@ public sealed class ColdChainMonitoringController : ControllerBase
             .ToListAsync(cancellationToken);
 
         var points = rawLogs
+            .Where(log => !incidents.Any(incident =>
+                incident.RescueDispatchedAt.HasValue &&
+                log.Timestamp >= incident.RescueDispatchedAt.Value &&
+                (!incident.TransloadConfirmedAt.HasValue ||
+                 log.Timestamp < incident.TransloadConfirmedAt.Value)))
             .Select(t => new TrackingPoint(t.Timestamp, t.Temperature, t.Latitude, t.Longitude))
             .ToList();
         var sampledPoints = TrackingDownsampler.Downsample(points, Math.Clamp(maxPoints, 20, 1000));
@@ -394,7 +421,8 @@ public sealed class ColdChainMonitoringController : ControllerBase
                     t.Lat,
                     t.Lon
                 }),
-                Alerts = alerts
+                Alerts = alerts,
+                Incidents = incidents
             }
         });
     }

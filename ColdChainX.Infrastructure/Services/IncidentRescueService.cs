@@ -26,6 +26,7 @@ public class IncidentRescueService : IIncidentRescueService
     private readonly IMqttCommandPublisher _mqttPublisher;
     private readonly ILogger<IncidentRescueService> _logger;
     private readonly INotificationService? _notificationService;
+    private readonly ILocationService? _locationService;
 
     private static readonly string[] OnRoadTripStatuses = { "SEALED", "DISPATCHED", "IN_TRANSIT", "DELAYED" };
 
@@ -42,7 +43,8 @@ public class IncidentRescueService : IIncidentRescueService
         IHubContext<NotificationHub> hubContext,
         IMqttCommandPublisher mqttPublisher,
         ILogger<IncidentRescueService> logger,
-        INotificationService? notificationService = null)
+        INotificationService? notificationService = null,
+        ILocationService? locationService = null)
     {
         _db = db;
         _goongMapService = goongMapService;
@@ -50,6 +52,7 @@ public class IncidentRescueService : IIncidentRescueService
         _mqttPublisher = mqttPublisher;
         _logger = logger;
         _notificationService = notificationService;
+        _locationService = locationService;
     }
 
 
@@ -88,23 +91,63 @@ public class IncidentRescueService : IIncidentRescueService
                          && v.MaxWeight >= totalWeight
                          && v.MaxCbm >= totalCbm
                          && v.IotDevices.Any(d => d.DeviceCode != null && d.DeviceCode != ""))
-                .OrderBy(v => v.MaxWeight)
                 .ToListAsync();
 
-            var items = vehicles.Select(v => new RescueCandidateResponse
+            var warehouseIds = vehicles
+                .Select(v => ParseWarehouseId(v.CurrentLocation))
+                .Where(id => id.HasValue)
+                .Select(id => id!.Value)
+                .Distinct()
+                .ToList();
+            var warehouses = await _db.Warehouses
+                .AsNoTracking()
+                .Where(w => warehouseIds.Contains(w.WarehouseId))
+                .ToDictionaryAsync(w => w.WarehouseId);
+            var warehouseCoordinates = await ResolveWarehouseCoordinatesAsync(warehouses.Values);
+
+            var items = vehicles.Select(v =>
             {
-                VehicleId = v.VehicleId,
-                TruckPlate = v.TruckPlate,
-                VehicleType = v.VehicleType,
-                MaxWeight = v.MaxWeight,
-                MaxCbm = v.MaxCbm,
-                MinTemp = v.MinTemp,
-                MaxTemp = v.MaxTemp,
-                IotDeviceCount = v.IotDevices.Count(d => !string.IsNullOrWhiteSpace(d.DeviceCode)),
-                OnlineIotDeviceCount = v.IotDevices.Count(d => !string.IsNullOrWhiteSpace(d.DeviceCode) && d.IsOnline),
-                HasOnlineIot = v.IotDevices.Any(d => !string.IsNullOrWhiteSpace(d.DeviceCode) && d.IsOnline),
-                Label = $"{v.TruckPlate} — {v.VehicleType} | tải {v.MaxWeight}kg / {v.MaxCbm}m³ | nhiệt {v.MinTemp}..{v.MaxTemp}°C | IoT {v.IotDevices.Count(d => !string.IsNullOrWhiteSpace(d.DeviceCode))}"
-            }).ToList();
+                var warehouseId = ParseWarehouseId(v.CurrentLocation);
+                var warehouse = warehouseId.HasValue && warehouses.TryGetValue(warehouseId.Value, out var matchedWarehouse)
+                    ? matchedWarehouse
+                    : null;
+                decimal? distanceKm = null;
+                if (warehouse != null
+                    && incident.CurrentLatitude.HasValue
+                    && incident.CurrentLongitude.HasValue
+                    && warehouseCoordinates.TryGetValue(warehouse.WarehouseId, out var coordinates))
+                {
+                    distanceKm = Math.Round(HaversineKm(
+                        incident.CurrentLatitude.Value,
+                        incident.CurrentLongitude.Value,
+                        coordinates.Latitude,
+                        coordinates.Longitude), 2);
+                }
+
+                var iotDeviceCount = v.IotDevices.Count(d => !string.IsNullOrWhiteSpace(d.DeviceCode));
+                return new RescueCandidateResponse
+                {
+                    VehicleId = v.VehicleId,
+                    TruckPlate = v.TruckPlate,
+                    VehicleType = v.VehicleType,
+                    WarehouseId = warehouse?.WarehouseId,
+                    WarehouseName = warehouse?.WarehouseName,
+                    WarehouseAddress = warehouse?.Address,
+                    DistanceKm = distanceKm,
+                    MaxWeight = v.MaxWeight,
+                    MaxCbm = v.MaxCbm,
+                    MinTemp = v.MinTemp,
+                    MaxTemp = v.MaxTemp,
+                    IotDeviceCount = iotDeviceCount,
+                    OnlineIotDeviceCount = v.IotDevices.Count(d => !string.IsNullOrWhiteSpace(d.DeviceCode) && d.IsOnline),
+                    HasOnlineIot = v.IotDevices.Any(d => !string.IsNullOrWhiteSpace(d.DeviceCode) && d.IsOnline),
+                    Label = $"{v.TruckPlate} — {v.VehicleType} | tải {v.MaxWeight}kg / {v.MaxCbm}m³ | nhiệt {v.MinTemp}..{v.MaxTemp}°C | IoT {iotDeviceCount}"
+                };
+            })
+            .OrderBy(item => item.DistanceKm.HasValue ? 0 : 1)
+            .ThenBy(item => item.DistanceKm)
+            .ThenBy(item => item.MaxWeight)
+            .ToList();
 
             return ApiResponse<List<RescueCandidateResponse>>.SuccessResponse(
                 items,
@@ -118,6 +161,95 @@ public class IncidentRescueService : IIncidentRescueService
             return ApiResponse<List<RescueCandidateResponse>>.Failure($"Failed to get rescue candidates: {ex.Message}");
         }
     }
+
+    private async Task<Dictionary<Guid, (decimal Latitude, decimal Longitude)>> ResolveWarehouseCoordinatesAsync(
+        IEnumerable<Warehouse> warehouses)
+    {
+        var result = new Dictionary<Guid, (decimal Latitude, decimal Longitude)>();
+        var warehouseList = warehouses.ToList();
+        var addresses = warehouseList
+            .Select(w => w.Address?.Trim())
+            .Where(address => !string.IsNullOrWhiteSpace(address))
+            .Select(address => address!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var knownLocations = addresses.Count == 0
+            ? new List<Location>()
+            : await _db.Locations
+                .AsNoTracking()
+                .Where(location => addresses.Contains(location.Address))
+                .ToListAsync();
+        var coordinatesByAddress = knownLocations
+            .Where(location => IsValidCoordinates(location.Latitude, location.Longitude))
+            .GroupBy(location => location.Address.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => (group.First().Latitude, group.First().Longitude),
+                StringComparer.OrdinalIgnoreCase);
+
+        foreach (var warehouse in warehouseList)
+        {
+            if (TryParseCoordinates(warehouse.Address, out var coordinates))
+            {
+                result[warehouse.WarehouseId] = coordinates;
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(warehouse.Address)
+                && coordinatesByAddress.TryGetValue(warehouse.Address.Trim(), out coordinates))
+            {
+                result[warehouse.WarehouseId] = coordinates;
+                continue;
+            }
+
+            if (_locationService == null || string.IsNullOrWhiteSpace(warehouse.Address))
+                continue;
+
+            try
+            {
+                var resolved = await _locationService.GetCoordinatesAsync(warehouse.Address);
+                if (IsValidCoordinates(resolved.Latitude, resolved.Longitude))
+                    result[warehouse.WarehouseId] = resolved;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Could not resolve coordinates for warehouse {WarehouseId} ({WarehouseAddress}).",
+                    warehouse.WarehouseId,
+                    warehouse.Address);
+            }
+        }
+
+        return result;
+    }
+
+    private static Guid? ParseWarehouseId(string? currentLocation)
+        => Guid.TryParse(currentLocation, out var warehouseId) ? warehouseId : null;
+
+    private static bool TryParseCoordinates(
+        string? value,
+        out (decimal Latitude, decimal Longitude) coordinates)
+    {
+        coordinates = default;
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        var parts = value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 2
+            || !decimal.TryParse(parts[0], NumberStyles.Number, CultureInfo.InvariantCulture, out var latitude)
+            || !decimal.TryParse(parts[1], NumberStyles.Number, CultureInfo.InvariantCulture, out var longitude)
+            || !IsValidCoordinates(latitude, longitude))
+        {
+            return false;
+        }
+
+        coordinates = (latitude, longitude);
+        return true;
+    }
+
+    private static bool IsValidCoordinates(decimal latitude, decimal longitude)
+        => latitude is >= -90m and <= 90m && longitude is >= -180m and <= 180m;
 
 
     public async Task<ApiResponse<IncidentWorkflowResult>> ContinueTripAsync(
@@ -581,7 +713,7 @@ public class IncidentRescueService : IIncidentRescueService
         Guid confirmedBy)
     {
         if (request == null || string.IsNullOrWhiteSpace(request.ConfirmationNote))
-            return ApiResponse<IncidentWorkflowResult>.Failure("Confirmation note is required.");
+            return ApiResponse<IncidentWorkflowResult>.Failure("Vui lòng nhập ghi chú xác nhận sang hàng.");
 
         try
         {
@@ -606,6 +738,21 @@ public class IncidentRescueService : IIncidentRescueService
                 return ApiResponse<IncidentWorkflowResult>.Failure(
                     "Xe hiện tại của chuyến không khớp xe cứu hộ đã được điều.");
 
+            var confirmingDriver = await _db.Drivers
+                .AsNoTracking()
+                .FirstOrDefaultAsync(d => d.UserId == confirmedBy);
+            if (confirmingDriver != null)
+            {
+                var isAssignedDriver = await _db.TripDrivers
+                    .AnyAsync(td => td.TripId == trip.TripId && td.DriverId == confirmingDriver.DriverId);
+                if (!isAssignedDriver)
+                {
+                    return ApiResponse<IncidentWorkflowResult>.Failure(
+                        "Bạn không phải tài xế được phân công cho chuyến này.",
+                        403);
+                }
+            }
+
             if (incident.Status == "TRANSLOAD_COMPLETED" && trip.Status == "IN_TRANSIT")
             {
                 return ApiResponse<IncidentWorkflowResult>.SuccessResponse(
@@ -615,7 +762,7 @@ public class IncidentRescueService : IIncidentRescueService
                         trip.Vehicle,
                         incident.TransloadConfirmedAt ?? DbNow(),
                         "Việc sang hàng đã được xác nhận trước đó."),
-                    "Transload already confirmed.");
+                    "Việc sang hàng đã được xác nhận trước đó.");
             }
 
             if (incident.Status != RescueDispatchedStatus || trip.Status != "DELAYED")

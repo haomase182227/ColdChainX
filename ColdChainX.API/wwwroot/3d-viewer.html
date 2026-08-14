@@ -302,12 +302,26 @@
         animate();
         checkUrlParamsAndSimulate();
 
+        window.addEventListener('message', (event) => {
+            if (event.data?.type !== 'COLDCHAINX_PACKING_PREVIEW') return;
+            const plan = event.data.payload;
+            if (!plan || !Array.isArray(plan.placedItems)) {
+                showMessage("Dữ liệu mô phỏng không hợp lệ.", "error");
+                return;
+            }
+
+            renderPlan(plan);
+        });
+
         // Parse URL parameters and auto-simulate
         async function checkUrlParamsAndSimulate() {
             const urlParams = new URLSearchParams(window.location.search);
             const scheduleId = urlParams.get('scheduleId');
             const vId = urlParams.get('vehicleId');
             let lpnIdsRaw = urlParams.get('lpnIds');
+            const embedded = urlParams.get('embedded') === '1';
+
+            if (embedded) return;
 
             if (vId && lpnIdsRaw) {
                 setTimeout(async () => {
@@ -335,27 +349,28 @@
                 const data = await response.json();
                 if (!response.ok || !data.success) throw new Error(data.message || data.error || 'Failed to simulate');
 
-                const plan = data.data;
-
-                // Update UI Sidebar
-                document.getElementById('res-util').textContent = plan.utilisation.toFixed(1) + '%';
-                document.getElementById('res-unplaced').textContent = plan.unplacedLpnIds.length;
-                document.getElementById('res-type').textContent = plan.vehicleType;
-                document.getElementById('res-dims').textContent = `${plan.containerWidth}x${plan.containerHeight}x${plan.containerLength} cm`;
-                document.getElementById('res-placed').textContent = `${plan.placedItems.length} kiện`;
-
-                const unplacedBox = document.getElementById('unplaced-box');
-                if (plan.unplacedLpnIds.length > 0) {
-                    unplacedBox.classList.add('warning');
-                } else {
-                    unplacedBox.classList.remove('warning');
-                }
-
-                drawPlan(plan);
+                renderPlan(data.data);
 
             } catch (err) {
                 showMessage(err.message, "error");
             }
+        }
+
+        function renderPlan(plan) {
+            document.getElementById('res-util').textContent = Number(plan.utilisation || 0).toFixed(1) + '%';
+            document.getElementById('res-unplaced').textContent = plan.unplacedLpnIds?.length || 0;
+            document.getElementById('res-type').textContent = plan.vehicleType || '—';
+            document.getElementById('res-dims').textContent = `${plan.containerWidth}x${plan.containerHeight}x${plan.containerLength} cm`;
+            document.getElementById('res-placed').textContent = `${plan.placedItems.length} kiện`;
+
+            const unplacedBox = document.getElementById('unplaced-box');
+            if ((plan.unplacedLpnIds?.length || 0) > 0) {
+                unplacedBox.classList.add('warning');
+            } else {
+                unplacedBox.classList.remove('warning');
+            }
+
+            drawPlan(plan);
         }
 
         function showMessage(text, type) {
