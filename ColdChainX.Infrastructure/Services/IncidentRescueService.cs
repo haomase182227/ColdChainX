@@ -713,7 +713,7 @@ public class IncidentRescueService : IIncidentRescueService
         Guid confirmedBy)
     {
         if (request == null || string.IsNullOrWhiteSpace(request.ConfirmationNote))
-            return ApiResponse<IncidentWorkflowResult>.Failure("Confirmation note is required.");
+            return ApiResponse<IncidentWorkflowResult>.Failure("Vui lòng nhập ghi chú xác nhận sang hàng.");
 
         try
         {
@@ -738,6 +738,21 @@ public class IncidentRescueService : IIncidentRescueService
                 return ApiResponse<IncidentWorkflowResult>.Failure(
                     "Xe hiện tại của chuyến không khớp xe cứu hộ đã được điều.");
 
+            var confirmingDriver = await _db.Drivers
+                .AsNoTracking()
+                .FirstOrDefaultAsync(d => d.UserId == confirmedBy);
+            if (confirmingDriver != null)
+            {
+                var isAssignedDriver = await _db.TripDrivers
+                    .AnyAsync(td => td.TripId == trip.TripId && td.DriverId == confirmingDriver.DriverId);
+                if (!isAssignedDriver)
+                {
+                    return ApiResponse<IncidentWorkflowResult>.Failure(
+                        "Bạn không phải tài xế được phân công cho chuyến này.",
+                        403);
+                }
+            }
+
             if (incident.Status == "TRANSLOAD_COMPLETED" && trip.Status == "IN_TRANSIT")
             {
                 return ApiResponse<IncidentWorkflowResult>.SuccessResponse(
@@ -747,7 +762,7 @@ public class IncidentRescueService : IIncidentRescueService
                         trip.Vehicle,
                         incident.TransloadConfirmedAt ?? DbNow(),
                         "Việc sang hàng đã được xác nhận trước đó."),
-                    "Transload already confirmed.");
+                    "Việc sang hàng đã được xác nhận trước đó.");
             }
 
             if (incident.Status != RescueDispatchedStatus || trip.Status != "DELAYED")

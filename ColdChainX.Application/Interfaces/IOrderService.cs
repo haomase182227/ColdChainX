@@ -6,7 +6,13 @@ namespace ColdChainX.Application.Interfaces
 {
     public interface IOrderService
     {
-        Task<ApiResponse<PagedResult<OrderResponse>>> GetOrdersAsync(int pageNumber, int pageSize, string? status = null, Guid? routeId = null);
+        Task<ApiResponse<PagedResult<OrderResponse>>> GetOrdersAsync(int pageNumber, int pageSize, string? status = null, Guid? routeId = null, Guid? scheduleId = null);
+        Task<ApiResponse<PagedResult<OrderScheduleSummaryResponse>>> GetOrderScheduleSummaryAsync(
+            DateOnly? fromDate,
+            DateOnly? toDate,
+            Guid? routeId,
+            int pageNumber,
+            int pageSize);
         Task<ApiResponse<OrderResponse>> GetOrderByIdAsync(Guid orderId);
         Task<ApiResponse<PagedResult<CustomerOrderSummaryResponse>>> GetOrdersByCustomerAsync(Guid customerId, int pageNumber, int pageSize, string? status = null);
         Task<ApiResponse<CreateOrderResponse>> CreateOrderAsync(CreateOrderRequest request, Guid customerId);
