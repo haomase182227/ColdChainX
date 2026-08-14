@@ -453,10 +453,10 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
         if (string.IsNullOrWhiteSpace(value))
             return null;
 
-        var normalized = value
-            .Replace("Â°C", "", StringComparison.OrdinalIgnoreCase)
-            .Replace("°C", "", StringComparison.OrdinalIgnoreCase)
-            .Replace("C", "", StringComparison.OrdinalIgnoreCase)
+        var normalized = new string(value
+                .Where(ch => char.IsDigit(ch) || ch == '-' || ch == '.' || ch == ',')
+                .ToArray())
+            .Replace(',', '.')
             .Trim();
 
         return decimal.TryParse(normalized, out var temp) ? temp : null;

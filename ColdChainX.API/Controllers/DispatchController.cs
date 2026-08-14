@@ -562,7 +562,7 @@ public class DispatchController : ControllerBase
         var items = rawLpns.Select(x => new DispatchLpnReadyDto
         {
             LpnId = x.LpnId,
-            Label = $"{x.LpnCode} ({x.TrackingCode}) â€” {x.ItemName} | Qty: {x.Quantity} | {x.ActualWeightKg}kg / {x.ActualCbm}mÂ³ ({x.TempCondition}) | KhÃ¡ch: {x.CustomerName} | Kho: {x.WarehouseName}",
+            Label = $"{x.LpnCode} ({x.TrackingCode}) - {x.ItemName} | Qty: {x.Quantity} | {x.ActualWeightKg}kg / {x.ActualCbm}m3 ({x.TempCondition}) | Khach: {x.CustomerName} | Kho: {x.WarehouseName}",
             LpnCode = x.LpnCode,
             OrderId = x.OrderId,
             TrackingCode = x.TrackingCode,
@@ -686,19 +686,17 @@ public class DispatchController : ControllerBase
     [HttpPost("simulate-packing")]
     public async Task<IActionResult> SimulatePacking([FromBody] SimulatePackingRequest request, [FromQuery] bool for3d = false)
     {
-        if (request.ScheduleId == Guid.Empty)
-        {
-            return BadRequest(ApiResponse<object>.Failure("ScheduleId is required."));
-        }
-
         if (request.LpnIds == null || !request.LpnIds.Any())
         {
             return BadRequest(ApiResponse<object>.Failure("At least one LPN is required."));
         }
 
-        var schedule = await _db.RouteSchedules
-            .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.ScheduleId == request.ScheduleId);
+        var selectedScheduleId = request.ScheduleId;
+        var schedule = selectedScheduleId == Guid.Empty
+            ? null
+            : await _db.RouteSchedules
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.ScheduleId == selectedScheduleId);
 
         var vehicle = await _db.Vehicles.FindAsync(request.VehicleId);
         if (vehicle == null) return NotFound(ApiResponse<object>.Failure("Vehicle not found"));
@@ -740,7 +738,7 @@ public class DispatchController : ControllerBase
 
         var selectedValidation = _cargoCompatibilityService.ValidateSelectedSet(
             lpns,
-            request.ScheduleId,
+            selectedScheduleId,
             selectedIds);
         var vehicleTempConflicts = _cargoCompatibilityService.ValidateVehicleTemperature(vehicle, lpns);
         var blockingReasons = selectedValidation.Conflicts
@@ -749,7 +747,7 @@ public class DispatchController : ControllerBase
             .Distinct()
             .ToList();
 
-        if (schedule == null)
+        if (selectedScheduleId != Guid.Empty && schedule == null)
         {
             blockingReasons.Add("DIFFERENT_SCHEDULE: Schedule does not exist.");
         }
@@ -824,7 +822,8 @@ public class DispatchController : ControllerBase
         var distinctLpnIds = lpns.Select(l => l.LpnId).Distinct().ToList();
 
         var baseUrl = $"{Request.Scheme}://{Request.Host}";
-        var shareableLink = $"{baseUrl}/3d-viewer.html?scheduleId={request.ScheduleId}&vehicleId={request.VehicleId}&lpnIds={string.Join(",", request.LpnIds)}";
+        var scheduleQuery = selectedScheduleId == Guid.Empty ? string.Empty : $"scheduleId={selectedScheduleId}&";
+        var shareableLink = $"{baseUrl}/3d-viewer.html?{scheduleQuery}vehicleId={request.VehicleId}&lpnIds={string.Join(",", request.LpnIds)}";
 
         var response = new SimulatePackingResponse
         {
@@ -927,16 +926,23 @@ public class DispatchController : ControllerBase
         [FromForm] ManualDispatchFormRequest form)
     {
         if (lpnIds == null || !lpnIds.Any())
-            return BadRequest(ApiResponse<object>.Failure("Vui lÃ²ng chá»n Ã­t nháº¥t má»™t LPN."));
+            return BadRequest(ApiResponse<object>.Failure("Vui long chon it nhat mot LPN."));
 
         if (form.PlannedStartTime >= form.PlannedEndTime)
-            return BadRequest(ApiResponse<object>.Failure("PlannedStartTime pháº£i nhá» hÆ¡n PlannedEndTime."));
+            return BadRequest(ApiResponse<object>.Failure("PlannedStartTime phai nho hon PlannedEndTime."));
 
-        if (string.IsNullOrWhiteSpace(form.ScheduleId)
-            || !Guid.TryParse(ExtractGuid(form.ScheduleId), out var selectedScheduleId)
-            || selectedScheduleId == Guid.Empty)
+        Guid? selectedScheduleId = null;
+        if (!string.IsNullOrWhiteSpace(form.ScheduleId))
         {
-            return BadRequest(ApiResponse<object>.Failure("ScheduleId is required."));
+            if (!Guid.TryParse(ExtractGuid(form.ScheduleId), out var parsedScheduleId))
+            {
+                return BadRequest(ApiResponse<object>.Failure("ScheduleId khong hop le."));
+            }
+
+            if (parsedScheduleId != Guid.Empty)
+            {
+                selectedScheduleId = parsedScheduleId;
+            }
         }
 
         var driverIds = (form.DriverIds ?? new List<string>())
@@ -948,7 +954,7 @@ public class DispatchController : ControllerBase
             .ToList();
 
         if (driverIds.Count < 1 || driverIds.Count > 2)
-            return BadRequest(ApiResponse<object>.Failure("Vui lÃ²ng chá»n 1 hoáº·c 2 tÃ i xáº¿ cho chuyáº¿n."));
+            return BadRequest(ApiResponse<object>.Failure("Vui long chon 1 hoac 2 tai xe cho chuyen."));
 
         var parsedLpnIds = new List<Guid>();
         foreach (var lpnId in lpnIds)
@@ -968,23 +974,15 @@ public class DispatchController : ControllerBase
             .Select(l => l.LpnId)
             .ToListAsync();
 
-        var wrongScheduleLpnIds = await _db.Lpns
-            .Include(l => l.Order)
-            .Where(l => parsedLpnIds.Contains(l.LpnId)
-                && (l.Order == null || l.Order.ScheduleId != selectedScheduleId))
-            .Select(l => l.LpnId)
-            .ToListAsync();
-
         var invalidLpnIds = parsedLpnIds
             .Except(existingLpnIds)
-            .Concat(wrongScheduleLpnIds)
             .Distinct()
             .ToList();
 
         if (invalidLpnIds.Any())
         {
             return BadRequest(ApiResponse<object>.Failure(
-                "Some LPNs do not belong to the selected schedule.",
+                "Some LPNs do not exist.",
                 errors: new { invalidLpnIds }));
         }
 
@@ -1013,7 +1011,7 @@ public class DispatchController : ControllerBase
 
         var hasIot = await _db.IotDevices.AnyAsync(d => d.VehicleId == parsedVehicleId);
         if (!hasIot)
-            return BadRequest(ApiResponse<object>.Failure("Xe chÆ°a Ä‘Æ°á»£c gáº¯n thiáº¿t bá»‹ IoT. Vui lÃ²ng gáº¯n thiáº¿t bá»‹ IoT cho xe nÃ y trÆ°á»›c khi ghÃ©p chuyáº¿n."));
+            return BadRequest(ApiResponse<object>.Failure("Xe chua duoc gan thiet bi IoT. Vui long gan thiet bi IoT cho xe nay truoc khi ghep chuyen."));
 
         var request = new ManualDispatchRequest
         {
@@ -1036,7 +1034,8 @@ public class DispatchController : ControllerBase
             var html = ManifestTemplateBuilder.BuildHtml(result, goongKey);
             var baseUrl = $"{Request.Scheme}://{Request.Host}";
             var lpnQuery = string.Join(",", request.LpnIds);
-            var lifoReportUrl = $"{baseUrl}/lifo-report.html?vehicleId={request.VehicleId}&lpnIds={lpnQuery}";
+            var scheduleQuery = request.ScheduleId.HasValue ? $"scheduleId={request.ScheduleId}&" : string.Empty;
+            var lifoReportUrl = $"{baseUrl}/lifo-report.html?{scheduleQuery}vehicleId={request.VehicleId}&lpnIds={lpnQuery}";
             var pdfUrl = await _pdfService.SavePdfFromUrlAsync(lifoReportUrl, result.TripId.ToString(), "lifo");
             result.LifoPdfUrl = pdfUrl;
             if (!string.IsNullOrEmpty(pdfUrl))
@@ -1079,19 +1078,21 @@ public class DispatchController : ControllerBase
 
         var baseUrl = $"{Request.Scheme}://{Request.Host}";
         var lpnQuery = string.Join(",", request.LpnIds);
+        var scheduleQuery = string.IsNullOrWhiteSpace(request.ScheduleId) ? string.Empty : $"scheduleId={request.ScheduleId}&";
         
         return Ok(new 
         {
             Success = true,
-            ThreeDLink = $"{baseUrl}/3d-viewer.html?vehicleId={request.VehicleId}&lpnIds={lpnQuery}",
-            PdfLink = $"{baseUrl}/lifo-report.html?vehicleId={request.VehicleId}&lpnIds={lpnQuery}"
+            ThreeDLink = $"{baseUrl}/3d-viewer.html?{scheduleQuery}vehicleId={request.VehicleId}&lpnIds={lpnQuery}",
+            PdfLink = $"{baseUrl}/lifo-report.html?{scheduleQuery}vehicleId={request.VehicleId}&lpnIds={lpnQuery}"
         });
     }
 
     public class TestLifoPdfRequest
     {
-        public string VehicleId { get; set; }
-        public List<string> LpnIds { get; set; }
+        public string? ScheduleId { get; set; }
+        public string VehicleId { get; set; } = string.Empty;
+        public List<string> LpnIds { get; set; } = new();
     }
 
     [HttpGet("trip/{tripId}/lifo-url")]
@@ -1174,7 +1175,7 @@ public class DispatchController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { Success = false, Error = "Lá»—i khi gá»i Goong API tá»‘i Æ°u lá»™ trÃ¬nh.", Detail = ex.Message });
+            return StatusCode(500, new { Success = false, Error = "Loi khi goi Goong API toi uu lo trinh.", Detail = ex.Message });
         }
     }
 
@@ -1305,7 +1306,7 @@ public class DispatchController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { Success = false, Error = "Lá»—i há»‡ thá»‘ng khi báº¯t Ä‘áº§u picking.", Detail = ex.Message });
+            return StatusCode(500, new { Success = false, Error = "Loi he thong khi bat dau picking.", Detail = ex.Message });
         }
     }
 
@@ -1332,7 +1333,7 @@ public class DispatchController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { Success = false, Error = "Lá»—i há»‡ thá»‘ng khi há»§y chuyáº¿n.", Detail = ex.Message });
+            return StatusCode(500, new { Success = false, Error = "Loi he thong khi huy chuyen.", Detail = ex.Message });
         }
     }
 
@@ -1431,7 +1432,7 @@ public class DispatchController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { Success = false, Error = "Lá»—i há»‡ thá»‘ng khi káº¹p chÃ¬.", Detail = ex.Message });
+            return StatusCode(500, new { Success = false, Error = "Loi he thong khi kep chi.", Detail = ex.Message });
         }
     }
 
@@ -1790,11 +1791,11 @@ public class DispatchController : ControllerBase
         }
         else if (stopSequence == 1)
         {
-            parts.Add("Äiá»ƒm giao Ä‘áº§u tiÃªn - xáº¿p gáº§n cá»­a xe");
+            parts.Add("Diem giao dau tien - xep gan cua xe");
         }
         else
         {
-            parts.Add($"Giao táº¡i Ä‘iá»ƒm #{stopSequence}/{totalStops}");
+            parts.Add($"Giao tai diem #{stopSequence}/{totalStops}");
         }
 
         parts.Add(zone switch
@@ -1803,7 +1804,7 @@ public class DispatchController : ControllerBase
             "MID" => "Hang mat - ngan MID",
             _ => "Hang nhiet do thuong - ngan FRONT"
         });
-        parts.Add($"Khá»‘i lÆ°á»£ng {weightKg:F1}kg - hÃ ng náº·ng xáº¿p dÆ°á»›i");
+        parts.Add($"Khoi luong {weightKg:F1}kg - hang nang xep duoi");
 
         return string.Join("; ", parts);
     }

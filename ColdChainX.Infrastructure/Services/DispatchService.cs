@@ -779,14 +779,17 @@ public class DispatchService : IDispatchService
 
     public async Task<ManualDispatchResult> ManualDispatchAsync(ManualDispatchRequest request)
     {
-        if (!request.ScheduleId.HasValue || request.ScheduleId.Value == Guid.Empty)
-            throw new InvalidOperationException("ScheduleId is required.");
-
-        var selectedScheduleId = request.ScheduleId.Value;
-        var schedule = await _context.RouteSchedules
-            .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.ScheduleId == selectedScheduleId)
-            ?? throw new InvalidOperationException($"ScheduleId '{selectedScheduleId}' does not exist.");
+        var selectedScheduleId = request.ScheduleId.HasValue && request.ScheduleId.Value != Guid.Empty
+            ? request.ScheduleId.Value
+            : Guid.Empty;
+        RouteSchedule? schedule = null;
+        if (selectedScheduleId != Guid.Empty)
+        {
+            schedule = await _context.RouteSchedules
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.ScheduleId == selectedScheduleId)
+                ?? throw new InvalidOperationException($"ScheduleId '{selectedScheduleId}' does not exist.");
+        }
 
         var originLocation = await _context.Locations.FindAsync(request.OriginWarehouseLocationId)
             ?? throw new InvalidOperationException("LocationId kho xuất phát không tồn tại.");

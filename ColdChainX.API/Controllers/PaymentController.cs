@@ -87,7 +87,7 @@ public class PaymentController : ControllerBase
             var customerIdClaim = User.FindFirst("CustomerId")?.Value ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(customerIdClaim) || !Guid.TryParse(customerIdClaim, out var parsedId))
             {
-                return Unauthorized(ApiResponse<object>.Failure("KhÃ´ng thá»ƒ xÃ¡c thá»±c danh tÃ­nh khÃ¡ch hÃ ng tá»« token."));
+                return Unauthorized(ApiResponse<object>.Failure("Khong the xac thuc danh tinh khach hang tu token."));
             }
             targetId = parsedId;
         }
