@@ -58,7 +58,8 @@ namespace ColdChainX.Infrastructure.Services
             int pageNumber,
             int pageSize,
             string? status = null,
-            Guid? routeId = null)
+            Guid? routeId = null,
+            Guid? scheduleId = null)
         {
             var query = BuildOrderQuery();
             if (!string.IsNullOrWhiteSpace(status))
@@ -68,6 +69,10 @@ namespace ColdChainX.Infrastructure.Services
             if (routeId.HasValue)
             {
                 query = query.Where(o => o.Schedule != null && o.Schedule.RouteId == routeId.Value);
+            }
+            if (scheduleId.HasValue)
+            {
+                query = query.Where(o => o.ScheduleId == scheduleId.Value);
             }
             query = query.OrderByDescending(o => o.CreatedAt);
             var totalRecords = await query.CountAsync();
@@ -79,7 +84,76 @@ namespace ColdChainX.Infrastructure.Services
 
             return ApiResponse<PagedResult<OrderResponse>>.SuccessResponse(
                 PagedResult<OrderResponse>.Create(orders, totalRecords, pageNumber, NormalizePageSize(pageSize)),
-                "Orders retrieved successfully");
+                "Đã tải danh sách đơn hàng.");
+        }
+
+        public async Task<ApiResponse<PagedResult<OrderScheduleSummaryResponse>>> GetOrderScheduleSummaryAsync(
+            DateOnly? fromDate,
+            DateOnly? toDate,
+            Guid? routeId,
+            int pageNumber,
+            int pageSize)
+        {
+            var vietnamToday = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
+            var effectiveFromDate = fromDate ?? vietnamToday;
+            var effectiveToDate = toDate ?? effectiveFromDate.AddDays(7);
+
+            if (effectiveToDate < effectiveFromDate)
+            {
+                return ApiResponse<PagedResult<OrderScheduleSummaryResponse>>.Failure(
+                    "Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.",
+                    400);
+            }
+
+            var startDate = effectiveFromDate.ToDateTime(TimeOnly.MinValue);
+            var endDate = effectiveToDate.ToDateTime(TimeOnly.MaxValue);
+            var query = _db.RouteSchedules
+                .AsNoTracking()
+                .Where(schedule => schedule.DepartureDate >= startDate && schedule.DepartureDate <= endDate);
+
+            if (routeId.HasValue)
+            {
+                query = query.Where(schedule => schedule.RouteId == routeId.Value);
+            }
+
+            query = query
+                .OrderBy(schedule => schedule.DepartureDate)
+                .ThenBy(schedule => schedule.DepartureTime);
+
+            var totalRecords = await query.CountAsync();
+            var safePageSize = NormalizePageSize(pageSize);
+            var summaries = await query
+                .Skip(NormalizeSkip(pageNumber, pageSize))
+                .Take(safePageSize)
+                .Select(schedule => new OrderScheduleSummaryResponse
+                {
+                    ScheduleId = schedule.ScheduleId,
+                    ScheduleName = schedule.ScheduleName,
+                    RouteId = schedule.RouteId,
+                    RouteCode = schedule.Route.RouteCode,
+                    OriginCity = schedule.Route.OriginCity,
+                    DestCity = schedule.Route.DestCity,
+                    DepartureDate = schedule.DepartureDate,
+                    DepartureTime = schedule.DepartureTime,
+                    CutOffTime = schedule.CutOffTime,
+                    TotalOrders = _db.TransportOrders.Count(order => order.ScheduleId == schedule.ScheduleId),
+                    PendingReviewCount = _db.TransportOrders.Count(order =>
+                        order.ScheduleId == schedule.ScheduleId && order.Status == "PENDING_REVIEW"),
+                    WaitingQuotationCount = _db.TransportOrders.Count(order =>
+                        order.ScheduleId == schedule.ScheduleId
+                        && (order.Status == "APPROVED" || order.Status == "QUOTING")),
+                    WaitingContractCount = _db.TransportOrders.Count(order =>
+                        order.ScheduleId == schedule.ScheduleId && order.Status == "CONTRACT_PENDING")
+                })
+                .ToListAsync();
+
+            return ApiResponse<PagedResult<OrderScheduleSummaryResponse>>.SuccessResponse(
+                PagedResult<OrderScheduleSummaryResponse>.Create(
+                    summaries,
+                    totalRecords,
+                    pageNumber <= 0 ? 1 : pageNumber,
+                    safePageSize),
+                "Đã tải danh sách lịch vận chuyển và tình trạng đơn hàng.");
         }
 
         public async Task<ApiResponse<OrderResponse>> GetOrderByIdAsync(Guid orderId)
@@ -1064,6 +1138,17 @@ namespace ColdChainX.Infrastructure.Services
                         DestCity = order.Schedule.Route.DestCity,
                         TransitTime = order.Schedule.Route.TransitTime,
                         CutOffTime = order.Schedule.Route.CutOffTime
+                    },
+                Schedule = order.Schedule == null
+                    ? null
+                    : new OrderScheduleResponse
+                    {
+                        ScheduleId = order.Schedule.ScheduleId,
+                        ScheduleName = order.Schedule.ScheduleName,
+                        DepartureDate = order.Schedule.DepartureDate,
+                        DepartureTime = order.Schedule.DepartureTime,
+                        CutOffTime = order.Schedule.CutOffTime,
+                        Status = order.Schedule.Status
                     },
                 Destination = order.DestLocationNavigation == null
                     ? null

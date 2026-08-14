@@ -22,10 +22,29 @@ namespace ColdChainX.API.Controllers
             [FromQuery] int pageNumber = 1,
             [FromQuery] int pageSize = 10,
             [FromQuery] string? status = null,
-            [FromQuery] Guid? routeId = null)
+            [FromQuery] Guid? routeId = null,
+            [FromQuery] Guid? scheduleId = null)
         {
-            var result = await _orderService.GetOrdersAsync(pageNumber, pageSize, status, routeId);
+            var result = await _orderService.GetOrdersAsync(pageNumber, pageSize, status, routeId, scheduleId);
             return Ok(result);
+        }
+
+        [HttpGet("schedule-summary")]
+        [Authorize(Roles = "Sales")]
+        public async Task<IActionResult> GetOrderScheduleSummary(
+            [FromQuery] DateOnly? fromDate = null,
+            [FromQuery] DateOnly? toDate = null,
+            [FromQuery] Guid? routeId = null,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10)
+        {
+            var result = await _orderService.GetOrderScheduleSummaryAsync(
+                fromDate,
+                toDate,
+                routeId,
+                pageNumber,
+                pageSize);
+            return result.Success ? Ok(result) : BadRequest(result);
         }
 
         [HttpGet("{orderId}/origin-warehouses")]

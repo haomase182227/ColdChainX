@@ -95,6 +95,22 @@ public sealed class ColdChainMonitoringService : IColdChainMonitoringService
             return;
         }
 
+        // During rescue approach, the replacement vehicle belongs to the trip but
+        // its route to the incident scene is not part of the customer's shipment.
+        var awaitingTransload = trip.Status == "DELAYED" && await _db.IncidentReports
+            .AsNoTracking()
+            .AnyAsync(i =>
+                i.TripId == trip.TripId &&
+                i.RequiresRescue &&
+                i.Status == "RESCUE_DISPATCHED" &&
+                i.ReplacementVehicleId == trip.VehicleId &&
+                i.TransloadConfirmedAt == null,
+                cancellationToken);
+        if (awaitingTransload)
+        {
+            return;
+        }
+
         var orders = await _db.TransportOrders
             .Where(o => o.MasterTripId == trip.TripId)
             .ToListAsync(cancellationToken);

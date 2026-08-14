@@ -125,7 +125,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("{id:guid}/confirm-transload")]
-        [Authorize(Roles = "Admin,WarehouseWorker,Dispatcher")]
+        [Authorize(Roles = "Admin,WarehouseWorker,Dispatcher,Driver")]
         public async Task<IActionResult> ConfirmTransload(
             [FromRoute] Guid id,
             [FromBody] ConfirmTransloadRequest request)
