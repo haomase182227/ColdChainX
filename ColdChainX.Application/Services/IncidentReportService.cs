@@ -217,10 +217,14 @@ public class IncidentReportService : IIncidentReportService
 
                 if (customerTemplateId != null)
                 {
-                    var customerUserIds = await _db.Users
-                        .Where(u => u.Role != null && u.Role.RoleName.ToUpper() == "CUSTOMER")
-                        .Select(u => u.UserId)
-                        .ToListAsync();
+                    var customerUserIds = await (
+                        from o in _db.TransportOrders
+                        where o.MasterTripId == incident.TripId.Value && o.CustomerId != null
+                        join c in _db.Customers on o.CustomerId equals c.CustomerId
+                        where c.Email != null && c.Email != ""
+                        join u in _db.Users on c.Email.ToLower() equals u.Email!.ToLower()
+                        select u.UserId
+                    ).Distinct().ToListAsync();
 
                     var custParams = JsonSerializer.Serialize(new Dictionary<string, string>
                     {
