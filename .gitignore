@@ -407,6 +407,7 @@ FodyWeavers.xsd
 
 # ColdChainX Custom Ignores (Inbound Flow Testing)
 scratch/
+test_build/
 ColdChainX.API/wwwroot/receipts/
 
 # Local-only design, task, audit and temporary files

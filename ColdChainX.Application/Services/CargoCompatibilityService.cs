@@ -135,7 +135,7 @@ public sealed class CargoCompatibilityService : ICargoCompatibilityService
     {
         var conflicts = new List<CargoCompatibilityConflictDto>();
 
-        if (lpn.Order == null || lpn.Order.ScheduleId != scheduleId)
+        if (scheduleId != Guid.Empty && (lpn.Order == null || lpn.Order.ScheduleId != scheduleId))
         {
             conflicts.Add(new CargoCompatibilityConflictDto
             {

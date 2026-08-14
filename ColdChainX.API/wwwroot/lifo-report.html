@@ -188,6 +188,7 @@
         let scene, camera, renderer, containerMesh, itemsGroup;
 
         const urlParams = new URLSearchParams(window.location.search);
+        const scheduleId = urlParams.get('scheduleId');
         const vehicleId = urlParams.get('vehicleId');
         const lpnIds = urlParams.get('lpnIds');
 
@@ -201,10 +202,15 @@
                 // The lpnIds from URL might be a string like "id1,id2", so we split it into an array
                 const idsArray = lpnIds.split(',').map(id => id.trim()).filter(id => id);
                 
+                const payload = { vehicleId: vehicleId, lpnIds: idsArray };
+                if (scheduleId) {
+                    payload.scheduleId = scheduleId;
+                }
+
                 const response = await fetch(`/api/Dispatch/simulate-packing?for3d=true`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ vehicleId: vehicleId, lpnIds: idsArray })
+                    body: JSON.stringify(payload)
                 });
                 
                 const data = await response.json();

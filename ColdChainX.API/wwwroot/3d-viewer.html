@@ -323,7 +323,7 @@
 
             if (embedded) return;
 
-            if (scheduleId && vId && lpnIdsRaw) {
+            if (vId && lpnIdsRaw) {
                 setTimeout(async () => {
                     const ids = lpnIdsRaw.split(',').map(id => id.trim()).filter(id => id);
                     await simulateFromUrl(scheduleId, vId, ids);
@@ -335,10 +335,15 @@
 
         async function simulateFromUrl(scheduleId, vehicleId, lpnIds) {
             try {
+                const payload = { vehicleId, lpnIds };
+                if (scheduleId) {
+                    payload.scheduleId = scheduleId;
+                }
+
                 const response = await fetch('/api/Dispatch/simulate-packing?for3d=true', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ scheduleId, vehicleId, lpnIds })
+                    body: JSON.stringify(payload)
                 });
 
                 const data = await response.json();
