@@ -353,19 +353,17 @@ public sealed class ColdChainMonitoringController : ControllerBase
                 i.CurrentLatitude.HasValue &&
                 i.CurrentLongitude.HasValue)
             .OrderBy(i => i.ReportedAt)
-            .Select(i => new
-            {
+            .Select(i => new RescueChartIncident(
                 i.IncidentId,
                 i.IncidentType,
                 i.Status,
-                Latitude = i.CurrentLatitude,
-                Longitude = i.CurrentLongitude,
+                i.CurrentLatitude.GetValueOrDefault(),
+                i.CurrentLongitude.GetValueOrDefault(),
                 i.ReportedAt,
                 i.RescueDispatchedAt,
                 i.TransloadConfirmedAt,
                 i.BrokenVehicleId,
-                i.ReplacementVehicleId
-            })
+                i.ReplacementVehicleId))
             .ToListAsync(cancellationToken);
 
         var rawLogs = await _db.TelemetryLogs
@@ -390,6 +388,7 @@ public sealed class ColdChainMonitoringController : ControllerBase
                  log.Timestamp < incident.TransloadConfirmedAt.Value)))
             .Select(t => new TrackingPoint(t.Timestamp, t.Temperature, t.Latitude, t.Longitude))
             .ToList();
+        points = InsertTransloadResumePoints(points, incidents);
         var sampledPoints = TrackingDownsampler.Downsample(points, Math.Clamp(maxPoints, 20, 1000));
 
         var alerts = await _db.AlertLogs
@@ -859,7 +858,63 @@ public sealed class ColdChainMonitoringController : ControllerBase
             ? device.DeviceId.ToString()
             : device.DeviceCode;
     }
+
+    private static List<TrackingPoint> InsertTransloadResumePoints(
+        List<TrackingPoint> points,
+        IReadOnlyCollection<RescueChartIncident> incidents)
+    {
+        var resumeIncidents = incidents
+            .Where(i => i.TransloadConfirmedAt.HasValue)
+            .OrderBy(i => i.TransloadConfirmedAt)
+            .ToList();
+        if (resumeIncidents.Count == 0)
+        {
+            return points;
+        }
+
+        var patched = new List<TrackingPoint>(points);
+        foreach (var incident in resumeIncidents)
+        {
+            var timestamp = incident.TransloadConfirmedAt!.Value;
+            var alreadyExists = patched.Any(point =>
+                Math.Abs((point.Timestamp - timestamp).TotalSeconds) <= 5
+                && Math.Abs(point.Lat - incident.Latitude) < 0.00001m
+                && Math.Abs(point.Lon - incident.Longitude) < 0.00001m);
+            if (alreadyExists)
+            {
+                continue;
+            }
+
+            var temp = patched
+                .Where(point => point.Timestamp <= timestamp)
+                .OrderByDescending(point => point.Timestamp)
+                .Select(point => point.TempC)
+                .FirstOrDefault();
+
+            patched.Add(new TrackingPoint(
+                timestamp,
+                temp,
+                incident.Latitude,
+                incident.Longitude));
+        }
+
+        return patched
+            .OrderBy(point => point.Timestamp)
+            .ToList();
+    }
 }
+
+public sealed record RescueChartIncident(
+    Guid IncidentId,
+    string IncidentType,
+    string? Status,
+    decimal Latitude,
+    decimal Longitude,
+    DateTime? ReportedAt,
+    DateTime? RescueDispatchedAt,
+    DateTime? TransloadConfirmedAt,
+    Guid? BrokenVehicleId,
+    Guid? ReplacementVehicleId);
 
 public sealed class AssignDeviceRequest
 {
