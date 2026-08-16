@@ -15,6 +15,7 @@ public sealed class ColdChainMonitoringService : IColdChainMonitoringService
     private const double DeliveryRadiusMeters = 50;
     private const double SoftGeoFenceRadiusMeters = 1000;
     private const double HardGeoFenceRadiusMeters = 2500;
+    private static readonly TimeSpan AlertCooldown = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan DeliveryGracePeriod = TimeSpan.FromMinutes(20);
     private static readonly ConcurrentDictionary<Guid, DoorDeliveryState> DoorDeliveryStates = new();
 
@@ -165,18 +166,24 @@ public sealed class ColdChainMonitoringService : IColdChainMonitoringService
             return;
         }
 
-        _db.AlertLogs.AddRange(alerts);
-        foreach (var alert in alerts)
+        var newAlerts = await FilterCooldownAlertsAsync(trip.TripId, alerts, cancellationToken);
+        if (newAlerts.Count == 0)
+        {
+            return;
+        }
+
+        _db.AlertLogs.AddRange(newAlerts);
+        foreach (var alert in newAlerts)
         {
             await BroadcastAlertAsync(trip.TripId, alert.AlertType, BuildAlertMessage(alert, risk), data.Timestamp, cancellationToken);
         }
 
-        if (alerts.Any(a => a.AlertType is "DOOR_OPEN" or "TEMP_HIGH" or "TEMP_CRITICAL" or "GEOFENCE_HARD" or "SMART_COLDCHAIN_RISK" or "TEMP_FORECAST_BREACH"))
+        if (newAlerts.Any(a => a.AlertType is "DOOR_OPEN" or "TEMP_HIGH" or "TEMP_CRITICAL" or "GEOFENCE_HARD" or "SMART_COLDCHAIN_RISK" or "TEMP_FORECAST_BREACH"))
         {
             var notificationData = new
             {
                 TripId = trip.TripId,
-                AlertTypes = alerts.Select(a => a.AlertType).ToArray(),
+                AlertTypes = newAlerts.Select(a => a.AlertType).ToArray(),
                 Timestamp = data.Timestamp
             };
 
@@ -283,6 +290,41 @@ public sealed class ColdChainMonitoringService : IColdChainMonitoringService
         }
 
         return alerts;
+    }
+
+    private async Task<List<AlertLog>> FilterCooldownAlertsAsync(
+        Guid tripId,
+        IReadOnlyCollection<AlertLog> alerts,
+        CancellationToken cancellationToken)
+    {
+        var cooldownStart = DateTime.UtcNow.Subtract(AlertCooldown);
+        var alertTypes = alerts.Select(a => a.AlertType).Distinct().ToArray();
+
+        var recentTypes = await _db.AlertLogs
+            .AsNoTracking()
+            .Where(a =>
+                a.TripId == tripId &&
+                alertTypes.Contains(a.AlertType) &&
+                a.CreatedAt >= cooldownStart)
+            .Select(a => a.AlertType)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        var pendingTypes = _db.ChangeTracker
+            .Entries<AlertLog>()
+            .Where(e =>
+                e.Entity.TripId == tripId &&
+                e.Entity.CreatedAt >= cooldownStart)
+            .Select(e => e.Entity.AlertType)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var blockedTypes = recentTypes
+            .Concat(pendingTypes)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return alerts
+            .Where(a => !blockedTypes.Contains(a.AlertType))
+            .ToList();
     }
 
     private static AlertLog CreateAlert(Guid tripId, string type, decimal? value, decimal latitude, decimal longitude)
