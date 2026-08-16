@@ -13,6 +13,10 @@ namespace ColdChainX.Application.DTOs.Orders
         public decimal ActualWeightKg { get; set; }
         public decimal ExpectedCbm { get; set; }
         public decimal? ActualCbm { get; set; }
+        public decimal? LengthCm { get; set; }
+        public decimal? WidthCm { get; set; }
+        public decimal? HeightCm { get; set; }
+        public Guid? DropoffStopId { get; set; }
 
         public string Status { get; set; } = null!;
         public Guid? MasterTripId { get; set; }
