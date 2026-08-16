@@ -34,6 +34,7 @@ public class IncidentReportService : IIncidentReportService
     private readonly ILogger<IncidentReportService> _logger;
     private readonly IIncidentRealtimeNotifier? _realtimeNotifier;
     private readonly INotificationService? _notificationService;
+    private readonly IRealtimeTelemetryService? _realtimeTelemetryService;
 
     public IncidentReportService(
         IApplicationDbContext db,
@@ -41,7 +42,8 @@ public class IncidentReportService : IIncidentReportService
         IFileService fileService,
         ILogger<IncidentReportService> logger,
         IIncidentRealtimeNotifier? realtimeNotifier = null,
-        INotificationService? notificationService = null)
+        INotificationService? notificationService = null,
+        IRealtimeTelemetryService? realtimeTelemetryService = null)
     {
         _db = db;
         _pdfGeneratorService = pdfGeneratorService;
@@ -49,6 +51,7 @@ public class IncidentReportService : IIncidentReportService
         _logger = logger;
         _realtimeNotifier = realtimeNotifier;
         _notificationService = notificationService;
+        _realtimeTelemetryService = realtimeTelemetryService;
     }
 
     public async Task<ApiResponse<IncidentResponse>> ReportIncidentAsync(
@@ -87,6 +90,8 @@ public class IncidentReportService : IIncidentReportService
             if (request.TripId.HasValue)
             {
                 trip = await _db.MasterTrips
+                    .Include(t => t.Vehicle)
+                        .ThenInclude(v => v.IotDevices)
                     .FirstOrDefaultAsync(t => t.TripId == request.TripId.Value);
                 if (trip == null)
                     return ApiResponse<IncidentResponse>.Failure("Trip not found.");
@@ -101,14 +106,22 @@ public class IncidentReportService : IIncidentReportService
             {
                 if (!request.TripId.HasValue)
                     return ApiResponse<IncidentResponse>.Failure("Driver incident reports must be linked to a trip.");
-                if (!request.CurrentLatitude.HasValue || !request.CurrentLongitude.HasValue)
-                    return ApiResponse<IncidentResponse>.Failure("Current location is required for driver incident reports.");
 
                 var assignedToTrip = await _db.TripDrivers.AnyAsync(td =>
                     td.TripId == request.TripId.Value &&
                     td.Driver.UserId == userId);
                 if (!assignedToTrip)
                     return ApiResponse<IncidentResponse>.Failure("Driver is not assigned to this trip.", 403);
+            }
+
+            var resolvedLocation = await ResolveIncidentVehicleLocationAsync(
+                trip,
+                isDriver ? null : request.CurrentLatitude,
+                isDriver ? null : request.CurrentLongitude);
+            if (isDriver && (!resolvedLocation.Latitude.HasValue || !resolvedLocation.Longitude.HasValue))
+            {
+                return ApiResponse<IncidentResponse>.Failure(
+                    "Vehicle telemetry location is required for driver incident reports. No realtime or persisted IoT GPS position was found for this trip.");
             }
 
             var uploadedEvidences = new List<(string Type, string Url)>();
@@ -126,8 +139,8 @@ public class IncidentReportService : IIncidentReportService
                 IncidentType = request.IncidentType.Value.ToString(),
                 Severity = request.Severity.Value.ToString(),
                 Description = request.Description.Trim(),
-                CurrentLatitude = request.CurrentLatitude,
-                CurrentLongitude = request.CurrentLongitude,
+                CurrentLatitude = resolvedLocation.Latitude,
+                CurrentLongitude = resolvedLocation.Longitude,
                 DriverPaidAmount = request.DriverPaidAmount,
                 RequiresRescue = request.RequiresRescue,
                 ExpenseStatus = request.DriverPaidAmount > 0 ? "PENDING_APPROVAL" : "NOT_REQUIRED",
@@ -973,6 +986,51 @@ public class IncidentReportService : IIncidentReportService
 
     private static string FormatDateTime(DateTime? value)
         => value.HasValue ? value.Value.ToString("dd/MM/yyyy HH:mm:ss") : "N/A";
+
+    private async Task<(decimal? Latitude, decimal? Longitude)> ResolveIncidentVehicleLocationAsync(
+        MasterTrip? trip,
+        decimal? fallbackLatitude,
+        decimal? fallbackLongitude)
+    {
+        if (trip == null)
+            return (fallbackLatitude, fallbackLongitude);
+
+        if (_realtimeTelemetryService != null && trip.Vehicle?.IotDevices != null)
+        {
+            foreach (var deviceCode in trip.Vehicle.IotDevices
+                         .Select(d => d.DeviceCode)
+                         .Where(code => !string.IsNullOrWhiteSpace(code))
+                         .Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    var realtimeGps = await _realtimeTelemetryService.GetLatestGpsPositionAsync(deviceCode!);
+                    if (realtimeGps != null && HasUsableCoordinates(realtimeGps.Latitude, realtimeGps.Longitude))
+                        return (realtimeGps.Latitude, realtimeGps.Longitude);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to resolve realtime GPS for incident trip {TripId}, device {DeviceCode}.", trip.TripId, deviceCode);
+                }
+            }
+        }
+
+        var latestTelemetry = await _db.TelemetryLogs
+            .AsNoTracking()
+            .Where(t => t.TripId == trip.TripId)
+            .OrderByDescending(t => t.Timestamp)
+            .FirstOrDefaultAsync();
+
+        if (latestTelemetry != null && HasUsableCoordinates(latestTelemetry.Latitude, latestTelemetry.Longitude))
+            return (latestTelemetry.Latitude, latestTelemetry.Longitude);
+
+        return (fallbackLatitude, fallbackLongitude);
+    }
+
+    private static bool HasUsableCoordinates(decimal latitude, decimal longitude)
+        => (latitude != 0m || longitude != 0m)
+           && latitude is >= -90m and <= 90m
+           && longitude is >= -180m and <= 180m;
 
     private static DateTime DbNow()
         => DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
