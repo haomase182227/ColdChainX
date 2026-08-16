@@ -106,6 +106,23 @@ public class DispatchController : ControllerBase
         return $"{d:yyyy-MM-dd} ({dayOfWeek})";
     }
 
+    private string GetPublicBaseUrl()
+    {
+        var scheme = Request.Scheme;
+        var forwardedProto = Request.Headers["X-Forwarded-Proto"].ToString();
+        if (!string.IsNullOrWhiteSpace(forwardedProto))
+        {
+            scheme = forwardedProto.Split(',')[0].Trim();
+        }
+
+        if (Request.Host.Host.Equals("api.coldchainx.online", StringComparison.OrdinalIgnoreCase))
+        {
+            scheme = "https";
+        }
+
+        return $"{scheme}://{Request.Host}";
+    }
+
 
     [HttpGet("available-lpns")]
     public async Task<IActionResult> GetAvailableLpns([FromQuery] Guid warehouseId, [FromQuery] int pageIndex = 1, [FromQuery] int pageSize = 20)
@@ -821,7 +838,7 @@ public class DispatchController : ControllerBase
 
         var distinctLpnIds = lpns.Select(l => l.LpnId).Distinct().ToList();
 
-        var baseUrl = $"{Request.Scheme}://{Request.Host}";
+        var baseUrl = GetPublicBaseUrl();
         var scheduleQuery = selectedScheduleId == Guid.Empty ? string.Empty : $"scheduleId={selectedScheduleId}&";
         var shareableLink = $"{baseUrl}/3d-viewer.html?{scheduleQuery}vehicleId={request.VehicleId}&lpnIds={string.Join(",", request.LpnIds)}";
 
@@ -1032,7 +1049,7 @@ public class DispatchController : ControllerBase
 
             var goongKey = Environment.GetEnvironmentVariable("key") ?? "xV6YBygCVRIQYybUrDAfaqYuuVfO9qvQBqQSA7uK";
             var html = ManifestTemplateBuilder.BuildHtml(result, goongKey);
-            var baseUrl = $"{Request.Scheme}://{Request.Host}";
+            var baseUrl = GetPublicBaseUrl();
             var lpnQuery = string.Join(",", request.LpnIds);
             var scheduleQuery = request.ScheduleId.HasValue ? $"scheduleId={request.ScheduleId}&" : string.Empty;
             var lifoReportUrl = $"{baseUrl}/lifo-report.html?{scheduleQuery}vehicleId={request.VehicleId}&lpnIds={lpnQuery}";
@@ -1076,7 +1093,7 @@ public class DispatchController : ControllerBase
         if (request == null || string.IsNullOrEmpty(request.VehicleId) || request.LpnIds == null || !request.LpnIds.Any())
             return BadRequest(new { Success = false, Error = "Vui long cung cap vehicleId va danh sach lpnIds." });
 
-        var baseUrl = $"{Request.Scheme}://{Request.Host}";
+        var baseUrl = GetPublicBaseUrl();
         var lpnQuery = string.Join(",", request.LpnIds);
         var scheduleQuery = string.IsNullOrWhiteSpace(request.ScheduleId) ? string.Empty : $"scheduleId={request.ScheduleId}&";
         
