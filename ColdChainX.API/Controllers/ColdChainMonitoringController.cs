@@ -69,11 +69,6 @@ public sealed class ColdChainMonitoringController : ControllerBase
             return Conflict(new { Success = false, Error = "Thiết bị IoT đã được gán cho một xe khác (Device is already paired to another active vehicle)." });
         }
 
-        if (!string.Equals(device.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
-        {
-            return BadRequest(new { Success = false, Error = "Device must be ACTIVE before assignment." });
-        }
-
         var existingVehicleDevice = await _db.IotDevices
             .FirstOrDefaultAsync(d => d.VehicleId == request.VehicleId && d.DeviceId != device.DeviceId, cancellationToken);
         if (existingVehicleDevice != null)
