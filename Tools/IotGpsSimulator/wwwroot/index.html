@@ -203,15 +203,20 @@
             alert('Vui lòng chọn Mã IoT!');
             return;
         }
+        const simulateStream = document.getElementById('inputHybrid').checked;
         fetch(`/api/iot/${code}/stream`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ stream: enableStream })
+            body: JSON.stringify({ stream: enableStream, simulateStream })
         })
         .then(res => res.json())
         .then(data => {
             if(data.success) {
-                const text = enableStream ? "📡 STREAM ON (Đang phát Telemetry qua MQTT)" : "⏸️ Stream OFF";
+                const text = enableStream
+                    ? (data.isSimulatedStreaming
+                        ? "📡 STREAM ON (Giả lập/Hybrid đang phát Telemetry)"
+                        : "📡 STREAM ON (Đã gửi lệnh tới IoT thật)")
+                    : "⏸️ Stream OFF";
                 const color = enableStream ? "#28a745" : "#ff9800";
                 document.getElementById('iotStatusDisplay').innerHTML = `Trạng thái: <b style="color:${color};">🟢 Online | ${text}</b>`;
                 loadIotDevices();
