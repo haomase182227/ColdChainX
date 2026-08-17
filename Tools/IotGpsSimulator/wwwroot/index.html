@@ -58,7 +58,7 @@
         <h3>Khởi tạo xe chạy</h3>
         <label>Trip ID (Dán mã Trip ID vào đây)</label>
         <div style="display:flex; gap: 5px;">
-            <input type="text" id="inputTripId" list="tripList" onchange="onTripSelected()" placeholder="VD: 550e8400-e29b-41d4-a716-446655440000" style="width: 100%; padding: 8px; margin: 5px 0 15px 0; border: 1px solid #ccc; border-radius: 4px;">
+            <input type="text" id="inputTripId" list="tripList" oninput="onTripInputChanged()" onchange="onTripSelected(true)" placeholder="VD: 550e8400-e29b-41d4-a716-446655440000" style="width: 100%; padding: 8px; margin: 5px 0 15px 0; border: 1px solid #ccc; border-radius: 4px;">
             <datalist id="tripList"></datalist>
             <button onclick="fetchTripPolyline()" style="width: auto; padding: 0 10px; margin-bottom: 10px;">Tải Tuyến</button>
         </div>
@@ -240,6 +240,8 @@
 
     let allTrips = [];
     let currentPolylineLayer = null;
+    let tripPolylineTimer = null;
+    let lastLoadedTripId = "";
 
     function decodePolyline(str, precision) {
         var index = 0, lat = 0, lng = 0, coordinates = [], shift = 0, result = 0, byte = null, latitude_change, longitude_change, factor = Math.pow(10, precision || 5);
@@ -300,16 +302,37 @@
             });
     }
 
-    function onTripSelected() {
-        const tripId = document.getElementById('inputTripId').value;
+    function isGuid(value) {
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test((value || '').trim());
+    }
+
+    function onTripInputChanged() {
+        onTripSelected(false);
+        clearTimeout(tripPolylineTimer);
+
+        const tripId = document.getElementById('inputTripId').value.trim();
+        if (!isGuid(tripId) || tripId === lastLoadedTripId) return;
+
+        tripPolylineTimer = setTimeout(() => {
+            fetchTripPolyline({ silent: true });
+        }, 500);
+    }
+
+    function onTripSelected(shouldFetchRoute = false) {
+        const tripId = document.getElementById('inputTripId').value.trim();
         const trip = allTrips.find(t => (t.TripId || t.tripId) === tripId);
         if (trip) {
             if (trip.DeviceCode || trip.deviceCode) {
                 document.getElementById('inputDeviceId').value = trip.DeviceCode || trip.deviceCode;
+                document.getElementById('inputCustomIotCode').value = trip.DeviceCode || trip.deviceCode;
             }
             if (trip.TargetTemperature || trip.targetTemperature) {
                 document.getElementById('inputTemp').value = trip.TargetTemperature || trip.targetTemperature;
             }
+        }
+
+        if (shouldFetchRoute && isGuid(tripId) && tripId !== lastLoadedTripId) {
+            fetchTripPolyline({ silent: true });
         }
     }
 
@@ -323,35 +346,55 @@
         }).addTo(map);
     }
 
-    function fetchTripPolyline() {
-        const tripId = document.getElementById('inputTripId').value;
+    async function fetchTripPolyline(options = {}) {
+        const silent = options.silent === true;
+        const tripId = document.getElementById('inputTripId').value.trim();
         if(!tripId) {
-            alert('Vui lòng nhập Trip ID!');
-            return;
+            if (!silent) alert('Vui lòng nhập Trip ID!');
+            return null;
+        }
+
+        if (!isGuid(tripId)) {
+            if (!silent) alert('Trip ID không hợp lệ!');
+            return null;
         }
         
-        fetch(`/api/fleet/trip/${tripId}/polyline`)
-            .then(res => res.json())
-            .then(data => {
-                if(data.polyline) {
-                    document.getElementById('inputPolyline').value = data.polyline;
-                    drawPolylineOnMap(data.polyline);
-                    if(data.deviceCode) {
-                        document.getElementById('inputDeviceId').value = data.deviceCode;
-                        alert('Đã tải thành công lộ trình và dò thấy IoT: ' + data.deviceCode);
-                    } else {
-                        alert('Đã tải thành công lộ trình! (Lưu ý: Không tìm thấy IoT gắn với chuyến này)');
-                    }
-                } else if(data.error) {
-                    alert('Lỗi: ' + data.error);
-                } else {
-                    alert('Lỗi khi tải Polyline: ' + JSON.stringify(data));
+        try {
+            const res = await fetch(`/api/fleet/trip/${tripId}/polyline`);
+            const data = await res.json();
+            if(data.polyline) {
+                document.getElementById('inputPolyline').value = data.polyline;
+                drawPolylineOnMap(data.polyline);
+                lastLoadedTripId = tripId;
+                if(data.deviceCode) {
+                    document.getElementById('inputDeviceId').value = data.deviceCode;
+                    document.getElementById('inputCustomIotCode').value = data.deviceCode;
+                    if (!silent) alert('Đã tải thành công lộ trình và dò thấy IoT: ' + data.deviceCode);
+                } else if (!silent) {
+                    alert('Đã tải thành công lộ trình! (Lưu ý: Không tìm thấy IoT gắn với chuyến này)');
                 }
-            })
-            .catch(e => alert('Lỗi gọi API: ' + e));
+                return data;
+            }
+
+            const message = data.error || JSON.stringify(data);
+            if (!silent) alert('Lỗi khi tải Polyline: ' + message);
+            return null;
+        } catch(e) {
+            if (!silent) alert('Lỗi gọi API: ' + e);
+            return null;
+        }
     }
 
-    function startSimulation() {
+    async function startSimulation() {
+        const tripId = document.getElementById('inputTripId').value.trim();
+        if (!document.getElementById('inputPolyline').value.trim() && isGuid(tripId)) {
+            const route = await fetchTripPolyline({ silent: true });
+            if (!route || !route.polyline) {
+                alert('Không thể tự tải Polyline từ Trip ID. Vui lòng kiểm tra Trip ID hoặc API route.');
+                return;
+            }
+        }
+
         let rawPolyline = document.getElementById('inputPolyline').value;
         if (rawPolyline) {
             // Loại bỏ tất cả ký tự xuống dòng (nếu copy từ text bị ngắt dòng)
