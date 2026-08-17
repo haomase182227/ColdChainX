@@ -146,7 +146,7 @@ public sealed class TelemetryMqttWorker : BackgroundService
                     incomingClientId = clientProp.GetString();
                 }
 
-                var parts = topic.Split('/');
+                var parts = topic.Split('/');   
                 if (parts.Length >= 2)
                 {
                     var deviceCode = parts[parts.Length - 2];

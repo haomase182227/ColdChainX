@@ -824,9 +824,17 @@ async Task SendMqttCommandAsync(string deviceId, string action, ILogger logger)
     try
     {
         await cmdClient.ConnectAsync(options);
+        var payload = JsonSerializer.Serialize(new
+        {
+            command = action,
+            deviceCode = deviceId,
+            timestamp = DateTimeOffset.UtcNow
+        });
+
         var msg = new MqttApplicationMessageBuilder()
             .WithTopic($"command/coldchain/{deviceId}")
-            .WithPayload($"{{\"action\":\"{action}\"}}")
+            .WithPayload(payload)
+            .WithQualityOfServiceLevel(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce)
             .Build();
         await cmdClient.PublishAsync(msg);
         await cmdClient.DisconnectAsync();
