@@ -118,14 +118,43 @@ app.MapPost("/api/iot/activate", async (ActivateIotRequest req, ILoggerFactory l
     return Results.Ok(new { success = true, deviceCode = req.DeviceCode, isOnline = true, isStreaming = false });
 });
 
-app.MapPost("/api/iot/{deviceCode}/stream", (string deviceCode, StreamIotRequest req) =>
+app.MapPost("/api/iot/{deviceCode}/stream", async (string deviceCode, StreamIotRequest req, ILoggerFactory loggerFactory, IConfiguration config) =>
 {
+    var logger = loggerFactory.CreateLogger("IotSimulator");
+
     if (StandaloneDevices.TryGetValue(deviceCode, out var state))
     {
         state.IsStreaming = req.Stream;
+        _ = SendMqttCommandAsync(deviceCode, req.Stream ? "START_STREAMING" : "STOP_STREAMING", logger);
         return Results.Ok(new { success = true, isStreaming = state.IsStreaming });
     }
-    return Results.BadRequest(new { error = $"Thiết bị '{deviceCode}' chưa được bật Online!" });
+
+    try
+    {
+        var connStr = config.GetConnectionString("LocalConnection");
+        using var conn = new NpgsqlConnection(connStr);
+        var isOnline = await conn.QuerySingleOrDefaultAsync<bool?>(
+            @"SELECT ""IsOnline"" FROM iot_devices WHERE device_code = @dc",
+            new { dc = deviceCode });
+
+        if (isOnline != true)
+        {
+            return Results.BadRequest(new { error = $"Thiết bị '{deviceCode}' chưa được bật Online!" });
+        }
+
+        _ = SendMqttCommandAsync(deviceCode, req.Stream ? "START_STREAMING" : "STOP_STREAMING", logger);
+        return Results.Ok(new
+        {
+            success = true,
+            isStreaming = req.Stream,
+            isHardwareDevice = true
+        });
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Error checking DB for IoT stream toggle");
+        return Results.BadRequest(new { error = "Lỗi khi kiểm tra trạng thái thiết bị IoT: " + ex.Message });
+    }
 });
 
 app.MapPost("/api/iot/{deviceCode}/deactivate", async (string deviceCode, ILoggerFactory loggerFactory, IConfiguration config) =>
