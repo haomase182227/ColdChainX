@@ -245,9 +245,23 @@ app.MapGet("/api/fleet/trip/{tripId}/polyline", async (string tripId, IConfigura
         }
 
         using var client = new HttpClient();
-        var backendUrl = config["BackendApiUrl"] ?? "http://localhost:5244";
-        var res = await client.GetAsync($"{backendUrl}/api/dispatch/trip/{tripId}/route");
-        if (!res.IsSuccessStatusCode) return Results.BadRequest("Cannot fetch from ColdChainX API");
+        var backendUrl = (config["BackendApiUrl"] ?? "http://localhost:5244").TrimEnd('/');
+        var backendAccessToken = config["BackendAccessToken"];
+        if (!string.IsNullOrWhiteSpace(backendAccessToken))
+        {
+            client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", $"Bearer {backendAccessToken}");
+        }
+
+        var res = await client.GetAsync($"{backendUrl}/api/Dispatch/trip/{tripId}/route");
+        if (!res.IsSuccessStatusCode)
+        {
+            var errorBody = await res.Content.ReadAsStringAsync();
+            return Results.BadRequest(new
+            {
+                error = $"Cannot fetch route from ColdChainX API. Status: {(int)res.StatusCode} {res.ReasonPhrase}",
+                details = errorBody
+            });
+        }
         
         var json = await res.Content.ReadAsStringAsync();
         using var doc = System.Text.Json.JsonDocument.Parse(json);
