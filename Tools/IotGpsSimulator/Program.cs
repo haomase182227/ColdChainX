@@ -124,9 +124,14 @@ app.MapPost("/api/iot/{deviceCode}/stream", async (string deviceCode, StreamIotR
 
     if (StandaloneDevices.TryGetValue(deviceCode, out var state))
     {
-        state.IsStreaming = req.Stream;
+        state.IsStreaming = req.Stream && req.SimulateStream;
         _ = SendMqttCommandAsync(deviceCode, req.Stream ? "START_STREAMING" : "STOP_STREAMING", logger);
-        return Results.Ok(new { success = true, isStreaming = state.IsStreaming });
+        return Results.Ok(new
+        {
+            success = true,
+            isStreaming = req.Stream,
+            isSimulatedStreaming = state.IsStreaming
+        });
     }
 
     try
@@ -1028,6 +1033,7 @@ public class ActivateIotRequest
 public class StreamIotRequest
 {
     public bool Stream { get; set; }
+    public bool SimulateStream { get; set; }
 }
 
 public class StandaloneIotState
