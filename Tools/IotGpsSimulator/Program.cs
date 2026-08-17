@@ -19,6 +19,7 @@ app.UseStaticFiles();
 
 var FleetState = new ConcurrentDictionary<string, VehicleSimulationState>();
 var StandaloneDevices = new ConcurrentDictionary<string, StandaloneIotState>();
+var CommandedStreamStates = new ConcurrentDictionary<string, bool>();
 var factory = new MqttFactory();
 
 app.MapGet("/api/iot/devices", async (IConfiguration config) =>
@@ -48,7 +49,9 @@ app.MapGet("/api/iot/devices", async (IConfiguration config) =>
         {
             var code = (string?)d.DeviceCode;
             var isSimRunning = code != null && StandaloneDevices.TryGetValue(code, out var std) && std.IsOnline;
-            var isStreaming = code != null && StandaloneDevices.TryGetValue(code, out var std2) && std2.IsStreaming;
+            var isStreaming = code != null &&
+                ((StandaloneDevices.TryGetValue(code, out var std2) && std2.IsStreaming) ||
+                 (CommandedStreamStates.TryGetValue(code, out var commandedStream) && commandedStream));
 
             return new
             {
@@ -112,6 +115,7 @@ app.MapPost("/api/iot/activate", async (ActivateIotRequest req, ILoggerFactory l
         CancellationTokenSource = new CancellationTokenSource()
     };
     StandaloneDevices[req.DeviceCode] = state;
+    CommandedStreamStates[req.DeviceCode] = false;
 
     _ = Task.Run(() => RunStandaloneIotSimulation(state, logger, config), state.CancellationTokenSource.Token);
     _ = PublishMqttStatusAsync(req.DeviceCode, true, logger);
@@ -121,9 +125,11 @@ app.MapPost("/api/iot/activate", async (ActivateIotRequest req, ILoggerFactory l
 app.MapPost("/api/iot/{deviceCode}/stream", async (string deviceCode, StreamIotRequest req, ILoggerFactory loggerFactory, IConfiguration config) =>
 {
     var logger = loggerFactory.CreateLogger("IotSimulator");
+    CommandedStreamStates[deviceCode] = req.Stream;
 
     if (StandaloneDevices.TryGetValue(deviceCode, out var state))
     {
+        state.AllowSimulatedStreaming = req.SimulateStream;
         state.IsStreaming = req.Stream && req.SimulateStream;
         _ = SendMqttCommandAsync(deviceCode, req.Stream ? "START_STREAMING" : "STOP_STREAMING", logger);
         return Results.Ok(new
@@ -166,6 +172,7 @@ app.MapPost("/api/iot/{deviceCode}/deactivate", async (string deviceCode, ILogge
 {
     var logger = loggerFactory.CreateLogger("IotSimulator");
     _ = PublishMqttStatusAsync(deviceCode, false, logger);
+    CommandedStreamStates.TryRemove(deviceCode, out _);
     if (StandaloneDevices.TryGetValue(deviceCode, out var state))
     {
         state.CancellationTokenSource?.Cancel();
@@ -337,7 +344,8 @@ app.MapPost("/api/fleet/start", async (SimulationRequest req, ILoggerFactory log
                 if (StandaloneDevices.TryGetValue(deviceId, out var std))
                 {
                     std.IsOnline = true;
-                    std.IsStreaming = true; // Khi bắt đầu lái xe, tự động stream on
+                    std.AllowSimulatedStreaming = req.IsHybridMode;
+                    std.IsStreaming = req.IsHybridMode; // Chỉ phát giả lập khi bật Hybrid
                 }
             }
             else
@@ -347,7 +355,8 @@ app.MapPost("/api/fleet/start", async (SimulationRequest req, ILoggerFactory log
         }
         else if (StandaloneDevices.TryGetValue(deviceId, out var runningStd))
         {
-            runningStd.IsStreaming = true; // Bật stream khi khởi hành
+            runningStd.AllowSimulatedStreaming = req.IsHybridMode;
+            runningStd.IsStreaming = req.IsHybridMode; // Chỉ phát giả lập khi bật Hybrid
         }
     }
     catch (Exception ex)
@@ -892,8 +901,8 @@ async Task RunStandaloneIotSimulation(StandaloneIotState state, ILogger logger, 
                 
                 if (payloadStr.Contains("START_STREAMING", StringComparison.OrdinalIgnoreCase))
                 {
-                    state.IsStreaming = true;
-                    logger.LogInformation($"[{state.DeviceCode}] => STREAM ON! (Đã kích hoạt gửi tín hiệu telemetry!)");
+                    state.IsStreaming = state.AllowSimulatedStreaming;
+                    logger.LogInformation($"[{state.DeviceCode}] => STREAM ON command received. SimulatedStream={state.IsStreaming}");
                 }
                 else if (payloadStr.Contains("STOP_STREAMING", StringComparison.OrdinalIgnoreCase))
                 {
@@ -1042,6 +1051,7 @@ public class StandaloneIotState
     public Guid? VehicleId { get; set; }
     public bool IsOnline { get; set; }
     public bool IsStreaming { get; set; }
+    public bool AllowSimulatedStreaming { get; set; }
     public double CurrentLat { get; set; }
     public double CurrentLon { get; set; }
     public double Temperature { get; set; }
