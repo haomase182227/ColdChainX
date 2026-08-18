@@ -396,9 +396,13 @@ public class WarehouseFlowService : IWarehouseFlowService
             WarehouseId = lpn.WarehouseId,
             StorageLocation = lpn.StorageLocation,
             Quantity = lpn.Quantity,
-            ExpectedWeightKg = (lpn.Order.OrderDimension?.ExpectedWeightKg ?? 0m),
+            ExpectedWeightKg = lpn.PackageVariantLines.Count > 0
+                ? lpn.PackageVariantLines.Sum(line => line.ExpectedWeightKg)
+                : (lpn.Order.OrderDimension?.ExpectedWeightKg ?? 0m),
             ActualWeightKg = lpn.ActualWeightKg,
-            ExpectedCbm = (lpn.Order.OrderDimension?.ExpectedCbm ?? 0m),
+            ExpectedCbm = lpn.PackageVariantLines.Count > 0
+                ? lpn.PackageVariantLines.Sum(line => line.ExpectedCbm)
+                : (lpn.Order.OrderDimension?.ExpectedCbm ?? 0m),
             ActualCbm = lpn.ActualCbm,
             MaxDiffPercent = Math.Max(
                 CalculateDiffPercent((lpn.Order.OrderDimension?.ExpectedWeightKg ?? 0m), lpn.ActualWeightKg),
@@ -416,7 +420,24 @@ public class WarehouseFlowService : IWarehouseFlowService
                 : null,
             InboundTime = lpn.InboundTime,
             SlaDeadline = lpn.SlaDeadline,
-            AgingColor = CalculateAgingColor(lpn)
+            AgingColor = CalculateAgingColor(lpn),
+            PackageLines = lpn.PackageVariantLines.Select(line => new LpnPackageVariantLineResponse
+            {
+                LpnPackageVariantLineId = line.LpnPackageVariantLineId,
+                OrderPackageVariantId = line.OrderPackageVariantId,
+                VariantName = line.VariantName,
+                PackingType = line.PackingType,
+                Quantity = line.Quantity,
+                ExpectedWeightKg = line.ExpectedWeightKg,
+                ActualWeightKg = line.ActualWeightKg,
+                ExpectedCbm = line.ExpectedCbm,
+                ActualCbm = line.ActualCbm,
+                LengthCm = line.LengthCm,
+                WidthCm = line.WidthCm,
+                HeightCm = line.HeightCm,
+                DiffPercent = line.DiffPercent,
+                HasDiscrepancy = line.HasDiscrepancy
+            }).ToList()
         };
     }
 

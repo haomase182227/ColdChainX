@@ -21,4 +21,16 @@ public class LpnDto
     public string? Condition { get; set; }
     public DateTime? InboundTime { get; set; }
     public DateTime? SlaDeadline { get; set; }
+    public List<LpnPackageLineDto> PackageLines { get; set; } = new();
+}
+
+public class LpnPackageLineDto
+{
+    public Guid? OrderPackageVariantId { get; set; }
+    public string? VariantName { get; set; }
+    public string PackingType { get; set; } = string.Empty;
+    public int Quantity { get; set; }
+    public decimal ActualWeightKg { get; set; }
+    public decimal ActualCbm { get; set; }
+    public bool HasDiscrepancy { get; set; }
 }

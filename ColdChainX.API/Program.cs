@@ -163,11 +163,14 @@ app.UseForwardedHeaders(new ForwardedHeadersOptions
     KnownProxies = { }
 });
 
+app.UseStaticFiles();
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "ColdChainX API v1");
     c.RoutePrefix = "swagger"; // Access at /swagger
+    c.InjectStylesheet("/swagger/create-order-form.css");
+    c.InjectJavascript("/swagger/create-order-form.js");
 });
 
 app.UseRouting();
@@ -179,7 +182,6 @@ app.Use(async (context, next) =>
 });
 
 app.UseCors("CorsPolicy");
-app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 

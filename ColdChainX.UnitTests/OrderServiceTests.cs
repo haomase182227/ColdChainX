@@ -178,6 +178,167 @@ namespace ColdChainX.UnitTests
             Assert.Equal("PENDING_REVIEW", result.Data.Status);
         }
 
+        [Fact]
+        public async Task AdminUpdateOrder_ReplacesPackageSizesAndRecalculatesTotals()
+        {
+            var orderId = Guid.NewGuid();
+            var firstVariantId = Guid.NewGuid();
+            var removedVariantId = Guid.NewGuid();
+            _db.TransportOrders.Add(new TransportOrder
+            {
+                OrderId = orderId,
+                TrackingCode = "TRK-MULTI-SIZE-01",
+                ItemName = "Mango",
+                Category = "FOOD",
+                Quantity = 15,
+                PackingType = "Box",
+                TempCondition = "5",
+                Status = "PENDING_REVIEW",
+                OrderDimension = new OrderDimension
+                {
+                    OrderId = orderId,
+                    ExpectedWeightKg = 190m,
+                    ActualWeightKg = 190m,
+                    ExpectedCbm = 1.1m,
+                    ActualCbm = 1.1m,
+                    LengthCm = 40m,
+                    WidthCm = 30m,
+                    HeightCm = 25m
+                },
+                PackageVariants = new List<OrderPackageVariant>
+                {
+                    new()
+                    {
+                        OrderPackageVariantId = firstVariantId,
+                        OrderId = orderId,
+                        VariantName = "Small",
+                        PackingType = "Box",
+                        Quantity = 10,
+                        ExpectedUnitWeightKg = 8m,
+                        ExpectedTotalWeightKg = 80m,
+                        ExpectedCbm = 0.3m,
+                        LengthCm = 40m,
+                        WidthCm = 30m,
+                        HeightCm = 25m,
+                        CreatedAt = DateTime.UtcNow
+                    },
+                    new()
+                    {
+                        OrderPackageVariantId = removedVariantId,
+                        OrderId = orderId,
+                        VariantName = "Large",
+                        PackingType = "Crate",
+                        Quantity = 5,
+                        ExpectedUnitWeightKg = 22m,
+                        ExpectedTotalWeightKg = 110m,
+                        ExpectedCbm = 0.8m,
+                        LengthCm = 80m,
+                        WidthCm = 50m,
+                        HeightCm = 40m,
+                        CreatedAt = DateTime.UtcNow
+                    }
+                }
+            });
+            await _db.SaveChangesAsync();
+
+            var result = await _service.AdminUpdateOrderAsync(orderId, new UpdateOrderRequest
+            {
+                PackageVariants = new List<UpdateOrderPackageVariantRequest>
+                {
+                    new()
+                    {
+                        OrderPackageVariantId = firstVariantId,
+                        VariantName = "Small updated",
+                        PackagingType = "Box",
+                        Quantity = 12,
+                        ExpectedUnitWeightKg = 8m,
+                        LengthCm = 40m,
+                        WidthCm = 30m,
+                        HeightCm = 25m
+                    },
+                    new()
+                    {
+                        VariantName = "Medium",
+                        PackagingType = "Crate",
+                        Quantity = 3,
+                        ExpectedUnitWeightKg = 15m,
+                        LengthCm = 60m,
+                        WidthCm = 40m,
+                        HeightCm = 30m
+                    }
+                }
+            }, Guid.NewGuid());
+
+            Assert.True(result.Success, result.Message);
+            Assert.Equal(15, result.Data.Quantity);
+            Assert.Equal(141m, result.Data.ExpectedWeightKg);
+            Assert.Equal(2, result.Data.PackageVariants.Count);
+            Assert.DoesNotContain(result.Data.PackageVariants, item => item.OrderPackageVariantId == removedVariantId);
+
+            var saved = await _db.TransportOrders
+                .Include(order => order.PackageVariants)
+                .Include(order => order.OrderDimension)
+                .SingleAsync(order => order.OrderId == orderId);
+            Assert.Equal(15, saved.Quantity);
+            Assert.Equal(141m, saved.OrderDimension!.ExpectedWeightKg);
+            Assert.Equal(0.576m, saved.OrderDimension.ExpectedCbm);
+            Assert.Equal(2, saved.PackageVariants.Count);
+        }
+
+        [Fact]
+        public async Task ReviewOrder_ApprovesIndividualLegalDocument()
+        {
+            var orderId = Guid.NewGuid();
+            var docId = Guid.NewGuid();
+            var reviewerId = Guid.NewGuid();
+            _db.TransportOrders.Add(new TransportOrder
+            {
+                OrderId = orderId,
+                TrackingCode = "TRK-DOC-REVIEW-01",
+                ItemName = "Mango",
+                Category = "FOOD",
+                Quantity = 1,
+                PackingType = "Box",
+                TempCondition = "5",
+                Status = "PENDING_REVIEW"
+            });
+            _db.TransportDocuments.Add(new TransportDocument
+            {
+                DocId = docId,
+                OrderId = orderId,
+                DocType = "LEGAL_DOCUMENT",
+                ImageUrl = "https://example.test/legal.pdf",
+                UploadedBy = Guid.NewGuid(),
+                CreatedAt = DateTime.UtcNow
+            });
+            _db.Quotations.Add(new Quotation
+            {
+                QuoteId = Guid.NewGuid(),
+                OrderId = orderId,
+                Status = "DRAFT",
+                CreatedAt = DateTime.UtcNow,
+                BaseFreight = 100m,
+                VatAmount = 8m,
+                FinalAmount = 108m,
+                PricingSource = "AUTO"
+            });
+            await _db.SaveChangesAsync();
+
+            var result = await _service.ReviewOrderAsync(orderId, new ReviewOrderRequest
+            {
+                Action = "APPROVE",
+                DocumentReviews = new List<ReviewOrderDocumentRequest>
+                {
+                    new() { DocId = docId, IsApproved = true }
+                }
+            }, reviewerId);
+
+            Assert.True(result.Success, result.Message);
+            var document = await _db.TransportDocuments.SingleAsync(item => item.DocId == docId);
+            Assert.Equal(reviewerId, document.VerifiedBy);
+            Assert.Null(document.RejectReason);
+        }
+
         #region Mock Classes
 
         private class MockLocationService : ILocationService

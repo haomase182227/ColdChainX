@@ -36,6 +36,7 @@ public class GetPendingDiscrepanciesQueryHandler : IRequestHandler<GetPendingDis
                 .ThenInclude(o => o.InboundAsns)
             .Include(l => l.Order)
                 .ThenInclude(o => o.OrderDimension)
+            .Include(l => l.PackageVariantLines)
             .Include(l => l.Customer)
             .Where(l => l.State == LpnState.DISCREPANCY_HOLD)
             .OrderByDescending(l => l.CreatedAt);
@@ -50,10 +51,15 @@ public class GetPendingDiscrepanciesQueryHandler : IRequestHandler<GetPendingDis
         var items = pendingLpns.Select(l =>
         {
             var order = l.Order;
-            var expectedCbm = order.OrderDimension == null
-                ? 0m
-                : InboundQcMeasurementCalculator.CalculateExpectedCbm(order.OrderDimension, order.Quantity);
-            var weightDiff = CalculateDiffPercent(order.OrderDimension?.ExpectedWeightKg ?? 0m, l.ActualWeightKg);
+            var expectedWeight = l.PackageVariantLines.Count > 0
+                ? l.PackageVariantLines.Sum(line => line.ExpectedWeightKg)
+                : order.OrderDimension?.ExpectedWeightKg ?? 0m;
+            var expectedCbm = l.PackageVariantLines.Count > 0
+                ? l.PackageVariantLines.Sum(line => line.ExpectedCbm)
+                : order.OrderDimension == null
+                    ? 0m
+                    : InboundQcMeasurementCalculator.CalculateExpectedCbm(order.OrderDimension, order.Quantity);
+            var weightDiff = CalculateDiffPercent(expectedWeight, l.ActualWeightKg);
             var cbmDiff = CalculateDiffPercent(expectedCbm, l.ActualCbm);
             var diffPercent = Math.Max(weightDiff, cbmDiff);
 
@@ -67,7 +73,7 @@ public class GetPendingDiscrepanciesQueryHandler : IRequestHandler<GetPendingDis
                 TrackingCode = order.TrackingCode,
                 CustomerName = l.Customer?.CompanyName,
                 ItemName = order.ItemName,
-                ExpectedWeightKg = order.OrderDimension?.ExpectedWeightKg ?? 0m,
+                ExpectedWeightKg = expectedWeight,
                 ActualWeightKg = l.ActualWeightKg,
                 ExpectedCbm = expectedCbm,
                 ActualCbm = l.ActualCbm,
@@ -77,7 +83,24 @@ public class GetPendingDiscrepanciesQueryHandler : IRequestHandler<GetPendingDis
                 AsnCode = asn?.AsnCode,
                 ReceiptId = l.ReceiptId,
                 EvidenceImageUrl = l.EvidenceImageUrl,
-                CreatedAt = l.CreatedAt
+                CreatedAt = l.CreatedAt,
+                PackageLines = l.PackageVariantLines.Select(line => new LpnPackageVariantLineResponse
+                {
+                    LpnPackageVariantLineId = line.LpnPackageVariantLineId,
+                    OrderPackageVariantId = line.OrderPackageVariantId,
+                    VariantName = line.VariantName,
+                    PackingType = line.PackingType,
+                    Quantity = line.Quantity,
+                    ExpectedWeightKg = line.ExpectedWeightKg,
+                    ActualWeightKg = line.ActualWeightKg,
+                    ExpectedCbm = line.ExpectedCbm,
+                    ActualCbm = line.ActualCbm,
+                    LengthCm = line.LengthCm,
+                    WidthCm = line.WidthCm,
+                    HeightCm = line.HeightCm,
+                    DiffPercent = line.DiffPercent,
+                    HasDiscrepancy = line.HasDiscrepancy
+                }).ToList()
             };
         }).ToList();
 

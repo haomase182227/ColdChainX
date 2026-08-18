@@ -338,9 +338,11 @@ namespace ColdChainX.Infrastructure.Services
             if (appendix.Order.CustomerId != customerId)
                 return ApiResponse<ContractAppendixResponse>.Failure("CustomerId does not match the order customer");
 
-            var lpn = await _db.Lpns.FirstOrDefaultAsync(l => l.OrderId == appendix.OrderId);
-            if (lpn == null)
-                return ApiResponse<ContractAppendixResponse>.Failure("No LPN found for this order");
+            var heldLpns = await _db.Lpns
+                .Where(l => l.OrderId == appendix.OrderId && l.State == LpnState.DISCREPANCY_HOLD)
+                .ToListAsync();
+            if (heldLpns.Count == 0)
+                return ApiResponse<ContractAppendixResponse>.Failure("No discrepancy-hold LPN found for this order");
 
             var strategy = _db.Database.CreateExecutionStrategy();
             return await strategy.ExecuteAsync(async () =>
@@ -348,42 +350,49 @@ namespace ColdChainX.Infrastructure.Services
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
                 const decimal PenaltyAmount = 200000m;
-                var resolveCmd = new ResolveDiscrepancyCommand
+                var returnSlips = new List<(InboundReturnSlip Slip, Lpn Lpn)>();
+                foreach (var lpn in heldLpns)
                 {
-                    LpnId = lpn.LpnId,
-                    Accept = false,
-                    PenaltyAmount = PenaltyAmount,
-                    PenaltyReason = "Discrepancy appendix rejected by customer"
-                };
-                var resolveRes = await _mediator.Send(resolveCmd);
-                if (!resolveRes.Success)
-                {
-                    await transaction.RollbackAsync();
-                    return ApiResponse<ContractAppendixResponse>.Failure($"Failed to resolve discrepancy: {resolveRes.Message}");
-                }
+                    var resolveRes = await _mediator.Send(new ResolveDiscrepancyCommand
+                    {
+                        LpnId = lpn.LpnId,
+                        Accept = false,
+                        PenaltyAmount = PenaltyAmount,
+                        PenaltyReason = "Discrepancy appendix rejected by customer"
+                    });
+                    if (!resolveRes.Success)
+                    {
+                        await transaction.RollbackAsync();
+                        return ApiResponse<ContractAppendixResponse>.Failure($"Failed to resolve discrepancy for {lpn.LpnCode}: {resolveRes.Message}");
+                    }
 
-                var returnSlip = new InboundReturnSlip
-                {
-                    ReturnSlipId = Guid.NewGuid(),
-                    OrderId = appendix.OrderId,
-                    LpnId = lpn.LpnId,
-                    SlipCode = lpn.LpnCode,
-                    ReturnedWeightKg = lpn.ActualWeightKg,
-                    ReturnedCbm = lpn.ActualCbm,
-                    ReturnedQty = lpn.Quantity,
-                    Reason = "Discrepancy appendix rejected by customer",
-                    CreatedAt = DbNow()
-                };
-                _db.InboundReturnSlips.Add(returnSlip);
+                    var returnSlip = new InboundReturnSlip
+                    {
+                        ReturnSlipId = Guid.NewGuid(),
+                        OrderId = appendix.OrderId,
+                        LpnId = lpn.LpnId,
+                        SlipCode = lpn.LpnCode,
+                        ReturnedWeightKg = lpn.ActualWeightKg,
+                        ReturnedCbm = lpn.ActualCbm,
+                        ReturnedQty = lpn.Quantity,
+                        Reason = "Discrepancy appendix rejected by customer",
+                        CreatedAt = DbNow()
+                    };
+                    _db.InboundReturnSlips.Add(returnSlip);
+                    returnSlips.Add((returnSlip, lpn));
+                }
 
                 await _db.SaveChangesAsync();
 
-                try
+                foreach (var (returnSlip, lpn) in returnSlips)
                 {
-                    returnSlip.PdfUrl = await GenerateReturnSlipPdfAsync(appendix.Order, lpn, returnSlip, PenaltyAmount);
-                }
-                catch (Exception ex)
-                {
+                    try
+                    {
+                        returnSlip.PdfUrl = await GenerateReturnSlipPdfAsync(appendix.Order, lpn, returnSlip, PenaltyAmount);
+                    }
+                    catch (Exception ex)
+                    {
+                    }
                 }
 
                 appendix.Status = Executed;
@@ -440,18 +449,19 @@ namespace ColdChainX.Infrastructure.Services
                         PaidAt = penaltyBill.PaidAt
                     };
                 }
+                var primaryReturnSlip = returnSlips[0].Slip;
                 resp.ReturnSlip = new InboundReturnSlipResponse
                 {
-                    ReturnSlipId = returnSlip.ReturnSlipId,
-                    OrderId = returnSlip.OrderId,
-                    LpnId = returnSlip.LpnId,
-                    SlipCode = returnSlip.SlipCode,
-                    ReturnedWeightKg = returnSlip.ReturnedWeightKg,
-                    ReturnedCbm = returnSlip.ReturnedCbm,
-                    ReturnedQty = returnSlip.ReturnedQty,
-                    Reason = returnSlip.Reason,
-                    PdfUrl = returnSlip.PdfUrl,
-                    CreatedAt = returnSlip.CreatedAt
+                    ReturnSlipId = primaryReturnSlip.ReturnSlipId,
+                    OrderId = primaryReturnSlip.OrderId,
+                    LpnId = primaryReturnSlip.LpnId,
+                    SlipCode = primaryReturnSlip.SlipCode,
+                    ReturnedWeightKg = primaryReturnSlip.ReturnedWeightKg,
+                    ReturnedCbm = primaryReturnSlip.ReturnedCbm,
+                    ReturnedQty = primaryReturnSlip.ReturnedQty,
+                    Reason = primaryReturnSlip.Reason,
+                    PdfUrl = primaryReturnSlip.PdfUrl,
+                    CreatedAt = primaryReturnSlip.CreatedAt
                 };
 
                 await _hubContext.Clients.Group("Group_Sales").SendAsync("AppendixRejected", new
@@ -486,9 +496,11 @@ namespace ColdChainX.Infrastructure.Services
             if (appendix.Status != Accepted && appendix.Status != Rejected)
                 return ApiResponse<ContractAppendixResponse>.Failure($"Appendix resolution can only be executed if status is ACCEPTED or REJECTED. Current: {appendix.Status}");
 
-            var lpn = await _db.Lpns.FirstOrDefaultAsync(l => l.OrderId == appendix.OrderId);
-            if (lpn == null)
-                return ApiResponse<ContractAppendixResponse>.Failure("No LPN found for this order");
+            var heldLpns = await _db.Lpns
+                .Where(l => l.OrderId == appendix.OrderId && l.State == LpnState.DISCREPANCY_HOLD)
+                .ToListAsync();
+            if (heldLpns.Count == 0)
+                return ApiResponse<ContractAppendixResponse>.Failure("No discrepancy-hold LPN found for this order");
 
             var wasRejected = appendix.Status == Rejected;
 
@@ -499,16 +511,18 @@ namespace ColdChainX.Infrastructure.Services
 
                 if (appendix.Status == Accepted)
                 {
-                    var resolveCmd = new ResolveDiscrepancyCommand
+                    foreach (var lpn in heldLpns)
                     {
-                        LpnId = lpn.LpnId,
-                        Accept = true
-                    };
-                    var resolveRes = await _mediator.Send(resolveCmd);
-                    if (!resolveRes.Success)
-                    {
-                        await transaction.RollbackAsync();
-                        return ApiResponse<ContractAppendixResponse>.Failure($"Failed to resolve discrepancy: {resolveRes.Message}");
+                        var resolveRes = await _mediator.Send(new ResolveDiscrepancyCommand
+                        {
+                            LpnId = lpn.LpnId,
+                            Accept = true
+                        });
+                        if (!resolveRes.Success)
+                        {
+                            await transaction.RollbackAsync();
+                            return ApiResponse<ContractAppendixResponse>.Failure($"Failed to resolve discrepancy for {lpn.LpnCode}: {resolveRes.Message}");
+                        }
                     }
 
                     var invoiceCode = await GenerateUniqueInvoiceCodeAsync();
@@ -554,42 +568,49 @@ namespace ColdChainX.Infrastructure.Services
                 else if (appendix.Status == Rejected)
                 {
                     const decimal PenaltyAmount = 200000m;
-                    var resolveCmd = new ResolveDiscrepancyCommand
+                    var returnSlips = new List<(InboundReturnSlip Slip, Lpn Lpn)>();
+                    foreach (var lpn in heldLpns)
                     {
-                        LpnId = lpn.LpnId,
-                        Accept = false,
-                        PenaltyAmount = PenaltyAmount,
-                        PenaltyReason = "Discrepancy appendix rejected by customer"
-                    };
-                    var resolveRes = await _mediator.Send(resolveCmd);
-                    if (!resolveRes.Success)
-                    {
-                        await transaction.RollbackAsync();
-                        return ApiResponse<ContractAppendixResponse>.Failure($"Failed to resolve discrepancy: {resolveRes.Message}");
-                    }
+                        var resolveRes = await _mediator.Send(new ResolveDiscrepancyCommand
+                        {
+                            LpnId = lpn.LpnId,
+                            Accept = false,
+                            PenaltyAmount = PenaltyAmount,
+                            PenaltyReason = "Discrepancy appendix rejected by customer"
+                        });
+                        if (!resolveRes.Success)
+                        {
+                            await transaction.RollbackAsync();
+                            return ApiResponse<ContractAppendixResponse>.Failure($"Failed to resolve discrepancy for {lpn.LpnCode}: {resolveRes.Message}");
+                        }
 
-                    var returnSlip = new InboundReturnSlip
-                    {
-                        ReturnSlipId = Guid.NewGuid(),
-                        OrderId = appendix.OrderId,
-                        LpnId = lpn.LpnId,
-                        SlipCode = lpn.LpnCode,
-                        ReturnedWeightKg = lpn.ActualWeightKg,
-                        ReturnedCbm = lpn.ActualCbm,
-                        ReturnedQty = lpn.Quantity,
-                        Reason = "Discrepancy appendix rejected by customer",
-                        CreatedAt = DbNow()
-                    };
-                    _db.InboundReturnSlips.Add(returnSlip);
+                        var returnSlip = new InboundReturnSlip
+                        {
+                            ReturnSlipId = Guid.NewGuid(),
+                            OrderId = appendix.OrderId,
+                            LpnId = lpn.LpnId,
+                            SlipCode = lpn.LpnCode,
+                            ReturnedWeightKg = lpn.ActualWeightKg,
+                            ReturnedCbm = lpn.ActualCbm,
+                            ReturnedQty = lpn.Quantity,
+                            Reason = "Discrepancy appendix rejected by customer",
+                            CreatedAt = DbNow()
+                        };
+                        _db.InboundReturnSlips.Add(returnSlip);
+                        returnSlips.Add((returnSlip, lpn));
+                    }
 
                     await _db.SaveChangesAsync();
 
-                    try
+                    foreach (var (returnSlip, lpn) in returnSlips)
                     {
-                        returnSlip.PdfUrl = await GenerateReturnSlipPdfAsync(appendix.Order, lpn, returnSlip, PenaltyAmount);
-                    }
-                    catch (Exception ex)
-                    {
+                        try
+                        {
+                            returnSlip.PdfUrl = await GenerateReturnSlipPdfAsync(appendix.Order, lpn, returnSlip, PenaltyAmount);
+                        }
+                        catch (Exception ex)
+                        {
+                        }
                     }
                 }
 
@@ -859,17 +880,31 @@ namespace ColdChainX.Infrastructure.Services
 
             var maxDiff = Math.Max(Math.Abs(weightDiff), Math.Abs(cbmDiff));
 
-            var lpn = await _db.Lpns
+            var lpns = await _db.Lpns
                 .AsNoTracking()
-                .FirstOrDefaultAsync(l => l.OrderId == data.Order.OrderId);
+                .Include(l => l.PackageVariantLines)
+                    .ThenInclude(line => line.OrderPackageVariant)
+                .Where(l => l.OrderId == data.Order.OrderId && l.State != LpnState.DELETED)
+                .ToListAsync();
 
-            var expectedLength = (data.Order.OrderDimension?.LengthCm ?? 0m);
-            var expectedWidth = (data.Order.OrderDimension?.WidthCm ?? 0m);
-            var expectedHeight = (data.Order.OrderDimension?.HeightCm ?? 0m);
+            var singlePackageLine = lpns.Count == 1 && lpns[0].PackageVariantLines.Count == 1
+                ? lpns[0].PackageVariantLines.Single()
+                : null;
+            var canCompareSingleDimensions = lpns.Count == 1 && lpns[0].PackageVariantLines.Count <= 1;
 
-            var actualLength = lpn?.LengthCm ?? 0m;
-            var actualWidth = lpn?.WidthCm ?? 0m;
-            var actualHeight = lpn?.HeightCm ?? 0m;
+            var expectedLength = singlePackageLine?.OrderPackageVariant?.LengthCm
+                ?? (canCompareSingleDimensions ? data.Order.OrderDimension?.LengthCm ?? 0m : 0m);
+            var expectedWidth = singlePackageLine?.OrderPackageVariant?.WidthCm
+                ?? (canCompareSingleDimensions ? data.Order.OrderDimension?.WidthCm ?? 0m : 0m);
+            var expectedHeight = singlePackageLine?.OrderPackageVariant?.HeightCm
+                ?? (canCompareSingleDimensions ? data.Order.OrderDimension?.HeightCm ?? 0m : 0m);
+
+            var actualLength = singlePackageLine?.LengthCm
+                ?? (canCompareSingleDimensions ? lpns[0].LengthCm ?? 0m : 0m);
+            var actualWidth = singlePackageLine?.WidthCm
+                ?? (canCompareSingleDimensions ? lpns[0].WidthCm ?? 0m : 0m);
+            var actualHeight = singlePackageLine?.HeightCm
+                ?? (canCompareSingleDimensions ? lpns[0].HeightCm ?? 0m : 0m);
 
             var lengthDiff = expectedLength > 0
                 ? Math.Round((actualLength - expectedLength) / expectedLength * 100m, 2)

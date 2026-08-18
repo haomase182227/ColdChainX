@@ -43,6 +43,8 @@ namespace ColdChainX.Infrastructure.Services
                     .ThenInclude(o => o.DestLocationNavigation)
                 .Include(a => a.Order)
                     .ThenInclude(o => o.WarehouseReceipts)
+                .Include(a => a.Order)
+                    .ThenInclude(o => o.PackageVariants)
                 .AsNoTracking();
 
             if (orderId.HasValue)
@@ -147,7 +149,23 @@ namespace ColdChainX.Infrastructure.Services
                     QrCodeValue = item.QrCodeValue,
                     CreatedAt = item.CreatedAt,
                     WarehouseId = matchedWarehouseId,
-                    WarehouseName = matchedWarehouseName
+                    WarehouseName = matchedWarehouseName,
+                    PackageVariants = item.Order.PackageVariants
+                        .OrderBy(package => package.CreatedAt)
+                        .Select(package => new InboundPackageVariantResponse
+                        {
+                            OrderPackageVariantId = package.OrderPackageVariantId,
+                            VariantName = package.VariantName,
+                            PackingType = package.PackingType,
+                            Quantity = package.Quantity,
+                            ExpectedUnitWeightKg = package.ExpectedUnitWeightKg,
+                            ExpectedTotalWeightKg = package.ExpectedTotalWeightKg,
+                            ExpectedCbm = package.ExpectedCbm,
+                            LengthCm = package.LengthCm,
+                            WidthCm = package.WidthCm,
+                            HeightCm = package.HeightCm
+                        })
+                        .ToList()
                 });
             }
 

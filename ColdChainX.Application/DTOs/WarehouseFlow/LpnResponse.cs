@@ -45,4 +45,24 @@ public class LpnResponse
     public DateTime? SlaDeadline { get; set; }
 
     public string? AgingColor { get; set; }
+
+    public IReadOnlyCollection<LpnPackageVariantLineResponse> PackageLines { get; set; } = Array.Empty<LpnPackageVariantLineResponse>();
+}
+
+public class LpnPackageVariantLineResponse
+{
+    public Guid LpnPackageVariantLineId { get; set; }
+    public Guid? OrderPackageVariantId { get; set; }
+    public string? VariantName { get; set; }
+    public string PackingType { get; set; } = string.Empty;
+    public int Quantity { get; set; }
+    public decimal ExpectedWeightKg { get; set; }
+    public decimal ActualWeightKg { get; set; }
+    public decimal ExpectedCbm { get; set; }
+    public decimal ActualCbm { get; set; }
+    public decimal LengthCm { get; set; }
+    public decimal WidthCm { get; set; }
+    public decimal HeightCm { get; set; }
+    public decimal DiffPercent { get; set; }
+    public bool HasDiscrepancy { get; set; }
 }

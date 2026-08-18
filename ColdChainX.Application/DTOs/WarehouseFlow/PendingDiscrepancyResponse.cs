@@ -21,4 +21,5 @@ public class PendingDiscrepancyResponse
     public Guid ReceiptId { get; set; }
     public string? EvidenceImageUrl { get; set; }
     public DateTime CreatedAt { get; set; }
+    public IReadOnlyCollection<LpnPackageVariantLineResponse> PackageLines { get; set; } = Array.Empty<LpnPackageVariantLineResponse>();
 }

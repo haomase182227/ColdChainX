@@ -64,6 +64,28 @@ public class PutawayLpnCommandHandler : IRequestHandler<PutawayLpnCommand, Putaw
 
         await _context.SaveChangesAsync(cancellationToken);
 
+        var orderLpns = await _context.Lpns
+            .Where(item => item.OrderId == lpn.OrderId && item.State != LpnState.DELETED)
+            .ToListAsync(cancellationToken);
+        if (orderLpns.Count > 0 && orderLpns.All(item => item.State == LpnState.IN_STOCK))
+        {
+            var order = await _context.TransportOrders
+                .FirstOrDefaultAsync(item => item.OrderId == lpn.OrderId, cancellationToken);
+            if (order != null)
+                order.Status = "IN_STOCK";
+
+            var asns = await _context.InboundAsns
+                .Where(item => item.OrderId == lpn.OrderId)
+                .ToListAsync(cancellationToken);
+            foreach (var asn in asns)
+                asn.Status = "PUTAWAY_COMPLETED";
+
+            if (lpn.Receipt != null)
+                lpn.Receipt.ReferenceDocNo = "COMPLETED";
+
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
         await _mediator.Publish(new Events.LpnPutawayCompletedEvent(lpn.OrderId, lpn.LpnId), cancellationToken);
 
         return new PutawayLpnResponse 

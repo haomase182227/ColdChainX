@@ -52,5 +52,11 @@ namespace ColdChainX.Application.DTOs.Orders
 
         [FromForm(Name = "Cargo_Photos")]
         public List<IFormFile>? CargoPhotos { get; set; }
+
+        /// <summary>
+        /// Complete package-size list. Use PackageVariants[index].PropertyName
+        /// multipart keys. Existing sizes omitted from the list are removed.
+        /// </summary>
+        public List<UpdateOrderPackageVariantRequest>? PackageVariants { get; set; }
     }
 }

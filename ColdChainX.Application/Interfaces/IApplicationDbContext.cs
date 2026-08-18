@@ -22,6 +22,7 @@ namespace ColdChainX.Application.Interfaces
         DbSet<OutboundOrderItem> OutboundOrderItems { get; }
 
         DbSet<TransportOrder> TransportOrders { get; }
+        DbSet<OrderPackageVariant> OrderPackageVariants { get; }
         DbSet<Customer> Customers { get; }
         DbSet<Driver> Drivers { get; }
         DbSet<MasterTrip> MasterTrips { get; }
@@ -39,6 +40,7 @@ namespace ColdChainX.Application.Interfaces
         DbSet<ChatMessage> ChatMessages { get; }
         DbSet<CustomerContract> CustomerContracts { get; }
         DbSet<Lpn> Lpns { get; }
+        DbSet<LpnPackageVariantLine> LpnPackageVariantLines { get; }
         DbSet<PenaltyBill> PenaltyBills { get; }
         DbSet<DeliveryEpod> DeliveryEpods { get; }
         DbSet<ContractAppendix> ContractAppendices { get; }

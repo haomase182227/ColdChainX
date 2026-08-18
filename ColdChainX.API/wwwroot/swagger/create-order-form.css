@@ -1,0 +1,158 @@
+.ccx-order-form {
+  margin: 16px 20px 24px;
+  padding: 18px;
+  border: 1px solid #49cc90;
+  border-radius: 6px;
+  background: rgba(73, 204, 144, 0.06);
+  font-family: sans-serif;
+}
+
+.ccx-order-form h4,
+.ccx-order-form h5 {
+  margin: 0 0 12px;
+}
+
+.ccx-order-form-note {
+  margin: 0 0 16px;
+  color: #3b4151;
+  line-height: 1.45;
+}
+
+.ccx-order-grid,
+.ccx-variant-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.ccx-order-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: #3b4151;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ccx-order-form input,
+.ccx-order-form select {
+  width: 100%;
+  min-height: 36px;
+  box-sizing: border-box;
+  padding: 7px 9px;
+  border: 1px solid #d8dde7;
+  border-radius: 4px;
+  background: #fff;
+  color: #3b4151;
+}
+
+.ccx-order-form input[type="checkbox"] {
+  width: auto;
+  min-height: auto;
+}
+
+.ccx-checkboxes {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-top: 14px;
+}
+
+.ccx-checkboxes label {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.ccx-variants-toolbar,
+.ccx-variant-header,
+.ccx-order-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ccx-variants-toolbar {
+  margin: 22px 0 10px;
+}
+
+.ccx-variant-card {
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid #c6cedd;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.ccx-file-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.ccx-variant-summary,
+.ccx-order-summary {
+  margin-top: 10px;
+  color: #3b4151;
+  font-size: 12px;
+}
+
+.ccx-order-summary {
+  padding: 10px;
+  border-radius: 4px;
+  background: #eef8f3;
+  font-weight: 700;
+}
+
+.ccx-order-form button {
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.ccx-add-size,
+.ccx-submit-order {
+  background: #49cc90;
+  color: #fff;
+}
+
+.ccx-remove-size {
+  background: #f3f4f6;
+  color: #b42318;
+}
+
+.ccx-submit-order:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.ccx-order-result {
+  max-height: 340px;
+  margin-top: 14px;
+  padding: 12px;
+  overflow: auto;
+  border-radius: 4px;
+  background: #263238;
+  color: #fff;
+  white-space: pre-wrap;
+}
+
+.ccx-hidden-default-order-ui {
+  display: none !important;
+}
+
+@media (max-width: 720px) {
+  .ccx-order-form {
+    margin: 12px 8px 18px;
+  }
+
+  .ccx-checkboxes,
+  .ccx-order-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

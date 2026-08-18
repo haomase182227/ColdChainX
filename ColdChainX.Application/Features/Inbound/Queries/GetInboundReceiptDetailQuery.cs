@@ -29,28 +29,46 @@ public class GetInboundReceiptDetailQueryHandler : IRequestHandler<GetInboundRec
         var receipt = await _context.WarehouseReceipts
             .Include(x => x.Lpns)
                 .ThenInclude(l => l.Order)
+            .Include(x => x.Lpns)
+                .ThenInclude(l => l.PackageVariantLines)
             .Where(x => x.ReceiptId == request.Id)
-            .Select(x => new InboundReceiptDetailDto
-            {
-                ReceiptId = x.ReceiptId,
-                ReceiptCode = x.ReceiptCode,
-                OrderId = x.OrderId,
-                Status = x.ReceiptType,
-                ArrivalTime = x.CreatedAt,
-                CompletionTime = x.CreatedAt,
-                DriverName = x.DelivererName,
-                TruckPlate = "N/A",
-                Items = x.Lpns.Select(i => new InboundReceiptItemDto
-                {
-                    ReceiptItemId = i.LpnId,
-                    ItemName = i.Order.ItemName,
-                    ExpectedQuantity = i.Quantity,
-                    ActualQuantity = i.Quantity,
-                    ConditionStatus = "GOOD"
-                }).ToList()
-            })
             .FirstOrDefaultAsync(cancellationToken);
 
-        return receipt;
+        if (receipt == null)
+            return null;
+
+        var items = receipt.Lpns.SelectMany(lpn => lpn.PackageVariantLines.Count > 0
+            ? lpn.PackageVariantLines.Select(line => new InboundReceiptItemDto
+            {
+                ReceiptItemId = line.LpnPackageVariantLineId,
+                ItemName = $"{lpn.Order.ItemName} - {line.VariantName ?? "Default size"}",
+                ExpectedQuantity = line.Quantity,
+                ActualQuantity = line.Quantity,
+                ConditionStatus = line.HasDiscrepancy ? "DISCREPANCY" : "GOOD"
+            })
+            : new[]
+            {
+                new InboundReceiptItemDto
+                {
+                    ReceiptItemId = lpn.LpnId,
+                    ItemName = lpn.Order.ItemName,
+                    ExpectedQuantity = lpn.Quantity,
+                    ActualQuantity = lpn.Quantity,
+                    ConditionStatus = lpn.State == ColdChainX.Core.Enums.LpnState.DISCREPANCY_HOLD ? "DISCREPANCY" : "GOOD"
+                }
+            }).ToList();
+
+        return new InboundReceiptDetailDto
+        {
+            ReceiptId = receipt.ReceiptId,
+            ReceiptCode = receipt.ReceiptCode,
+            OrderId = receipt.OrderId,
+            Status = receipt.ReceiptType,
+            ArrivalTime = receipt.CreatedAt,
+            CompletionTime = receipt.CreatedAt,
+            DriverName = receipt.DelivererName,
+            TruckPlate = "N/A",
+            Items = items
+        };
     }
 }

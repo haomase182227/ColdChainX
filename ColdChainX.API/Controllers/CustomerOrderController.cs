@@ -104,6 +104,8 @@ namespace ColdChainX.API.Controllers
                 .Include(o => o.DestLocationNavigation)
                 .Include(o => o.PickupLocationNavigation)
                 .Include(o => o.OrderDimension)
+                .Include(o => o.PackageVariants)
+                    .ThenInclude(package => package.TransportDocuments)
                 .Include(o => o.MasterTrip).ThenInclude(t => t!.Vehicle)
                 .Include(o => o.MasterTrip).ThenInclude(t => t!.TripDrivers).ThenInclude(td => td.Driver)
                 .Include(o => o.MasterTrip).ThenInclude(t => t!.Route)
@@ -133,6 +135,34 @@ namespace ColdChainX.API.Controllers
                 ["cbmVolume"] = order.OrderDimension?.ExpectedCbm,
                 ["originAddress"] = order.PickupLocationNavigation?.Address,
                 ["destinationAddress"] = order.DestLocationNavigation?.Address,
+                ["packageVariants"] = order.PackageVariants
+                    .OrderBy(package => package.CreatedAt)
+                    .Select(package => new
+                    {
+                        package.OrderPackageVariantId,
+                        package.VariantName,
+                        package.PackingType,
+                        package.Quantity,
+                        package.ExpectedUnitWeightKg,
+                        package.ExpectedTotalWeightKg,
+                        package.ExpectedCbm,
+                        package.LengthCm,
+                        package.WidthCm,
+                        package.HeightCm,
+                        LegalDocuments = package.TransportDocuments
+                            .Where(document => document.DocType == "LEGAL_DOCUMENT")
+                            .Select(document => new
+                            {
+                                document.DocId,
+                                document.ImageUrl,
+                                IsVerified = document.VerifiedBy.HasValue && string.IsNullOrWhiteSpace(document.RejectReason),
+                                document.RejectReason
+                            }),
+                        CargoPhotos = package.TransportDocuments
+                            .Where(document => document.DocType == "ITEM_IMAGE")
+                            .Select(document => new { document.DocId, document.ImageUrl })
+                    })
+                    .ToList(),
             };
 
             var latestReceipt = order.WarehouseReceipts

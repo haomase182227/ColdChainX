@@ -15,6 +15,7 @@ public class ReEvaluateInboundQcCommand : IRequest<ReEvaluateInboundQcResponse>
     public decimal? Temperature { get; set; }
     public List<IFormFile>? EvidenceImages { get; set; }
     public Guid WarehouseId { get; set; }
+    public List<PackageVariantQcMeasurement> PackageMeasurements { get; set; } = new();
 }
 
 public class ReEvaluateInboundQcResponse
@@ -26,4 +27,5 @@ public class ReEvaluateInboundQcResponse
     public string? State { get; set; }
     public decimal DiffPercent { get; set; }
     public string? PdfUrl { get; set; }
+    public List<ProcessInboundQcPackageLineResponse> PackageLines { get; set; } = new();
 }

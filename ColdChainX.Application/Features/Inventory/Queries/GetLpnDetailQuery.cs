@@ -41,12 +41,24 @@ public class GetLpnDetailQueryHandler : IRequestHandler<GetLpnDetailQuery, LpnDt
                 WarehouseName = x.Warehouse != null ? x.Warehouse.WarehouseName : null,
                 StorageLocation = x.StorageLocation,
                 Quantity = x.Quantity,
-                ExpectedWeightKg = x.Order != null && x.Order.OrderDimension != null ? x.Order.OrderDimension.ExpectedWeightKg : 0m,
+                ExpectedWeightKg = x.PackageVariantLines.Any()
+                    ? x.PackageVariantLines.Sum(line => line.ExpectedWeightKg)
+                    : (x.Order != null && x.Order.OrderDimension != null ? x.Order.OrderDimension.ExpectedWeightKg : 0m),
                 ActualWeightKg = x.ActualWeightKg,
                 State = x.State.ToString(),
                 Condition = x.DiscrepancyReason,
                 InboundTime = x.InboundTime,
-                SlaDeadline = x.SlaDeadline
+                SlaDeadline = x.SlaDeadline,
+                PackageLines = x.PackageVariantLines.Select(line => new LpnPackageLineDto
+                {
+                    OrderPackageVariantId = line.OrderPackageVariantId,
+                    VariantName = line.VariantName,
+                    PackingType = line.PackingType,
+                    Quantity = line.Quantity,
+                    ActualWeightKg = line.ActualWeightKg,
+                    ActualCbm = line.ActualCbm,
+                    HasDiscrepancy = line.HasDiscrepancy
+                }).ToList()
             })
             .FirstOrDefaultAsync(cancellationToken);
 

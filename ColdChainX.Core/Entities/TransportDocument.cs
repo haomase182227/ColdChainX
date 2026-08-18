@@ -9,6 +9,8 @@ public partial class TransportDocument
 
     public Guid? OrderId { get; set; }
 
+    public Guid? OrderPackageVariantId { get; set; }
+
     public string DocType { get; set; } = null!;
 
     public string ImageUrl { get; set; } = null!;
@@ -24,6 +26,8 @@ public partial class TransportDocument
     public virtual ICollection<ClaimEvidence> ClaimEvidences { get; set; } = new List<ClaimEvidence>();
 
     public virtual TransportOrder? Order { get; set; }
+
+    public virtual OrderPackageVariant? OrderPackageVariant { get; set; }
 
     public virtual User UploadedByNavigation { get; set; } = null!;
 

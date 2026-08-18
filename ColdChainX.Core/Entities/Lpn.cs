@@ -67,4 +67,6 @@ public partial class Lpn
     public virtual Warehouse? Warehouse { get; set; }
 
     public virtual ICollection<PenaltyBill> PenaltyBills { get; set; } = new List<PenaltyBill>();
+
+    public virtual ICollection<LpnPackageVariantLine> PackageVariantLines { get; set; } = new List<LpnPackageVariantLine>();
 }

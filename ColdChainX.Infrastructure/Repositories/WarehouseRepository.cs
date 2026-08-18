@@ -92,6 +92,7 @@ namespace ColdChainX.Infrastructure.Repositories
         {
             var query = _db.Lpns
                 .Include(l => l.Receipt)
+                .Include(l => l.PackageVariantLines)
                 .Where(l => l.WarehouseId == warehouseId && l.State == ColdChainX.Core.Enums.LpnState.IN_STOCK)
                 .AsNoTracking();
 

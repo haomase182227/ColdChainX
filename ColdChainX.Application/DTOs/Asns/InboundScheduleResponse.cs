@@ -24,5 +24,20 @@ namespace ColdChainX.Application.DTOs.Asns
         
         public Guid? WarehouseId { get; set; }
         public string? WarehouseName { get; set; }
+        public IReadOnlyCollection<InboundPackageVariantResponse> PackageVariants { get; set; } = Array.Empty<InboundPackageVariantResponse>();
+    }
+
+    public class InboundPackageVariantResponse
+    {
+        public Guid OrderPackageVariantId { get; set; }
+        public string? VariantName { get; set; }
+        public string PackingType { get; set; } = string.Empty;
+        public int Quantity { get; set; }
+        public decimal ExpectedUnitWeightKg { get; set; }
+        public decimal ExpectedTotalWeightKg { get; set; }
+        public decimal ExpectedCbm { get; set; }
+        public decimal LengthCm { get; set; }
+        public decimal WidthCm { get; set; }
+        public decimal HeightCm { get; set; }
     }
 }

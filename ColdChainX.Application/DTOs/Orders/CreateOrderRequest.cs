@@ -47,6 +47,13 @@ namespace ColdChainX.Application.DTOs.Orders
         [FromForm(Name = "Is_Stackable")]
         public bool IsStackable { get; set; } = true;
 
+        /// <summary>
+        /// Package sizes for the same item. Indexed multipart keys use the
+        /// PackageVariants[0].PropertyName convention.
+        /// </summary>
+        public List<CreateOrderPackageVariantRequest> PackageVariants { get; set; } = new();
+
+        // Legacy order-level files remain supported for existing clients.
         [FromForm(Name = "Legal_Documents")]
         public List<IFormFile> LegalDocuments { get; set; } = new();
 

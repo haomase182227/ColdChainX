@@ -207,14 +207,31 @@ namespace ColdChainX.Infrastructure.Services
 
         public async Task<ApiResponse<CreateOrderResponse>> CreateOrderAsync(CreateOrderRequest request, Guid customerId)
         {
-            if (request.ExpectedWeightKg <= 0)
-                return ApiResponse<CreateOrderResponse>.Failure("Expected weight must be greater than 0", 400);
-            if (request.Quantity <= 0)
-                return ApiResponse<CreateOrderResponse>.Failure("Quantity must be greater than 0", 400);
-            if (request.LengthCm <= 0 || request.WidthCm <= 0 || request.HeightCm <= 0)
-                return ApiResponse<CreateOrderResponse>.Failure("Dimensions must be greater than 0", 400);
             if (string.IsNullOrWhiteSpace(request.ItemName) || string.IsNullOrWhiteSpace(request.Category))
                 return ApiResponse<CreateOrderResponse>.Failure("Item name and category are required", 400);
+
+            var usesPackageVariants = request.PackageVariants is { Count: > 0 };
+            var packageRequests = NormalizePackageVariantRequests(request);
+            if (packageRequests.Count == 0)
+                return ApiResponse<CreateOrderResponse>.Failure("At least one package size is required", 400);
+            if (packageRequests.Count > 20)
+                return ApiResponse<CreateOrderResponse>.Failure("An order cannot contain more than 20 package sizes", 400);
+            if (packageRequests.Any(package => package.Quantity <= 0
+                                               || package.ExpectedUnitWeightKg <= 0
+                                               || package.LengthCm <= 0
+                                               || package.WidthCm <= 0
+                                               || package.HeightCm <= 0
+                                               || string.IsNullOrWhiteSpace(package.PackagingType)))
+            {
+                return ApiResponse<CreateOrderResponse>.Failure(
+                    "Every package size requires a packaging type, positive quantity, unit weight and dimensions",
+                    400);
+            }
+
+            var allVariantFiles = packageRequests
+                .SelectMany(package => package.LegalDocuments.Concat(package.CargoPhotos));
+            if (allVariantFiles.Any(file => file.Length <= 0 || file.Length > 10 * 1024 * 1024))
+                return ApiResponse<CreateOrderResponse>.Failure("Every package file must be non-empty and smaller than 10MB", 400);
 
             var strategy = _db.Database.CreateExecutionStrategy();
 
@@ -244,7 +261,27 @@ namespace ColdChainX.Infrastructure.Services
 
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
-                var expectedCbm = Math.Round(request.LengthCm * request.WidthCm * request.HeightCm * request.Quantity / 1000000m, 4);
+                var packageVariants = packageRequests
+                    .Select(package => new OrderPackageVariant
+                    {
+                        OrderPackageVariantId = Guid.NewGuid(),
+                        VariantName = string.IsNullOrWhiteSpace(package.VariantName) ? null : package.VariantName.Trim(),
+                        PackingType = package.PackagingType.Trim(),
+                        Quantity = package.Quantity,
+                        ExpectedUnitWeightKg = package.ExpectedUnitWeightKg,
+                        ExpectedTotalWeightKg = Math.Round(package.ExpectedUnitWeightKg * package.Quantity, 2),
+                        ExpectedCbm = CalculatePackageCbm(package),
+                        LengthCm = package.LengthCm,
+                        WidthCm = package.WidthCm,
+                        HeightCm = package.HeightCm,
+                        CreatedAt = DbNow()
+                    })
+                    .ToList();
+
+                var totalQuantity = packageVariants.Sum(package => package.Quantity);
+                var totalExpectedWeightKg = packageVariants.Sum(package => package.ExpectedTotalWeightKg);
+                var totalExpectedCbm = packageVariants.Sum(package => package.ExpectedCbm);
+                var representativePackage = packageVariants[0];
                 var coordinates = await _locationService.GetCoordinatesAsync(request.DestAddressText);
 
                 var location = new Location
@@ -266,21 +303,24 @@ namespace ColdChainX.Infrastructure.Services
                     CustomerId = customerId,
                     ItemName = request.ItemName.Trim(),
                     Category = request.Category.Trim(),
-                    Quantity = request.Quantity,
-                    PackingType = request.PackagingType.Trim(),
+                    Quantity = totalQuantity,
+                    PackingType = BuildPackingTypeSummary(packageVariants),
                     TempCondition = request.TempCondition.ToString("0.##", CultureInfo.InvariantCulture),
                     HasStrongOdor = request.HasStrongOdor,
                     IsStackable = request.IsStackable,
                     OrderDimension = new OrderDimension
                     {
-                        ExpectedWeightKg = request.ExpectedWeightKg,
-                        ActualWeightKg = request.ExpectedWeightKg,
-                        ExpectedCbm = expectedCbm,
-                        ActualCbm = expectedCbm,
-                        LengthCm = request.LengthCm,
-                        WidthCm = request.WidthCm,
-                        HeightCm = request.HeightCm
+                        ExpectedWeightKg = totalExpectedWeightKg,
+                        ActualWeightKg = totalExpectedWeightKg,
+                        ExpectedCbm = totalExpectedCbm,
+                        ActualCbm = totalExpectedCbm,
+                        // Legacy summary fields remain populated for old consumers.
+                        // PackageVariants is authoritative whenever there is more than one size.
+                        LengthCm = representativePackage.LengthCm,
+                        WidthCm = representativePackage.WidthCm,
+                        HeightCm = representativePackage.HeightCm
                     },
+                    PackageVariants = usesPackageVariants ? packageVariants : new List<OrderPackageVariant>(),
                     ScheduleId = request.ScheduleId,
                     DropoffStopId = request.DropoffStopId,
                     DestLocation = location.LocationId,
@@ -289,7 +329,7 @@ namespace ColdChainX.Infrastructure.Services
                 };
                 _db.TransportOrders.Add(order);
 
-                                var uploadedBy = await ResolveCustomerUserIdAsync(customerId);
+                var uploadedBy = await ResolveCustomerUserIdAsync(customerId);
                 if (!uploadedBy.HasValue)
                     return ApiResponse<CreateOrderResponse>.Failure("Customer user was not found for document upload");
 
@@ -329,6 +369,44 @@ namespace ColdChainX.Infrastructure.Services
                     }
                 }
 
+                for (var index = 0; usesPackageVariants && index < packageRequests.Count; index++)
+                {
+                    var packageRequest = packageRequests[index];
+                    var packageVariant = packageVariants[index];
+
+                    foreach (var file in packageRequest.LegalDocuments)
+                    {
+                        var document = new TransportDocument
+                        {
+                            DocId = Guid.NewGuid(),
+                            OrderId = order.OrderId,
+                            OrderPackageVariantId = packageVariant.OrderPackageVariantId,
+                            DocType = "LEGAL_DOCUMENT",
+                            ImageUrl = await _fileService.UploadFileAsync(file),
+                            UploadedBy = uploadedBy.Value,
+                            CreatedAt = DbNow()
+                        };
+                        packageVariant.TransportDocuments.Add(document);
+                        _db.TransportDocuments.Add(document);
+                    }
+
+                    foreach (var file in packageRequest.CargoPhotos)
+                    {
+                        var document = new TransportDocument
+                        {
+                            DocId = Guid.NewGuid(),
+                            OrderId = order.OrderId,
+                            OrderPackageVariantId = packageVariant.OrderPackageVariantId,
+                            DocType = "ITEM_IMAGE",
+                            ImageUrl = await _fileService.UploadFileAsync(file),
+                            UploadedBy = uploadedBy.Value,
+                            CreatedAt = DbNow()
+                        };
+                        packageVariant.TransportDocuments.Add(document);
+                        _db.TransportDocuments.Add(document);
+                    }
+                }
+
                 var draftQuotation = await BuildAutoDraftQuotationAsync(order, route, location);
                 _db.Quotations.Add(draftQuotation);
 
@@ -363,6 +441,9 @@ namespace ColdChainX.Infrastructure.Services
                     TempCondition = order.TempCondition,
                     ExpectedWeightKg = order.OrderDimension?.ExpectedWeightKg ?? 0,
                     ExpectedCbm = order.OrderDimension?.ExpectedCbm ?? 0,
+                    PackageVariants = order.PackageVariants
+                        .Select(ToPackageVariantResponse)
+                        .ToList(),
                     Status = order.Status,
                     CreatedAt = order.CreatedAt ?? DateTime.UtcNow
                 }, "Order created successfully");
@@ -376,6 +457,8 @@ namespace ColdChainX.Infrastructure.Services
             {
                 var order = await _db.TransportOrders
                     .Include(o => o.OrderDimension)
+                    .Include(o => o.PackageVariants)
+                        .ThenInclude(package => package.TransportDocuments)
                     .Include(o => o.DestLocationNavigation)
                     .Include(o => o.Schedule)
                     .ThenInclude(s => s!.Route)
@@ -383,6 +466,34 @@ namespace ColdChainX.Infrastructure.Services
 
                 if (order == null)
                     return ApiResponse<CreateOrderResponse>.Failure("Order not found", 404);
+
+                if (request.PackageVariants != null && HasLegacyPackageUpdate(request))
+                {
+                    return ApiResponse<CreateOrderResponse>.Failure(
+                        "Send either PackageVariants or the legacy quantity, weight and dimension fields, not both.",
+                        400);
+                }
+
+                if (order.PackageVariants.Count > 0
+                    && request.PackageVariants == null
+                    && HasLegacyPackageUpdate(request))
+                {
+                    return ApiResponse<CreateOrderResponse>.Failure(
+                        "This order uses package sizes. Update the package variants instead of the legacy quantity, weight and dimension fields.",
+                        409);
+                }
+
+                if (request.PackageVariants != null)
+                {
+                    var packageError = ValidatePackageVariantUpdate(request.PackageVariants, order.PackageVariants);
+                    if (packageError != null)
+                        return ApiResponse<CreateOrderResponse>.Failure(packageError, 400);
+
+                    if (await _db.Lpns.AnyAsync(lpn => lpn.OrderId == order.OrderId))
+                        return ApiResponse<CreateOrderResponse>.Failure(
+                            "Package sizes cannot be changed after inbound QC has created an LPN.",
+                            409);
+                }
 
                 if (request.ExpectedWeightKg.HasValue && request.ExpectedWeightKg.Value <= 0)
                     return ApiResponse<CreateOrderResponse>.Failure("Expected weight must be greater than 0", 400);
@@ -411,14 +522,20 @@ namespace ColdChainX.Infrastructure.Services
                 
                 bool dimensionChanged = false;
 
-                if (request.ExpectedWeightKg.HasValue && order.OrderDimension != null)
+                if (request.PackageVariants != null)
+                {
+                    await ApplyPackageVariantUpdateAsync(order, request.PackageVariants, salesUserId);
+                    dimensionChanged = true;
+                }
+
+                if (request.PackageVariants == null && request.ExpectedWeightKg.HasValue && order.OrderDimension != null)
                 {
                     if (order.OrderDimension.ExpectedWeightKg != request.ExpectedWeightKg.Value) dimensionChanged = true;
                     order.OrderDimension.ExpectedWeightKg = request.ExpectedWeightKg.Value;
                     order.OrderDimension.ActualWeightKg = request.ExpectedWeightKg.Value;
                 }
                 
-                if (request.LengthCm.HasValue && request.WidthCm.HasValue && request.HeightCm.HasValue && request.Quantity.HasValue && order.OrderDimension != null)
+                if (request.PackageVariants == null && request.LengthCm.HasValue && request.WidthCm.HasValue && request.HeightCm.HasValue && request.Quantity.HasValue && order.OrderDimension != null)
                 {
                     var expectedCbm = Math.Round(request.LengthCm.Value * request.WidthCm.Value * request.HeightCm.Value * request.Quantity.Value / 1000000m, 4);
                     if (order.OrderDimension.ExpectedCbm != expectedCbm) dimensionChanged = true;
@@ -509,6 +626,9 @@ namespace ColdChainX.Infrastructure.Services
                     TempCondition = order.TempCondition,
                     ExpectedWeightKg = order.OrderDimension?.ExpectedWeightKg ?? 0,
                     ExpectedCbm = order.OrderDimension?.ExpectedCbm ?? 0,
+                    PackageVariants = order.PackageVariants
+                        .Select(ToPackageVariantResponse)
+                        .ToList(),
                     Status = order.Status,
                     CreatedAt = order.CreatedAt ?? DateTime.UtcNow
                 }, "Order updated successfully by Admin");
@@ -529,11 +649,43 @@ namespace ColdChainX.Infrastructure.Services
             {
                 var order = await _db.TransportOrders
                     .Include(o => o.OrderDimension)
+                    .Include(o => o.PackageVariants)
+                        .ThenInclude(package => package.TransportDocuments)
                     .Include(o => o.DestLocationNavigation)
+                    .Include(o => o.Schedule)
+                        .ThenInclude(schedule => schedule!.Route)
                     .FirstOrDefaultAsync(o => o.OrderId == orderId && o.CustomerId == customerId);
 
                 if (order == null)
                     return ApiResponse<CreateOrderResponse>.Failure("Order not found or you don't have permission");
+
+                if (request.PackageVariants != null && HasLegacyPackageUpdate(request))
+                {
+                    return ApiResponse<CreateOrderResponse>.Failure(
+                        "Send either PackageVariants or the legacy quantity, weight and dimension fields, not both.",
+                        400);
+                }
+
+                if (order.PackageVariants.Count > 0
+                    && request.PackageVariants == null
+                    && HasLegacyPackageUpdate(request))
+                {
+                    return ApiResponse<CreateOrderResponse>.Failure(
+                        "This order uses package sizes. Update the package variants instead of the legacy quantity, weight and dimension fields.",
+                        409);
+                }
+
+                if (request.PackageVariants != null)
+                {
+                    var packageError = ValidatePackageVariantUpdate(request.PackageVariants, order.PackageVariants);
+                    if (packageError != null)
+                        return ApiResponse<CreateOrderResponse>.Failure(packageError, 400);
+
+                    if (await _db.Lpns.AnyAsync(lpn => lpn.OrderId == order.OrderId))
+                        return ApiResponse<CreateOrderResponse>.Failure(
+                            "Package sizes cannot be changed after inbound QC has created an LPN.",
+                            409);
+                }
 
                 if (!string.Equals(order.Status, PendingReview, StringComparison.OrdinalIgnoreCase)
                     && !string.Equals(order.Status, "NEEDS_UPDATE", StringComparison.OrdinalIgnoreCase))
@@ -541,6 +693,10 @@ namespace ColdChainX.Infrastructure.Services
                     return ApiResponse<CreateOrderResponse>.Failure(
                         "Order can only be updated while pending review or when it requires an update (PENDING_REVIEW, NEEDS_UPDATE)");
                 }
+
+                var uploadedBy = await ResolveCustomerUserIdAsync(customerId);
+                if (request.PackageVariants != null && !uploadedBy.HasValue)
+                    return ApiResponse<CreateOrderResponse>.Failure("Customer user was not found for document upload.");
 
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
@@ -551,14 +707,22 @@ namespace ColdChainX.Infrastructure.Services
                 if (request.TempCondition.HasValue) order.TempCondition = request.TempCondition.Value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
                 if (request.HasStrongOdor.HasValue) order.HasStrongOdor = request.HasStrongOdor.Value;
                 if (request.IsStackable.HasValue) order.IsStackable = request.IsStackable.Value;
+
+                var dimensionChanged = false;
+                if (request.PackageVariants != null)
+                {
+                    await ApplyPackageVariantUpdateAsync(order, request.PackageVariants, uploadedBy!.Value);
+                    dimensionChanged = true;
+                }
                 
-                if (request.ExpectedWeightKg.HasValue && order.OrderDimension != null)
+                if (request.PackageVariants == null && request.ExpectedWeightKg.HasValue && order.OrderDimension != null)
                 {
                     order.OrderDimension.ExpectedWeightKg = request.ExpectedWeightKg.Value;
                     order.OrderDimension.ActualWeightKg = request.ExpectedWeightKg.Value;
+                    dimensionChanged = true;
                 }
                 
-                if (request.LengthCm.HasValue && request.WidthCm.HasValue && request.HeightCm.HasValue && request.Quantity.HasValue && order.OrderDimension != null)
+                if (request.PackageVariants == null && request.LengthCm.HasValue && request.WidthCm.HasValue && request.HeightCm.HasValue && request.Quantity.HasValue && order.OrderDimension != null)
                 {
                     var expectedCbm = Math.Round(request.LengthCm.Value * request.WidthCm.Value * request.HeightCm.Value * request.Quantity.Value / 1000000m, 4);
                     order.OrderDimension.ExpectedCbm = expectedCbm;
@@ -566,6 +730,7 @@ namespace ColdChainX.Infrastructure.Services
                     order.OrderDimension.LengthCm = request.LengthCm.Value;
                     order.OrderDimension.WidthCm = request.WidthCm.Value;
                     order.OrderDimension.HeightCm = request.HeightCm.Value;
+                    dimensionChanged = true;
                 }
 
                 if (request.DestAddressText != null && order.DestLocationNavigation != null)
@@ -574,12 +739,16 @@ namespace ColdChainX.Infrastructure.Services
                     order.DestLocationNavigation.Address = request.DestAddressText.Trim();
                     order.DestLocationNavigation.Latitude = coordinates.Latitude;
                     order.DestLocationNavigation.Longitude = coordinates.Longitude;
+                    dimensionChanged = true;
                 }
 
-                if (request.ScheduleId.HasValue) order.ScheduleId = request.ScheduleId.Value;
+                if (request.ScheduleId.HasValue)
+                {
+                    if (order.ScheduleId != request.ScheduleId.Value) dimensionChanged = true;
+                    order.ScheduleId = request.ScheduleId.Value;
+                }
                 if (request.DropoffStopId.HasValue) order.DropoffStopId = request.DropoffStopId.Value;
 
-                var uploadedBy = await ResolveCustomerUserIdAsync(customerId);
                 if (request.LegalDocuments != null && uploadedBy.HasValue)
                 {
                     foreach (var file in request.LegalDocuments)
@@ -621,6 +790,14 @@ namespace ColdChainX.Infrastructure.Services
                     order.Status = PendingReview;
                 }
 
+                if (dimensionChanged && order.Schedule?.Route != null && order.DestLocationNavigation != null)
+                {
+                    var existingQuotations = await _db.Quotations.Where(quotation => quotation.OrderId == orderId).ToListAsync();
+                    if (existingQuotations.Count > 0)
+                        _db.Quotations.RemoveRange(existingQuotations);
+                    _db.Quotations.Add(await BuildAutoDraftQuotationAsync(order, order.Schedule.Route, order.DestLocationNavigation));
+                }
+
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
 
@@ -637,6 +814,9 @@ namespace ColdChainX.Infrastructure.Services
                     TempCondition = order.TempCondition,
                     ExpectedWeightKg = order.OrderDimension?.ExpectedWeightKg ?? 0,
                     ExpectedCbm = order.OrderDimension?.ExpectedCbm ?? 0,
+                    PackageVariants = order.PackageVariants
+                        .Select(ToPackageVariantResponse)
+                        .ToList(),
                     Status = order.Status,
                     CreatedAt = order.CreatedAt ?? DateTime.UtcNow
                 }, "Order updated successfully");
@@ -708,6 +888,7 @@ namespace ColdChainX.Infrastructure.Services
                 .Include(o => o.Customer)
                 .Include(o => o.Schedule).ThenInclude(s => s.Route)
                 .Include(o => o.DestLocationNavigation)
+                .Include(o => o.TransportDocuments)
                 .FirstOrDefaultAsync(o => o.OrderId == orderId);
 
                 if (order == null)
@@ -719,6 +900,32 @@ namespace ColdChainX.Infrastructure.Services
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
                 var action = request.Action.Trim().ToUpperInvariant();
+                if (request.DocumentReviews
+                    .GroupBy(review => review.DocId)
+                    .Any(group => group.Count() > 1))
+                {
+                    return ApiResponse<ReviewOrderResponse>.Failure("Each document can only be reviewed once.");
+                }
+
+                foreach (var review in request.DocumentReviews)
+                {
+                    var document = order.TransportDocuments.FirstOrDefault(doc => doc.DocId == review.DocId);
+                    if (document == null || document.DocType != "LEGAL_DOCUMENT")
+                        return ApiResponse<ReviewOrderResponse>.Failure($"Legal document {review.DocId} was not found in this order.");
+                    if (!review.IsApproved && string.IsNullOrWhiteSpace(review.RejectReason))
+                        return ApiResponse<ReviewOrderResponse>.Failure($"RejectReason is required for rejected document {review.DocId}.");
+
+                    document.VerifiedBy = salesUserId;
+                    document.RejectReason = review.IsApproved ? null : review.RejectReason!.Trim();
+                }
+
+                if (action == "APPROVE"
+                    && order.TransportDocuments.Any(document => document.DocType == "LEGAL_DOCUMENT"
+                                                                 && !string.IsNullOrWhiteSpace(document.RejectReason)))
+                {
+                    return ApiResponse<ReviewOrderResponse>.Failure(
+                        "Order cannot be approved while one or more legal documents are rejected. Use REQUEST_UPDATE instead.");
+                }
                                 if (action == "REQUEST_UPDATE")
                 {
                     if (string.IsNullOrWhiteSpace(request.CustomerNote))
@@ -1106,6 +1313,7 @@ namespace ColdChainX.Infrastructure.Services
                 .Include(o => o.Schedule).ThenInclude(s => s.Route)
                 .Include(o => o.DestLocationNavigation)
                 .Include(o => o.OrderDimension)
+                .Include(o => o.PackageVariants)
                 .Include(o => o.TransportDocuments)
                 .Include(o => o.Quotations);
         }
@@ -1125,9 +1333,9 @@ namespace ColdChainX.Infrastructure.Services
                 ActualWeightKg = (order.OrderDimension?.ActualWeightKg ?? 0m),
                 ExpectedCbm = (order.OrderDimension?.ExpectedCbm ?? 0m),
                 ActualCbm = (order.OrderDimension?.ActualCbm ?? 0m),
-                LengthCm = order.OrderDimension?.LengthCm,
-                WidthCm = order.OrderDimension?.WidthCm,
-                HeightCm = order.OrderDimension?.HeightCm,
+                LengthCm = order.PackageVariants.Count > 1 ? null : order.OrderDimension?.LengthCm,
+                WidthCm = order.PackageVariants.Count > 1 ? null : order.OrderDimension?.WidthCm,
+                HeightCm = order.PackageVariants.Count > 1 ? null : order.OrderDimension?.HeightCm,
                 DropoffStopId = order.DropoffStopId,
                 Status = order.Status,
                 MasterTripId = order.MasterTripId,
@@ -1162,6 +1370,7 @@ namespace ColdChainX.Infrastructure.Services
                         Address = order.DestLocationNavigation.Address
                     },
                 Documents = order.TransportDocuments
+                    .Where(d => d.OrderPackageVariantId == null)
                     .OrderByDescending(d => d.CreatedAt)
                     .Select(d => new OrderDocumentResponse
                     {
@@ -1170,6 +1379,12 @@ namespace ColdChainX.Infrastructure.Services
                         ImageUrl = d.ImageUrl,
                         CreatedAt = d.CreatedAt
                     })
+                    .ToList(),
+                PackageVariants = order.PackageVariants
+                    .OrderBy(package => package.CreatedAt)
+                    .Select(package => ToPackageVariantResponse(
+                        package,
+                        order.TransportDocuments.Where(document => document.OrderPackageVariantId == package.OrderPackageVariantId)))
                     .ToList(),
                 CustomerId = order.CustomerId,
                 CustomerName = order.Customer?.CompanyName,
@@ -1188,6 +1403,261 @@ namespace ColdChainX.Infrastructure.Services
                         CreatedAt = q.CreatedAt
                     })
                     .ToList()
+            };
+        }
+
+        private static bool HasLegacyPackageUpdate(UpdateOrderRequest request)
+            => request.ExpectedWeightKg.HasValue
+               || request.Quantity.HasValue
+               || request.PackagingType != null
+               || request.LengthCm.HasValue
+               || request.WidthCm.HasValue
+               || request.HeightCm.HasValue;
+
+        private static string? ValidatePackageVariantUpdate(
+            IReadOnlyCollection<UpdateOrderPackageVariantRequest> requests,
+            ICollection<OrderPackageVariant> existingVariants)
+        {
+            if (requests.Count == 0)
+                return "At least one package size is required.";
+            if (requests.Count > 20)
+                return "An order cannot contain more than 20 package sizes.";
+            if (requests.Any(package => package.Quantity <= 0
+                                        || package.ExpectedUnitWeightKg <= 0
+                                        || package.LengthCm <= 0
+                                        || package.WidthCm <= 0
+                                        || package.HeightCm <= 0
+                                        || string.IsNullOrWhiteSpace(package.PackagingType)))
+            {
+                return "Every package size requires a packaging type, positive quantity, unit weight and dimensions.";
+            }
+
+            var suppliedIds = requests
+                .Where(package => package.OrderPackageVariantId.HasValue)
+                .Select(package => package.OrderPackageVariantId!.Value)
+                .ToList();
+            if (suppliedIds.Count != suppliedIds.Distinct().Count())
+                return "Each existing package size can only appear once.";
+
+            var existingIds = existingVariants.Select(package => package.OrderPackageVariantId).ToHashSet();
+            var unknownId = suppliedIds.FirstOrDefault(id => !existingIds.Contains(id));
+            if (unknownId != Guid.Empty)
+                return $"Package size {unknownId} does not belong to this order.";
+
+            var allFiles = requests.SelectMany(package => package.LegalDocuments.Concat(package.CargoPhotos));
+            if (allFiles.Any(file => file.Length <= 0 || file.Length > 10 * 1024 * 1024))
+                return "Every package file must be non-empty and smaller than 10MB.";
+
+            var existingDocumentIds = existingVariants
+                .SelectMany(package => package.TransportDocuments)
+                .Select(document => document.DocId)
+                .ToHashSet();
+            var invalidDocumentId = requests
+                .SelectMany(package => package.RemoveDocumentIds)
+                .FirstOrDefault(id => !existingDocumentIds.Contains(id));
+            return invalidDocumentId == Guid.Empty
+                ? null
+                : $"Document {invalidDocumentId} does not belong to a package size in this order.";
+        }
+
+        private async Task ApplyPackageVariantUpdateAsync(
+            TransportOrder order,
+            IReadOnlyList<UpdateOrderPackageVariantRequest> requests,
+            Guid uploadedBy)
+        {
+            var existingById = order.PackageVariants
+                .ToDictionary(package => package.OrderPackageVariantId);
+            var retainedIds = requests
+                .Where(package => package.OrderPackageVariantId.HasValue)
+                .Select(package => package.OrderPackageVariantId!.Value)
+                .ToHashSet();
+
+            var removedVariants = order.PackageVariants
+                .Where(package => !retainedIds.Contains(package.OrderPackageVariantId))
+                .ToList();
+            if (removedVariants.Count > 0)
+                _db.OrderPackageVariants.RemoveRange(removedVariants);
+
+            var updatedVariants = new List<OrderPackageVariant>();
+            foreach (var request in requests)
+            {
+                OrderPackageVariant package;
+                if (request.OrderPackageVariantId.HasValue)
+                {
+                    package = existingById[request.OrderPackageVariantId.Value];
+                }
+                else
+                {
+                    package = new OrderPackageVariant
+                    {
+                        OrderPackageVariantId = Guid.NewGuid(),
+                        OrderId = order.OrderId,
+                        CreatedAt = DbNow()
+                    };
+                    _db.OrderPackageVariants.Add(package);
+                }
+
+                package.VariantName = string.IsNullOrWhiteSpace(request.VariantName) ? null : request.VariantName.Trim();
+                package.PackingType = request.PackagingType.Trim();
+                package.Quantity = request.Quantity;
+                package.ExpectedUnitWeightKg = request.ExpectedUnitWeightKg;
+                package.ExpectedTotalWeightKg = Math.Round(request.ExpectedUnitWeightKg * request.Quantity, 2);
+                package.LengthCm = request.LengthCm;
+                package.WidthCm = request.WidthCm;
+                package.HeightCm = request.HeightCm;
+                package.ExpectedCbm = Math.Round(
+                    request.LengthCm * request.WidthCm * request.HeightCm * request.Quantity / 1_000_000m,
+                    4);
+
+                var documentsToRemove = package.TransportDocuments
+                    .Where(document => request.RemoveDocumentIds.Contains(document.DocId))
+                    .ToList();
+                if (documentsToRemove.Count > 0)
+                    _db.TransportDocuments.RemoveRange(documentsToRemove);
+
+                foreach (var file in request.LegalDocuments)
+                {
+                    var document = new TransportDocument
+                    {
+                        DocId = Guid.NewGuid(),
+                        OrderId = order.OrderId,
+                        OrderPackageVariantId = package.OrderPackageVariantId,
+                        DocType = "LEGAL_DOCUMENT",
+                        ImageUrl = await _fileService.UploadFileAsync(file),
+                        UploadedBy = uploadedBy,
+                        CreatedAt = DbNow()
+                    };
+                    package.TransportDocuments.Add(document);
+                    _db.TransportDocuments.Add(document);
+                }
+
+                foreach (var file in request.CargoPhotos)
+                {
+                    var document = new TransportDocument
+                    {
+                        DocId = Guid.NewGuid(),
+                        OrderId = order.OrderId,
+                        OrderPackageVariantId = package.OrderPackageVariantId,
+                        DocType = "ITEM_IMAGE",
+                        ImageUrl = await _fileService.UploadFileAsync(file),
+                        UploadedBy = uploadedBy,
+                        CreatedAt = DbNow()
+                    };
+                    package.TransportDocuments.Add(document);
+                    _db.TransportDocuments.Add(document);
+                }
+
+                updatedVariants.Add(package);
+            }
+
+            order.PackageVariants = updatedVariants;
+            order.Quantity = updatedVariants.Sum(package => package.Quantity);
+            order.PackingType = BuildPackingTypeSummary(updatedVariants);
+            var totalWeight = updatedVariants.Sum(package => package.ExpectedTotalWeightKg);
+            var totalCbm = updatedVariants.Sum(package => package.ExpectedCbm);
+            var representative = updatedVariants[0];
+            order.OrderDimension ??= new OrderDimension { OrderId = order.OrderId };
+            order.OrderDimension.ExpectedWeightKg = totalWeight;
+            order.OrderDimension.ActualWeightKg = totalWeight;
+            order.OrderDimension.ExpectedCbm = totalCbm;
+            order.OrderDimension.ActualCbm = totalCbm;
+            order.OrderDimension.LengthCm = representative.LengthCm;
+            order.OrderDimension.WidthCm = representative.WidthCm;
+            order.OrderDimension.HeightCm = representative.HeightCm;
+        }
+
+        private static List<CreateOrderPackageVariantRequest> NormalizePackageVariantRequests(CreateOrderRequest request)
+        {
+            if (request.PackageVariants is { Count: > 0 })
+                return request.PackageVariants;
+
+            if (request.Quantity <= 0
+                || request.ExpectedWeightKg <= 0
+                || request.LengthCm <= 0
+                || request.WidthCm <= 0
+                || request.HeightCm <= 0
+                || string.IsNullOrWhiteSpace(request.PackagingType))
+            {
+                return new List<CreateOrderPackageVariantRequest>();
+            }
+
+            return new List<CreateOrderPackageVariantRequest>
+            {
+                new()
+                {
+                    VariantName = "Default size",
+                    PackagingType = request.PackagingType,
+                    Quantity = request.Quantity,
+                    // Legacy Expected_Weight_KG represents the total order weight.
+                    ExpectedUnitWeightKg = Math.Round(request.ExpectedWeightKg / request.Quantity, 4),
+                    LengthCm = request.LengthCm,
+                    WidthCm = request.WidthCm,
+                    HeightCm = request.HeightCm
+                }
+            };
+        }
+
+        private static decimal CalculatePackageCbm(CreateOrderPackageVariantRequest package)
+            => Math.Round(
+                package.LengthCm * package.WidthCm * package.HeightCm * package.Quantity / 1_000_000m,
+                4);
+
+        private static string BuildPackingTypeSummary(IReadOnlyCollection<OrderPackageVariant> packageVariants)
+        {
+            var values = packageVariants
+                .Select(package => package.PackingType)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var summary = string.Join(", ", values);
+            return summary.Length <= 50 ? summary : "Mixed";
+        }
+
+        private static OrderPackageVariantResponse ToPackageVariantResponse(OrderPackageVariant package)
+            => ToPackageVariantResponse(package, package.TransportDocuments);
+
+        private static OrderPackageVariantResponse ToPackageVariantResponse(
+            OrderPackageVariant package,
+            IEnumerable<TransportDocument> documents)
+        {
+            var documentList = documents.ToList();
+
+            return new OrderPackageVariantResponse
+            {
+                OrderPackageVariantId = package.OrderPackageVariantId,
+                VariantName = package.VariantName,
+                PackingType = package.PackingType,
+                Quantity = package.Quantity,
+                ExpectedUnitWeightKg = package.ExpectedUnitWeightKg,
+                ExpectedTotalWeightKg = package.ExpectedTotalWeightKg,
+                ExpectedCbm = package.ExpectedCbm,
+                LengthCm = package.LengthCm,
+                WidthCm = package.WidthCm,
+                HeightCm = package.HeightCm,
+                LegalDocuments = documentList
+                    .Where(document => document.DocType == "LEGAL_DOCUMENT")
+                    .OrderByDescending(document => document.CreatedAt)
+                    .Select(ToOrderDocumentResponse)
+                    .ToList(),
+                CargoPhotos = documentList
+                    .Where(document => document.DocType == "ITEM_IMAGE")
+                    .OrderByDescending(document => document.CreatedAt)
+                    .Select(ToOrderDocumentResponse)
+                    .ToList()
+            };
+        }
+
+        private static OrderDocumentResponse ToOrderDocumentResponse(TransportDocument document)
+        {
+            return new OrderDocumentResponse
+            {
+                DocId = document.DocId,
+                DocType = document.DocType,
+                ImageUrl = document.ImageUrl,
+                IsVerified = document.VerifiedBy.HasValue && string.IsNullOrWhiteSpace(document.RejectReason),
+                VerifiedBy = document.VerifiedBy,
+                RejectReason = document.RejectReason,
+                CreatedAt = document.CreatedAt
             };
         }
 

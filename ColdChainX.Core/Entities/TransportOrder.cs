@@ -71,6 +71,8 @@ public partial class TransportOrder
 
     public virtual ICollection<TransportDocument> TransportDocuments { get; set; } = new List<TransportDocument>();
 
+    public virtual ICollection<OrderPackageVariant> PackageVariants { get; set; } = new List<OrderPackageVariant>();
+
     public virtual ICollection<WarehouseReceipt> WarehouseReceipts { get; set; } = new List<WarehouseReceipt>();
 
     public virtual OrderDimension? OrderDimension { get; set; }

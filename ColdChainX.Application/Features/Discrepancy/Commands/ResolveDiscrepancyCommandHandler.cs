@@ -36,7 +36,12 @@ public class ResolveDiscrepancyCommandHandler : IRequestHandler<ResolveDiscrepan
             lpn.UpdatedAt = DateTime.UtcNow;
             if (lpn.Order != null)
             {
-                lpn.Order.Status = "RECEIVING";
+                var anotherHeldLpnExists = await _context.Lpns.AnyAsync(
+                    item => item.OrderId == lpn.OrderId
+                            && item.LpnId != lpn.LpnId
+                            && item.State == LpnState.DISCREPANCY_HOLD,
+                    cancellationToken);
+                lpn.Order.Status = anotherHeldLpnExists ? "DISCREPANCY_HOLD" : "RECEIVING";
             }
 
             var doc = await _context.TransportDocuments

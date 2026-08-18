@@ -30,6 +30,8 @@ public class GenerateReceiptPdfQueryHandler : IRequestHandler<GenerateReceiptPdf
         var receipt = await _context.WarehouseReceipts
             .Include(x => x.Lpns)
                 .ThenInclude(l => l.Order)
+            .Include(x => x.Lpns)
+                .ThenInclude(l => l.PackageVariantLines)
             .Include(x => x.Order)
                 .ThenInclude(o => o.Customer)
             .Include(x => x.Warehouse)
@@ -37,6 +39,38 @@ public class GenerateReceiptPdfQueryHandler : IRequestHandler<GenerateReceiptPdf
 
         if (receipt == null)
             throw new Exception("Warehouse receipt not found");
+
+        var receiptItems = receipt.Lpns.SelectMany(lpn => lpn.PackageVariantLines.Count > 0
+            ? lpn.PackageVariantLines.Select(line => new
+            {
+                ItemName = $"{lpn.Order?.ItemName ?? "Unknown"} - {line.VariantName ?? "Default size"}",
+                lpn.LpnCode,
+                Unit = line.PackingType,
+                ExpectedQty = line.Quantity,
+                ActualQty = line.Quantity,
+                Notes = line.HasDiscrepancy ? "DISCREPANCY" : lpn.State.ToString()
+            })
+            : new[]
+            {
+                new
+                {
+                    ItemName = lpn.Order?.ItemName ?? "Unknown",
+                    lpn.LpnCode,
+                    Unit = lpn.Order?.PackingType ?? "N/A",
+                    ExpectedQty = lpn.Quantity,
+                    ActualQty = lpn.Quantity,
+                    Notes = lpn.State.ToString()
+                }
+            }).Select((item, index) => new
+            {
+                Index = index + 1,
+                item.ItemName,
+                item.LpnCode,
+                item.Unit,
+                item.ExpectedQty,
+                item.ActualQty,
+                item.Notes
+            }).ToList();
 
         var data = new
         {
@@ -52,16 +86,7 @@ public class GenerateReceiptPdfQueryHandler : IRequestHandler<GenerateReceiptPdf
             CustomerName = receipt.Order?.Customer?.CompanyName ?? "N/A",
             CreatorName = "", 
             WarehouseManagerName = "",
-            Items = receipt.Lpns.Select((item, index) => new
-            {
-                Index = index + 1,
-                ItemName = item.Order?.ItemName ?? "Unknown",
-                LpnCode = item.LpnCode,
-                Unit = item.Order?.PackingType ?? "N/A",
-                ExpectedQty = item.Order?.Quantity ?? 0,
-                ActualQty = item.Quantity,
-                Notes = item.State.ToString()
-            })
+            Items = receiptItems
         };
 
         return await _pdfGenerator.GeneratePdfAsync("WarehouseReceipt", data);

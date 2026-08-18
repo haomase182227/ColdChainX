@@ -37,6 +37,8 @@ public class GetDiscrepancyDetailQueryHandler : IRequestHandler<GetDiscrepancyDe
                 .ThenInclude(r => r.Warehouse)
             .Include(l => l.Receipt)
                 .ThenInclude(r => r.Receiver)
+            .Include(l => l.PackageVariantLines)
+                .ThenInclude(line => line.OrderPackageVariant)
             .FirstOrDefaultAsync(l => l.LpnId == request.LpnId, cancellationToken);
 
         if (lpn == null)
@@ -44,9 +46,25 @@ public class GetDiscrepancyDetailQueryHandler : IRequestHandler<GetDiscrepancyDe
 
         var order = lpn.Order;
         var receipt = lpn.Receipt;
-        var expectedCbm = order?.OrderDimension == null
-            ? 0m
-            : InboundQcMeasurementCalculator.CalculateExpectedCbm(order.OrderDimension, order.Quantity);
+        var expectedQuantity = lpn.PackageVariantLines.Count > 0
+            ? lpn.PackageVariantLines.Sum(line => line.Quantity)
+            : order?.Quantity ?? 0;
+        var expectedWeight = lpn.PackageVariantLines.Count > 0
+            ? lpn.PackageVariantLines.Sum(line => line.ExpectedWeightKg)
+            : order?.OrderDimension?.ExpectedWeightKg ?? 0m;
+        var expectedCbm = lpn.PackageVariantLines.Count > 0
+            ? lpn.PackageVariantLines.Sum(line => line.ExpectedCbm)
+            : order?.OrderDimension == null
+                ? 0m
+                : InboundQcMeasurementCalculator.CalculateExpectedCbm(order.OrderDimension, order.Quantity);
+        var singleLine = lpn.PackageVariantLines.Count == 1 ? lpn.PackageVariantLines.Single() : null;
+        var compareDimensions = lpn.PackageVariantLines.Count <= 1;
+        var expectedLength = singleLine?.OrderPackageVariant?.LengthCm ?? order?.OrderDimension?.LengthCm ?? 0m;
+        var expectedWidth = singleLine?.OrderPackageVariant?.WidthCm ?? order?.OrderDimension?.WidthCm ?? 0m;
+        var expectedHeight = singleLine?.OrderPackageVariant?.HeightCm ?? order?.OrderDimension?.HeightCm ?? 0m;
+        var actualLength = singleLine?.LengthCm ?? lpn.LengthCm ?? 0m;
+        var actualWidth = singleLine?.WidthCm ?? lpn.WidthCm ?? 0m;
+        var actualHeight = singleLine?.HeightCm ?? lpn.HeightCm ?? 0m;
 
         return new DiscrepancyDetailsResponse
         {
@@ -55,30 +73,47 @@ public class GetDiscrepancyDetailQueryHandler : IRequestHandler<GetDiscrepancyDe
             OrderId = lpn.OrderId,
             TrackingCode = order?.TrackingCode ?? "N/A",
             ItemName = order?.ItemName ?? "Unknown",
-            ExpectedQuantity = order?.Quantity ?? 0,
+            ExpectedQuantity = expectedQuantity,
             ActualQuantity = lpn.Quantity,
             Quantity = lpn.Quantity,
-            ExpectedWeightKg = order?.OrderDimension?.ExpectedWeightKg ?? 0,
+            ExpectedWeightKg = expectedWeight,
             ActualWeightKg = lpn.ActualWeightKg,
             ExpectedCbm = expectedCbm,
             ActualCbm = lpn.ActualCbm,
-            ExpectedLengthCm = order?.OrderDimension?.LengthCm ?? 0,
-            ActualLengthCm = lpn.LengthCm ?? 0,
-            ExpectedWidthCm = order?.OrderDimension?.WidthCm ?? 0,
-            ActualWidthCm = lpn.WidthCm ?? 0,
-            ExpectedHeightCm = order?.OrderDimension?.HeightCm ?? 0,
-            ActualHeightCm = lpn.HeightCm ?? 0,
-            IsQuantityDifferent = order != null && order.Quantity != lpn.Quantity,
-            IsWeightDifferent = order != null && Math.Abs((order.OrderDimension?.ExpectedWeightKg ?? 0m) - lpn.ActualWeightKg) > 0.01m,
+            ExpectedLengthCm = compareDimensions ? expectedLength : 0m,
+            ActualLengthCm = compareDimensions ? actualLength : 0m,
+            ExpectedWidthCm = compareDimensions ? expectedWidth : 0m,
+            ActualWidthCm = compareDimensions ? actualWidth : 0m,
+            ExpectedHeightCm = compareDimensions ? expectedHeight : 0m,
+            ActualHeightCm = compareDimensions ? actualHeight : 0m,
+            IsQuantityDifferent = expectedQuantity != lpn.Quantity,
+            IsWeightDifferent = Math.Abs(expectedWeight - lpn.ActualWeightKg) > 0.01m,
             IsCbmDifferent = Math.Abs(expectedCbm - lpn.ActualCbm) > 0.0001m,
-            IsLengthDifferent = order != null && Math.Abs((order.OrderDimension?.LengthCm ?? 0m) - (lpn.LengthCm ?? 0)) > 0.01m,
-            IsWidthDifferent = order != null && Math.Abs((order.OrderDimension?.WidthCm ?? 0m) - (lpn.WidthCm ?? 0)) > 0.01m,
-            IsHeightDifferent = order != null && Math.Abs((order.OrderDimension?.HeightCm ?? 0m) - (lpn.HeightCm ?? 0)) > 0.01m,
+            IsLengthDifferent = compareDimensions && Math.Abs(expectedLength - actualLength) > 0.01m,
+            IsWidthDifferent = compareDimensions && Math.Abs(expectedWidth - actualWidth) > 0.01m,
+            IsHeightDifferent = compareDimensions && Math.Abs(expectedHeight - actualHeight) > 0.01m,
             RequiredTemperature = lpn.RequiredTemperature,
             RecordedTemperature = lpn.RecordedTemperature,
             EvidenceImageUrl = lpn.EvidenceImageUrl,
             DiscrepancyReason = lpn.DiscrepancyReason,
             CreatedAt = lpn.CreatedAt,
+            PackageLines = lpn.PackageVariantLines.Select(line => new LpnPackageVariantLineResponse
+            {
+                LpnPackageVariantLineId = line.LpnPackageVariantLineId,
+                OrderPackageVariantId = line.OrderPackageVariantId,
+                VariantName = line.VariantName,
+                PackingType = line.PackingType,
+                Quantity = line.Quantity,
+                ExpectedWeightKg = line.ExpectedWeightKg,
+                ActualWeightKg = line.ActualWeightKg,
+                ExpectedCbm = line.ExpectedCbm,
+                ActualCbm = line.ActualCbm,
+                LengthCm = line.LengthCm,
+                WidthCm = line.WidthCm,
+                HeightCm = line.HeightCm,
+                DiffPercent = line.DiffPercent,
+                HasDiscrepancy = line.HasDiscrepancy
+            }).ToList(),
             ReceiptInfo = receipt == null ? null! : new DiscrepancyReceiptInfo
             {
                 ReceiptId = receipt.ReceiptId,

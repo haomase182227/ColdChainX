@@ -39,13 +39,15 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
         if (request.LpnId == Guid.Empty)
             return Failure("LpnId is required.");
 
-        if (request.ActualWeightKg <= 0 || request.LengthCm <= 0 || request.WidthCm <= 0 || request.HeightCm <= 0)
+        if (request.PackageMeasurements.Count == 0
+            && (request.ActualWeightKg <= 0 || request.LengthCm <= 0 || request.WidthCm <= 0 || request.HeightCm <= 0))
             return Failure("Actual weight and dimensions must be greater than 0.");
 
         var lpn = await _context.Lpns
             .Include(l => l.Receipt)
             .Include(l => l.Route) // for tracking
             .Include(l => l.Trip)
+            .Include(l => l.PackageVariantLines)
             .FirstOrDefaultAsync(l => l.LpnId == request.LpnId, cancellationToken);
 
         if (lpn == null)
@@ -80,81 +82,158 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
         if (receipt == null)
             return Failure("Warehouse Receipt not found for this LPN.");
 
-        string? evidenceImageUrl = lpn.EvidenceImageUrl;
-        if (request.EvidenceImages != null && request.EvidenceImages.Count > 0)
+        var now = DateTime.UtcNow;
+        decimal maxDiff;
+        bool hasDiscrepancy;
+
+        if (lpn.PackageVariantLines.Count > 0)
         {
-            var uploadedUrls = new System.Collections.Generic.List<string>();
-            foreach (var file in request.EvidenceImages)
+            List<PackageVariantQcMeasurement> measurements;
+            if (request.PackageMeasurements.Count == 0)
             {
-                var url = await _fileService.UploadFileAsync(file);
-                uploadedUrls.Add(url);
+                if (lpn.PackageVariantLines.Count != 1)
+                    return Failure("PackageMeasurements must contain one measurement for every size in this LPN.");
+
+                var line = lpn.PackageVariantLines.Single();
+                measurements = new List<PackageVariantQcMeasurement>
+                {
+                    new()
+                    {
+                        OrderPackageVariantId = line.OrderPackageVariantId ?? Guid.Empty,
+                        Quantity = line.Quantity,
+                        ActualWeightKg = request.ActualWeightKg,
+                        LengthCm = request.LengthCm,
+                        WidthCm = request.WidthCm,
+                        HeightCm = request.HeightCm,
+                        Temperature = request.Temperature,
+                        EvidenceImages = request.EvidenceImages ?? new List<Microsoft.AspNetCore.Http.IFormFile>()
+                    }
+                };
             }
-            evidenceImageUrl = string.Join(";", uploadedUrls);
+            else
+            {
+                measurements = request.PackageMeasurements;
+            }
+
+            var lineByVariantId = lpn.PackageVariantLines
+                .Where(line => line.OrderPackageVariantId.HasValue)
+                .ToDictionary(line => line.OrderPackageVariantId!.Value);
+            if (measurements.Count != lpn.PackageVariantLines.Count
+                || measurements.Select(measurement => measurement.OrderPackageVariantId).Distinct().Count() != measurements.Count)
+            {
+                return Failure("PackageMeasurements must contain each size in this LPN exactly once.");
+            }
+
+            foreach (var measurement in measurements)
+            {
+                LpnPackageVariantLine? line = null;
+                if (measurement.OrderPackageVariantId != Guid.Empty)
+                    lineByVariantId.TryGetValue(measurement.OrderPackageVariantId, out line);
+                else if (lpn.PackageVariantLines.Count == 1 && !lpn.PackageVariantLines.Single().OrderPackageVariantId.HasValue)
+                    line = lpn.PackageVariantLines.Single();
+
+                if (line == null)
+                    return Failure($"Package size {measurement.OrderPackageVariantId} does not belong to this LPN.");
+                if (measurement.Quantity > 0 && measurement.Quantity != line.Quantity)
+                    return Failure($"Package size {measurement.OrderPackageVariantId} must keep quantity {line.Quantity} during re-evaluation.");
+                if (measurement.ActualWeightKg <= 0 || measurement.LengthCm <= 0 || measurement.WidthCm <= 0 || measurement.HeightCm <= 0)
+                    return Failure("Actual weight and dimensions must be greater than 0 for every package size.");
+
+                var uploadedUrls = new List<string>();
+                foreach (var file in measurement.EvidenceImages)
+                {
+                    if (file.Length <= 0 || file.Length > 10 * 1024 * 1024)
+                        return Failure($"File {file.FileName} must be non-empty and cannot exceed 10MB.");
+                    uploadedUrls.Add(await _fileService.UploadFileAsync(file));
+                }
+
+                var actualLineCbm = InboundQcMeasurementCalculator.CalculateCbm(
+                    measurement.LengthCm,
+                    measurement.WidthCm,
+                    measurement.HeightCm,
+                    line.Quantity);
+                var weightDiff = CalculateDiffPercent(line.ExpectedWeightKg, measurement.ActualWeightKg);
+                var cbmDiff = CalculateDiffPercent(line.ExpectedCbm, actualLineCbm);
+                line.ActualWeightKg = measurement.ActualWeightKg;
+                line.ActualCbm = actualLineCbm;
+                line.LengthCm = measurement.LengthCm;
+                line.WidthCm = measurement.WidthCm;
+                line.HeightCm = measurement.HeightCm;
+                line.RecordedTemperature = measurement.Temperature;
+                line.DiffPercent = Math.Max(weightDiff, cbmDiff);
+                line.HasDiscrepancy = line.DiffPercent > DiscrepancyThresholdPercent;
+                if (uploadedUrls.Count > 0)
+                    line.EvidenceImageUrl = string.Join(";", uploadedUrls);
+                line.UpdatedAt = now;
+            }
+
+            lpn.Quantity = lpn.PackageVariantLines.Sum(line => line.Quantity);
+            lpn.ActualWeightKg = lpn.PackageVariantLines.Sum(line => line.ActualWeightKg);
+            lpn.ActualCbm = lpn.PackageVariantLines.Sum(line => line.ActualCbm);
+            lpn.RecordedTemperature = lpn.PackageVariantLines.Select(line => line.RecordedTemperature).FirstOrDefault(value => value.HasValue);
+            lpn.EvidenceImageUrl = string.Join(";", lpn.PackageVariantLines
+                .Select(line => line.EvidenceImageUrl)
+                .Where(value => !string.IsNullOrWhiteSpace(value)));
+            maxDiff = lpn.PackageVariantLines.Max(line => line.DiffPercent);
+            hasDiscrepancy = lpn.PackageVariantLines.Any(line => line.HasDiscrepancy);
+        }
+        else
+        {
+            var uploadedUrls = new List<string>();
+            foreach (var file in request.EvidenceImages ?? new List<Microsoft.AspNetCore.Http.IFormFile>())
+            {
+                if (file.Length <= 0 || file.Length > 10 * 1024 * 1024)
+                    return Failure($"File {file.FileName} must be non-empty and cannot exceed 10MB.");
+                uploadedUrls.Add(await _fileService.UploadFileAsync(file));
+            }
+
+            var expectedCbm = InboundQcMeasurementCalculator.CalculateExpectedCbm(order.OrderDimension, order.Quantity);
+            var actualCbm = InboundQcMeasurementCalculator.CalculateCbm(request.LengthCm, request.WidthCm, request.HeightCm, order.Quantity);
+            var weightDiff = CalculateDiffPercent(order.OrderDimension.ExpectedWeightKg, request.ActualWeightKg);
+            var cbmDiff = CalculateDiffPercent(expectedCbm, actualCbm);
+            maxDiff = Math.Max(weightDiff, cbmDiff);
+            hasDiscrepancy = maxDiff > DiscrepancyThresholdPercent;
+            lpn.ActualWeightKg = request.ActualWeightKg;
+            lpn.ActualCbm = actualCbm;
+            lpn.LengthCm = request.LengthCm;
+            lpn.WidthCm = request.WidthCm;
+            lpn.HeightCm = request.HeightCm;
+            lpn.RecordedTemperature = request.Temperature;
+            if (uploadedUrls.Count > 0)
+                lpn.EvidenceImageUrl = string.Join(";", uploadedUrls);
         }
 
-        var now = DateTime.UtcNow;
-        var storedExpectedCbm = order.OrderDimension.ExpectedCbm;
-        var expectedCbm = InboundQcMeasurementCalculator.CalculateExpectedCbm(order.OrderDimension, order.Quantity);
-        var actualCbm = InboundQcMeasurementCalculator.CalculateCbm(request.LengthCm, request.WidthCm, request.HeightCm, order.Quantity);
-
-#if DEBUG
-        _logger.LogDebug(
-            "Inbound QC re-evaluation CBM trace storedExpectedCbm={StoredExpectedCbm} calculatedExpectedCbmFromDimensions={CalculatedExpectedCbmFromDimensions} actualCbm={ActualCbm} expectedDimensionsCm={ExpectedLengthCm}x{ExpectedWidthCm}x{ExpectedHeightCm} actualDimensionsCm={ActualLengthCm}x{ActualWidthCm}x{ActualHeightCm}",
-            storedExpectedCbm,
-            expectedCbm,
-            actualCbm,
-            order.OrderDimension.LengthCm,
-            order.OrderDimension.WidthCm,
-            order.OrderDimension.HeightCm,
-            request.LengthCm,
-            request.WidthCm,
-            request.HeightCm);
-#endif
-
-        var weightDiff = CalculateDiffPercent(order.OrderDimension.ExpectedWeightKg, request.ActualWeightKg);
-        var cbmDiff = CalculateDiffPercent(expectedCbm, actualCbm);
-        var maxDiff = Math.Max(weightDiff, cbmDiff);
-        var hasDiscrepancy = maxDiff > DiscrepancyThresholdPercent;
-
-        lpn.ActualWeightKg = request.ActualWeightKg;
-        lpn.ActualCbm = actualCbm;
-        lpn.LengthCm = request.LengthCm;
-        lpn.WidthCm = request.WidthCm;
-        lpn.HeightCm = request.HeightCm;
-        lpn.RecordedTemperature = request.Temperature;
         lpn.State = hasDiscrepancy ? LpnState.DISCREPANCY_HOLD : LpnState.RECEIVING;
         lpn.DiscrepancyReason = hasDiscrepancy
-            ? $"Actual cargo differs from expected by {maxDiff:0.##}% (weight {weightDiff:0.##}%, cbm {cbmDiff:0.##}%). (Re-evaluated)"
+            ? $"Actual cargo differs from expected by {maxDiff:0.##}%. (Re-evaluated)"
             : null;
-        if (!string.IsNullOrEmpty(evidenceImageUrl))
-        {
-            lpn.EvidenceImageUrl = evidenceImageUrl;
-        }
         lpn.UpdatedAt = now;
 
-        if (order.OrderDimension != null)
-        {
-            order.OrderDimension.ActualWeightKg = request.ActualWeightKg;
-            order.OrderDimension.ActualCbm = actualCbm;
-        }
+        var orderLpns = await _context.Lpns
+            .Where(item => item.OrderId == order.OrderId && item.State != LpnState.DELETED)
+            .ToListAsync(cancellationToken);
+        var overallHasDiscrepancy = orderLpns.Any(item => item.State == LpnState.DISCREPANCY_HOLD);
+        order.OrderDimension.ActualWeightKg = orderLpns.Sum(item => item.ActualWeightKg);
+        order.OrderDimension.ActualCbm = orderLpns.Sum(item => item.ActualCbm);
+        order.Status = overallHasDiscrepancy ? "DISCREPANCY_HOLD" : "RECEIVING";
 
         if (asn != null)
         {
-            asn.Status = hasDiscrepancy ? "DISCREPANCY_HOLD" : "QC_PASSED";
+            asn.Status = overallHasDiscrepancy ? "DISCREPANCY_HOLD" : "QC_PASSED";
         }
 
-        receipt.ReferenceDocNo = hasDiscrepancy ? "DISCREPANCY_HOLD" : "PENDING_PUTAWAY";
-        receipt.Reason = hasDiscrepancy ? "QC discrepancy hold (Re-evaluated)" : null;
-        receipt.RecordedTemperature = request.Temperature;
-        receipt.Note = hasDiscrepancy ? "QC discrepancy hold. (Re-evaluated)" : "QC passed and waiting putaway. (Re-evaluated)";
+        receipt.ReferenceDocNo = overallHasDiscrepancy ? "DISCREPANCY_HOLD" : "PENDING_PUTAWAY";
+        receipt.Reason = overallHasDiscrepancy ? "QC discrepancy hold (Re-evaluated)" : null;
+        receipt.RecordedTemperature = lpn.RecordedTemperature;
+        receipt.Note = overallHasDiscrepancy ? "QC discrepancy hold. (Re-evaluated)" : "QC passed and waiting putaway. (Re-evaluated)";
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        var pdfBytes = hasDiscrepancy
+        var pdfBytes = overallHasDiscrepancy
             ? await _mediator.Send(new GenerateDiscrepancyPdfQuery(receipt.ReceiptId), cancellationToken)
             : await _mediator.Send(new GenerateReceiptPdfQuery(receipt.ReceiptId), cancellationToken);
 
-        var pdfFileName = hasDiscrepancy 
+        var pdfFileName = overallHasDiscrepancy
             ? $"discrepancy-{order.TrackingCode}-{now:yyyyMMddHHmmss}.pdf" 
             : $"grn-{order.TrackingCode}-{now:yyyyMMddHHmmss}.pdf";
             
@@ -165,7 +244,7 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
         var existingDoc = await _context.TransportDocuments
             .FirstOrDefaultAsync(d => d.OrderId == order.OrderId && d.DocType == "DISCREPANCY_REPORT", cancellationToken);
 
-        if (hasDiscrepancy)
+        if (overallHasDiscrepancy)
         {
             if (existingDoc == null)
             {
@@ -213,7 +292,19 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
             LpnCode = lpn.LpnCode,
             State = lpn.State.ToString(),
             DiffPercent = maxDiff,
-            PdfUrl = pdfUrl
+            PdfUrl = pdfUrl,
+            PackageLines = lpn.PackageVariantLines.Select(line => new ProcessInboundQcPackageLineResponse
+            {
+                LpnPackageVariantLineId = line.LpnPackageVariantLineId,
+                OrderPackageVariantId = line.OrderPackageVariantId,
+                PackageVariantName = line.VariantName,
+                PackingType = line.PackingType,
+                Quantity = line.Quantity,
+                ActualWeightKg = line.ActualWeightKg,
+                ActualCbm = line.ActualCbm,
+                DiffPercent = line.DiffPercent,
+                HasDiscrepancy = line.HasDiscrepancy
+            }).ToList()
         };
     }
 

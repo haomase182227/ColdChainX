@@ -104,6 +104,8 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
 
     public virtual DbSet<TransportOrder> TransportOrders { get; set; }
 
+    public virtual DbSet<OrderPackageVariant> OrderPackageVariants { get; set; }
+
     public virtual DbSet<TripStop> TripStops { get; set; }
 
     public virtual DbSet<User> Users { get; set; }
@@ -123,6 +125,8 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
     public virtual DbSet<OutboundOrderItem> OutboundOrderItems { get; set; }
 
     public virtual DbSet<Lpn> Lpns { get; set; }
+
+    public virtual DbSet<LpnPackageVariantLine> LpnPackageVariantLines { get; set; }
 
     public virtual DbSet<PenaltyBill> PenaltyBills { get; set; }
 
@@ -1799,6 +1803,7 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasMaxLength(255)
                 .HasColumnName("image_url");
             entity.Property(e => e.OrderId).HasColumnName("order_id");
+            entity.Property(e => e.OrderPackageVariantId).HasColumnName("order_package_variant_id");
             entity.Property(e => e.RejectReason)
                 .HasMaxLength(255)
                 .HasColumnName("reject_reason");
@@ -1808,6 +1813,11 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.HasOne(d => d.Order).WithMany(p => p.TransportDocuments)
                 .HasForeignKey(d => d.OrderId)
                 .HasConstraintName("fk_td_to");
+
+            entity.HasOne(d => d.OrderPackageVariant).WithMany(p => p.TransportDocuments)
+                .HasForeignKey(d => d.OrderPackageVariantId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_td_package_variant");
 
             entity.HasOne(d => d.UploadedByNavigation).WithMany(p => p.TransportDocumentUploadedByNavigations)
                 .HasForeignKey(d => d.UploadedBy)
@@ -1909,6 +1919,48 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .WithOne(p => p.OrderDimension)
                 .HasForeignKey<OrderDimension>(d => d.OrderId)
                 .HasConstraintName("fk_order_dimensions_order");
+        });
+
+        modelBuilder.Entity<OrderPackageVariant>(entity =>
+        {
+            entity.HasKey(e => e.OrderPackageVariantId).HasName("order_package_variants_pkey");
+
+            entity.ToTable("order_package_variants");
+
+            entity.HasIndex(e => e.OrderId, "ix_order_package_variants_order_id");
+
+            entity.Property(e => e.OrderPackageVariantId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("order_package_variant_id");
+            entity.Property(e => e.OrderId).HasColumnName("order_id");
+            entity.Property(e => e.VariantName)
+                .HasMaxLength(100)
+                .HasColumnName("variant_name");
+            entity.Property(e => e.PackingType)
+                .HasMaxLength(50)
+                .HasColumnName("packing_type");
+            entity.Property(e => e.Quantity).HasColumnName("quantity");
+            entity.Property(e => e.ExpectedUnitWeightKg)
+                .HasPrecision(10, 2)
+                .HasColumnName("expected_unit_weight_kg");
+            entity.Property(e => e.ExpectedTotalWeightKg)
+                .HasPrecision(10, 2)
+                .HasColumnName("expected_total_weight_kg");
+            entity.Property(e => e.ExpectedCbm)
+                .HasPrecision(10, 4)
+                .HasColumnName("expected_cbm");
+            entity.Property(e => e.LengthCm).HasPrecision(10, 2).HasColumnName("length_cm");
+            entity.Property(e => e.WidthCm).HasPrecision(10, 2).HasColumnName("width_cm");
+            entity.Property(e => e.HeightCm).HasPrecision(10, 2).HasColumnName("height_cm");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+
+            entity.HasOne(d => d.Order).WithMany(p => p.PackageVariants)
+                .HasForeignKey(d => d.OrderId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_order_package_variants_order");
         });
 
         modelBuilder.Entity<TripStop>(entity =>
@@ -2623,6 +2675,46 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasForeignKey(e => e.WarehouseId)
                 .OnDelete(DeleteBehavior.SetNull)
                 .HasConstraintName("fk_lpns_warehouse");
+        });
+
+        modelBuilder.Entity<LpnPackageVariantLine>(entity =>
+        {
+            entity.HasKey(e => e.LpnPackageVariantLineId).HasName("lpn_package_variant_lines_pkey");
+            entity.ToTable("lpn_package_variant_lines");
+
+            entity.Property(e => e.LpnPackageVariantLineId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("lpn_package_variant_line_id");
+            entity.Property(e => e.LpnId).HasColumnName("lpn_id");
+            entity.Property(e => e.OrderPackageVariantId).HasColumnName("order_package_variant_id");
+            entity.Property(e => e.VariantName).HasMaxLength(100).HasColumnName("variant_name");
+            entity.Property(e => e.PackingType).HasMaxLength(50).HasColumnName("packing_type");
+            entity.Property(e => e.Quantity).HasColumnName("quantity");
+            entity.Property(e => e.ExpectedWeightKg).HasPrecision(10, 2).HasColumnName("expected_weight_kg");
+            entity.Property(e => e.ActualWeightKg).HasPrecision(10, 2).HasColumnName("actual_weight_kg");
+            entity.Property(e => e.ExpectedCbm).HasPrecision(10, 4).HasColumnName("expected_cbm");
+            entity.Property(e => e.ActualCbm).HasPrecision(10, 4).HasColumnName("actual_cbm");
+            entity.Property(e => e.LengthCm).HasPrecision(10, 2).HasColumnName("length_cm");
+            entity.Property(e => e.WidthCm).HasPrecision(10, 2).HasColumnName("width_cm");
+            entity.Property(e => e.HeightCm).HasPrecision(10, 2).HasColumnName("height_cm");
+            entity.Property(e => e.RecordedTemperature).HasPrecision(8, 2).HasColumnName("recorded_temperature");
+            entity.Property(e => e.DiffPercent).HasPrecision(8, 2).HasColumnName("diff_percent");
+            entity.Property(e => e.HasDiscrepancy).HasColumnName("has_discrepancy");
+            entity.Property(e => e.EvidenceImageUrl).HasMaxLength(1000).HasColumnName("evidence_image_url");
+            entity.Property(e => e.CreatedAt).HasColumnType("timestamp without time zone").HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnType("timestamp without time zone").HasColumnName("updated_at");
+
+            entity.HasIndex(e => e.LpnId).HasDatabaseName("idx_lpn_package_variant_lines_lpn_id");
+            entity.HasIndex(e => e.OrderPackageVariantId).HasDatabaseName("idx_lpn_package_variant_lines_variant_id");
+
+            entity.HasOne(e => e.Lpn).WithMany(e => e.PackageVariantLines)
+                .HasForeignKey(e => e.LpnId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_lpn_package_variant_lines_lpn");
+            entity.HasOne(e => e.OrderPackageVariant).WithMany(e => e.LpnPackageVariantLines)
+                .HasForeignKey(e => e.OrderPackageVariantId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_lpn_package_variant_lines_variant");
         });
 
         modelBuilder.Entity<PenaltyBill>(entity =>

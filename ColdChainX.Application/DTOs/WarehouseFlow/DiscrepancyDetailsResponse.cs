@@ -34,6 +34,7 @@ public class DiscrepancyDetailsResponse
     public string? DiscrepancyReason { get; set; }
     public DateTime CreatedAt { get; set; }
     public DiscrepancyReceiptInfo ReceiptInfo { get; set; } = null!;
+    public IReadOnlyCollection<LpnPackageVariantLineResponse> PackageLines { get; set; } = Array.Empty<LpnPackageVariantLineResponse>();
 }
 
 public class DiscrepancyReceiptInfo

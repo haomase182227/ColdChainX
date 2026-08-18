@@ -25,6 +25,7 @@ namespace ColdChainX.Application.DTOs.Orders
         public OrderScheduleResponse? Schedule { get; set; }
         public OrderLocationResponse? Destination { get; set; }
         public IReadOnlyCollection<OrderDocumentResponse> Documents { get; set; } = Array.Empty<OrderDocumentResponse>();
+        public IReadOnlyCollection<OrderPackageVariantResponse> PackageVariants { get; set; } = Array.Empty<OrderPackageVariantResponse>();
 
         public Guid? CustomerId { get; set; }
         public string? CustomerName { get; set; }
@@ -79,6 +80,9 @@ namespace ColdChainX.Application.DTOs.Orders
         public Guid DocId { get; set; }
         public string DocType { get; set; } = null!;
         public string ImageUrl { get; set; } = null!;
+        public bool IsVerified { get; set; }
+        public Guid? VerifiedBy { get; set; }
+        public string? RejectReason { get; set; }
         public DateTime? CreatedAt { get; set; }
     }
 

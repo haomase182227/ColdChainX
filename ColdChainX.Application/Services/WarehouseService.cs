@@ -179,7 +179,30 @@ namespace ColdChainX.Application.Services
                 ActualWeightKg = l.ActualWeightKg,
                 ActualCbm = l.ActualCbm,
                 State = l.State,
-                InboundTime = l.CreatedAt
+                InboundTime = l.CreatedAt,
+                ExpectedWeightKg = l.PackageVariantLines.Count > 0
+                    ? l.PackageVariantLines.Sum(line => line.ExpectedWeightKg)
+                    : 0m,
+                ExpectedCbm = l.PackageVariantLines.Count > 0
+                    ? l.PackageVariantLines.Sum(line => line.ExpectedCbm)
+                    : 0m,
+                PackageLines = l.PackageVariantLines.Select(line => new LpnPackageVariantLineResponse
+                {
+                    LpnPackageVariantLineId = line.LpnPackageVariantLineId,
+                    OrderPackageVariantId = line.OrderPackageVariantId,
+                    VariantName = line.VariantName,
+                    PackingType = line.PackingType,
+                    Quantity = line.Quantity,
+                    ExpectedWeightKg = line.ExpectedWeightKg,
+                    ActualWeightKg = line.ActualWeightKg,
+                    ExpectedCbm = line.ExpectedCbm,
+                    ActualCbm = line.ActualCbm,
+                    LengthCm = line.LengthCm,
+                    WidthCm = line.WidthCm,
+                    HeightCm = line.HeightCm,
+                    DiffPercent = line.DiffPercent,
+                    HasDiscrepancy = line.HasDiscrepancy
+                }).ToList()
             }).ToList();
 
             var result = PagedResult<LpnResponse>.Create(mappedList, totalCount, page, pageSize);

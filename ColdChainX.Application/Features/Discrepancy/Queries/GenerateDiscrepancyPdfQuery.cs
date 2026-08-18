@@ -33,6 +33,9 @@ public class GenerateDiscrepancyPdfQueryHandler : IRequestHandler<GenerateDiscre
             .Include(x => x.Lpns)
                 .ThenInclude(l => l.Order)
                     .ThenInclude(o => o.OrderDimension)
+            .Include(x => x.Lpns)
+                .ThenInclude(l => l.PackageVariantLines)
+                    .ThenInclude(line => line.OrderPackageVariant)
             .Include(x => x.Order)
                 .ThenInclude(o => o.OrderDimension)
             .Include(x => x.Warehouse)
@@ -42,7 +45,10 @@ public class GenerateDiscrepancyPdfQueryHandler : IRequestHandler<GenerateDiscre
             throw new Exception("Warehouse receipt not found");
 
         var discrepancyItems = receipt.Lpns
-            .Where(x => x.State == ColdChainX.Core.Enums.LpnState.DISCREPANCY_HOLD || x.State == ColdChainX.Core.Enums.LpnState.RETURN_PENDING || x.Quantity != (x.Order?.Quantity ?? 0))
+            .Where(x => x.State == ColdChainX.Core.Enums.LpnState.DISCREPANCY_HOLD
+                        || x.State == ColdChainX.Core.Enums.LpnState.RETURN_PENDING
+                        || x.PackageVariantLines.Any(line => line.HasDiscrepancy)
+                        || (x.PackageVariantLines.Count == 0 && x.Quantity != (x.Order?.Quantity ?? 0)))
             .ToList();
 
         var data = new
@@ -57,20 +63,27 @@ public class GenerateDiscrepancyPdfQueryHandler : IRequestHandler<GenerateDiscre
             VehiclePlateNumber = "N/A", // Truck plate is usually on trip
             OrderCode = receipt.Order?.TrackingCode ?? "N/A",
             DiscrepancyItems = discrepancyItems.Select((item, index) => {
-                var expectedQty = item.Order?.Quantity ?? 0;
+                var expectedQty = item.PackageVariantLines.Count > 0
+                    ? item.PackageVariantLines.Sum(line => line.Quantity)
+                    : item.Order?.Quantity ?? 0;
                 var actualQty = item.Quantity;
-                var expectedWeight = item.Order?.OrderDimension?.ExpectedWeightKg ?? 0m;
+                var expectedWeight = item.PackageVariantLines.Count > 0
+                    ? item.PackageVariantLines.Sum(line => line.ExpectedWeightKg)
+                    : item.Order?.OrderDimension?.ExpectedWeightKg ?? 0m;
                 var actualWeight = item.ActualWeightKg;
-                var expectedCbm = item.Order?.OrderDimension == null
-                    ? 0m
-                    : InboundQcMeasurementCalculator.CalculateExpectedCbm(item.Order.OrderDimension, expectedQty);
+                var expectedCbm = item.PackageVariantLines.Count > 0
+                    ? item.PackageVariantLines.Sum(line => line.ExpectedCbm)
+                    : item.Order?.OrderDimension == null
+                        ? 0m
+                        : InboundQcMeasurementCalculator.CalculateExpectedCbm(item.Order.OrderDimension, expectedQty);
                 var actualCbm = item.ActualCbm;
-                var expectedLength = item.Order?.OrderDimension?.LengthCm ?? 0m;
-                var actualLength = item.LengthCm ?? 0m;
-                var expectedWidth = item.Order?.OrderDimension?.WidthCm ?? 0m;
-                var actualWidth = item.WidthCm ?? 0m;
-                var expectedHeight = item.Order?.OrderDimension?.HeightCm ?? 0m;
-                var actualHeight = item.HeightCm ?? 0m;
+                var singleLine = item.PackageVariantLines.Count == 1 ? item.PackageVariantLines.Single() : null;
+                var expectedLength = item.PackageVariantLines.Count > 1 ? 0m : singleLine?.OrderPackageVariant?.LengthCm ?? item.Order?.OrderDimension?.LengthCm ?? 0m;
+                var actualLength = item.PackageVariantLines.Count > 1 ? 0m : singleLine?.LengthCm ?? item.LengthCm ?? 0m;
+                var expectedWidth = item.PackageVariantLines.Count > 1 ? 0m : singleLine?.OrderPackageVariant?.WidthCm ?? item.Order?.OrderDimension?.WidthCm ?? 0m;
+                var actualWidth = item.PackageVariantLines.Count > 1 ? 0m : singleLine?.WidthCm ?? item.WidthCm ?? 0m;
+                var expectedHeight = item.PackageVariantLines.Count > 1 ? 0m : singleLine?.OrderPackageVariant?.HeightCm ?? item.Order?.OrderDimension?.HeightCm ?? 0m;
+                var actualHeight = item.PackageVariantLines.Count > 1 ? 0m : singleLine?.HeightCm ?? item.HeightCm ?? 0m;
 
                 var isQtyDiff = expectedQty != actualQty;
                 var isWeightDiff = Math.Abs(expectedWeight - actualWeight) > 0.01m;
@@ -88,7 +101,9 @@ public class GenerateDiscrepancyPdfQueryHandler : IRequestHandler<GenerateDiscre
                 {
                     Index = index + 1,
                     LpnCode = item.LpnCode,
-                    ItemName = item.Order?.ItemName ?? "Unknown",
+                    ItemName = item.PackageVariantLines.Count > 0
+                        ? $"{item.Order?.ItemName ?? "Unknown"} - {string.Join(", ", item.PackageVariantLines.Select(line => line.VariantName))}"
+                        : item.Order?.ItemName ?? "Unknown",
                     
                     ExpectedQty = expectedQty,
                     ActualQty = actualQty,

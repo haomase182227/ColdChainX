@@ -36,6 +36,7 @@ public class InboundController : ControllerBase
             HeightCm = request.HeightCm,
             Temperature = request.Temperature,
             EvidenceImages = request.EvidenceImages,
+            PackageMeasurements = request.PackageMeasurements,
             ReceiverId = receiverId,
             WarehouseId = Guid.Empty
         };
@@ -63,6 +64,7 @@ public class InboundController : ControllerBase
             HeightCm = request.HeightCm,
             Temperature = request.Temperature,
             EvidenceImages = request.EvidenceImages,
+            PackageMeasurements = request.PackageMeasurements,
             WarehouseId = warehouseId
         };
 

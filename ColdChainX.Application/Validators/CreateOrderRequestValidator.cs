@@ -20,6 +20,7 @@ namespace ColdChainX.Application.Validators
         [
             "Pallet",
             "Thùng",
+            "Bin",
             "Bao",
             "Plastic Box",
             "Foam Box",
@@ -27,6 +28,7 @@ namespace ColdChainX.Application.Validators
         ];
 
         private const long MaxDocumentSizeBytes = 10 * 1024 * 1024;
+        private const int MaxPackageVariants = 20;
 
         public CreateOrderRequestValidator()
         {
@@ -43,25 +45,35 @@ namespace ColdChainX.Application.Validators
                 .InclusiveBetween(-18m, -5m)
                 .WithMessage("Temp_Condition must be between -18 and -5 Celsius");
 
-            RuleFor(x => x.ExpectedWeightKg)
-                .GreaterThan(0).WithMessage("Expected_Weight_KG must be greater than 0");
+            RuleFor(x => x.PackageVariants)
+                .Must(variants => variants == null || variants.Count <= MaxPackageVariants)
+                .WithMessage($"PackageVariants must not contain more than {MaxPackageVariants} sizes");
 
-            RuleFor(x => x.Quantity)
-                .GreaterThan(0).WithMessage("Quantity must be greater than 0");
+            RuleForEach(x => x.PackageVariants)
+                .SetValidator(new CreateOrderPackageVariantRequestValidator());
 
-            RuleFor(x => x.PackagingType)
-                .NotEmpty().WithMessage("Packaging_Type is required")
-                .Must(ContainsOnlyAllowedPackagingTypes)
-                .WithMessage(request => BuildPackagingTypeErrorMessage(request.PackagingType));
+            When(x => x.PackageVariants == null || x.PackageVariants.Count == 0, () =>
+            {
+                RuleFor(x => x.ExpectedWeightKg)
+                    .GreaterThan(0).WithMessage("Expected_Weight_KG must be greater than 0");
 
-            RuleFor(x => x.LengthCm)
-                .GreaterThan(0).WithMessage("Length_CM must be greater than 0");
+                RuleFor(x => x.Quantity)
+                    .GreaterThan(0).WithMessage("Quantity must be greater than 0");
 
-            RuleFor(x => x.WidthCm)
-                .GreaterThan(0).WithMessage("Width_CM must be greater than 0");
+                RuleFor(x => x.PackagingType)
+                    .NotEmpty().WithMessage("Packaging_Type is required")
+                    .Must(ContainsOnlyAllowedPackagingTypes)
+                    .WithMessage(request => BuildPackagingTypeErrorMessage(request.PackagingType));
 
-            RuleFor(x => x.HeightCm)
-                .GreaterThan(0).WithMessage("Height_CM must be greater than 0");
+                RuleFor(x => x.LengthCm)
+                    .GreaterThan(0).WithMessage("Length_CM must be greater than 0");
+
+                RuleFor(x => x.WidthCm)
+                    .GreaterThan(0).WithMessage("Width_CM must be greater than 0");
+
+                RuleFor(x => x.HeightCm)
+                    .GreaterThan(0).WithMessage("Height_CM must be greater than 0");
+            });
 
             RuleFor(x => x.DestAddressText)
                 .NotEmpty().WithMessage("Dest_Address_Text is required")
@@ -73,7 +85,7 @@ namespace ColdChainX.Application.Validators
             RuleFor(x => x.DropoffStopId)
                 .NotEmpty().WithMessage("Dropoff_Stop_ID is required");
 
-                    }
+        }
 
         private static bool ContainsOnlyAllowedPackagingTypes(string? value)
         {
@@ -102,6 +114,43 @@ namespace ColdChainX.Application.Validators
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .Where(packagingType => !string.IsNullOrWhiteSpace(packagingType))
                 .ToArray();
+        }
+
+        private sealed class CreateOrderPackageVariantRequestValidator : AbstractValidator<CreateOrderPackageVariantRequest>
+        {
+            public CreateOrderPackageVariantRequestValidator()
+            {
+                RuleFor(x => x.VariantName)
+                    .MaximumLength(100).WithMessage("VariantName must not exceed 100 characters");
+
+                RuleFor(x => x.PackagingType)
+                    .NotEmpty().WithMessage("PackagingType is required for every package size")
+                    .Must(value => AllowedPackagingTypes.Contains(value))
+                    .WithMessage($"PackagingType must be one of: {string.Join(", ", AllowedPackagingTypes)}");
+
+                RuleFor(x => x.Quantity)
+                    .GreaterThan(0).WithMessage("Quantity must be greater than 0 for every package size");
+
+                RuleFor(x => x.ExpectedUnitWeightKg)
+                    .GreaterThan(0).WithMessage("ExpectedUnitWeightKg must be greater than 0 for every package size");
+
+                RuleFor(x => x.LengthCm)
+                    .GreaterThan(0).WithMessage("LengthCm must be greater than 0 for every package size");
+
+                RuleFor(x => x.WidthCm)
+                    .GreaterThan(0).WithMessage("WidthCm must be greater than 0 for every package size");
+
+                RuleFor(x => x.HeightCm)
+                    .GreaterThan(0).WithMessage("HeightCm must be greater than 0 for every package size");
+
+                RuleForEach(x => x.LegalDocuments)
+                    .Must(file => file.Length > 0 && file.Length <= MaxDocumentSizeBytes)
+                    .WithMessage("Each legal document must be non-empty and no larger than 10MB");
+
+                RuleForEach(x => x.CargoPhotos)
+                    .Must(file => file.Length > 0 && file.Length <= MaxDocumentSizeBytes)
+                    .WithMessage("Each cargo photo must be non-empty and no larger than 10MB");
+            }
         }
     }
 }
