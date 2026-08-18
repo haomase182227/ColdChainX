@@ -10,6 +10,8 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Globalization;
+using System.Text.Json;
 
 namespace ColdChainX.UnitTests;
 
@@ -217,6 +219,102 @@ public sealed class IncidentRescueFlowTests : IDisposable
         Assert.Equal(new[] { "IOT-REPLACEMENT" }, _mqtt.StreamingDeviceCodes);
         Assert.Equal(_tripId, (await _db.Lpns.FindAsync(_lpnId))!.TripId);
         Assert.Equal(_tripId, (await _db.TransportOrders.FindAsync(_orderId))!.MasterTripId);
+    }
+
+    [Fact]
+    public async Task DispatchRescue_CustomerEtaNotification_ContainsDatesWithoutTimes()
+    {
+        await SeedRescueTripAsync(replacementOnline: false);
+
+        var customer = new Customer
+        {
+            CustomerId = Guid.NewGuid(),
+            CompanyName = "Incident ETA Customer",
+            TaxCode = $"INC-ETA-{Guid.NewGuid():N}",
+            Email = "incident-eta@example.com",
+            Status = "ACTIVE"
+        };
+        var customerUser = new User
+        {
+            UserId = Guid.NewGuid(),
+            Username = "incident-eta-customer",
+            Email = customer.Email,
+            FullName = "Incident ETA Customer",
+            Status = "ACTIVE"
+        };
+        var destination = new Location
+        {
+            LocationId = Guid.NewGuid(),
+            CustomerId = customer.CustomerId,
+            Customer = customer,
+            Address = "Incident delivery point",
+            Latitude = 10.8m,
+            Longitude = 106.8m,
+            Status = "ACTIVE"
+        };
+        var trip = (await _db.MasterTrips.FindAsync(_tripId))!;
+        var order = (await _db.TransportOrders.FindAsync(_orderId))!;
+        var plannedArrival = DateTime.UtcNow.AddHours(2);
+        trip.DestinationLocationId = destination.LocationId;
+        order.CustomerId = customer.CustomerId;
+        order.Customer = customer;
+        order.DestLocation = destination.LocationId;
+        order.DestLocationNavigation = destination;
+
+        _db.AddRange(
+            customer,
+            customerUser,
+            destination,
+            new Messagetype
+            {
+                TypeId = Guid.NewGuid(),
+                TypeName = "INCIDENT"
+            },
+            new TripStop
+            {
+                StopId = Guid.NewGuid(),
+                TripId = _tripId,
+                Trip = trip,
+                LocationId = destination.LocationId,
+                Location = destination,
+                StopSequence = 1,
+                StopType = "DELIVERY",
+                PlannedArrivalTime = plannedArrival,
+                PlannedDepartureTime = plannedArrival.AddMinutes(30),
+                Status = "PLANNED",
+                CreatedAt = DateTime.UtcNow
+            });
+        await _db.SaveChangesAsync();
+
+        var result = await _service.DispatchRescueAsync(
+            _incidentId,
+            new DispatchRescueRequest
+            {
+                ReplacementVehicleId = _replacementVehicleId,
+                TransloadMinutes = 30
+            },
+            _dispatcherId);
+
+        Assert.True(result.Success, result.Message);
+        var etaChange = Assert.Single(result.Data!.UpdatedStops);
+        var notification = await _db.Notifications
+            .SingleAsync(item => item.TemplateId == "INCIDENT_TRIP_DELAYED");
+        using var payload = JsonDocument.Parse(notification.Params);
+        var oldEta = payload.RootElement.GetProperty("old_eta").GetString();
+        var newEta = payload.RootElement.GetProperty("new_eta").GetString();
+
+        Assert.Equal(
+            etaChange.OldEta.AddHours(7).ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+            oldEta);
+        Assert.Equal(
+            etaChange.NewEta.AddHours(7).ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+            newEta);
+        Assert.DoesNotContain(":", oldEta);
+        Assert.DoesNotContain(":", newEta);
+
+        var template = await _db.NotificationTemplates
+            .SingleAsync(item => item.TemplateId == "INCIDENT_TRIP_DELAYED");
+        Assert.Contains("Ngày giao dự kiến mới", template.BodyTemplate);
     }
 
     [Fact]

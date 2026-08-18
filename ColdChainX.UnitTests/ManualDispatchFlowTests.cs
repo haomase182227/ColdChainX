@@ -6,6 +6,8 @@ using ColdChainX.Infrastructure.Persistence;
 using ColdChainX.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Globalization;
+using System.Text.Json;
 
 namespace ColdChainX.UnitTests;
 
@@ -32,6 +34,48 @@ public class ManualDispatchFlowTests
         Assert.Equal(trip.TripId, order.MasterTripId);
         Assert.Equal("LOADING", order.Status);
         Assert.Equal("PLANNING", vehicle.Status);
+    }
+
+    [Fact]
+    public async Task PlanLoad_CustomerEtaNotification_ContainsDateWithoutTime()
+    {
+        await using var fixture = await CreateFixtureAsync();
+        var messageType = await fixture.Db.Messagetypes.SingleAsync();
+        fixture.Db.NotificationTemplates.Add(new NotificationTemplate
+        {
+            TemplateId = "DISPATCH_CUSTOMER_ETA",
+            TypeId = messageType.TypeId,
+            TitleTemplate = "Legacy title",
+            BodyTemplate = "Dự kiến giao hàng lúc {eta}.",
+            Channel = "IN_APP",
+            Status = "ACTIVE"
+        });
+        await fixture.Db.SaveChangesAsync();
+
+        var result = await fixture.Service.PlanLoadFromWarehouseAsync(new PlanLoadRequest
+        {
+            LpnIds = fixture.Request.LpnIds,
+            VehicleId = fixture.Request.VehicleId,
+            OriginWarehouseLocationId = fixture.Request.OriginWarehouseLocationId,
+            PlannedStartTime = fixture.Request.PlannedStartTime,
+            PlannedEndTime = fixture.Request.PlannedEndTime
+        });
+
+        var notification = await fixture.Db.Notifications
+            .SingleAsync(item => item.TemplateId == "DISPATCH_CUSTOMER_ETA");
+        var stop = await fixture.Db.TripStops
+            .SingleAsync(item => item.TripId == result.TripId);
+        using var payload = JsonDocument.Parse(notification.Params);
+        var eta = payload.RootElement.GetProperty("eta").GetString();
+
+        Assert.Equal(
+            stop.PlannedArrivalTime.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+            eta);
+        Assert.DoesNotContain(":", eta);
+
+        var template = await fixture.Db.NotificationTemplates
+            .SingleAsync(item => item.TemplateId == "DISPATCH_CUSTOMER_ETA");
+        Assert.Contains("giao hàng ngày {eta}", template.BodyTemplate);
     }
 
     [Fact]
@@ -142,10 +186,33 @@ public class ManualDispatchFlowTests
             Longitude = 105.85m,
             Status = "ACTIVE"
         };
+        var customer = new Customer
+        {
+            CustomerId = Guid.NewGuid(),
+            CompanyName = "ETA Test Customer",
+            TaxCode = $"ETA-{Guid.NewGuid():N}",
+            Email = "eta-customer@example.com",
+            Status = "ACTIVE"
+        };
+        var customerUser = new User
+        {
+            UserId = Guid.NewGuid(),
+            Username = "eta-customer",
+            Email = customer.Email,
+            FullName = "ETA Test Customer",
+            Status = "ACTIVE"
+        };
+        var messageType = new Messagetype
+        {
+            TypeId = Guid.NewGuid(),
+            TypeName = "ORDER_STATUS"
+        };
         var order = new TransportOrder
         {
             OrderId = Guid.NewGuid(),
             TrackingCode = "TEST-MANUAL-001",
+            CustomerId = customer.CustomerId,
+            Customer = customer,
             ItemName = "Frozen cargo",
             Category = "FROZEN_FOOD",
             Quantity = 1,
@@ -226,7 +293,19 @@ public class ManualDispatchFlowTests
             Status = "ACTIVE"
         });
 
-        db.AddRange(route, schedule, origin, destination, order, receipt, lpn, vehicle, driver);
+        db.AddRange(
+            route,
+            schedule,
+            origin,
+            destination,
+            customer,
+            customerUser,
+            messageType,
+            order,
+            receipt,
+            lpn,
+            vehicle,
+            driver);
         await db.SaveChangesAsync();
 
         var availability = new DriverAvailabilityService(db);
