@@ -129,6 +129,8 @@
 
   function buildRequestBody(panel) {
     const formData = new FormData();
+    const customerId = panel.querySelector(".ccx-customer-id").value.trim();
+    if (customerId) formData.append("Customer_ID", customerId);
     formData.append("Item_Name", panel.querySelector(".ccx-item-name").value.trim());
     formData.append("Category", panel.querySelector(".ccx-category").value);
     formData.append("Temp_Condition", panel.querySelector(".ccx-temperature").value);
@@ -201,9 +203,13 @@
       <p class="ccx-order-form-note">
         One order contains one item/category/temperature profile. Add up to 20 package sizes;
         each size has its own weight, dimensions, legal documents and cargo photos.
+        Customer ID is only required for an internal user creating an order on behalf of a customer.
       </p>
       <form>
         <div class="ccx-order-grid">
+          <label>Customer ID (internal users only)
+            <input class="ccx-customer-id" type="text" pattern="[0-9a-fA-F-]{36}">
+          </label>
           <label>Item name *
             <input class="ccx-item-name" type="text" maxlength="150" required>
           </label>

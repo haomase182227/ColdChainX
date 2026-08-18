@@ -1,8 +1,10 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ColdChainX.API.Authorization;
 using ColdChainX.Application.DTOs.Orders;
 using ColdChainX.Application.Interfaces;
+using ColdChainX.Shared.Constants;
 
 namespace ColdChainX.API.Controllers
 {
@@ -76,13 +78,21 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "Sales,Customer")]
+        [HasPermission(PermissionCodes.OrderCreate)]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> CreateOrder([FromForm] CreateOrderRequest request)
         {
             var customerIdClaim = User.FindFirst("CustomerId")?.Value;
             if (!Guid.TryParse(customerIdClaim, out var customerId))
-                return Unauthorized("CustomerId claim is missing from token");
+            {
+                if (!request.CustomerId.HasValue || request.CustomerId == Guid.Empty)
+                {
+                    return BadRequest(
+                        "Customer_ID is required when creating an order on behalf of a customer.");
+                }
+
+                customerId = request.CustomerId.Value;
+            }
 
             var result = await _orderService.CreateOrderAsync(request, customerId);
             if (!result.Success) return BadRequest(result);

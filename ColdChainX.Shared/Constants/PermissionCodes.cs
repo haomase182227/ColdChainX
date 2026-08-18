@@ -9,6 +9,8 @@ public static class PermissionCodes
     public const string WorkAssignmentManage = "WORK_ASSIGNMENT.MANAGE";
     public const string WorkAssignmentExecute = "WORK_ASSIGNMENT.EXECUTE";
 
+    public const string OrderCreate = "ORDER.CREATE";
+
     public const string WarehouseTaskView = "WAREHOUSE.TASK.VIEW";
     public const string WarehouseAsnView = "WAREHOUSE.ASN.VIEW";
     public const string WarehouseReceivingConfirm = "WAREHOUSE.RECEIVING.CONFIRM";

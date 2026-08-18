@@ -5,6 +5,13 @@ namespace ColdChainX.Application.DTOs.Orders
 {
     public class CreateOrderRequest
     {
+        /// <summary>
+        /// Target customer for an internal user creating an order on behalf of a customer.
+        /// Customer tokens always use their own CustomerId claim and ignore this value.
+        /// </summary>
+        [FromForm(Name = "Customer_ID")]
+        public Guid? CustomerId { get; set; }
+
         [FromForm(Name = "Item_Name")]
         public string ItemName { get; set; } = null!;
 
