@@ -381,6 +381,80 @@ namespace ColdChainX.UnitTests
             Assert.Equal("SUSPENDED_DOCS", updatedVehicle!.Status);
             Assert.Equal("Toyota Updated", updatedVehicle.Brand);
         }
+
+        [Fact]
+        public async Task CreateVehicle_CalculatesMaxCbmFromInnerDimensions()
+        {
+            var request = new CreateVehicleRequest
+            {
+                TruckPlate = "51C-CBM01",
+                VehicleType = "REEFER_TRUCK",
+                MaxWeight = 5000m,
+                InnerLengthCm = 950m,
+                InnerWidthCm = 250m,
+                InnerHeightCm = 240m,
+                MinTemp = -18m,
+                MaxTemp = 5m
+            };
+
+            var result = await _service.CreateVehicleAsync(request);
+
+            Assert.True(result.Success);
+            Assert.NotNull(result.Data);
+            Assert.Equal(51.30m, result.Data.MaxCbm);
+
+            var savedVehicle = await _db.Vehicles.FindAsync(result.Data.VehicleId);
+            Assert.NotNull(savedVehicle);
+            Assert.Equal(51.30m, savedVehicle.MaxCbm);
+        }
+
+        [Fact]
+        public async Task UpdateVehicle_InnerDimensions_RecalculatesMaxCbm()
+        {
+            var request = new ColdChainX.Application.DTOs.VehicleUpdateRequest
+            {
+                InnerLengthCm = 500m,
+                InnerWidthCm = 250m,
+                InnerHeightCm = 240m
+            };
+
+            var result = await _service.UpdateVehicleAsync(_vehicleId, request);
+
+            Assert.True(result.Success);
+            Assert.NotNull(result.Data);
+            Assert.Equal(27m, result.Data.MaxCbm);
+
+            var savedVehicle = await _db.Vehicles.FindAsync(_vehicleId);
+            Assert.NotNull(savedVehicle);
+            Assert.Equal(27m, savedVehicle.MaxCbm);
+        }
+
+        [Fact]
+        public async Task UpdateVehicle_OneDimensionChanged_UsesStoredDimensionsToRecalculateMaxCbm()
+        {
+            var vehicle = await _db.Vehicles.FindAsync(_vehicleId);
+            Assert.NotNull(vehicle);
+            vehicle.InnerLengthCm = 500m;
+            vehicle.InnerWidthCm = 250m;
+            vehicle.InnerHeightCm = 240m;
+            vehicle.MaxCbm = 27m;
+            await _db.SaveChangesAsync();
+
+            var request = new ColdChainX.Application.DTOs.VehicleUpdateRequest
+            {
+                InnerLengthCm = 600m
+            };
+
+            var result = await _service.UpdateVehicleAsync(_vehicleId, request);
+
+            Assert.True(result.Success);
+            Assert.NotNull(result.Data);
+            Assert.Equal(32.40m, result.Data.MaxCbm);
+
+            var savedVehicle = await _db.Vehicles.FindAsync(_vehicleId);
+            Assert.NotNull(savedVehicle);
+            Assert.Equal(32.40m, savedVehicle.MaxCbm);
+        }
     }
 
 

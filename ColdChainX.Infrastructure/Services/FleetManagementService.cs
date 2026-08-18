@@ -6,6 +6,7 @@ using ColdChainX.Application.DTOs.Fleet;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
 using ColdChainX.Core.Enums;
+using ColdChainX.Core.Services;
 using ColdChainX.Infrastructure.Hubs;
 using ColdChainX.Infrastructure.Persistence;
 using ColdChainX.Shared.Responses;
@@ -114,6 +115,11 @@ public class FleetManagementService : IFleetManagementService
             return ApiResponse<VehicleFleetResponse>.Failure("Engine number already exists");
 
 
+        var maxCbm = VehicleCapacityCalculator.CalculateMaxCbm(
+            request.InnerLengthCm,
+            request.InnerWidthCm,
+            request.InnerHeightCm);
+
         var vehicle = new Vehicle
         {
             VehicleId = Guid.NewGuid(),
@@ -125,7 +131,7 @@ public class FleetManagementService : IFleetManagementService
             StandardFuelLiters = request.StandardFuelLiters,
             VehicleType = NormalizeRequired(request.VehicleType),
             MaxWeight = request.MaxWeight,
-            MaxCbm = request.MaxCbm,
+            MaxCbm = maxCbm,
             InnerLengthCm = request.InnerLengthCm,
             InnerWidthCm = request.InnerWidthCm,
             InnerHeightCm = request.InnerHeightCm,
@@ -240,26 +246,23 @@ public class FleetManagementService : IFleetManagementService
                 }
 
                 var maxWeight = GetDecimal(row, vehicle?.MaxWeight, "MaxWeight", "Tai trong");
-                var maxCbm = GetDecimal(row, vehicle?.MaxCbm, "MaxCbm", "So khoi");
                 var innerLengthCm = GetDecimal(row, vehicle?.InnerLengthCm, "InnerLengthCm", "Chieu dai long thung");
                 var innerWidthCm = GetDecimal(row, vehicle?.InnerWidthCm, "InnerWidthCm", "Chieu rong long thung");
                 var innerHeightCm = GetDecimal(row, vehicle?.InnerHeightCm, "InnerHeightCm", "Chieu cao long thung");
                 var minTemp = GetDecimal(row, vehicle?.MinTemp, "MinTemp", "Nhiet do min");
                 var maxTemp = GetDecimal(row, vehicle?.MaxTemp, "MaxTemp", "Nhiet do max");
 
-                if (maxWeight <= 0 || maxCbm <= 0
+                if (maxWeight <= 0
                     || innerLengthCm <= 0 || innerWidthCm <= 0 || innerHeightCm <= 0)
                 {
                     throw new InvalidOperationException(
-                        $"Weight, CBM and all inner dimensions must be greater than zero for vehicle {plate}");
+                        $"Weight and all inner dimensions must be greater than zero for vehicle {plate}");
                 }
 
-                var physicalCbm = innerLengthCm * innerWidthCm * innerHeightCm / 1_000_000m;
-                if (maxCbm > physicalCbm)
-                {
-                    throw new InvalidOperationException(
-                        $"Max CBM cannot exceed the inner volume for vehicle {plate}");
-                }
+                var maxCbm = VehicleCapacityCalculator.CalculateMaxCbm(
+                    innerLengthCm,
+                    innerWidthCm,
+                    innerHeightCm);
 
                 if (minTemp < -100 || minTemp > 100 || maxTemp < minTemp || maxTemp > 100)
                 {
@@ -1812,13 +1815,13 @@ public class FleetManagementService : IFleetManagementService
         if (vehicle == null)
             return ApiResponse<VehicleFleetResponse>.Failure("Vehicle not found");
 
-        var nextMaxCbm = request.MaxCbm ?? vehicle.MaxCbm;
         var nextInnerLength = request.InnerLengthCm ?? vehicle.InnerLengthCm;
         var nextInnerWidth = request.InnerWidthCm ?? vehicle.InnerWidthCm;
         var nextInnerHeight = request.InnerHeightCm ?? vehicle.InnerHeightCm;
         var updatesInnerDimensions = request.InnerLengthCm.HasValue
             || request.InnerWidthCm.HasValue
             || request.InnerHeightCm.HasValue;
+        decimal? recalculatedMaxCbm = null;
 
         if (updatesInnerDimensions
             && (nextInnerLength is not > 0
@@ -1829,15 +1832,12 @@ public class FleetManagementService : IFleetManagementService
                 "All inner dimensions must be greater than zero");
         }
 
-        if (nextInnerLength is > 0 && nextInnerWidth is > 0 && nextInnerHeight is > 0)
+        if (updatesInnerDimensions)
         {
-            var physicalCbm = nextInnerLength.Value
-                / 1_000_000m;
-            if (nextMaxCbm > physicalCbm)
-            {
-                return ApiResponse<VehicleFleetResponse>.Failure(
-                    "Max CBM cannot exceed the volume calculated from the inner dimensions");
-            }
+            recalculatedMaxCbm = VehicleCapacityCalculator.CalculateMaxCbm(
+                nextInnerLength!.Value,
+                nextInnerWidth!.Value,
+                nextInnerHeight!.Value);
         }
 
         if (!string.IsNullOrWhiteSpace(request.TruckPlate))
@@ -1899,9 +1899,6 @@ public class FleetManagementService : IFleetManagementService
         if (request.MaxWeight.HasValue)
             vehicle.MaxWeight = request.MaxWeight.Value;
 
-        if (request.MaxCbm.HasValue)
-            vehicle.MaxCbm = request.MaxCbm.Value;
-
         if (request.InnerLengthCm.HasValue)
             vehicle.InnerLengthCm = request.InnerLengthCm.Value;
 
@@ -1910,6 +1907,9 @@ public class FleetManagementService : IFleetManagementService
 
         if (request.InnerHeightCm.HasValue)
             vehicle.InnerHeightCm = request.InnerHeightCm.Value;
+
+        if (recalculatedMaxCbm.HasValue)
+            vehicle.MaxCbm = recalculatedMaxCbm.Value;
 
         if (request.MinTemp.HasValue)
             vehicle.MinTemp = request.MinTemp.Value;

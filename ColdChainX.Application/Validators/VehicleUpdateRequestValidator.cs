@@ -41,10 +41,6 @@ namespace ColdChainX.Application.Validators
                 .GreaterThan(0).When(x => x.MaxWeight.HasValue)
                 .WithMessage("Max weight must be greater than zero");
 
-            RuleFor(x => x.MaxCbm)
-                .GreaterThan(0).When(x => x.MaxCbm.HasValue)
-                .WithMessage("Max CBM must be greater than zero");
-
             RuleFor(x => x.InnerLengthCm)
                 .GreaterThan(0).When(x => x.InnerLengthCm.HasValue)
                 .WithMessage("Inner length must be greater than zero");
