@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using ColdChainX.Application.Interfaces;
-using ColdChainX.Core.Enums;
 using ColdChainX.Shared.Responses;
 
 namespace ColdChainX.Application.Features.Inbound.Queries;
@@ -25,16 +24,23 @@ public class GetPendingReturnSlipsQueryHandler : IRequestHandler<GetPendingRetur
 
     public async Task<ApiResponse<object>> Handle(GetPendingReturnSlipsQuery request, CancellationToken cancellationToken)
     {
-        var slips = await _context.InboundReturnSlips
-            .Where(s => s.Lpn.State == LpnState.DELIVERY_RETURNED)
-            .OrderByDescending(s => s.CreatedAt)
-            .Select(s => new
+        var slips = await (
+            from slip in _context.InboundReturnSlips
+            join returnedItem in _context.ReturnedItems
+                on slip.ReturnSlipId equals returnedItem.ReturnId
+            where returnedItem.ProcessingStatus == "PENDING_INBOUND"
+            orderby slip.CreatedAt descending
+            select new
             {
-                s.SlipCode,
-                s.ReturnSlipId,
-                s.Reason,
-                LpnCode = s.Lpn.LpnCode,
-                Label = $"{s.SlipCode} (LPN: {s.Lpn.LpnCode})"
+                slip.SlipCode,
+                slip.ReturnSlipId,
+                slip.Reason,
+                LpnCode = slip.Lpn.LpnCode,
+                slip.ReturnedQty,
+                Status = returnedItem.ProcessingStatus,
+                OrderStatus = slip.Order.Status,
+                LpnState = slip.Lpn.State.ToString(),
+                Label = $"{slip.SlipCode} (LPN: {slip.Lpn.LpnCode})"
             })
             .ToListAsync(cancellationToken);
 

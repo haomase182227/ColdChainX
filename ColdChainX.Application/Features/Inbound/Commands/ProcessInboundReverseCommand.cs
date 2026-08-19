@@ -43,49 +43,108 @@ public class ProcessInboundReverseCommandHandler : IRequestHandler<ProcessInboun
         if (warehouse == null)
             throw new NotFoundException("Warehouse not found.");
 
-        var lpns = await _context.Lpns
-            .Where(l => request.LpnCodes.Contains(l.LpnCode))
+        var requestedLpnCodes = request.LpnCodes
+            .Where(code => !string.IsNullOrWhiteSpace(code))
+            .Select(code => code.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (requestedLpnCodes.Count != request.LpnCodes.Count)
+            throw new ValidationException("LpnCodes must contain unique, non-empty values.");
+
+        var pendingReturnedItems = await _context.ReturnedItems
+            .Include(item => item.Epod)
+            .Where(item => item.ItemCode != null
+                && requestedLpnCodes.Contains(item.ItemCode)
+                && item.ProcessingStatus == "PENDING_INBOUND")
             .ToListAsync(cancellationToken);
 
-        if (lpns.Count != request.LpnCodes.Count)
-            throw new ValidationException("Some LPNs were not found in the system.");
+        var duplicatePendingCodes = pendingReturnedItems
+            .GroupBy(item => item.ItemCode!, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToList();
+        if (duplicatePendingCodes.Any())
+            throw new ConflictException($"Multiple active return records exist for LPN(s): {string.Join(", ", duplicatePendingCodes)}.");
 
-        var invalidLpns = lpns.Where(l => l.State != LpnState.RETURN_PENDING && l.State != LpnState.DELIVERY_RETURNED).ToList();
-        if (invalidLpns.Any())
+        var returnSlipIds = pendingReturnedItems.Select(item => item.ReturnId).ToList();
+        var returnSlips = await _context.InboundReturnSlips
+            .Include(slip => slip.Lpn)
+            .Include(slip => slip.Order)
+            .Where(slip => returnSlipIds.Contains(slip.ReturnSlipId))
+            .ToListAsync(cancellationToken);
+
+        var returnLines = new List<(InboundReturnSlip Slip, ReturnedItem ReturnedItem, Lpn Lpn, bool IsPartial)>();
+        foreach (var lpnCode in requestedLpnCodes)
         {
-            var invalidCodes = string.Join(", ", invalidLpns.Select(l => l.LpnCode));
-            throw new ValidationException($"The following LPNs are not in a valid return state (must be RETURN_PENDING or DELIVERY_RETURNED): {invalidCodes}");
+            var returnedItem = pendingReturnedItems.SingleOrDefault(item =>
+                string.Equals(item.ItemCode, lpnCode, StringComparison.OrdinalIgnoreCase));
+            if (returnedItem == null)
+                throw new ValidationException($"LPN '{lpnCode}' does not have an active PENDING_INBOUND return item.");
+
+            var returnSlip = returnSlips.SingleOrDefault(slip => slip.ReturnSlipId == returnedItem.ReturnId);
+            if (returnSlip?.Lpn == null)
+                throw new ValidationException($"LPN '{lpnCode}' does not have a matching inbound return slip.");
+
+            var lpn = returnSlip.Lpn;
+            var isPartialReturn = lpn.State == LpnState.DELIVERED
+                && string.Equals(returnedItem.Epod?.Status, "OSD_PARTIAL_DELIVER", StringComparison.OrdinalIgnoreCase)
+                && returnSlip.ReturnedQty > 0;
+            var isWholeLpnReturn = lpn.State == LpnState.RETURN_PENDING
+                || lpn.State == LpnState.DELIVERY_RETURNED;
+
+            if (!isWholeLpnReturn && !isPartialReturn)
+            {
+                throw new ValidationException(
+                    $"LPN '{lpnCode}' is not eligible for reverse inbound. " +
+                    $"Current state: {lpn.State}; order status: {returnSlip.Order?.Status ?? "UNKNOWN"}.");
+            }
+
+            returnLines.Add((returnSlip, returnedItem, lpn, isPartialReturn));
         }
 
-        var distinctOrderIds = lpns.Select(l => l.OrderId).Distinct().ToList();
+        var distinctOrderIds = returnLines.Select(line => line.Lpn.OrderId).Distinct().ToList();
         if (distinctOrderIds.Count != 1)
             throw new ValidationException("Inbound reverse can only process LPNs from one transport order at a time.");
 
         using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
         try
         {
+            var processedAt = DateTime.UtcNow;
             var receipt = new WarehouseReceipt
             {
                 ReceiptId = Guid.NewGuid(),
-                ReceiptCode = $"WR-REV-{DateTime.UtcNow:yyyyMMddHHmmss}",
+                ReceiptCode = $"WR-REV-{processedAt:yyyyMMddHHmmss}",
                 OrderId = distinctOrderIds[0],
                 WarehouseId = request.WarehouseId,
                 ReceiptType = "REVERSE_LOGISTICS",
                 ReceiverId = request.UserId,
                 DelivererName = "Hub Return",
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = processedAt
             };
             
             _context.WarehouseReceipts.Add(receipt);
 
-            foreach (var lpn in lpns)
+            foreach (var line in returnLines)
             {
-                lpn.State = LpnState.IN_STOCK;
-                lpn.WarehouseId = request.WarehouseId;
-                lpn.ReceiptId = receipt.ReceiptId;
-                lpn.UpdatedAt = DateTime.UtcNow;
-                lpn.RouteId = null;
-                lpn.TripId = null;
+                line.ReturnedItem.ReturnedQty = line.Slip.ReturnedQty;
+                line.ReturnedItem.ProcessingStatus = "RECEIVED_AT_HUB";
+                line.ReturnedItem.ProcessedBy = request.UserId;
+                line.ReturnedItem.ProcessedAt = processedAt;
+
+                if (line.IsPartial)
+                {
+                    // The existing LPN represents the accepted portion. The return slip represents
+                    // only the rejected units, so reverse receipt must not put that LPN back in stock.
+                    continue;
+                }
+
+                line.Lpn.State = LpnState.IN_STOCK;
+                line.Lpn.WarehouseId = request.WarehouseId;
+                line.Lpn.ReceiptId = receipt.ReceiptId;
+                line.Lpn.UpdatedAt = processedAt;
+                line.Lpn.RouteId = null;
+                line.Lpn.TripId = null;
             }
 
             if (request.VehicleId.HasValue)
@@ -106,7 +165,7 @@ public class ProcessInboundReverseCommandHandler : IRequestHandler<ProcessInboun
                 }
             }
 
-            var orderIds = lpns.Select(l => l.OrderId).Distinct().ToList();
+            var orderIds = returnLines.Select(line => line.Lpn.OrderId).Distinct().ToList();
             var orders = await _context.TransportOrders
                 .Where(o => orderIds.Contains(o.OrderId))
                 .ToListAsync(cancellationToken);
@@ -132,7 +191,15 @@ public class ProcessInboundReverseCommandHandler : IRequestHandler<ProcessInboun
                 receipt.WarehouseId,
                 receipt.ReceiptType,
                 receipt.CreatedAt,
-                LpnCodes = lpns.Select(l => l.LpnCode).ToList()
+                LpnCodes = returnLines.Select(line => line.Lpn.LpnCode).ToList(),
+                ReturnLines = returnLines.Select(line => new
+                {
+                    LpnCode = line.Lpn.LpnCode,
+                    ReturnedQuantity = line.Slip.ReturnedQty,
+                    IsPartialReturn = line.IsPartial,
+                    LpnStateAfterReverse = line.Lpn.State.ToString(),
+                    AcceptedLpnQuantityPreserved = line.IsPartial ? line.Lpn.Quantity : (int?)null
+                }).ToList()
             };
 
             return ApiResponse<object>.SuccessResponse(response, "Inbound reverse processed successfully.");

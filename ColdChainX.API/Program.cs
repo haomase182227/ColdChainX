@@ -152,6 +152,16 @@ else
     app.Logger.LogInformation("Database bootstrap skipped by Startup:ApplyDatabaseBootstrap=false.");
 }
 
+if (args.Contains("--seed-unhappy") || configuration.GetValue<bool>("Startup:SeedUnhappyScenarios", false))
+{
+    await app.Services.SeedUnhappyScenariosAsync(app.Logger, app.Environment);
+    if (args.Contains("--seed-exit"))
+    {
+        app.Logger.LogInformation("Exiting after seeding unhappy scenarios (--seed-exit specified).");
+        return;
+    }
+}
+
 app.UseMiddleware<ExceptionMiddleware>();
 
 app.UseForwardedHeaders(new ForwardedHeadersOptions

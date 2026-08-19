@@ -94,7 +94,7 @@ public class ReportNoShowCommandHandler : IRequestHandler<ReportNoShowCommand, A
                 }
 
                 var now = DateTime.UtcNow;
-                _context.DeliveryEpods.Add(new DeliveryEpod
+                var noShowEpod = new DeliveryEpod
                 {
                     EpodId = Guid.NewGuid(),
                     OrderId = order.OrderId,
@@ -109,7 +109,47 @@ public class ReportNoShowCommandHandler : IRequestHandler<ReportNoShowCommand, A
                     PaymentStatus = "SKIPPED_NO_SHOW",
                     Note = $"Customer no-show / refused to receive. Evidence: {proofUrl}",
                     CreatedAt = now
-                });
+                };
+                _context.DeliveryEpods.Add(noShowEpod);
+
+                var lpnIds = lpns.Select(l => l.LpnId).ToList();
+                var lpnIdsWithActiveReturnSlip = await _context.InboundReturnSlips
+                    .Where(s => s.OrderId == order.OrderId && lpnIds.Contains(s.LpnId))
+                    .Where(s => _context.ReturnedItems.Any(item =>
+                        item.ReturnId == s.ReturnSlipId && item.ProcessingStatus == "PENDING_INBOUND"))
+                    .Select(s => s.LpnId)
+                    .ToListAsync(cancellationToken);
+
+                foreach (var lpn in lpns.Where(l => !lpnIdsWithActiveReturnSlip.Contains(l.LpnId)))
+                {
+                    var returnSlip = new InboundReturnSlip
+                    {
+                        ReturnSlipId = Guid.NewGuid(),
+                        OrderId = order.OrderId,
+                        LpnId = lpn.LpnId,
+                        SlipCode = lpn.LpnCode,
+                        ReturnedQty = lpn.Quantity,
+                        ReturnedWeightKg = lpn.ActualWeightKg,
+                        ReturnedCbm = lpn.ActualCbm,
+                        Reason = "NO_SHOW / No-Show: customer unavailable at delivery stop",
+                        CreatedAt = now
+                    };
+                    _context.InboundReturnSlips.Add(returnSlip);
+
+                    _context.ReturnedItems.Add(new ReturnedItem
+                    {
+                        ReturnId = returnSlip.ReturnSlipId,
+                        EpodId = noShowEpod.EpodId,
+                        ItemName = !string.IsNullOrWhiteSpace(order.ItemName) ? order.ItemName : "Hàng trả về do khách không có mặt",
+                        ItemCode = lpn.LpnCode,
+                        Unit = "BOX",
+                        ReturnedQty = lpn.Quantity,
+                        ReasonType = "NO_SHOW",
+                        ReasonNote = "[No-Show] Toàn bộ kiện hàng được tài xế mang về kho.",
+                        ProcessingStatus = "PENDING_INBOUND",
+                        ReturnedAt = now
+                    });
+                }
             }
         }
 
