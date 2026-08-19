@@ -59,6 +59,19 @@ public class GetEpodPaymentQrQueryHandler : IRequestHandler<GetEpodPaymentQrQuer
             description,
             cancellationToken);
 
+        var payosTag = $"[PayOS:{qrResult.OrderCode}]";
+        if (string.IsNullOrWhiteSpace(epod.Note))
+        {
+            epod.Note = payosTag;
+        }
+        else if (!epod.Note.Contains(payosTag))
+        {
+            var cleanedNote = System.Text.RegularExpressions.Regex.Replace(epod.Note, @"\[PayOS:\d+\]", "").Trim();
+            epod.Note = string.IsNullOrWhiteSpace(cleanedNote) ? payosTag : $"{cleanedNote} {payosTag}";
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+
         return ApiResponse<object>.SuccessResponse(new
         {
             EpodId = epod.EpodId,

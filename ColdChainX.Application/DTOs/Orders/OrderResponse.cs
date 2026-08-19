@@ -28,6 +28,8 @@ namespace ColdChainX.Application.DTOs.Orders
 
         public Guid? CustomerId { get; set; }
         public string? CustomerName { get; set; }
+        public string? CustomerContactName { get; set; }
+        public string? CustomerPhone { get; set; }
         public IReadOnlyCollection<OrderQuotationResponse> Quotations { get; set; } = Array.Empty<OrderQuotationResponse>();
     }
 
