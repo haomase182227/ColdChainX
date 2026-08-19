@@ -7,6 +7,7 @@ using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
 using ColdChainX.Core.Enums;
 using ColdChainX.Core.Interfaces;
+using ColdChainX.Core.Services;
 using ColdChainX.Shared.Responses;
 
 namespace ColdChainX.Application.Services
@@ -150,8 +151,38 @@ namespace ColdChainX.Application.Services
             if (request.MaxWeight.HasValue)
                 vehicle.MaxWeight = request.MaxWeight.Value;
 
-            if (request.MaxCbm.HasValue)
-                vehicle.MaxCbm = request.MaxCbm.Value;
+            var nextInnerLength = request.InnerLengthCm ?? vehicle.InnerLengthCm;
+            var nextInnerWidth = request.InnerWidthCm ?? vehicle.InnerWidthCm;
+            var nextInnerHeight = request.InnerHeightCm ?? vehicle.InnerHeightCm;
+            var updatesInnerDimensions = request.InnerLengthCm.HasValue
+                || request.InnerWidthCm.HasValue
+                || request.InnerHeightCm.HasValue;
+
+            if (updatesInnerDimensions
+                && (nextInnerLength is not > 0
+                    || nextInnerWidth is not > 0
+                    || nextInnerHeight is not > 0))
+            {
+                return ApiResponse<VehicleDto>.Failure(
+                    "All inner dimensions must be greater than zero");
+            }
+
+            if (request.InnerLengthCm.HasValue)
+                vehicle.InnerLengthCm = request.InnerLengthCm.Value;
+
+            if (request.InnerWidthCm.HasValue)
+                vehicle.InnerWidthCm = request.InnerWidthCm.Value;
+
+            if (request.InnerHeightCm.HasValue)
+                vehicle.InnerHeightCm = request.InnerHeightCm.Value;
+
+            if (updatesInnerDimensions)
+            {
+                vehicle.MaxCbm = VehicleCapacityCalculator.CalculateMaxCbm(
+                    nextInnerLength!.Value,
+                    nextInnerWidth!.Value,
+                    nextInnerHeight!.Value);
+            }
 
             if (request.MinTemp.HasValue)
                 vehicle.MinTemp = request.MinTemp.Value;

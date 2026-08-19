@@ -51,8 +51,8 @@ namespace ColdChainX.API.Controllers
         {
             if (string.IsNullOrWhiteSpace(request.TruckPlate))
                 return BadRequest(ApiResponse<object>.Failure("TruckPlate is required.", 400));
-            if (request.MaxWeight <= 0 || request.MaxCbm <= 0 || request.InnerLengthCm <= 0 || request.InnerWidthCm <= 0 || request.InnerHeightCm <= 0)
-                return BadRequest(ApiResponse<object>.Failure("Vehicle payload and dimensions must be greater than zero.", 400));
+            if (request.MaxWeight <= 0 || request.InnerLengthCm <= 0 || request.InnerWidthCm <= 0 || request.InnerHeightCm <= 0)
+                return BadRequest(ApiResponse<object>.Failure("MaxWeight and all inner dimensions in centimeters must be greater than zero.", 400));
             if (request.MinTemp > request.MaxTemp)
                 return BadRequest(ApiResponse<object>.Failure("MinTemp must be less than or equal to MaxTemp.", 400));
 

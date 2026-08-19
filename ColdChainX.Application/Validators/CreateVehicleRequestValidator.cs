@@ -30,9 +30,6 @@ public class CreateVehicleRequestValidator : AbstractValidator<CreateVehicleRequ
         RuleFor(x => x.MaxWeight)
             .GreaterThan(0).WithMessage("Max weight must be greater than zero");
 
-        RuleFor(x => x.MaxCbm)
-            .GreaterThan(0).WithMessage("Max CBM must be greater than zero");
-
         RuleFor(x => x.InnerLengthCm)
             .GreaterThan(0).WithMessage("Inner length must be greater than zero");
 
@@ -41,11 +38,6 @@ public class CreateVehicleRequestValidator : AbstractValidator<CreateVehicleRequ
 
         RuleFor(x => x.InnerHeightCm)
             .GreaterThan(0).WithMessage("Inner height must be greater than zero");
-
-        RuleFor(x => x)
-            .Must(x => x.InnerLengthCm <= 0 || x.InnerWidthCm <= 0 || x.InnerHeightCm <= 0
-                || x.MaxCbm <= x.InnerLengthCm * x.InnerWidthCm * x.InnerHeightCm / 1_000_000m)
-            .WithMessage("Max CBM cannot exceed the volume calculated from the inner dimensions");
 
         RuleFor(x => x.MinTemp)
             .InclusiveBetween(-100m, 100m).WithMessage("Min temp must be between -100 and 100");

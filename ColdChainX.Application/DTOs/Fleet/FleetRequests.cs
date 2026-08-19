@@ -19,6 +19,11 @@ public class InlineDriverLicenseRequest
     public DateOnly ExpiryDate { get; set; }
 }
 
+// ── Tạo xe (kèm giấy tờ tùy chọn) ─────────────────────────────
+/// <summary>
+/// Tạo xe với ba kích thước lòng thùng cùng đơn vị centimet (cm).
+/// Max CBM được hệ thống tự tính và không nhận từ request.
+/// </summary>
 public class CreateVehicleRequest
 {
     public string TruckPlate { get; set; } = null!;
@@ -30,9 +35,14 @@ public class CreateVehicleRequest
     public decimal? StandardFuelLiters { get; set; }
     public string VehicleType { get; set; } = null!;
     public decimal MaxWeight { get; set; }
-    public decimal MaxCbm { get; set; }
+
+    /// <summary>Chiều dài lòng thùng, đơn vị centimet (cm).</summary>
     public decimal InnerLengthCm { get; set; }
+
+    /// <summary>Chiều rộng lòng thùng, đơn vị centimet (cm).</summary>
     public decimal InnerWidthCm { get; set; }
+
+    /// <summary>Chiều cao lòng thùng, đơn vị centimet (cm).</summary>
     public decimal InnerHeightCm { get; set; }
     public decimal MinTemp { get; set; }
     public decimal MaxTemp { get; set; }

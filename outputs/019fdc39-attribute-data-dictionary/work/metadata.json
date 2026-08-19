@@ -1,0 +1,6456 @@
+{
+  "Project": "ColdChainX",
+  "Source": "Live PostgreSQL metadata (read-only, public schema)",
+  "GeneratedAt": "2026-08-07 19:46:53 \u002B07:00",
+  "Tables": [
+    {
+      "No": 1,
+      "SchemaName": "public",
+      "TableName": "alert_logs",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "alert_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "trip_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "master_trips.trip_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "alert_type",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "value",
+          "DataType": "numeric(5,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "latitude",
+          "DataType": "numeric(10,7)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "longitude",
+          "DataType": "numeric(10,7)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "status",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "resolved_by",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "users.user_id"
+          ]
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "resolved_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "resolution_note",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 12,
+          "AttributeName": "LpnId",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "lpns.lpn_id"
+          ]
+        }
+      ]
+    },
+    {
+      "No": 2,
+      "SchemaName": "public",
+      "TableName": "chat_messages",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "order_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "transport_orders.order_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "sender_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "users.user_id"
+          ]
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "receiver_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "users.user_id"
+          ]
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "message_content",
+          "DataType": "text",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "is_read",
+          "DataType": "boolean",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 3,
+      "SchemaName": "public",
+      "TableName": "claims",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "claim_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "claim_code",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "order_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "transport_orders.order_id"
+          ]
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "claim_type",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "description",
+          "DataType": "text",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "fault_owner",
+          "DataType": "character varying(50)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "status",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "resolution_note",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "resolved_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "LpnId",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "lpns.lpn_id"
+          ]
+        },
+        {
+          "Ordinal": 12,
+          "AttributeName": "BankTransferImageUrl",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 13,
+          "AttributeName": "InternalChargebackOption",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 4,
+      "SchemaName": "public",
+      "TableName": "claim_evidences",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "evidence_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "claim_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "claims.claim_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "evidence_type",
+          "DataType": "character varying(30)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "alert_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "alert_logs.alert_id"
+          ]
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "doc_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "transport_documents.doc_id"
+          ]
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "image_url",
+          "DataType": "character varying(255)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "uploaded_by",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "users.user_id"
+          ]
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 5,
+      "SchemaName": "public",
+      "TableName": "contract_appendices",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "appendix_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "contract_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "customer_contracts.contract_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "order_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "transport_orders.order_id"
+          ]
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "appendix_number",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "adjusted_price",
+          "DataType": "numeric(18,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "reason",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "status",
+          "DataType": "character varying(30)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "draft_html_content",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "pdf_url",
+          "DataType": "character varying(255)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "sent_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 12,
+          "AttributeName": "resolved_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 6,
+      "SchemaName": "public",
+      "TableName": "customers",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "customer_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "company_name",
+          "DataType": "character varying(150)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "tax_code",
+          "DataType": "character varying(20)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "address",
+          "DataType": "character varying(200)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "email",
+          "DataType": "character varying(200)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "payment_term",
+          "DataType": "integer",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "status",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 7,
+      "SchemaName": "public",
+      "TableName": "customer_contracts",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "contract_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "customer_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "customers.customer_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "order_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "transport_orders.order_id"
+          ]
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "contract_number",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "signed_date",
+          "DataType": "date",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "expired_date",
+          "DataType": "date",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "file_url",
+          "DataType": "character varying(500)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "status",
+          "DataType": "character varying(30)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "draft_html_content",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "signed_file_url",
+          "DataType": "character varying(255)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 12,
+          "AttributeName": "sent_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 13,
+          "AttributeName": "uploaded_signed_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 14,
+          "AttributeName": "verified_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 15,
+          "AttributeName": "verified_by",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 18,
+          "AttributeName": "FinalContractTotalAmount",
+          "DataType": "numeric",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 19,
+          "AttributeName": "SelectedOptionalServices",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 8,
+      "SchemaName": "public",
+      "TableName": "delivery_epods",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "epod_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "order_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "transport_orders.order_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "checkin_time",
+          "DataType": "timestamp without time zone",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "signed_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "receiver_name",
+          "DataType": "character varying(100)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "receiver_phone",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "sign_image_url",
+          "DataType": "character varying(255)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "sign_latitude",
+          "DataType": "numeric(10,7)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "sign_longitude",
+          "DataType": "numeric(10,7)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "delivery_rating",
+          "DataType": "integer",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "note",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 12,
+          "AttributeName": "pdf_url",
+          "DataType": "character varying(500)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 13,
+          "AttributeName": "status",
+          "DataType": "character varying(30)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 14,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 15,
+          "AttributeName": "cod_amount",
+          "DataType": "numeric(15,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 16,
+          "AttributeName": "cod_amount_paid",
+          "DataType": "numeric(15,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 17,
+          "AttributeName": "payment_evidence_image_url",
+          "DataType": "character varying(255)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 18,
+          "AttributeName": "payment_method",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 19,
+          "AttributeName": "payment_status",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 20,
+          "AttributeName": "handover_confirmed_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 21,
+          "AttributeName": "handover_pdf_url",
+          "DataType": "character varying(500)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 22,
+          "AttributeName": "payment_confirmed_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 23,
+          "AttributeName": "DetentionFee",
+          "DataType": "numeric",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 24,
+          "AttributeName": "PhysicalPodImageUrl",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 9,
+      "SchemaName": "public",
+      "TableName": "DetentionCharges",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "ChargeId",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "StopId",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "trip_stops.stop_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "CustomerId",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "customers.customer_id"
+          ]
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "FreeMinutesAllocated",
+          "DataType": "integer",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "ActualWaitMinutes",
+          "DataType": "integer",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "AmountCharged",
+          "DataType": "numeric",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "Status",
+          "DataType": "text",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 10,
+      "SchemaName": "public",
+      "TableName": "device_tokens",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "device_token_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "user_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "users.user_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "token",
+          "DataType": "character varying(4096)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "platform",
+          "DataType": "character varying(20)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "device_id",
+          "DataType": "character varying(255)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "device_name",
+          "DataType": "character varying(200)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "app_version",
+          "DataType": "character varying(50)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "is_active",
+          "DataType": "boolean",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "created_at",
+          "DataType": "timestamp with time zone",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "updated_at",
+          "DataType": "timestamp with time zone",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "last_used_at",
+          "DataType": "timestamp with time zone",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 11,
+      "SchemaName": "public",
+      "TableName": "drivers",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "driver_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "user_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "users.user_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "date_of_birth",
+          "DataType": "date",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "status",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "full_name",
+          "DataType": "character varying(150)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "identity_number",
+          "DataType": "character varying(30)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "join_date",
+          "DataType": "date",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "phone_number",
+          "DataType": "character varying(20)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "current_location",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 12,
+      "SchemaName": "public",
+      "TableName": "driver_licenses",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "license_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "driver_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "drivers.driver_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "license_number",
+          "DataType": "character varying(20)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "license_class",
+          "DataType": "character varying(10)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "issue_date",
+          "DataType": "date",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "expiry_date",
+          "DataType": "date",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "status",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 13,
+      "SchemaName": "public",
+      "TableName": "driver_work_logs",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "work_log_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "driver_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "drivers.driver_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "trip_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "master_trips.trip_id"
+          ]
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "work_date",
+          "DataType": "date",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "driving_hours",
+          "DataType": "numeric(8,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 14,
+      "SchemaName": "public",
+      "TableName": "expense_advances",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "advance_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "advance_code",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "trip_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "master_trips.trip_id"
+          ]
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "driver_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "drivers.driver_id"
+          ]
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "amount",
+          "DataType": "numeric(15,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "payment_method",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "advanced_date",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "approved_by",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "users.user_id"
+          ]
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "cleared_amount",
+          "DataType": "numeric(15,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "returned_amount",
+          "DataType": "numeric(15,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "status",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 12,
+          "AttributeName": "clearance_status",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 13,
+          "AttributeName": "note",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 15,
+      "SchemaName": "public",
+      "TableName": "expense_receipts",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "receipt_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "advance_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "expense_advances.advance_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "expense_type",
+          "DataType": "character varying(30)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "description",
+          "DataType": "character varying(255)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "amount",
+          "DataType": "numeric(15,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "expense_date",
+          "DataType": "date",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "image_url",
+          "DataType": "character varying(255)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "status",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "verified_by",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "users.user_id"
+          ]
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "verified_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "reject_reason",
+          "DataType": "character varying(255)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 12,
+          "AttributeName": "uploaded_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 13,
+          "AttributeName": "TripId",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "master_trips.trip_id"
+          ]
+        }
+      ]
+    },
+    {
+      "No": 16,
+      "SchemaName": "public",
+      "TableName": "geo_fences",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "fence_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "location_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "locations.location_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "status",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 17,
+      "SchemaName": "public",
+      "TableName": "inbound_asn",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "asn_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "asn_code",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "order_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "transport_orders.order_id"
+          ]
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "requested_dropoff_time",
+          "DataType": "timestamp without time zone",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "qr_code_value",
+          "DataType": "character varying(500)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "status",
+          "DataType": "character varying(30)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "phone",
+          "DataType": "character varying(50)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "warehouse_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "customer_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "file_url",
+          "DataType": "character varying(500)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 18,
+      "SchemaName": "public",
+      "TableName": "inbound_return_slips",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "return_slip_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "order_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "transport_orders.order_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "lpn_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "lpns.lpn_id"
+          ]
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "slip_code",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "returned_weight_kg",
+          "DataType": "numeric(18,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "returned_cbm",
+          "DataType": "numeric(18,4)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "returned_qty",
+          "DataType": "integer",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "reason",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "pdf_url",
+          "DataType": "character varying(255)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 19,
+      "SchemaName": "public",
+      "TableName": "IncidentEvidences",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "EvidenceId",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "IncidentId",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "incident_reports.incident_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "EvidenceType",
+          "DataType": "text",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "FileUrl",
+          "DataType": "text",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "Description",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "UploadedAt",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "UploadedBy",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 20,
+      "SchemaName": "public",
+      "TableName": "incident_reports",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "incident_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "trip_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "master_trips.trip_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "incident_type",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "severity",
+          "DataType": "character varying(20)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "description",
+          "DataType": "text",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "current_latitude",
+          "DataType": "numeric(10,7)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "current_longitude",
+          "DataType": "numeric(10,7)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "status",
+          "DataType": "character varying(30)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "reported_by",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "users.user_id"
+          ]
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "reported_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "resolved_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 14,
+          "AttributeName": "approval_note",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 15,
+          "AttributeName": "approved_amount",
+          "DataType": "numeric(15,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 16,
+          "AttributeName": "approved_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 17,
+          "AttributeName": "approved_by",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 18,
+          "AttributeName": "broken_vehicle_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 19,
+          "AttributeName": "expense_rejection_reason",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 20,
+          "AttributeName": "expense_status",
+          "DataType": "character varying(30)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 21,
+          "AttributeName": "reimbursed_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 22,
+          "AttributeName": "reimbursed_by",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 23,
+          "AttributeName": "reimbursement_note",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 24,
+          "AttributeName": "replacement_vehicle_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 25,
+          "AttributeName": "requires_rescue",
+          "DataType": "boolean",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 26,
+          "AttributeName": "rescue_dispatched_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 27,
+          "AttributeName": "rescue_dispatched_by",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 28,
+          "AttributeName": "transload_confirmed_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 29,
+          "AttributeName": "transload_confirmed_by",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 30,
+          "AttributeName": "transload_note",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 31,
+          "AttributeName": "transload_temperature",
+          "DataType": "numeric(6,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 32,
+          "AttributeName": "handled_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 33,
+          "AttributeName": "handled_by",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 34,
+          "AttributeName": "handling_note",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 35,
+          "AttributeName": "maintenance_ticket_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 36,
+          "AttributeName": "resolved_by",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 37,
+          "AttributeName": "resolution_note",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 38,
+          "AttributeName": "driver_paid_amount",
+          "DataType": "numeric(15,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 39,
+          "AttributeName": "reimbursed_amount",
+          "DataType": "numeric(15,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 21,
+      "SchemaName": "public",
+      "TableName": "invoices",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "invoice_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "invoice_code",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "customer_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "customers.customer_id"
+          ]
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "vat_invoice_no",
+          "DataType": "character varying(50)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "pdf_url",
+          "DataType": "character varying(500)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "sub_total",
+          "DataType": "numeric(15,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "tax_rate",
+          "DataType": "numeric(5,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "tax_amount",
+          "DataType": "numeric(15,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "deduction_amount",
+          "DataType": "numeric(15,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "grand_total",
+          "DataType": "numeric(15,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "paid_amount",
+          "DataType": "numeric(15,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 12,
+          "AttributeName": "issued_date",
+          "DataType": "date",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 13,
+          "AttributeName": "due_date",
+          "DataType": "date",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 14,
+          "AttributeName": "status",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 15,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 22,
+      "SchemaName": "public",
+      "TableName": "invoice_lines",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "line_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "invoice_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "invoices.invoice_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "order_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "transport_orders.order_id"
+          ]
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "charge_type",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "description",
+          "DataType": "character varying(255)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "quantity",
+          "DataType": "numeric(10,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "unit_price",
+          "DataType": "numeric(15,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "amount",
+          "DataType": "numeric(15,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "tax_rate",
+          "DataType": "numeric(5,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 23,
+      "SchemaName": "public",
+      "TableName": "iot_devices",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "device_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "vehicle_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "vehicles.vehicle_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "battery_level",
+          "DataType": "integer",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "last_ping_time",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "status",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "device_code",
+          "DataType": "character varying(100)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "IsOnline",
+          "DataType": "boolean",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 24,
+      "SchemaName": "public",
+      "TableName": "locations",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "location_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "customer_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "customers.customer_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "address",
+          "DataType": "text",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "latitude",
+          "DataType": "numeric(10,7)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "longitude",
+          "DataType": "numeric(10,7)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "status",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 25,
+      "SchemaName": "public",
+      "TableName": "lpns",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "lpn_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "lpn_code",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "order_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "transport_orders.order_id"
+          ]
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "customer_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "customers.customer_id"
+          ]
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "route_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "route_master.route_id"
+          ]
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "trip_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "master_trips.trip_id"
+          ]
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "storage_location",
+          "DataType": "character varying(200)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "quantity",
+          "DataType": "integer",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 13,
+          "AttributeName": "actual_weight_kg",
+          "DataType": "numeric(18,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 15,
+          "AttributeName": "actual_cbm",
+          "DataType": "numeric(18,4)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 19,
+          "AttributeName": "required_temperature",
+          "DataType": "numeric(8,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 20,
+          "AttributeName": "recorded_temperature",
+          "DataType": "numeric(8,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 22,
+          "AttributeName": "state",
+          "DataType": "character varying(30)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 23,
+          "AttributeName": "discrepancy_reason",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 27,
+          "AttributeName": "inbound_time",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 30,
+          "AttributeName": "sla_deadline",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 31,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 32,
+          "AttributeName": "updated_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 34,
+          "AttributeName": "temperature",
+          "DataType": "numeric",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 35,
+          "AttributeName": "evidence_image_url",
+          "DataType": "character varying(255)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 36,
+          "AttributeName": "receipt_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "warehouse_receipts.receipt_id"
+          ]
+        },
+        {
+          "Ordinal": 37,
+          "AttributeName": "height_cm",
+          "DataType": "numeric(10,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 38,
+          "AttributeName": "length_cm",
+          "DataType": "numeric(10,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 39,
+          "AttributeName": "width_cm",
+          "DataType": "numeric(10,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 40,
+          "AttributeName": "warehouse_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "warehouses.warehouse_id"
+          ]
+        },
+        {
+          "Ordinal": 42,
+          "AttributeName": "IsFastTrack",
+          "DataType": "boolean",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 26,
+      "SchemaName": "public",
+      "TableName": "lpn_delivery_confirmations",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "confirmation_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "lpn_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "lpns.lpn_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "trip_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "master_trips.trip_id"
+          ]
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "order_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "transport_orders.order_id"
+          ]
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "outcome_type",
+          "DataType": "character varying(20)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "receiver_name",
+          "DataType": "character varying(200)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "receiver_phone",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "reject_reason",
+          "DataType": "character varying(50)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "reject_note",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "evidence_image_url",
+          "DataType": "character varying(500)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "confirmed_by",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "users.user_id"
+          ]
+        },
+        {
+          "Ordinal": 12,
+          "AttributeName": "confirmed_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 13,
+          "AttributeName": "checkin_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 14,
+          "AttributeName": "cod_amount",
+          "DataType": "numeric(15,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 15,
+          "AttributeName": "cod_payment_method",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 16,
+          "AttributeName": "cod_receipt_image_url",
+          "DataType": "character varying(500)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 17,
+          "AttributeName": "new_seal_number",
+          "DataType": "character varying(50)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 18,
+          "AttributeName": "signature_image_url",
+          "DataType": "character varying(500)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 19,
+          "AttributeName": "cod_verified_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 20,
+          "AttributeName": "cod_verified_by",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "users.user_id"
+          ]
+        },
+        {
+          "Ordinal": 21,
+          "AttributeName": "is_cod_verified",
+          "DataType": "boolean",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 22,
+          "AttributeName": "recorded_temperature",
+          "DataType": "numeric(8,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 27,
+      "SchemaName": "public",
+      "TableName": "maintenance_tickets",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "ticket_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "ticket_code",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "vehicle_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "vehicles.vehicle_id"
+          ]
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "maintenance_type",
+          "DataType": "character varying(30)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "garage_name",
+          "DataType": "character varying(150)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "description",
+          "DataType": "text",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "cost",
+          "DataType": "numeric(15,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "issue_date",
+          "DataType": "date",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "completion_date",
+          "DataType": "date",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "status",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "created_by",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "users.user_id"
+          ]
+        },
+        {
+          "Ordinal": 12,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 13,
+          "AttributeName": "triggered_at_odometer",
+          "DataType": "double precision",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 14,
+          "AttributeName": "attachment_url",
+          "DataType": "character varying(500)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 28,
+      "SchemaName": "public",
+      "TableName": "master_trips",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "trip_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "vehicle_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "vehicles.vehicle_id"
+          ]
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "origin_location_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "locations.location_id"
+          ]
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "destination_location_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "locations.location_id"
+          ]
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "total_distance_km",
+          "DataType": "numeric(8,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "target_temperature",
+          "DataType": "numeric(5,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "planned_start_time",
+          "DataType": "timestamp without time zone",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "planned_end_time",
+          "DataType": "timestamp without time zone",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "started_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "completed_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 12,
+          "AttributeName": "status",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 13,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 14,
+          "AttributeName": "seal_number",
+          "DataType": "character varying(100)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 15,
+          "AttributeName": "estimated_duration_hours",
+          "DataType": "numeric(8,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 16,
+          "AttributeName": "RequiresInspection",
+          "DataType": "boolean",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 17,
+          "AttributeName": "departure_date",
+          "DataType": "date",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 18,
+          "AttributeName": "route_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "route_master.route_id"
+          ]
+        },
+        {
+          "Ordinal": 19,
+          "AttributeName": "schedule_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "route_schedules.schedule_id"
+          ]
+        }
+      ]
+    },
+    {
+      "No": 29,
+      "SchemaName": "public",
+      "TableName": "messagetype",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "type_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "type_name",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "description",
+          "DataType": "character varying(255)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 30,
+      "SchemaName": "public",
+      "TableName": "notifications",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "noti_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "user_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "users.user_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "sender_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "users.user_id"
+          ]
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "template_id",
+          "DataType": "character varying(50)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "notification_templates.template_id"
+          ]
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "params",
+          "DataType": "json",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "order_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "transport_orders.order_id"
+          ]
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "is_read",
+          "DataType": "boolean",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "body",
+          "DataType": "character varying(1000)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "data_json",
+          "DataType": "jsonb",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "delivery_status",
+          "DataType": "character varying(20)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 12,
+          "AttributeName": "failure_reason",
+          "DataType": "character varying(1000)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 13,
+          "AttributeName": "read_at",
+          "DataType": "timestamp with time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 14,
+          "AttributeName": "reference_id",
+          "DataType": "character varying(100)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 15,
+          "AttributeName": "sent_at",
+          "DataType": "timestamp with time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 16,
+          "AttributeName": "title",
+          "DataType": "character varying(200)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 17,
+          "AttributeName": "type",
+          "DataType": "character varying(50)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 31,
+      "SchemaName": "public",
+      "TableName": "notification_templates",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "template_id",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "type_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "messagetype.type_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "title_template",
+          "DataType": "character varying(100)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "body_template",
+          "DataType": "text",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "channel",
+          "DataType": "character varying(20)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "status",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 32,
+      "SchemaName": "public",
+      "TableName": "order_dimensions",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "order_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": [
+            "transport_orders.order_id"
+          ]
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "expected_weight_kg",
+          "DataType": "numeric(10,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "actual_weight_kg",
+          "DataType": "numeric(10,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "expected_cbm",
+          "DataType": "numeric(8,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "actual_cbm",
+          "DataType": "numeric(8,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "length_cm",
+          "DataType": "numeric(10,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "width_cm",
+          "DataType": "numeric(10,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "height_cm",
+          "DataType": "numeric(10,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 33,
+      "SchemaName": "public",
+      "TableName": "outbound_orders",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "outbound_order_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "order_code",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "customer_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "customers.customer_id"
+          ]
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "receiver_name",
+          "DataType": "character varying(100)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "receiver_phone",
+          "DataType": "character varying(100)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "destination_address",
+          "DataType": "character varying(255)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "status",
+          "DataType": "character varying(30)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "assigned_picker_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "users.user_id"
+          ]
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "allocated_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "created_by",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 12,
+          "AttributeName": "updated_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 13,
+          "AttributeName": "updated_by",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 34,
+      "SchemaName": "public",
+      "TableName": "outbound_order_items",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "outbound_order_item_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "outbound_order_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "outbound_orders.outbound_order_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "item_code",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "item_name",
+          "DataType": "character varying(255)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "unit",
+          "DataType": "character varying(20)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "quantity",
+          "DataType": "numeric(10,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 35,
+      "SchemaName": "public",
+      "TableName": "payment_transactions",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "transaction_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "transaction_code",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "order_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "transport_orders.order_id"
+          ]
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "invoice_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "invoices.invoice_id"
+          ]
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "claim_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "claims.claim_id"
+          ]
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "customer_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "customers.customer_id"
+          ]
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "transaction_type",
+          "DataType": "character varying(20)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "amount",
+          "DataType": "numeric(18,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "payment_method",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "reference_code",
+          "DataType": "character varying(100)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "evidence_image_url",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 12,
+          "AttributeName": "status",
+          "DataType": "character varying(20)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 13,
+          "AttributeName": "note",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 14,
+          "AttributeName": "created_by",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "users.user_id"
+          ]
+        },
+        {
+          "Ordinal": 15,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 16,
+          "AttributeName": "completed_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 36,
+      "SchemaName": "public",
+      "TableName": "penalty_bills",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "penalty_bill_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "bill_code",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "lpn_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "lpns.lpn_id"
+          ]
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "order_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "transport_orders.order_id"
+          ]
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "customer_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "customers.customer_id"
+          ]
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "handling_fee",
+          "DataType": "numeric(18,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "storage_fee",
+          "DataType": "numeric(18,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "total_amount",
+          "DataType": "numeric(18,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "reason",
+          "DataType": "text",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "is_paid",
+          "DataType": "boolean",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 12,
+          "AttributeName": "paid_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 13,
+          "AttributeName": "paid_by",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "users.user_id"
+          ]
+        }
+      ]
+    },
+    {
+      "No": 37,
+      "SchemaName": "public",
+      "TableName": "permissions",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "perm_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "perm_code",
+          "DataType": "character varying(100)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "module",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "description",
+          "DataType": "character varying(500)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "display_name",
+          "DataType": "character varying(150)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "is_active",
+          "DataType": "boolean",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "sort_order",
+          "DataType": "integer",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 38,
+      "SchemaName": "public",
+      "TableName": "pricing_matrix",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "price_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "origin_city",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "dest_city",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "pricing_unit",
+          "DataType": "character varying(20)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "unit_price",
+          "DataType": "numeric(15,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "effective_date",
+          "DataType": "date",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "min_value",
+          "DataType": "numeric(12,4)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "max_value",
+          "DataType": "numeric(12,4)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "min_charge",
+          "DataType": "numeric(15,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 39,
+      "SchemaName": "public",
+      "TableName": "quotations",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "quote_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "order_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "transport_orders.order_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "base_freight",
+          "DataType": "numeric(15,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "last_mile_surcharge",
+          "DataType": "numeric(15,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "vas_amount",
+          "DataType": "numeric(15,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "vat_amount",
+          "DataType": "numeric(15,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "final_amount",
+          "DataType": "numeric(15,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "file_url",
+          "DataType": "character varying(500)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "status",
+          "DataType": "character varying(20)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "system_base_freight",
+          "DataType": "numeric(15,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 12,
+          "AttributeName": "manual_adjustment",
+          "DataType": "numeric(15,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 13,
+          "AttributeName": "override_reason",
+          "DataType": "character varying(500)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 14,
+          "AttributeName": "pricing_source",
+          "DataType": "character varying(30)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 15,
+          "AttributeName": "vat_percentage",
+          "DataType": "numeric(5,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 16,
+          "AttributeName": "chargeable_weight_kg",
+          "DataType": "numeric(10,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 17,
+          "AttributeName": "volumetric_weight_kg",
+          "DataType": "numeric(10,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 18,
+          "AttributeName": "price_per_kg",
+          "DataType": "numeric(15,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 19,
+          "AttributeName": "distance_km",
+          "DataType": "numeric(10,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 20,
+          "AttributeName": "additional_charges",
+          "DataType": "jsonb",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 23,
+          "AttributeName": "MandatoryCharges",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 24,
+          "AttributeName": "OptionalServicesMenu",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 25,
+          "AttributeName": "accepted_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 26,
+          "AttributeName": "sent_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 40,
+      "SchemaName": "public",
+      "TableName": "returned_items",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "return_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "epod_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "delivery_epods.epod_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "item_name",
+          "DataType": "character varying(255)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "item_code",
+          "DataType": "character varying(50)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "unit",
+          "DataType": "character varying(20)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "returned_qty",
+          "DataType": "numeric(10,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "reason_type",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "reason_note",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "processing_status",
+          "DataType": "character varying(30)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "processed_by",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "users.user_id"
+          ]
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "processed_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 12,
+          "AttributeName": "returned_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 41,
+      "SchemaName": "public",
+      "TableName": "roles",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "role_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "role_name",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "description",
+          "DataType": "character varying(255)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 42,
+      "SchemaName": "public",
+      "TableName": "role_permissions",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "role_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": [
+            "roles.role_id"
+          ]
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "perm_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": [
+            "permissions.perm_id"
+          ]
+        }
+      ]
+    },
+    {
+      "No": 43,
+      "SchemaName": "public",
+      "TableName": "route_master",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "route_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "route_code",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "origin_city",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "dest_city",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "status",
+          "DataType": "character varying(20)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "transit_time",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 44,
+      "SchemaName": "public",
+      "TableName": "route_schedules",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "schedule_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "route_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "route_master.route_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "schedule_name",
+          "DataType": "character varying(100)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "departure_time",
+          "DataType": "interval",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "cut_off_time",
+          "DataType": "interval",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "status",
+          "DataType": "character varying(20)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "departure_date",
+          "DataType": "timestamp without time zone",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 45,
+      "SchemaName": "public",
+      "TableName": "route_stops",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "stop_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "route_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "route_master.route_id"
+          ]
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "stop_name",
+          "DataType": "character varying(150)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 46,
+      "SchemaName": "public",
+      "TableName": "seals",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "seal_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "trip_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "master_trips.trip_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "stop_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "trip_stops.stop_id"
+          ]
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "seal_code",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "applied_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "applied_image_url",
+          "DataType": "character varying(255)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "removed_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "removed_image_url",
+          "DataType": "character varying(255)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "status",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "note",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 47,
+      "SchemaName": "public",
+      "TableName": "service_catalogs",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "service_catalog_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "service_code",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "service_name",
+          "DataType": "character varying(200)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "description",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "default_price",
+          "DataType": "numeric(15,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "is_mandatory",
+          "DataType": "boolean",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "is_active",
+          "DataType": "boolean",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "updated_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 48,
+      "SchemaName": "public",
+      "TableName": "system_configs",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "key",
+          "DataType": "character varying(100)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "value",
+          "DataType": "character varying(255)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "description",
+          "DataType": "character varying(500)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 49,
+      "SchemaName": "public",
+      "TableName": "telemetry_logs",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "log_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "device_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "iot_devices.device_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "trip_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "master_trips.trip_id"
+          ]
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "temperature",
+          "DataType": "numeric(5,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "latitude",
+          "DataType": "numeric(10,7)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "longitude",
+          "DataType": "numeric(10,7)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "timestamp",
+          "DataType": "timestamp without time zone",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 50,
+      "SchemaName": "public",
+      "TableName": "transport_documents",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "doc_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "order_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "transport_orders.order_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "doc_type",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "image_url",
+          "DataType": "character varying(255)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "verified_by",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "users.user_id"
+          ]
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "reject_reason",
+          "DataType": "character varying(255)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "uploaded_by",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "users.user_id"
+          ]
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 51,
+      "SchemaName": "public",
+      "TableName": "transport_orders",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "order_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "tracking_code",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "customer_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "customers.customer_id"
+          ]
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "item_name",
+          "DataType": "character varying(150)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "category",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "quantity",
+          "DataType": "integer",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "packing_type",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "temp_condition",
+          "DataType": "character varying(20)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 13,
+          "AttributeName": "pickup_location",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "locations.location_id"
+          ]
+        },
+        {
+          "Ordinal": 14,
+          "AttributeName": "dest_location",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "locations.location_id"
+          ]
+        },
+        {
+          "Ordinal": 16,
+          "AttributeName": "status",
+          "DataType": "character varying(30)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 17,
+          "AttributeName": "master_trip_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "master_trips.trip_id"
+          ]
+        },
+        {
+          "Ordinal": 18,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 19,
+          "AttributeName": "schedule_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "route_schedules.schedule_id"
+          ]
+        },
+        {
+          "Ordinal": 23,
+          "AttributeName": "has_strong_odor",
+          "DataType": "boolean",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 24,
+          "AttributeName": "is_stackable",
+          "DataType": "boolean",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 25,
+          "AttributeName": "dropoff_stop_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "route_stops.stop_id"
+          ]
+        },
+        {
+          "Ordinal": 26,
+          "AttributeName": "RouteMasterRouteId",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "route_master.route_id"
+          ]
+        }
+      ]
+    },
+    {
+      "No": 52,
+      "SchemaName": "public",
+      "TableName": "TripStopEvents",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "EventId",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "StopId",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "trip_stops.stop_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "EventType",
+          "DataType": "text",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "EventTime",
+          "DataType": "timestamp without time zone",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "MetaData",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 53,
+      "SchemaName": "public",
+      "TableName": "trip_drivers",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "trip_driver_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "trip_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "master_trips.trip_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "driver_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "drivers.driver_id"
+          ]
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "driver_role",
+          "DataType": "character varying(20)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "assigned_duration_hours",
+          "DataType": "numeric(8,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 54,
+      "SchemaName": "public",
+      "TableName": "trip_stops",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "stop_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "trip_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "master_trips.trip_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "location_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "locations.location_id"
+          ]
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "stop_sequence",
+          "DataType": "integer",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "stop_type",
+          "DataType": "character varying(30)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "planned_arrival_time",
+          "DataType": "timestamp without time zone",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "planned_departure_time",
+          "DataType": "timestamp without time zone",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "actual_arrival_time",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "actual_departure_time",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "status",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "note",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 12,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 13,
+          "AttributeName": "CallCustomerCount",
+          "DataType": "integer",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 14,
+          "AttributeName": "NoShowEvidenceImageUrl",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 55,
+      "SchemaName": "public",
+      "TableName": "users",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "user_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "username",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "password_hash",
+          "DataType": "character varying(255)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "email",
+          "DataType": "character varying(255)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "role_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "roles.role_id"
+          ]
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "full_name",
+          "DataType": "character varying(100)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "status",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "refresh_token",
+          "DataType": "character varying(255)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "refresh_token_expiry_time",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "updated_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 12,
+          "AttributeName": "phone",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 13,
+          "AttributeName": "created_by",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 14,
+          "AttributeName": "updated_by",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 15,
+          "AttributeName": "deleted_by",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 16,
+          "AttributeName": "deleted_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 17,
+          "AttributeName": "warehouse_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "warehouses.warehouse_id"
+          ]
+        },
+        {
+          "Ordinal": 18,
+          "AttributeName": "WarehouseId",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 19,
+          "AttributeName": "auth_provider",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 20,
+          "AttributeName": "avatar_url",
+          "DataType": "character varying(1024)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 21,
+          "AttributeName": "google_id",
+          "DataType": "character varying(255)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 56,
+      "SchemaName": "public",
+      "TableName": "user_permissions",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "user_permission_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "user_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "users.user_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "perm_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "permissions.perm_id"
+          ]
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "effect",
+          "DataType": "character varying(10)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "valid_from",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "valid_to",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "reason",
+          "DataType": "character varying(500)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "granted_by",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "granted_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "revoked_by",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "revoked_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 57,
+      "SchemaName": "public",
+      "TableName": "vehicles",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "vehicle_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "truck_plate",
+          "DataType": "character varying(20)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "brand",
+          "DataType": "character varying(50)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "manufacture_year",
+          "DataType": "integer",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "chassis_number",
+          "DataType": "character varying(50)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "engine_number",
+          "DataType": "character varying(50)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "standard_fuel_liters",
+          "DataType": "numeric(5,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "vehicle_type",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "max_weight",
+          "DataType": "numeric(10,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "max_cbm",
+          "DataType": "numeric(8,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "min_temp",
+          "DataType": "numeric(5,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 12,
+          "AttributeName": "max_temp",
+          "DataType": "numeric(5,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 13,
+          "AttributeName": "status",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 14,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 15,
+          "AttributeName": "current_location",
+          "DataType": "character varying(255)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 16,
+          "AttributeName": "current_odometer",
+          "DataType": "double precision",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 18,
+          "AttributeName": "next_maintenance_odometer",
+          "DataType": "double precision",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 19,
+          "AttributeName": "next_maintenance_date",
+          "DataType": "date",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 20,
+          "AttributeName": "warning_days_before_due",
+          "DataType": "integer",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 21,
+          "AttributeName": "warning_km_before_due",
+          "DataType": "double precision",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 25,
+          "AttributeName": "InnerHeightCm",
+          "DataType": "numeric",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 26,
+          "AttributeName": "InnerLengthCm",
+          "DataType": "numeric",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 27,
+          "AttributeName": "InnerWidthCm",
+          "DataType": "numeric",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 58,
+      "SchemaName": "public",
+      "TableName": "vehicle_documents",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "doc_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "vehicle_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "vehicles.vehicle_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "document_number",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "issuer",
+          "DataType": "character varying(150)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "issue_date",
+          "DataType": "date",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "expire_date",
+          "DataType": "date",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "status",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "document_type",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 59,
+      "SchemaName": "public",
+      "TableName": "vehicle_odometer_logs",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "log_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "vehicle_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "vehicles.vehicle_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "odometer_value",
+          "DataType": "double precision",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "location_text",
+          "DataType": "character varying(500)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "reason",
+          "DataType": "character varying(255)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "updated_by",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "odometer_photo_url",
+          "DataType": "character varying(1000)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 60,
+      "SchemaName": "public",
+      "TableName": "warehouses",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "warehouse_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "warehouse_name",
+          "DataType": "character varying(100)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "address",
+          "DataType": "character varying(100)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "max_pallets",
+          "DataType": "integer",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "current_pallets",
+          "DataType": "integer",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "status",
+          "DataType": "character varying(20)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "created_by",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "default_max_temp",
+          "DataType": "numeric(5,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "default_min_temp",
+          "DataType": "numeric(5,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "deleted_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 12,
+          "AttributeName": "deleted_by",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 13,
+          "AttributeName": "updated_at",
+          "DataType": "timestamp with time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 14,
+          "AttributeName": "updated_by",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 15,
+          "AttributeName": "warehouse_code",
+          "DataType": "character varying(20)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 16,
+          "AttributeName": "warehouse_type",
+          "DataType": "character varying(20)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 61,
+      "SchemaName": "public",
+      "TableName": "warehouse_receipts",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "receipt_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "receipt_code",
+          "DataType": "character varying(50)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "reference_doc_no",
+          "DataType": "character varying(100)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "order_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "transport_orders.order_id"
+          ]
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "warehouse_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "warehouses.warehouse_id"
+          ]
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "receipt_type",
+          "DataType": "character varying(20)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "reason",
+          "DataType": "character varying(255)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "total_expected_qty",
+          "DataType": "numeric(10,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "total_actual_qty",
+          "DataType": "numeric(10,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "recorded_temperature",
+          "DataType": "numeric(5,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "deliverer_name",
+          "DataType": "character varying(100)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 12,
+          "AttributeName": "receiver_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "users.user_id"
+          ]
+        },
+        {
+          "Ordinal": 13,
+          "AttributeName": "note",
+          "DataType": "text",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 14,
+          "AttributeName": "pdf_url",
+          "DataType": "character varying(500)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 15,
+          "AttributeName": "created_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 62,
+      "SchemaName": "public",
+      "TableName": "weight_tiers",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "route_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "route_master.route_id"
+          ]
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "min_weight_kg",
+          "DataType": "numeric(10,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "max_weight_kg",
+          "DataType": "numeric(10,2)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "price_per_kg",
+          "DataType": "numeric(15,2)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    },
+    {
+      "No": 63,
+      "SchemaName": "public",
+      "TableName": "work_assignments",
+      "Columns": [
+        {
+          "Ordinal": 1,
+          "AttributeName": "assignment_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": true,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 2,
+          "AttributeName": "task_type",
+          "DataType": "character varying(100)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 3,
+          "AttributeName": "reference_type",
+          "DataType": "character varying(100)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 4,
+          "AttributeName": "reference_id",
+          "DataType": "character varying(100)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 5,
+          "AttributeName": "required_permission_code",
+          "DataType": "character varying(100)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 6,
+          "AttributeName": "warehouse_id",
+          "DataType": "uuid",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "warehouses.warehouse_id"
+          ]
+        },
+        {
+          "Ordinal": 7,
+          "AttributeName": "assigned_to_user_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": [
+            "users.user_id"
+          ]
+        },
+        {
+          "Ordinal": 8,
+          "AttributeName": "assigned_by_user_id",
+          "DataType": "uuid",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 9,
+          "AttributeName": "priority",
+          "DataType": "character varying(20)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 10,
+          "AttributeName": "status",
+          "DataType": "character varying(20)",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 11,
+          "AttributeName": "note",
+          "DataType": "character varying(1000)",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 12,
+          "AttributeName": "assigned_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": true,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 13,
+          "AttributeName": "due_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 14,
+          "AttributeName": "started_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 15,
+          "AttributeName": "completed_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        },
+        {
+          "Ordinal": 16,
+          "AttributeName": "cancelled_at",
+          "DataType": "timestamp without time zone",
+          "NotNull": false,
+          "IsPrimaryKey": false,
+          "ForeignKeys": []
+        }
+      ]
+    }
+  ]
+}
