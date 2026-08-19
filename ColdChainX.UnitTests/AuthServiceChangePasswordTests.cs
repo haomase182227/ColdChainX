@@ -29,6 +29,7 @@ namespace ColdChainX.UnitTests
                 null!,
                 _passwordHasher,
                 null!,
+                null!,
                 null!);
         }
 

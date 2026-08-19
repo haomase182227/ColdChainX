@@ -30,7 +30,7 @@ namespace ColdChainX.API.Controllers
 
         [HttpPost]
         [Consumes("multipart/form-data")]
-        [Authorize(Roles = "Admin,WarehouseWorker,Driver")]
+        [Authorize(Roles = "Driver,Dispatcher")]
         public async Task<IActionResult> ReportIncident([FromForm] CreateIncidentRequest request)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -46,7 +46,7 @@ namespace ColdChainX.API.Controllers
 
         [HttpPost("{id:guid}/evidences")]
         [Consumes("multipart/form-data")]
-        [Authorize(Roles = "Admin,WarehouseWorker,Driver")]
+        [Authorize(Roles = "Admin,Driver,Dispatcher")]
         public async Task<IActionResult> AddEvidence(
             [FromRoute] Guid id,
             [FromForm] UploadIncidentEvidenceRequest request)
@@ -67,7 +67,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("{id:guid}/resolve")]
-        [Authorize(Roles = "Admin,WarehouseWorker")]
+        [Authorize(Roles = "Admin,Dispatcher")]
         public async Task<IActionResult> ResolveIncident([FromRoute] Guid id, [FromBody] ResolveIncidentRequest request)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -82,7 +82,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("{id:guid}/continue-trip")]
-        [Authorize(Roles = "Driver")]
+        [Authorize(Roles = "Driver,Dispatcher")]
         public async Task<IActionResult> ContinueTrip(
             [FromRoute] Guid id,
             [FromBody] ContinueTripAfterIncidentRequest request)
@@ -99,7 +99,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpGet("{id:guid}/rescue-candidates")]
-        [Authorize(Roles = "Admin,WarehouseWorker,Dispatcher")]
+        [Authorize(Roles = "Admin,Dispatcher")]
         public async Task<IActionResult> GetRescueCandidates([FromRoute] Guid id)
         {
             var result = await _rescueService.GetRescueCandidatesAsync(id);
@@ -109,8 +109,44 @@ namespace ColdChainX.API.Controllers
             return Ok(result);
         }
 
+        [HttpPost("{id:guid}/assess-risk")]
+        [Authorize(Roles = "Admin,Driver,Dispatcher")]
+        public async Task<IActionResult> AssessRisk(
+            [FromRoute] Guid id,
+            [FromBody] AssessIncidentRiskRequest request)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var userId))
+                return Unauthorized(ApiResponse<object>.Failure("User ID claim is missing or invalid in the token."));
+
+            var result = await _incidentService.AssessRiskAsync(id, request, userId);
+            return result.Success ? Ok(result) : StatusCode(result.StatusCode, result);
+        }
+
+        [HttpGet("{id:guid}/rescue-options")]
+        [Authorize(Roles = "Admin,Dispatcher")]
+        public async Task<IActionResult> GetRescueOptions([FromRoute] Guid id)
+        {
+            var result = await _rescueService.GetRescuePlanAsync(id);
+            return result.Success ? Ok(result) : StatusCode(result.StatusCode, result);
+        }
+
+        [HttpPost("{id:guid}/record-fallback")]
+        [Authorize(Roles = "Admin,Dispatcher")]
+        public async Task<IActionResult> RecordFallback(
+            [FromRoute] Guid id,
+            [FromBody] RecordRescueFallbackRequest request)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var userId))
+                return Unauthorized(ApiResponse<object>.Failure("User ID claim is missing or invalid in the token."));
+
+            var result = await _rescueService.RecordFallbackAsync(id, request, userId);
+            return result.Success ? Ok(result) : StatusCode(result.StatusCode, result);
+        }
+
         [HttpPost("{id:guid}/dispatch-rescue")]
-        [Authorize(Roles = "Admin,WarehouseWorker,Dispatcher")]
+        [Authorize(Roles = "Admin,Dispatcher")]
         public async Task<IActionResult> DispatchRescue([FromRoute] Guid id, [FromBody] DispatchRescueRequest request)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -125,7 +161,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("{id:guid}/confirm-transload")]
-        [Authorize(Roles = "Admin,WarehouseWorker,Dispatcher,Driver")]
+        [Authorize(Roles = "Admin,Dispatcher,Driver")]
         public async Task<IActionResult> ConfirmTransload(
             [FromRoute] Guid id,
             [FromBody] ConfirmTransloadRequest request)
@@ -142,7 +178,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPost("{id:guid}/expenses/approve")]
-        [Authorize(Roles = "Admin,Accountant")]
+        [Authorize(Roles = "Admin,ADMIN,Accountant,ACCOUNTANT")]
         public async Task<IActionResult> ApproveExpense(
             [FromRoute] Guid id,
             [FromBody] ApproveIncidentExpenseRequest request)
@@ -164,7 +200,7 @@ namespace ColdChainX.API.Controllers
         /// </summary>
         [HttpPost("{id:guid}/expenses/reimburse")]
         [Consumes("multipart/form-data")]
-        [Authorize(Roles = "Admin,Accountant")]
+        [Authorize(Roles = "Admin,ADMIN,Accountant,ACCOUNTANT")]
         public async Task<IActionResult> ReimburseExpense(
             [FromRoute] Guid id,
             [FromForm] ReimburseIncidentExpenseRequest request)

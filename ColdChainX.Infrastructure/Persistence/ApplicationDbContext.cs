@@ -839,6 +839,7 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
 
             entity.HasIndex(e => new { e.ReportedAt, e.Status }, "ix_incident_reports_reported_status");
             entity.HasIndex(e => new { e.ReimbursedAt, e.ExpenseStatus }, "ix_incident_reports_reimbursed_expense_status");
+            entity.HasIndex(e => new { e.Status, e.SlaDueAt }, "ix_incident_reports_status_sla_due_at");
 
             entity.Property(e => e.IncidentId)
                 .HasDefaultValueSql("gen_random_uuid()")
@@ -850,6 +851,9 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasPrecision(10, 7)
                 .HasColumnName("current_longitude");
             entity.Property(e => e.Description).HasColumnName("description");
+            entity.Property(e => e.RiskLevel)
+                .HasMaxLength(10)
+                .HasColumnName("risk_level");
             entity.Property(e => e.ApprovedAmount)
                 .HasPrecision(15, 2)
                 .HasColumnName("approved_amount");
@@ -890,6 +894,46 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.RequiresRescue)
                 .HasDefaultValue(false)
                 .HasColumnName("requires_rescue");
+            entity.Property(e => e.TemperatureSource)
+                .HasMaxLength(30)
+                .HasColumnName("temperature_source");
+            entity.Property(e => e.LatestTemperature)
+                .HasPrecision(8, 2)
+                .HasColumnName("latest_temperature");
+            entity.Property(e => e.TemperatureMeasuredAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("temperature_measured_at");
+            entity.Property(e => e.TemperatureTolerance)
+                .HasPrecision(8, 2)
+                .HasDefaultValue(2m)
+                .HasColumnName("temperature_tolerance");
+            entity.Property(e => e.TemperatureThresholdBreached)
+                .HasDefaultValue(false)
+                .HasColumnName("temperature_threshold_breached");
+            entity.Property(e => e.ContainmentConfirmedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("containment_confirmed_at");
+            entity.Property(e => e.RemainingSafeTimeMinutes).HasColumnName("remaining_safe_time_minutes");
+            entity.Property(e => e.SafeTimeCalculation)
+                .HasMaxLength(50)
+                .HasColumnName("safe_time_calculation");
+            entity.Property(e => e.DirectDeliveryLocked)
+                .HasDefaultValue(false)
+                .HasColumnName("direct_delivery_locked");
+            entity.Property(e => e.PreviousIncidentId).HasColumnName("previous_incident_id");
+            entity.Property(e => e.SlaDueAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("sla_due_at");
+            entity.Property(e => e.LastSlaEscalatedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("last_sla_escalated_at");
+            entity.Property(e => e.RescuePlanType)
+                .HasMaxLength(40)
+                .HasColumnName("rescue_plan_type");
+            entity.Property(e => e.RescuePlanDetails)
+                .HasColumnType("jsonb")
+                .HasColumnName("rescue_plan_details");
+            entity.Property(e => e.RedispatchPlan).HasColumnName("redispatch_plan");
             entity.Property(e => e.RescueDispatchedAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("rescue_dispatched_at");
@@ -913,6 +957,9 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
                 .HasColumnName("transload_confirmed_at");
             entity.Property(e => e.TransloadConfirmedBy).HasColumnName("transload_confirmed_by");
             entity.Property(e => e.TransloadNote).HasColumnName("transload_note");
+            entity.Property(e => e.TransloadDetailsJson)
+                .HasColumnType("jsonb")
+                .HasColumnName("transload_details_json");
             entity.Property(e => e.TripId).HasColumnName("trip_id");
 
             entity.HasOne(d => d.ReportedByNavigation).WithMany(p => p.IncidentReports)

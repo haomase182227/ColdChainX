@@ -9,6 +9,7 @@ namespace ColdChainX.Application.DTOs.Incident
         public Guid? TripId { get; set; }
         public IncidentType? IncidentType { get; set; }
         public IncidentSeverity? Severity { get; set; }
+        public IncidentRiskLevel? RiskLevel { get; set; }
         public string Description { get; set; } = null!;
         public decimal? CurrentLatitude { get; set; }
         public decimal? CurrentLongitude { get; set; }
