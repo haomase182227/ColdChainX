@@ -1172,8 +1172,16 @@ namespace ColdChainX.Infrastructure.Services
                 .Include(o => o.Quotations);
         }
 
-        private static OrderResponse ToOrderResponse(TransportOrder order)
+        private OrderResponse ToOrderResponse(TransportOrder order)
         {
+            var customerEmail = order.Customer?.Email;
+            var customerUser = !string.IsNullOrWhiteSpace(customerEmail)
+                ? _db.Users
+                    .Where(u => u.Email == customerEmail)
+                    .Select(u => new { u.FullName, u.Phone })
+                    .FirstOrDefault()
+                : null;
+
             return new OrderResponse
             {
                 OrderId = order.OrderId,
@@ -1235,6 +1243,8 @@ namespace ColdChainX.Infrastructure.Services
                     .ToList(),
                 CustomerId = order.CustomerId,
                 CustomerName = order.Customer?.CompanyName,
+                CustomerContactName = customerUser?.FullName,
+                CustomerPhone = customerUser?.Phone,
                 Quotations = order.Quotations
                     .OrderByDescending(q => q.CreatedAt)
                     .Select(q => new OrderQuotationResponse
