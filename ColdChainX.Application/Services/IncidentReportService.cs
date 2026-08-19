@@ -41,6 +41,7 @@ public class IncidentReportService : IIncidentReportService
     private readonly IIncidentRealtimeNotifier? _realtimeNotifier;
     private readonly INotificationService? _notificationService;
     private readonly IRealtimeTelemetryService? _realtimeTelemetryService;
+    private readonly IIncidentWorkflowNotificationService? _workflowNotificationService;
     private readonly int _reportedSlaMinutes;
 
     public IncidentReportService(
@@ -51,7 +52,8 @@ public class IncidentReportService : IIncidentReportService
         IIncidentRealtimeNotifier? realtimeNotifier = null,
         INotificationService? notificationService = null,
         IRealtimeTelemetryService? realtimeTelemetryService = null,
-        IConfiguration? configuration = null)
+        IConfiguration? configuration = null,
+        IIncidentWorkflowNotificationService? workflowNotificationService = null)
     {
         _db = db;
         _pdfGeneratorService = pdfGeneratorService;
@@ -60,6 +62,7 @@ public class IncidentReportService : IIncidentReportService
         _realtimeNotifier = realtimeNotifier;
         _notificationService = notificationService;
         _realtimeTelemetryService = realtimeTelemetryService;
+        _workflowNotificationService = workflowNotificationService;
         _reportedSlaMinutes = Math.Max(
             1,
             configuration?.GetValue<int?>("IncidentWorkflow:ReportedSlaMinutes")
@@ -395,7 +398,7 @@ public class IncidentReportService : IIncidentReportService
             if (actor == null)
                 return ApiResponse<IncidentResponse>.Failure("Evidence uploader user not found.", 404);
 
-            var isPrivileged = actor?.Role?.RoleName is not null &&
+            var isPrivileged = actor.Role?.RoleName is not null &&
                                (actor.Role.RoleName.Equals("Admin", StringComparison.OrdinalIgnoreCase) ||
                                 actor.Role.RoleName.Equals("Dispatcher", StringComparison.OrdinalIgnoreCase));
             if (incident.ReportedBy != userId && !isPrivileged)
@@ -415,6 +418,29 @@ public class IncidentReportService : IIncidentReportService
 
             await _db.SaveChangesAsync();
             var saved = await LoadIncidentAsync(incidentId);
+            if (_workflowNotificationService != null)
+            {
+                await _workflowNotificationService.NotifyAsync(new IncidentWorkflowNotification
+                {
+                    IncidentId = incident.IncidentId,
+                    TripId = incident.TripId,
+                    Action = "EVIDENCE_ADDED",
+                    Title = "Đã bổ sung bằng chứng sự cố",
+                    Body = $"{actor.FullName} đã tải lên {files.Count} tệp loại {normalizedType}.",
+                    RecipientRoles = new[] { "ADMIN", "DISPATCHER" },
+                    AdditionalUserIds = new[] { userId },
+                    RealtimeGroups = new[] { "Group_Admin", "Group_Dispatcher" },
+                    RealtimeEventName = "IncidentEvidenceAdded",
+                    Payload = new
+                    {
+                        incident.IncidentId,
+                        incident.TripId,
+                        EvidenceType = normalizedType,
+                        FileCount = files.Count,
+                        UploadedBy = userId
+                    }
+                });
+            }
             return ApiResponse<IncidentResponse>.SuccessResponse(
                 MapToResponse(saved!),
                 "Incident evidence uploaded successfully.");
@@ -611,10 +637,28 @@ public class IncidentReportService : IIncidentReportService
                 SafeTimeCalculation = safeTimeCalculation
             };
 
-            await SafeNotifyGroupsAsync(
-                new[] { "Group_Dispatcher", "Group_Admin" },
-                "IncidentRiskAssessed",
-                response);
+            if (_workflowNotificationService != null)
+            {
+                await _workflowNotificationService.NotifyAsync(new IncidentWorkflowNotification
+                {
+                    IncidentId = incident.IncidentId,
+                    TripId = incident.TripId,
+                    Action = "RISK_ASSESSED",
+                    Title = "Đã đánh giá mức độ sự cố",
+                    Body = $"Sự cố được xếp mức {response.EffectiveRiskLevel}; trạng thái {response.IncidentStatus}.",
+                    RecipientRoles = new[] { "ADMIN", "DISPATCHER" },
+                    RealtimeGroups = new[] { "Group_Admin", "Group_Dispatcher" },
+                    RealtimeEventName = "IncidentRiskAssessed",
+                    Payload = response
+                });
+            }
+            else
+            {
+                await SafeNotifyGroupsAsync(
+                    new[] { "Group_Dispatcher", "Group_Admin" },
+                    "IncidentRiskAssessed",
+                    response);
+            }
 
             return ApiResponse<IncidentRiskAssessmentResponse>.SuccessResponse(
                 response,

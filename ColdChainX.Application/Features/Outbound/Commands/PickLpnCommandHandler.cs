@@ -1,3 +1,4 @@
+using ColdChainX.Application.DTOs.Incident;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Enums;
 using MediatR;
@@ -8,10 +9,14 @@ namespace ColdChainX.Application.Features.Outbound.Commands;
 public class PickLpnCommandHandler : IRequestHandler<PickLpnCommand, PickLpnResponse>
 {
     private readonly IApplicationDbContext _context;
+    private readonly IIncidentWorkflowNotificationService? _workflowNotificationService;
 
-    public PickLpnCommandHandler(IApplicationDbContext context)
+    public PickLpnCommandHandler(
+        IApplicationDbContext context,
+        IIncidentWorkflowNotificationService? workflowNotificationService = null)
     {
         _context = context;
+        _workflowNotificationService = workflowNotificationService;
     }
 
     public async Task<PickLpnResponse> Handle(PickLpnCommand request, CancellationToken cancellationToken)
@@ -47,6 +52,44 @@ public class PickLpnCommandHandler : IRequestHandler<PickLpnCommand, PickLpnResp
         lpn.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        var linkedIncident = await _context.IncidentReports
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                incident => incident.TripId == trip.TripId && incident.Status == "REDISPATCH_PLANNED",
+                cancellationToken);
+        if (linkedIncident != null && _workflowNotificationService != null)
+        {
+            var pickedCount = await _context.Lpns.CountAsync(
+                item => item.TripId == trip.TripId && item.State == LpnState.LOADING_COMPLETED,
+                cancellationToken);
+            var totalCount = await _context.Lpns.CountAsync(
+                item => item.TripId == trip.TripId,
+                cancellationToken);
+            await _workflowNotificationService.NotifyAsync(new IncidentWorkflowNotification
+            {
+                IncidentId = linkedIncident.IncidentId,
+                TripId = trip.TripId,
+                Action = "REDISPATCH_LPN_PICKED",
+                Title = "Đã lấy một LPN cho chuyến giao lại",
+                Body = $"LPN {lpn.LpnCode} đã bốc xong ({pickedCount}/{totalCount}).",
+                RecipientRoles = new[] { "ADMIN", "DISPATCHER", "WAREHOUSEWORKER" },
+                IncludeReporter = false,
+                IncludeTripDrivers = false,
+                RealtimeGroups = new[] { "Group_Admin", "Group_Dispatcher", "Group_WarehouseWorker" },
+                RealtimeEventName = "IncidentRedispatchLpnPicked",
+                Payload = new
+                {
+                    linkedIncident.IncidentId,
+                    TripId = trip.TripId,
+                    lpn.LpnId,
+                    lpn.LpnCode,
+                    PickedCount = pickedCount,
+                    TotalCount = totalCount,
+                    LpnState = lpn.State.ToString()
+                }
+            }, cancellationToken);
+        }
 
         return new PickLpnResponse
         {
