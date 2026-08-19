@@ -149,6 +149,10 @@ public class DispatchInstruction
 
 public class ManualDispatchRequest
 {
+    public Guid? IncidentId { get; set; }
+
+    public Guid? DispatcherId { get; set; }
+
     public Guid? ScheduleId { get; set; }
 
     public List<Guid> LpnIds { get; set; } = new();
@@ -168,6 +172,8 @@ public class ManualDispatchRequest
 
 public class ManualDispatchFormRequest
 {
+    public string? IncidentId { get; set; }
+
     public string? ScheduleId { get; set; }
 
     public string VehicleId { get; set; } = string.Empty;

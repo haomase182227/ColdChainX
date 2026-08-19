@@ -938,6 +938,7 @@ public class DispatchController : ControllerBase
 
     [HttpPost("manual-dispatch")]
     [Consumes("multipart/form-data")]
+    [Authorize(Roles = "Dispatcher,Admin")]
     public async Task<IActionResult> ManualDispatch(
         [FromQuery] List<string> lpnIds,
         [FromForm] ManualDispatchFormRequest form)
@@ -947,6 +948,14 @@ public class DispatchController : ControllerBase
 
         if (form.PlannedStartTime >= form.PlannedEndTime)
             return BadRequest(ApiResponse<object>.Failure("PlannedStartTime phai nho hon PlannedEndTime."));
+
+        Guid? incidentId = null;
+        if (!string.IsNullOrWhiteSpace(form.IncidentId))
+        {
+            if (!Guid.TryParse(ExtractGuid(form.IncidentId), out var parsedIncidentId) || parsedIncidentId == Guid.Empty)
+                return BadRequest(ApiResponse<object>.Failure("IncidentId khong hop le."));
+            incidentId = parsedIncidentId;
+        }
 
         Guid? selectedScheduleId = null;
         if (!string.IsNullOrWhiteSpace(form.ScheduleId))
@@ -1004,12 +1013,31 @@ public class DispatchController : ControllerBase
         }
 
         var firstLpnId = parsedLpnIds.First();
-        var firstLpn = await _db.Lpns.Include(l => l.Order).FirstOrDefaultAsync(l => l.LpnId == firstLpnId);
+        var firstLpn = await _db.Lpns
+            .Include(l => l.Order)
+            .Include(l => l.Warehouse)
+            .FirstOrDefaultAsync(l => l.LpnId == firstLpnId);
         if (firstLpn == null)
             return BadRequest(ApiResponse<object>.Failure($"Khong tim thay LPN {firstLpnId}."));
 
         Guid originLocId;
-        if (firstLpn.Order != null && firstLpn.Order.PickupLocation.HasValue)
+        if (incidentId.HasValue)
+        {
+            var warehouseAddress = firstLpn.Warehouse?.Address?.Trim();
+            if (string.IsNullOrWhiteSpace(warehouseAddress))
+                return BadRequest(ApiResponse<object>.Failure("Kho inbound cua Incident chua co dia chi de tao diem xuat phat."));
+
+            originLocId = await _db.Locations
+                .Where(l => l.Status == "ACTIVE" && l.Address == warehouseAddress)
+                .Select(l => l.LocationId)
+                .FirstOrDefaultAsync();
+            if (originLocId == Guid.Empty)
+            {
+                return BadRequest(ApiResponse<object>.Failure(
+                    "Khong tim thay Location ACTIVE trung dia chi kho inbound. Can cau hinh Location cho kho truoc khi ghep chuyen lai."));
+            }
+        }
+        else if (firstLpn.Order != null && firstLpn.Order.PickupLocation.HasValue)
         {
             originLocId = firstLpn.Order.PickupLocation.Value;
         }
@@ -1032,6 +1060,8 @@ public class DispatchController : ControllerBase
 
         var request = new ManualDispatchRequest
         {
+            IncidentId = incidentId,
+            DispatcherId = GetCurrentUserId(),
             ScheduleId = selectedScheduleId,
             
             LpnIds = parsedLpnIds,

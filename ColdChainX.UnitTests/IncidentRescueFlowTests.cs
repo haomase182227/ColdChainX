@@ -326,7 +326,7 @@ public sealed class IncidentRescueFlowTests : IDisposable
     }
 
     [Fact]
-    public async Task BreachedIncident_WithoutInternalColdStorage_RecommendsExternalFallback()
+    public async Task NonBreakdownIncident_WithoutInternalOption_RecommendsManualEscalation()
     {
         await SeedRescueTripAsync(replacementOnline: true);
         var incident = (await _db.IncidentReports.FindAsync(_incidentId))!;
@@ -339,36 +339,144 @@ public sealed class IncidentRescueFlowTests : IDisposable
         var result = await _service.GetRescuePlanAsync(_incidentId);
 
         Assert.True(result.Success, result.Message);
-        Assert.Equal("EXTERNAL_COLD_STORAGE", result.Data!.RecommendedAction);
-        Assert.True(result.Data.RequiresExternalStorageSearch);
+        Assert.Equal("MANUAL_ESCALATION", result.Data!.RecommendedAction);
         Assert.True(result.Data.RequiresManualEscalation);
     }
 
     [Fact]
-    public async Task ExternalStorageFallback_WithPickupPlan_RemainsOpenAndAwaitsControlledPickup()
+    public async Task VehicleBreakdown_RejectsStorageFallbackAndRequiresExternalReeferToRouteWarehouse()
     {
         await SeedRescueTripAsync(replacementOnline: true);
+        (await _db.IncidentReports.FindAsync(_incidentId))!.IncidentType = "VEHICLE_BREAKDOWN";
+        await _db.SaveChangesAsync();
 
         var result = await _service.RecordFallbackAsync(
             _incidentId,
             new RecordRescueFallbackRequest
             {
-                PlanType = IncidentRescuePlanType.EXTERNAL_COLD_STORAGE,
-                ExternalStorageName = "Certified temporary cold room",
-                ExternalStorageAddress = "Emergency site",
-                StorageTemperature = -5m,
-                ConfirmedByName = "Site operator",
-                RedispatchPlan = "Dispatcher will collect with internal reefer at 14:00.",
-                Note = "No compatible internal vehicle can arrive in time."
+                PlanType = IncidentRescuePlanType.INTERNAL_COLD_STORAGE,
+                WarehouseId = Guid.NewGuid(),
+                Note = "Attempt to use a storage fallback."
             },
             _dispatcherId);
 
-        Assert.True(result.Success, result.Message);
-        Assert.True(result.Data!.IncidentRemainsOpen);
-        Assert.Equal("PICKUP_PLANNED", result.Data.IncidentStatus);
-        Assert.Equal("DELAYED", result.Data.TripStatus);
-        Assert.Equal("EXTERNAL_COLD_STORAGE", result.Data.PlanType);
-        Assert.NotEqual("RESOLVED", (await _db.IncidentReports.FindAsync(_incidentId))!.Status);
+        Assert.False(result.Success);
+        Assert.Contains("external-reefer-dispatch", result.Message);
+        Assert.Equal("REPORTED", (await _db.IncidentReports.FindAsync(_incidentId))!.Status);
+    }
+
+    [Theory]
+    [InlineData("VEHICLE_BREAKDOWN")]
+    [InlineData("REEFER_BREAKDOWN")]
+    public async Task VehicleOrReeferBreakdown_RentsExternalReefer_ThenInboundsBySealWithoutQc(
+        string incidentType)
+    {
+        await SeedRescueTripAsync(replacementOnline: true);
+        var routeId = Guid.NewGuid();
+        var hanoiWarehouseId = Guid.NewGuid();
+        _db.RouteMasters.Add(new RouteMaster
+        {
+            RouteId = routeId,
+            RouteCode = "HCM-HN",
+            OriginCity = "Hồ Chí Minh",
+            DestCity = "Hà Nội",
+            TransitTime = "36:00",
+            Status = "ACTIVE",
+            CreatedAt = DateTime.UtcNow
+        });
+        _db.Warehouses.Add(new Warehouse
+        {
+            WarehouseId = hanoiWarehouseId,
+            WarehouseCode = "HN-HUB",
+            WarehouseName = "Kho lạnh Hà Nội",
+            WarehouseType = "HUB",
+            Address = "Hà Nội",
+            MaxPallets = 100,
+            CurrentPallets = 0,
+            Status = "ACTIVE",
+            DefaultMinTemp = -20m,
+            DefaultMaxTemp = 10m
+        });
+        var trip = (await _db.MasterTrips.FindAsync(_tripId))!;
+        trip.RouteId = routeId;
+        (await _db.IncidentReports.FindAsync(_incidentId))!.IncidentType = incidentType;
+        await _db.SaveChangesAsync();
+
+        var options = await _service.GetRescuePlanAsync(_incidentId);
+
+        Assert.True(options.Success, options.Message);
+        Assert.Equal("EXTERNAL_REEFER_TO_ROUTE_WAREHOUSE", options.Data!.RecommendedAction);
+        Assert.True(options.Data.RequiresExternalVehicleRental);
+        Assert.Equal(hanoiWarehouseId, options.Data.RouteDestinationWarehouse!.WarehouseId);
+
+        var forbiddenInternalDispatch = await _service.DispatchRescueAsync(
+            _incidentId,
+            new DispatchRescueRequest
+            {
+                ReplacementVehicleId = _replacementVehicleId,
+                PlanType = IncidentRescuePlanType.WAREHOUSE_RESCUE,
+                DestinationWarehouseId = hanoiWarehouseId
+            },
+            _dispatcherId);
+        Assert.False(forbiddenInternalDispatch.Success);
+        Assert.Contains("bắt buộc thuê xe lạnh ngoài", forbiddenInternalDispatch.Message);
+
+        var externalDispatch = await _service.DispatchExternalReeferAsync(
+            _incidentId,
+            new DispatchExternalReeferRequest
+            {
+                RentalProvider = "Đối tác xe lạnh Bắc Nam",
+                VehiclePlate = "51R-123.45",
+                DriverName = "Nguyễn Văn Thuê",
+                DriverPhone = "0909123456",
+                DestinationWarehouseId = hanoiWarehouseId,
+                AgreedTemperature = -5m,
+                ExpectedWarehouseArrivalAt = DateTime.UtcNow.AddHours(36),
+                SealNumber = "EXT-SEAL-001",
+                LpnIds = { _lpnId },
+                EvidenceUrls = { "https://evidence.test/external-handover.jpg" },
+                Note = "Thuê xe lạnh ngoài chở thẳng về kho Hà Nội."
+            },
+            _dispatcherId);
+
+        Assert.True(externalDispatch.Success, externalDispatch.Message);
+        Assert.Equal("EXTERNAL_REEFER_IN_TRANSIT", externalDispatch.Data!.IncidentStatus);
+        Assert.Equal("DELAYED", externalDispatch.Data.TripStatus);
+        Assert.Equal("MAINTENANCE", (await _db.Vehicles.FindAsync(_brokenVehicleId))!.Status);
+
+        var wrongSealArrival = await _service.InboundRouteWarehouseAsync(
+            _incidentId,
+            new InboundRouteWarehouseRequest
+            {
+                SealNumber = "WRONG-SEAL"
+            },
+            _dispatcherId);
+
+        Assert.False(wrongSealArrival.Success);
+        Assert.Contains("seal", wrongSealArrival.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("EXTERNAL_REEFER_IN_TRANSIT", (await _db.IncidentReports.FindAsync(_incidentId))!.Status);
+
+        var arrival = await _service.InboundRouteWarehouseAsync(
+            _incidentId,
+            new InboundRouteWarehouseRequest
+            {
+                SealNumber = "EXT-SEAL-001"
+            },
+            _dispatcherId);
+
+        Assert.True(arrival.Success, arrival.Message);
+        Assert.Equal("READY_FOR_REDISPATCH", arrival.Data!.IncidentStatus);
+        var lpnAtWarehouse = (await _db.Lpns.FindAsync(_lpnId))!;
+        Assert.Equal(hanoiWarehouseId, lpnAtWarehouse.WarehouseId);
+        Assert.Equal(LpnState.IN_STOCK, lpnAtWarehouse.State);
+        Assert.Null(lpnAtWarehouse.TripId);
+        Assert.NotNull(lpnAtWarehouse.InboundTime);
+        Assert.Equal("READY_FOR_ROUTING", (await _db.TransportOrders.FindAsync(_orderId))!.Status);
+        Assert.Equal("RELAY_COMPLETED", (await _db.MasterTrips.FindAsync(_tripId))!.Status);
+        var receipt = await _db.WarehouseReceipts.SingleAsync(r => r.ReceiptId == lpnAtWarehouse.ReceiptId);
+        Assert.Equal("INCIDENT_RELAY_INBOUND", receipt.ReceiptType);
+        Assert.Contains("EXT-SEAL-001", receipt.Note);
+        Assert.Contains("bỏ qua QC", receipt.Note);
     }
 
     [Fact]
@@ -595,7 +703,7 @@ public sealed class IncidentRescueFlowTests : IDisposable
         {
             IncidentId = _incidentId,
             TripId = _tripId,
-            IncidentType = "VEHICLE_BREAKDOWN",
+            IncidentType = "ACCIDENT",
             Severity = "HIGH",
             Description = "Xe hỏng giữa đường.",
             RequiresRescue = true,

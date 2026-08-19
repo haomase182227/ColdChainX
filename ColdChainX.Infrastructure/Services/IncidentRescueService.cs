@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using ColdChainX.Application.DTOs.Incident;
@@ -36,6 +37,7 @@ public class IncidentRescueService : IIncidentRescueService
         "Tài xế xác nhận đã xử lý sự cố tại chỗ và tiếp tục hành trình.";
     private const int DefaultTransloadMinutes = 45;
     private const decimal FallbackAvgSpeedKmh = 40m;
+    private const decimal NearbyColdStorageMaxDistanceKm = 100m;
 
     public IncidentRescueService(
         ApplicationDbContext db,
@@ -217,6 +219,10 @@ public class IncidentRescueService : IIncidentRescueService
                 .FirstAsync(i => i.IncidentId == incidentId);
             var trip = await _db.MasterTrips.AsNoTracking()
                 .FirstAsync(t => t.TripId == incident.TripId);
+            var route = trip.RouteId.HasValue
+                ? await _db.RouteMasters.AsNoTracking().FirstOrDefaultAsync(r => r.RouteId == trip.RouteId.Value)
+                : null;
+            var routeDestinationKey = NormalizeLocationKey(route?.DestCity);
             var warehouses = await _db.Warehouses.AsNoTracking()
                 .Where(w => (w.Status == null || w.Status == "ACTIVE")
                             && (!w.DefaultMinTemp.HasValue || w.DefaultMinTemp.Value <= trip.TargetTemperature)
@@ -255,7 +261,12 @@ public class IncidentRescueService : IIncidentRescueService
                             : null,
                     MinTemperature = warehouse.DefaultMinTemp,
                     MaxTemperature = warehouse.DefaultMaxTemp,
-                    AvailablePalletPositions = Math.Max(0, warehouse.MaxPallets - (warehouse.CurrentPallets ?? 0))
+                    AvailablePalletPositions = Math.Max(0, warehouse.MaxPallets - (warehouse.CurrentPallets ?? 0)),
+                    IsNearby = distanceKm.HasValue && distanceKm.Value <= NearbyColdStorageMaxDistanceKm,
+                    IsRouteDestinationWarehouse = !string.IsNullOrWhiteSpace(routeDestinationKey)
+                        && (NormalizeLocationKey(warehouse.WarehouseName).Contains(routeDestinationKey)
+                            || NormalizeLocationKey(warehouse.WarehouseCode).Contains(routeDestinationKey)
+                            || NormalizeLocationKey(warehouse.Address).Contains(routeDestinationKey))
                 };
             })
             .OrderBy(w => w.CanArriveWithinSafeTime == true ? 0 : w.CanArriveWithinSafeTime == null ? 1 : 2)
@@ -265,28 +276,48 @@ public class IncidentRescueService : IIncidentRescueService
 
             var vehicles = candidatesResult.Data ?? new List<RescueCandidateResponse>();
             var timelyVehicle = vehicles.FirstOrDefault(v => v.CanArriveWithinSafeTime != false);
-            var timelyWarehouse = storageOptions.FirstOrDefault(w => w.CanArriveWithinSafeTime != false);
+            var nearbyWarehouse = storageOptions.FirstOrDefault(w => w.AvailablePalletPositions > 0
+                && w.IsNearby
+                && w.CanArriveWithinSafeTime != false);
+            var routeDestinationWarehouse = storageOptions.FirstOrDefault(w => w.AvailablePalletPositions > 0
+                && w.IsRouteDestinationWarehouse);
+            var warehouseForInternalVehicle = nearbyWarehouse ?? routeDestinationWarehouse;
+            var mandatoryExternalRelay = RequiresMandatoryExternalReeferRelay(incident);
             string action;
             string reason;
-            if (timelyVehicle != null && !incident.DirectDeliveryLocked)
+            if (mandatoryExternalRelay)
+            {
+                action = IncidentRescuePlanType.EXTERNAL_REEFER_TO_ROUTE_WAREHOUSE.ToString();
+                reason = routeDestinationWarehouse != null
+                    ? "Vehicle/reefer breakdown requires an external refrigerated vehicle to carry all cargo to the route destination warehouse; a ColdChainX vehicle must then be redispatched from that warehouse for customer delivery."
+                    : "Vehicle/reefer breakdown requires an external refrigerated vehicle, but no active temperature-compatible warehouse matching Route.DestCity is configured. Configure the route warehouse before dispatch.";
+            }
+            else if (timelyVehicle != null && !incident.DirectDeliveryLocked)
             {
                 action = IncidentRescuePlanType.DIRECT_RESCUE.ToString();
                 reason = "A temperature-compatible vehicle can carry the remaining load with one controlled transfer.";
             }
-            else if (timelyVehicle != null && timelyWarehouse != null)
+            else if (timelyVehicle != null && warehouseForInternalVehicle != null)
             {
                 action = IncidentRescuePlanType.WAREHOUSE_RESCUE.ToString();
-                reason = "Direct delivery is locked; use the compatible vehicle to reach controlled internal inspection/storage.";
+                reason = nearbyWarehouse != null
+                    ? "Direct delivery is locked; use the compatible vehicle to reach nearby controlled cold storage."
+                    : "Use the compatible internal vehicle to carry the load to the destination warehouse of the route.";
             }
-            else if (timelyWarehouse != null)
+            else if (timelyVehicle == null && routeDestinationWarehouse != null)
+            {
+                action = IncidentRescuePlanType.EXTERNAL_REEFER_TO_ROUTE_WAREHOUSE.ToString();
+                reason = "No suitable ColdChainX reefer is available near the incident; rent an external reefer to the route destination warehouse, then redispatch a ColdChainX vehicle for customer delivery.";
+            }
+            else if (nearbyWarehouse != null)
             {
                 action = IncidentRescuePlanType.INTERNAL_COLD_STORAGE.ToString();
-                reason = "No suitable vehicle can be proven timely; compatible internal cold storage is the next fallback.";
+                reason = "No suitable vehicle can be proven timely; nearby compatible internal cold storage is the next fallback.";
             }
             else
             {
-                action = IncidentRescuePlanType.EXTERNAL_COLD_STORAGE.ToString();
-                reason = "No timely internal vehicle or cold-storage option is available; Dispatcher must verify external cold storage.";
+                action = IncidentRescuePlanType.MANUAL_ESCALATION.ToString();
+                reason = "No valid internal option or route destination warehouse is available; keep the incident open for Dispatcher/Admin escalation. External cold storage is not part of this workflow.";
             }
 
             var response = new IncidentRescuePlanResponse
@@ -301,8 +332,10 @@ public class IncidentRescueService : IIncidentRescueService
                 RecommendationReason = reason,
                 Vehicles = vehicles,
                 InternalColdStorages = storageOptions,
-                RequiresExternalStorageSearch = action == IncidentRescuePlanType.EXTERNAL_COLD_STORAGE.ToString(),
-                RequiresManualEscalation = action == IncidentRescuePlanType.EXTERNAL_COLD_STORAGE.ToString()
+                RouteDestinationWarehouse = routeDestinationWarehouse,
+                RequiresExternalVehicleRental = action == IncidentRescuePlanType.EXTERNAL_REEFER_TO_ROUTE_WAREHOUSE.ToString(),
+                RequiresManualEscalation = action == IncidentRescuePlanType.MANUAL_ESCALATION.ToString()
+                    || (mandatoryExternalRelay && routeDestinationWarehouse == null)
             };
             return ApiResponse<IncidentRescuePlanResponse>.SuccessResponse(
                 response,
@@ -323,11 +356,10 @@ public class IncidentRescueService : IIncidentRescueService
         if (request == null || string.IsNullOrWhiteSpace(request.Note))
             return ApiResponse<RescueFallbackResult>.Failure("A fallback handling note is required.");
         if (request.PlanType is not (IncidentRescuePlanType.INTERNAL_COLD_STORAGE
-            or IncidentRescuePlanType.EXTERNAL_COLD_STORAGE
             or IncidentRescuePlanType.MANUAL_ESCALATION))
         {
             return ApiResponse<RescueFallbackResult>.Failure(
-                "PlanType must be INTERNAL_COLD_STORAGE, EXTERNAL_COLD_STORAGE or MANUAL_ESCALATION.");
+                "PlanType must be INTERNAL_COLD_STORAGE or MANUAL_ESCALATION. External cold storage is not supported.");
         }
 
         try
@@ -345,6 +377,11 @@ public class IncidentRescueService : IIncidentRescueService
                 return ApiResponse<RescueFallbackResult>.Failure("Confirm cold containment before recording a fallback.");
             if (incident.Status == "RESOLVED")
                 return ApiResponse<RescueFallbackResult>.Failure("Incident is already resolved.");
+            if (RequiresMandatoryExternalReeferRelay(incident))
+            {
+                return ApiResponse<RescueFallbackResult>.Failure(
+                    "Vehicle/reefer breakdown must use external-reefer-dispatch to the route destination warehouse.");
+            }
 
             var trip = await _db.MasterTrips.FirstOrDefaultAsync(t => t.TripId == incident.TripId.Value);
             if (trip == null)
@@ -375,31 +412,6 @@ public class IncidentRescueService : IIncidentRescueService
                     Note = request.Note.Trim()
                 });
             }
-            else if (request.PlanType == IncidentRescuePlanType.EXTERNAL_COLD_STORAGE)
-            {
-                if (string.IsNullOrWhiteSpace(request.ExternalStorageName)
-                    || !request.StorageTemperature.HasValue
-                    || string.IsNullOrWhiteSpace(request.ConfirmedByName))
-                {
-                    return ApiResponse<RescueFallbackResult>.Failure(
-                        "External storage requires name, storage temperature and confirming person.");
-                }
-                if (Math.Abs(request.StorageTemperature.Value - trip.TargetTemperature) > incident.TemperatureTolerance)
-                {
-                    return ApiResponse<RescueFallbackResult>.Failure(
-                        "External storage temperature is outside the MasterTrip target tolerance.");
-                }
-
-                details = JsonSerializer.Serialize(new
-                {
-                    request.ExternalStorageName,
-                    request.ExternalStorageAddress,
-                    request.StorageTemperature,
-                    request.ConfirmedByName,
-                    IsSystemWarehouse = false,
-                    Note = request.Note.Trim()
-                });
-            }
             else
             {
                 details = JsonSerializer.Serialize(new
@@ -419,9 +431,6 @@ public class IncidentRescueService : IIncidentRescueService
             incident.Status = request.PlanType switch
             {
                 IncidentRescuePlanType.MANUAL_ESCALATION => "AWAITING_EMERGENCY_PLAN",
-                IncidentRescuePlanType.EXTERNAL_COLD_STORAGE when !string.IsNullOrWhiteSpace(request.RedispatchPlan)
-                    => "PICKUP_PLANNED",
-                IncidentRescuePlanType.EXTERNAL_COLD_STORAGE => "AT_EXTERNAL_COLD_STORAGE",
                 _ when !string.IsNullOrWhiteSpace(request.RedispatchPlan) => "REDISPATCH_PLANNED",
                 _ => "AT_INTERNAL_COLD_STORAGE"
             };
@@ -448,6 +457,299 @@ public class IncidentRescueService : IIncidentRescueService
         {
             _logger.LogError(ex, "Failed to record incident fallback. IncidentId: {IncidentId}", incidentId);
             return ApiResponse<RescueFallbackResult>.Failure($"Failed to record fallback: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponse<ExternalReeferWorkflowResult>> DispatchExternalReeferAsync(
+        Guid incidentId,
+        DispatchExternalReeferRequest request,
+        Guid dispatcherId)
+    {
+        if (request == null
+            || string.IsNullOrWhiteSpace(request.RentalProvider)
+            || string.IsNullOrWhiteSpace(request.VehiclePlate)
+            || string.IsNullOrWhiteSpace(request.DriverName)
+            || string.IsNullOrWhiteSpace(request.SealNumber)
+            || string.IsNullOrWhiteSpace(request.Note))
+        {
+            return ApiResponse<ExternalReeferWorkflowResult>.Failure(
+                "RentalProvider, VehiclePlate, DriverName, SealNumber and Note are required.");
+        }
+        if (request.DestinationWarehouseId == Guid.Empty)
+            return ApiResponse<ExternalReeferWorkflowResult>.Failure("DestinationWarehouseId is required.");
+        if ((request.EvidenceUrls ?? new List<string>()).Any(url => !IsValidEvidenceUrl(url)))
+            return ApiResponse<ExternalReeferWorkflowResult>.Failure("EvidenceUrls must contain valid HTTP/HTTPS URLs.");
+
+        try
+        {
+            if (!await _db.Users.AnyAsync(u => u.UserId == dispatcherId))
+                return ApiResponse<ExternalReeferWorkflowResult>.Failure("Dispatcher user not found.", 404);
+
+            var incident = await _db.IncidentReports.FirstOrDefaultAsync(i => i.IncidentId == incidentId);
+            if (incident == null)
+                return ApiResponse<ExternalReeferWorkflowResult>.Failure("Incident not found.", 404);
+            if (!incident.RequiresRescue || !incident.TripId.HasValue)
+                return ApiResponse<ExternalReeferWorkflowResult>.Failure("Incident is not eligible for rescue transport.");
+            if (incident.Status == "CONTAINMENT_REQUIRED")
+                return ApiResponse<ExternalReeferWorkflowResult>.Failure("Confirm cold containment before renting an external reefer.");
+            if (incident.Status is "RESOLVED" or "EXTERNAL_REEFER_IN_TRANSIT" or "READY_FOR_REDISPATCH" or "REDISPATCH_PLANNED" or "REDISPATCHED_TO_CUSTOMER")
+                return ApiResponse<ExternalReeferWorkflowResult>.Failure($"Incident status {incident.Status} does not allow another external dispatch.");
+
+            var trip = await _db.MasterTrips
+                .Include(t => t.Vehicle)
+                .Include(t => t.Route)
+                .FirstOrDefaultAsync(t => t.TripId == incident.TripId.Value);
+            if (trip == null || trip.Route == null || trip.Vehicle == null)
+                return ApiResponse<ExternalReeferWorkflowResult>.Failure("Trip, route or current vehicle is missing.");
+            if (!OnRoadTripStatuses.Contains(trip.Status))
+                return ApiResponse<ExternalReeferWorkflowResult>.Failure("Trip is not in an on-road status.");
+
+            var warehouse = await _db.Warehouses.FirstOrDefaultAsync(w =>
+                w.WarehouseId == request.DestinationWarehouseId
+                && (w.Status == null || w.Status == "ACTIVE"));
+            if (warehouse == null)
+                return ApiResponse<ExternalReeferWorkflowResult>.Failure("Route destination warehouse is not active or does not exist.");
+            if (!MatchesRouteDestination(warehouse, trip.Route))
+            {
+                return ApiResponse<ExternalReeferWorkflowResult>.Failure(
+                    $"Warehouse {warehouse.WarehouseName} does not match route destination {trip.Route.DestCity}.");
+            }
+            if ((warehouse.DefaultMinTemp.HasValue && warehouse.DefaultMinTemp.Value > trip.TargetTemperature)
+                || (warehouse.DefaultMaxTemp.HasValue && warehouse.DefaultMaxTemp.Value < trip.TargetTemperature))
+            {
+                return ApiResponse<ExternalReeferWorkflowResult>.Failure(
+                    "Route destination warehouse cannot maintain the MasterTrip target temperature.");
+            }
+            if (Math.Abs(request.AgreedTemperature - trip.TargetTemperature) > incident.TemperatureTolerance)
+            {
+                return ApiResponse<ExternalReeferWorkflowResult>.Failure(
+                    "External reefer agreed temperature is outside the MasterTrip target tolerance.");
+            }
+
+            var shippingLpns = await _db.Lpns
+                .Where(l => l.TripId == trip.TripId && l.State == LpnState.SHIPPING)
+                .ToListAsync();
+            var requestedLpnIds = request.LpnIds ?? new List<Guid>();
+            var selectedLpnIds = requestedLpnIds.Count > 0
+                ? requestedLpnIds.Distinct().ToList()
+                : shippingLpns.Select(l => l.LpnId).ToList();
+            if (!ContainsExactly(selectedLpnIds, shippingLpns.Select(l => l.LpnId)))
+                return ApiResponse<ExternalReeferWorkflowResult>.Failure("External reefer handover must include every SHIPPING LPN on the trip.");
+
+            var now = DbNow();
+            var evidenceUrls = (request.EvidenceUrls ?? new List<string>())
+                .Where(url => !string.IsNullOrWhiteSpace(url))
+                .Select(url => url.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var plan = new ExternalReeferPlanRecord
+            {
+                RentalProvider = request.RentalProvider.Trim(),
+                VehiclePlate = request.VehiclePlate.Trim().ToUpperInvariant(),
+                DriverName = request.DriverName.Trim(),
+                DriverPhone = request.DriverPhone?.Trim(),
+                DestinationWarehouseId = warehouse.WarehouseId,
+                DestinationWarehouseName = warehouse.WarehouseName,
+                DestinationWarehouseAddress = warehouse.Address,
+                RouteDestinationCity = trip.Route.DestCity,
+                AgreedTemperature = request.AgreedTemperature,
+                OriginalTripId = trip.TripId,
+                DispatchedAt = now,
+                ExpectedWarehouseArrivalAt = request.ExpectedWarehouseArrivalAt.HasValue
+                    ? DateTime.SpecifyKind(request.ExpectedWarehouseArrivalAt.Value, DateTimeKind.Unspecified)
+                    : null,
+                SealNumber = request.SealNumber.Trim(),
+                LpnIds = selectedLpnIds,
+                DispatchEvidenceUrls = evidenceUrls,
+                RecordedBy = dispatcherId,
+                DispatchNote = request.Note.Trim()
+            };
+
+            var brokenVehicle = trip.Vehicle;
+            brokenVehicle.Status = "MAINTENANCE";
+            if (incident.CurrentLatitude.HasValue && incident.CurrentLongitude.HasValue)
+            {
+                brokenVehicle.CurrentLocation = GoongMapService.FormatCoordinate(
+                    incident.CurrentLatitude.Value,
+                    incident.CurrentLongitude.Value);
+            }
+            if (!incident.MaintenanceTicketId.HasValue)
+            {
+                var ticket = new MaintenanceTicket
+                {
+                    TicketId = Guid.NewGuid(),
+                    TicketCode = $"MT-{DateTime.Now:yyyyMMddHHmmss}",
+                    VehicleId = brokenVehicle.VehicleId,
+                    MaintenanceType = "INCIDENT_BREAKDOWN",
+                    TriggeredAtOdometer = brokenVehicle.CurrentOdometer,
+                    GarageName = "Cứu hộ tại hiện trường",
+                    Description = $"Sự cố {incident.IncidentType} trên chuyến {trip.TripId}: {incident.Description}",
+                    IssueDate = DateOnly.FromDateTime(DateTime.Today),
+                    Status = "OPEN",
+                    CreatedBy = dispatcherId,
+                    CreatedAt = now
+                };
+                _db.MaintenanceTickets.Add(ticket);
+                incident.MaintenanceTicketId = ticket.TicketId;
+            }
+
+            incident.BrokenVehicleId ??= brokenVehicle.VehicleId;
+            incident.ReplacementVehicleId = null;
+            incident.RescuePlanType = IncidentRescuePlanType.EXTERNAL_REEFER_TO_ROUTE_WAREHOUSE.ToString();
+            incident.RescuePlanDetails = JsonSerializer.Serialize(plan);
+            incident.RedispatchPlan = $"Khi hàng đến {warehouse.WarehouseName}, Dispatcher chọn xe ColdChainX tại kho để giao khách.";
+            incident.Status = "EXTERNAL_REEFER_IN_TRANSIT";
+            incident.HandledBy = dispatcherId;
+            incident.HandledAt = now;
+            incident.HandlingNote = request.Note.Trim();
+            incident.RescueDispatchedAt = now;
+            trip.Status = "DELAYED";
+            foreach (var evidenceUrl in evidenceUrls)
+            {
+                _db.IncidentEvidences.Add(new IncidentEvidence
+                {
+                    EvidenceId = Guid.NewGuid(),
+                    IncidentId = incident.IncidentId,
+                    EvidenceType = "EXTERNAL_REEFER_HANDOVER",
+                    FileUrl = evidenceUrl
+                });
+            }
+
+            await _db.SaveChangesAsync();
+            var result = BuildExternalReeferResult(
+                incident,
+                trip,
+                plan,
+                $"Đã ghi nhận xe lạnh thuê ngoài {plan.VehiclePlate} chở hàng về {warehouse.WarehouseName}.");
+            await _hubContext.Clients.Groups("Group_Dispatcher", "Group_Admin", "Group_WarehouseWorker")
+                .SendAsync("ExternalReeferDispatched", result);
+            return ApiResponse<ExternalReeferWorkflowResult>.SuccessResponse(result, "External reefer dispatched to route destination warehouse.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to dispatch external reefer. IncidentId: {IncidentId}", incidentId);
+            return ApiResponse<ExternalReeferWorkflowResult>.Failure($"Failed to dispatch external reefer: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponse<ExternalReeferWorkflowResult>> InboundRouteWarehouseAsync(
+        Guid incidentId,
+        InboundRouteWarehouseRequest request,
+        Guid confirmedBy)
+    {
+        if (request == null || string.IsNullOrWhiteSpace(request.SealNumber))
+            return ApiResponse<ExternalReeferWorkflowResult>.Failure("SealNumber is required.");
+
+        try
+        {
+            if (!await _db.Users.AnyAsync(u => u.UserId == confirmedBy))
+                return ApiResponse<ExternalReeferWorkflowResult>.Failure("Confirming user not found.", 404);
+            var incident = await _db.IncidentReports.FirstOrDefaultAsync(i => i.IncidentId == incidentId);
+            if (incident == null || !incident.TripId.HasValue)
+                return ApiResponse<ExternalReeferWorkflowResult>.Failure("Incident or trip not found.", 404);
+            if (incident.Status != "EXTERNAL_REEFER_IN_TRANSIT"
+                || incident.RescuePlanType != IncidentRescuePlanType.EXTERNAL_REEFER_TO_ROUTE_WAREHOUSE.ToString())
+            {
+                return ApiResponse<ExternalReeferWorkflowResult>.Failure(
+                    "Only an EXTERNAL_REEFER_IN_TRANSIT incident can be received at the route warehouse.");
+            }
+
+            var plan = DeserializeExternalReeferPlan(incident.RescuePlanDetails);
+            if (plan == null)
+                return ApiResponse<ExternalReeferWorkflowResult>.Failure("External reefer plan details are missing or invalid.");
+            var trip = await _db.MasterTrips
+                .Include(t => t.TripStops)
+                .Include(t => t.TripDrivers)
+                    .ThenInclude(td => td.Driver)
+                .FirstOrDefaultAsync(t => t.TripId == incident.TripId.Value);
+            var warehouse = await _db.Warehouses.FirstOrDefaultAsync(w => w.WarehouseId == plan.DestinationWarehouseId);
+            if (trip == null || warehouse == null)
+                return ApiResponse<ExternalReeferWorkflowResult>.Failure("Trip or route destination warehouse not found.");
+            if (!string.Equals(plan.SealNumber, request.SealNumber.Trim(), StringComparison.OrdinalIgnoreCase))
+                return ApiResponse<ExternalReeferWorkflowResult>.Failure("Arrival seal does not match the external reefer handover seal.");
+
+            var lpns = await _db.Lpns
+                .Include(l => l.Order)
+                .Where(l => plan.LpnIds.Contains(l.LpnId))
+                .ToListAsync();
+            if (lpns.Count != plan.LpnIds.Distinct().Count())
+                return ApiResponse<ExternalReeferWorkflowResult>.Failure("Not all LPNs handed to the external reefer could be found.");
+
+            var now = DbNow();
+            var inboundReceiptIds = new List<Guid>();
+            foreach (var orderGroup in lpns.GroupBy(l => l.OrderId))
+            {
+                var order = orderGroup.First().Order;
+                var receipt = new WarehouseReceipt
+                {
+                    ReceiptId = Guid.NewGuid(),
+                    ReceiptCode = $"INC-IN-{incident.IncidentId.ToString("N")[..8]}-{orderGroup.Key.ToString("N")[..8]}",
+                    ReferenceDocNo = incident.IncidentId.ToString(),
+                    OrderId = orderGroup.Key,
+                    WarehouseId = warehouse.WarehouseId,
+                    ReceiptType = "INCIDENT_RELAY_INBOUND",
+                    Reason = incident.IncidentType,
+                    TotalExpectedQty = orderGroup.Sum(l => l.Quantity),
+                    TotalActualQty = orderGroup.Sum(l => l.Quantity),
+                    DelivererName = $"{plan.RentalProvider} - {plan.DriverName}",
+                    ReceiverId = confirmedBy,
+                    Note = $"Inbound bằng seal {request.SealNumber.Trim()}, bỏ qua QC theo luồng cứu hộ sự cố.",
+                    CreatedAt = now
+                };
+                _db.WarehouseReceipts.Add(receipt);
+                inboundReceiptIds.Add(receipt.ReceiptId);
+
+                foreach (var lpn in orderGroup)
+                {
+                    lpn.ReceiptId = receipt.ReceiptId;
+                    lpn.WarehouseId = warehouse.WarehouseId;
+                    lpn.TripId = null;
+                    lpn.State = LpnState.IN_STOCK;
+                    lpn.InboundTime = now;
+                    lpn.UpdatedAt = now;
+                }
+
+                order.MasterTripId = null;
+                order.Status = "READY_FOR_ROUTING";
+            }
+            plan.ArrivedAt = now;
+            plan.ArrivalConfirmedBy = confirmedBy;
+            plan.InboundReceiptIds = inboundReceiptIds;
+            plan.ArrivalNote = $"Warehouse Worker đã inbound bằng seal {request.SealNumber.Trim()}, không qua QC.";
+            incident.RescuePlanDetails = JsonSerializer.Serialize(plan);
+            incident.Status = "READY_FOR_REDISPATCH";
+            incident.HandledBy = confirmedBy;
+            incident.HandledAt = now;
+            incident.RedispatchPlan = $"Chờ Dispatcher ghép chuyến mới từ {warehouse.WarehouseName} bằng manual-dispatch.";
+            trip.Status = "RELAY_COMPLETED";
+            foreach (var stop in trip.TripStops.Where(s => s.Status is not ("COMPLETED" or "ARRIVED" or "CANCELLED")))
+                stop.Status = "CANCELLED";
+            foreach (var tripDriver in trip.TripDrivers)
+            {
+                if (tripDriver.Driver?.Status is "ONTRIP" or "ON_TRIP" or "PLANNING")
+                    tripDriver.Driver.Status = "ACTIVE";
+            }
+
+            var coordinates = await ResolveWarehouseCoordinatesAsync(new[] { warehouse });
+            if (coordinates.TryGetValue(warehouse.WarehouseId, out var position))
+            {
+                incident.CurrentLatitude = position.Latitude;
+                incident.CurrentLongitude = position.Longitude;
+            }
+            await _db.SaveChangesAsync();
+            var result = BuildExternalReeferResult(
+                incident,
+                trip,
+                plan,
+                $"Đã inbound {lpns.Count} LPN tại {warehouse.WarehouseName} bằng seal; chờ Dispatcher ghép chuyến mới.");
+            await _hubContext.Clients.Groups("Group_Dispatcher", "Group_Admin", "Group_WarehouseWorker")
+                .SendAsync("IncidentCargoInboundedAtRouteWarehouse", result);
+            return ApiResponse<ExternalReeferWorkflowResult>.SuccessResponse(result, "Cargo inbounded at route warehouse without QC.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to inbound cargo at route warehouse. IncidentId: {IncidentId}", incidentId);
+            return ApiResponse<ExternalReeferWorkflowResult>.Failure($"Failed to inbound cargo at route warehouse: {ex.Message}");
         }
     }
 
@@ -539,6 +841,73 @@ public class IncidentRescueService : IIncidentRescueService
 
     private static bool IsValidCoordinates(decimal latitude, decimal longitude)
         => latitude is >= -90m and <= 90m && longitude is >= -180m and <= 180m;
+
+    private static bool MatchesRouteDestination(Warehouse warehouse, RouteMaster route)
+    {
+        var destinationKey = NormalizeLocationKey(route.DestCity);
+        return !string.IsNullOrWhiteSpace(destinationKey)
+            && (NormalizeLocationKey(warehouse.WarehouseName).Contains(destinationKey)
+                || NormalizeLocationKey(warehouse.WarehouseCode).Contains(destinationKey)
+                || NormalizeLocationKey(warehouse.Address).Contains(destinationKey));
+    }
+
+    private static bool RequiresMandatoryExternalReeferRelay(IncidentReport incident)
+        => incident.IncidentType.Equals(IncidentType.VEHICLE_BREAKDOWN.ToString(), StringComparison.OrdinalIgnoreCase)
+            || incident.IncidentType.Equals(IncidentType.REEFER_BREAKDOWN.ToString(), StringComparison.OrdinalIgnoreCase)
+            || incident.IncidentType.Equals("BREAKDOWN", StringComparison.OrdinalIgnoreCase)
+            || incident.IncidentType.Equals("COOLING_FAILURE", StringComparison.OrdinalIgnoreCase)
+            || incident.IncidentType.Equals("REFRIGERATION_BREAKDOWN", StringComparison.OrdinalIgnoreCase);
+
+    private static bool ContainsExactly(IEnumerable<Guid> actual, IEnumerable<Guid> expected)
+        => actual.Distinct().ToHashSet().SetEquals(expected.Distinct());
+
+    private static ExternalReeferPlanRecord? DeserializeExternalReeferPlan(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return null;
+        try
+        {
+            return JsonSerializer.Deserialize<ExternalReeferPlanRecord>(json);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static ExternalReeferWorkflowResult BuildExternalReeferResult(
+        IncidentReport incident,
+        MasterTrip trip,
+        ExternalReeferPlanRecord plan,
+        string message)
+        => new()
+        {
+            IncidentId = incident.IncidentId,
+            TripId = trip.TripId,
+            IncidentStatus = incident.Status ?? "UNKNOWN",
+            TripStatus = trip.Status ?? "UNKNOWN",
+            DestinationWarehouseId = plan.DestinationWarehouseId,
+            DestinationWarehouseName = plan.DestinationWarehouseName,
+            ExternalVehiclePlate = plan.VehiclePlate,
+            LpnCount = plan.LpnIds.Count,
+            Message = message
+        };
+
+    private static string NormalizeLocationKey(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        var normalized = value.Trim().ToUpperInvariant().Normalize(NormalizationForm.FormD);
+        var builder = new StringBuilder(normalized.Length);
+        foreach (var character in normalized)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark)
+                builder.Append(character == 'Đ' ? 'D' : character);
+        }
+
+        return string.Concat(builder.ToString().Normalize(NormalizationForm.FormC).Where(char.IsLetterOrDigit));
+    }
 
 
     public async Task<ApiResponse<IncidentWorkflowResult>> ContinueTripAsync(
@@ -715,6 +1084,12 @@ public class IncidentRescueService : IIncidentRescueService
             if (incident.Status == "CONTAINMENT_REQUIRED")
                 return ApiResponse<IncidentRescueResult>.Failure(
                     "Hãy xác nhận chống thất thoát nhiệt trước khi điều xe cứu hàng.");
+            if (RequiresMandatoryExternalReeferRelay(incident))
+            {
+                return ApiResponse<IncidentRescueResult>.Failure(
+                    "Sự cố xe/thùng lạnh bắt buộc thuê xe lạnh ngoài chở về kho đích tuyến; " +
+                    "hãy dùng external-reefer-dispatch, inbound-route-warehouse, sau đó ghép chuyến mới bằng manual-dispatch.");
+            }
             if (!incident.RequiresRescue)
                 return ApiResponse<IncidentRescueResult>.Failure(
                     "Sự cố này không yêu cầu xe cứu hộ.");

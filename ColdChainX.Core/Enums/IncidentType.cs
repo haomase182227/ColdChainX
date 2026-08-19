@@ -6,5 +6,6 @@ public enum IncidentType
     VEHICLE_BREAKDOWN = 2,
     TEMP_EXCURSION = 3,
     DAMAGE_CARGO = 4,
-    DELAY = 5
+    DELAY = 5,
+    REEFER_BREAKDOWN = 6
 }

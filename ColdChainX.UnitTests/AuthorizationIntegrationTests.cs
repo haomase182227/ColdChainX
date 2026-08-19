@@ -231,6 +231,8 @@ public sealed class AuthorizationIntegrationTests : IAsyncLifetime
         public Task<ApiResponse<List<RescueCandidateResponse>>> GetRescueCandidatesAsync(Guid incidentId) => throw new NotSupportedException();
         public Task<ApiResponse<IncidentRescuePlanResponse>> GetRescuePlanAsync(Guid incidentId) => throw new NotSupportedException();
         public Task<ApiResponse<RescueFallbackResult>> RecordFallbackAsync(Guid incidentId, RecordRescueFallbackRequest request, Guid dispatcherId) => throw new NotSupportedException();
+        public Task<ApiResponse<ExternalReeferWorkflowResult>> DispatchExternalReeferAsync(Guid incidentId, DispatchExternalReeferRequest request, Guid dispatcherId) => throw new NotSupportedException();
+        public Task<ApiResponse<ExternalReeferWorkflowResult>> InboundRouteWarehouseAsync(Guid incidentId, InboundRouteWarehouseRequest request, Guid confirmedBy) => throw new NotSupportedException();
         public Task<ApiResponse<IncidentWorkflowResult>> ContinueTripAsync(Guid incidentId, ContinueTripAfterIncidentRequest request, Guid driverUserId) => throw new NotSupportedException();
         public Task<ApiResponse<IncidentRescueResult>> DispatchRescueAsync(Guid incidentId, DispatchRescueRequest request, Guid dispatcherId) => throw new NotSupportedException();
         public Task<ApiResponse<IncidentWorkflowResult>> ConfirmTransloadAsync(Guid incidentId, ConfirmTransloadRequest request, Guid confirmedBy) => throw new NotSupportedException();

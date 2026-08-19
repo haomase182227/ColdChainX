@@ -87,6 +87,8 @@ namespace ColdChainX.Application.DTOs.Incident
         public decimal? MinTemperature { get; set; }
         public decimal? MaxTemperature { get; set; }
         public int AvailablePalletPositions { get; set; }
+        public bool IsNearby { get; set; }
+        public bool IsRouteDestinationWarehouse { get; set; }
     }
 
     public sealed class IncidentRescuePlanResponse
@@ -101,18 +103,75 @@ namespace ColdChainX.Application.DTOs.Incident
         public string RecommendationReason { get; set; } = null!;
         public List<RescueCandidateResponse> Vehicles { get; set; } = new();
         public List<InternalColdStorageOption> InternalColdStorages { get; set; } = new();
-        public bool RequiresExternalStorageSearch { get; set; }
+        public InternalColdStorageOption? RouteDestinationWarehouse { get; set; }
+        public bool RequiresExternalVehicleRental { get; set; }
         public bool RequiresManualEscalation { get; set; }
+    }
+
+    public sealed class DispatchExternalReeferRequest
+    {
+        public string RentalProvider { get; set; } = null!;
+        public string VehiclePlate { get; set; } = null!;
+        public string DriverName { get; set; } = null!;
+        public string? DriverPhone { get; set; }
+        public Guid DestinationWarehouseId { get; set; }
+        public decimal AgreedTemperature { get; set; }
+        public DateTime? ExpectedWarehouseArrivalAt { get; set; }
+        public string SealNumber { get; set; } = null!;
+        public List<Guid> LpnIds { get; set; } = new();
+        public List<string> EvidenceUrls { get; set; } = new();
+        public string Note { get; set; } = null!;
+    }
+
+    public sealed class InboundRouteWarehouseRequest
+    {
+        public string SealNumber { get; set; } = null!;
+    }
+
+    public sealed class ExternalReeferPlanRecord
+    {
+        public string RentalProvider { get; set; } = null!;
+        public string VehiclePlate { get; set; } = null!;
+        public string DriverName { get; set; } = null!;
+        public string? DriverPhone { get; set; }
+        public Guid DestinationWarehouseId { get; set; }
+        public string DestinationWarehouseName { get; set; } = null!;
+        public string? DestinationWarehouseAddress { get; set; }
+        public string? RouteDestinationCity { get; set; }
+        public decimal AgreedTemperature { get; set; }
+        public Guid OriginalTripId { get; set; }
+        public DateTime DispatchedAt { get; set; }
+        public DateTime? ExpectedWarehouseArrivalAt { get; set; }
+        public DateTime? ArrivedAt { get; set; }
+        public string SealNumber { get; set; } = null!;
+        public List<Guid> LpnIds { get; set; } = new();
+        public List<string> DispatchEvidenceUrls { get; set; } = new();
+        public List<Guid> InboundReceiptIds { get; set; } = new();
+        public Guid RecordedBy { get; set; }
+        public Guid? ArrivalConfirmedBy { get; set; }
+        public Guid? RedispatchTripId { get; set; }
+        public DateTime? RedispatchPlannedAt { get; set; }
+        public string? DispatchNote { get; set; }
+        public string? ArrivalNote { get; set; }
+    }
+
+    public sealed class ExternalReeferWorkflowResult
+    {
+        public Guid IncidentId { get; set; }
+        public Guid TripId { get; set; }
+        public string IncidentStatus { get; set; } = null!;
+        public string TripStatus { get; set; } = null!;
+        public Guid DestinationWarehouseId { get; set; }
+        public string DestinationWarehouseName { get; set; } = null!;
+        public string ExternalVehiclePlate { get; set; } = null!;
+        public int LpnCount { get; set; }
+        public string Message { get; set; } = null!;
     }
 
     public sealed class RecordRescueFallbackRequest
     {
         public IncidentRescuePlanType PlanType { get; set; }
         public Guid? WarehouseId { get; set; }
-        public string? ExternalStorageName { get; set; }
-        public string? ExternalStorageAddress { get; set; }
-        public decimal? StorageTemperature { get; set; }
-        public string? ConfirmedByName { get; set; }
         public string? RedispatchPlan { get; set; }
         public string Note { get; set; } = null!;
     }

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using ColdChainX.Application.DTOs.Dispatch;
+using ColdChainX.Application.DTOs.Incident;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Application.Services;
 using ColdChainX.Core.Entities;
@@ -821,6 +822,32 @@ public class DispatchService : IDispatchService
         if (missingLpns.Any())
             throw new InvalidOperationException($"Không tìm thấy các LPN sau: {string.Join(", ", missingLpns)}");
 
+        IncidentReport? relayIncident = null;
+        ExternalReeferPlanRecord? relayPlan = null;
+        if (request.IncidentId.HasValue)
+        {
+            relayIncident = await _context.IncidentReports
+                .FirstOrDefaultAsync(i => i.IncidentId == request.IncidentId.Value)
+                ?? throw new InvalidOperationException("Không tìm thấy Incident cần ghép chuyến lại.");
+            if (relayIncident.Status != "READY_FOR_REDISPATCH")
+                throw new InvalidOperationException("Incident chỉ được ghép chuyến lại sau khi Warehouse Worker inbound bằng seal.");
+
+            try
+            {
+                relayPlan = JsonSerializer.Deserialize<ExternalReeferPlanRecord>(relayIncident.RescuePlanDetails ?? string.Empty);
+            }
+            catch (JsonException)
+            {
+                relayPlan = null;
+            }
+            if (relayPlan == null || relayPlan.ArrivedAt == null)
+                throw new InvalidOperationException("Incident thiếu dữ liệu inbound tại kho tuyến.");
+            if (!request.LpnIds.Distinct().ToHashSet().SetEquals(relayPlan.LpnIds.Distinct()))
+                throw new InvalidOperationException("Phải ghép lại đúng toàn bộ LPN đã inbound từ xe lạnh thuê ngoài.");
+            if (lpns.Any(l => l.WarehouseId != relayPlan.DestinationWarehouseId))
+                throw new InvalidOperationException("Tất cả LPN phải nằm tại đúng kho đích của tuyến.");
+        }
+
         var selectedSetValidation = _cargoCompatibilityService.ValidateSelectedSet(
             lpns,
             selectedScheduleId,
@@ -1048,6 +1075,20 @@ public class DispatchService : IDispatchService
             CreatedAt           = DateTime.UtcNow,
         };
         _context.MasterTrips.Add(masterTrip);
+
+        if (relayIncident != null && relayPlan != null)
+        {
+            var redispatchPlannedAt = DateTime.UtcNow;
+            relayPlan.RedispatchTripId = masterTrip.TripId;
+            relayPlan.RedispatchPlannedAt = redispatchPlannedAt;
+            relayIncident.TripId = masterTrip.TripId;
+            relayIncident.ReplacementVehicleId = vehicle.VehicleId;
+            relayIncident.Status = "REDISPATCH_PLANNED";
+            relayIncident.HandledBy = request.DispatcherId;
+            relayIncident.HandledAt = redispatchPlannedAt;
+            relayIncident.RedispatchPlan = $"Đã ghép chuyến {masterTrip.TripId} từ kho {relayPlan.DestinationWarehouseName}; chờ picking, loading và seal-and-dispatch.";
+            relayIncident.RescuePlanDetails = JsonSerializer.Serialize(relayPlan);
+        }
 
         var stopGapHours = (request.PlannedEndTime - request.PlannedStartTime).TotalHours
                            / Math.Max(routeResult.StopSequence.Count, 1);
@@ -1682,6 +1723,20 @@ public class DispatchService : IDispatchService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Waybill generation failed for trip {TripId}. Trip remains SEALED.", tripId);
+        }
+
+        if (trip.Status == "IN_TRANSIT")
+        {
+            var linkedIncidents = await _context.IncidentReports
+                .Where(i => i.TripId == tripId && i.Status == "REDISPATCH_PLANNED")
+                .ToListAsync();
+            foreach (var incident in linkedIncidents)
+            {
+                incident.Status = "REDISPATCHED_TO_CUSTOMER";
+                incident.RescueDispatchedAt = now;
+                incident.HandledAt = now;
+                incident.RedispatchPlan = $"Chuyến {tripId} đã kẹp seal {sealCode} và xuất phát giao khách.";
+            }
         }
 
         await _context.SaveChangesAsync();

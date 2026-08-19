@@ -145,6 +145,34 @@ namespace ColdChainX.API.Controllers
             return result.Success ? Ok(result) : StatusCode(result.StatusCode, result);
         }
 
+        [HttpPost("{id:guid}/external-reefer-dispatch")]
+        [Authorize(Roles = "Admin,Dispatcher")]
+        public async Task<IActionResult> DispatchExternalReefer(
+            [FromRoute] Guid id,
+            [FromBody] DispatchExternalReeferRequest request)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var userId))
+                return Unauthorized(ApiResponse<object>.Failure("User ID claim is missing or invalid in the token."));
+
+            var result = await _rescueService.DispatchExternalReeferAsync(id, request, userId);
+            return result.Success ? Ok(result) : StatusCode(result.StatusCode, result);
+        }
+
+        [HttpPost("{id:guid}/inbound-route-warehouse")]
+        [Authorize(Roles = "Admin,Dispatcher,WarehouseWorker")]
+        public async Task<IActionResult> InboundRouteWarehouse(
+            [FromRoute] Guid id,
+            [FromBody] InboundRouteWarehouseRequest request)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var userId))
+                return Unauthorized(ApiResponse<object>.Failure("User ID claim is missing or invalid in the token."));
+
+            var result = await _rescueService.InboundRouteWarehouseAsync(id, request, userId);
+            return result.Success ? Ok(result) : StatusCode(result.StatusCode, result);
+        }
+
         [HttpPost("{id:guid}/dispatch-rescue")]
         [Authorize(Roles = "Admin,Dispatcher")]
         public async Task<IActionResult> DispatchRescue([FromRoute] Guid id, [FromBody] DispatchRescueRequest request)

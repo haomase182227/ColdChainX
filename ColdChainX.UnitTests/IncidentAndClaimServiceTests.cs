@@ -399,10 +399,12 @@ namespace ColdChainX.UnitTests
             Assert.Equal("REPORTED", reportResult.Data.Status);
             Assert.Equal(1_500_000m, reportResult.Data.DriverPaidAmount);
             Assert.Equal("PENDING_APPROVAL", reportResult.Data.ExpenseStatus);
+            Assert.True(reportResult.Data.RequiresRescue);
+            Assert.Equal("CRITICAL", reportResult.Data.RiskLevel);
             Assert.Empty(reportResult.Data.Evidences);
 
             var persistedIncident = await _db.IncidentReports.FindAsync(incidentId);
-            persistedIncident!.Status = "CONTINUED";
+            persistedIncident!.Status = "REDISPATCHED_TO_CUSTOMER";
             await _db.SaveChangesAsync();
 
             var approveResult = await _incidentService.ApproveExpenseAsync(
