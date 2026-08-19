@@ -76,11 +76,18 @@ namespace ColdChainX.Infrastructure.Services
             }
             query = query.OrderByDescending(o => o.CreatedAt);
             var totalRecords = await query.CountAsync();
-            var orders = await query
+            var pageOrders = await query
                 .Skip(NormalizeSkip(pageNumber, pageSize))
                 .Take(NormalizePageSize(pageSize))
-                .Select(o => ToOrderResponse(o))
                 .ToListAsync();
+            var contactsByEmail = await LoadCustomerContactsAsync(pageOrders);
+            var orders = pageOrders
+                .Select(order =>
+                {
+                    var contact = FindCustomerContact(contactsByEmail, order.Customer?.Email);
+                    return ToOrderResponse(order, contact?.FullName, contact?.Phone);
+                })
+                .ToList();
 
             return ApiResponse<PagedResult<OrderResponse>>.SuccessResponse(
                 PagedResult<OrderResponse>.Create(orders, totalRecords, pageNumber, NormalizePageSize(pageSize)),
@@ -164,7 +171,12 @@ namespace ColdChainX.Infrastructure.Services
             if (order == null)
                 return ApiResponse<OrderResponse>.Failure("Order not found");
 
-            return ApiResponse<OrderResponse>.SuccessResponse(ToOrderResponse(order), "Order retrieved successfully");
+            var contactsByEmail = await LoadCustomerContactsAsync([order]);
+            var contact = FindCustomerContact(contactsByEmail, order.Customer?.Email);
+
+            return ApiResponse<OrderResponse>.SuccessResponse(
+                ToOrderResponse(order, contact?.FullName, contact?.Phone),
+                "Order retrieved successfully");
         }
 
         public async Task<ApiResponse<PagedResult<CustomerOrderSummaryResponse>>> GetOrdersByCustomerAsync(Guid customerId, int pageNumber, int pageSize, string? status = null)
@@ -1172,15 +1184,53 @@ namespace ColdChainX.Infrastructure.Services
                 .Include(o => o.Quotations);
         }
 
-        private OrderResponse ToOrderResponse(TransportOrder order)
+        private async Task<IReadOnlyDictionary<string, CustomerContact>> LoadCustomerContactsAsync(
+            IEnumerable<TransportOrder> orders)
         {
-            var customerEmail = order.Customer?.Email;
-            var customerUser = !string.IsNullOrWhiteSpace(customerEmail)
-                ? _db.Users
-                    .Where(u => u.Email == customerEmail)
-                    .Select(u => new { u.FullName, u.Phone })
-                    .FirstOrDefault()
-                : null;
+            var customerEmails = orders
+                .Select(order => order.Customer?.Email)
+                .Where(email => !string.IsNullOrWhiteSpace(email))
+                .Select(email => email!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (customerEmails.Count == 0)
+                return new Dictionary<string, CustomerContact>(StringComparer.OrdinalIgnoreCase);
+
+            var users = await _db.Users
+                .AsNoTracking()
+                .Where(user => user.Email != null && customerEmails.Contains(user.Email))
+                .Select(user => new
+                {
+                    Email = user.Email!,
+                    user.FullName,
+                    user.Phone
+                })
+                .ToListAsync();
+
+            return users
+                .GroupBy(user => user.Email, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    group => group.Key,
+                    group => new CustomerContact(group.First().FullName, group.First().Phone),
+                    StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static CustomerContact? FindCustomerContact(
+            IReadOnlyDictionary<string, CustomerContact> contactsByEmail,
+            string? customerEmail)
+        {
+            return !string.IsNullOrWhiteSpace(customerEmail)
+                && contactsByEmail.TryGetValue(customerEmail, out var contact)
+                    ? contact
+                    : null;
+        }
+
+        private static OrderResponse ToOrderResponse(
+            TransportOrder order,
+            string? customerContactName = null,
+            string? customerPhone = null)
+        {
 
             return new OrderResponse
             {
@@ -1243,8 +1293,8 @@ namespace ColdChainX.Infrastructure.Services
                     .ToList(),
                 CustomerId = order.CustomerId,
                 CustomerName = order.Customer?.CompanyName,
-                CustomerContactName = customerUser?.FullName,
-                CustomerPhone = customerUser?.Phone,
+                CustomerContactName = customerContactName,
+                CustomerPhone = customerPhone,
                 Quotations = order.Quotations
                     .OrderByDescending(q => q.CreatedAt)
                     .Select(q => new OrderQuotationResponse
@@ -1262,6 +1312,8 @@ namespace ColdChainX.Infrastructure.Services
                     .ToList()
             };
         }
+
+        private sealed record CustomerContact(string FullName, string? Phone);
 
         private sealed record RoutePricing(
             decimal BaseFreight,
