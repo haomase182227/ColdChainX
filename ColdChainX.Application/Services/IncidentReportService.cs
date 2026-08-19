@@ -4,9 +4,11 @@ using ColdChainX.Application.DTOs.Common;
 using ColdChainX.Application.DTOs.Incident;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
+using ColdChainX.Core.Enums;
 using ColdChainX.Shared.Responses;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace ColdChainX.Application.Services;
@@ -17,8 +19,12 @@ public class IncidentReportService : IIncidentReportService
     private const string ExpenseApprovedTemplateId = "INCIDENT_EXPENSE_APPROVED";
     private const string ReimbursedTemplateId = "INCIDENT_REIMBURSED";
     private const string ResolvedTemplateId = "INCIDENT_RESOLVED";
+    private const string SlaEscalatedTemplateId = "INCIDENT_SLA_ESCALATED";
     private const int MaxEvidenceFiles = 5;
     private const long MaxEvidenceFileSize = 10 * 1024 * 1024;
+    private const decimal DefaultTemperatureTolerance = 2m;
+    private const int DefaultReportedSlaMinutes = 15;
+    private const int TrustedReadingMaxAgeMinutes = 30;
 
     private static readonly string[] IncidentRecipientRoles = { "ADMIN", "DISPATCHER" };
     private static readonly string[] AllowedEvidenceTypes =
@@ -35,6 +41,7 @@ public class IncidentReportService : IIncidentReportService
     private readonly IIncidentRealtimeNotifier? _realtimeNotifier;
     private readonly INotificationService? _notificationService;
     private readonly IRealtimeTelemetryService? _realtimeTelemetryService;
+    private readonly int _reportedSlaMinutes;
 
     public IncidentReportService(
         IApplicationDbContext db,
@@ -43,7 +50,8 @@ public class IncidentReportService : IIncidentReportService
         ILogger<IncidentReportService> logger,
         IIncidentRealtimeNotifier? realtimeNotifier = null,
         INotificationService? notificationService = null,
-        IRealtimeTelemetryService? realtimeTelemetryService = null)
+        IRealtimeTelemetryService? realtimeTelemetryService = null,
+        IConfiguration? configuration = null)
     {
         _db = db;
         _pdfGeneratorService = pdfGeneratorService;
@@ -52,6 +60,10 @@ public class IncidentReportService : IIncidentReportService
         _realtimeNotifier = realtimeNotifier;
         _notificationService = notificationService;
         _realtimeTelemetryService = realtimeTelemetryService;
+        _reportedSlaMinutes = Math.Max(
+            1,
+            configuration?.GetValue<int?>("IncidentWorkflow:ReportedSlaMinutes")
+            ?? DefaultReportedSlaMinutes);
     }
 
     public async Task<ApiResponse<IncidentResponse>> ReportIncidentAsync(
@@ -62,8 +74,8 @@ public class IncidentReportService : IIncidentReportService
             return ApiResponse<IncidentResponse>.Failure("Request is null.");
         if (!request.IncidentType.HasValue)
             return ApiResponse<IncidentResponse>.Failure("Incident type is required.");
-        if (!request.Severity.HasValue)
-            return ApiResponse<IncidentResponse>.Failure("Severity is required.");
+        if (!request.Severity.HasValue && !request.RiskLevel.HasValue)
+            return ApiResponse<IncidentResponse>.Failure("Severity or RiskLevel is required.");
         if (string.IsNullOrWhiteSpace(request.Description))
             return ApiResponse<IncidentResponse>.Failure("Description is required.");
         if (request.DriverPaidAmount < 0)
@@ -91,11 +103,18 @@ public class IncidentReportService : IIncidentReportService
             {
                 trip = await _db.MasterTrips
                     .Include(t => t.Vehicle)
-                        .ThenInclude(v => v.IotDevices)
+                        .ThenInclude(v => v!.IotDevices)
                     .FirstOrDefaultAsync(t => t.TripId == request.TripId.Value);
                 if (trip == null)
                     return ApiResponse<IncidentResponse>.Failure("Trip not found.");
             }
+
+            var previousIncident = request.TripId.HasValue
+                ? await _db.IncidentReports
+                    .Where(i => i.TripId == request.TripId.Value)
+                    .OrderByDescending(i => i.ReportedAt)
+                    .FirstOrDefaultAsync()
+                : null;
 
             var isDriver = string.Equals(
                                reporter.Role?.RoleName,
@@ -132,21 +151,32 @@ public class IncidentReportService : IIncidentReportService
             }
 
             var now = DbNow();
+            var riskLevel = request.RiskLevel ?? MapLegacySeverityToRisk(request.Severity);
+            if (previousIncident?.ReplacementVehicleId == trip?.VehicleId
+                && (riskLevel == IncidentRiskLevel.WARNING || request.RequiresRescue))
+            {
+                riskLevel = IncidentRiskLevel.CRITICAL;
+            }
             var incident = new IncidentReport
             {
                 IncidentId = Guid.NewGuid(),
                 TripId = request.TripId,
                 IncidentType = request.IncidentType.Value.ToString(),
-                Severity = request.Severity.Value.ToString(),
+                Severity = (request.Severity ?? MapRiskToLegacySeverity(riskLevel)).ToString(),
+                RiskLevel = riskLevel.ToString(),
                 Description = request.Description.Trim(),
                 CurrentLatitude = resolvedLocation.Latitude,
                 CurrentLongitude = resolvedLocation.Longitude,
                 DriverPaidAmount = request.DriverPaidAmount,
                 RequiresRescue = request.RequiresRescue,
+                TemperatureTolerance = DefaultTemperatureTolerance,
+                PreviousIncidentId = previousIncident?.IncidentId,
+                SlaDueAt = now.AddMinutes(_reportedSlaMinutes),
                 ExpenseStatus = request.DriverPaidAmount > 0 ? "PENDING_APPROVAL" : "NOT_REQUIRED",
                 Status = "REPORTED",
                 ReportedBy = userId,
-                ReportedAt = now
+                ReportedAt = now,
+                BrokenVehicleId = trip?.VehicleId
             };
 
             foreach (var uploaded in uploadedEvidences)
@@ -173,7 +203,7 @@ public class IncidentReportService : IIncidentReportService
                 var templateId = await EnsureNotificationTemplateAsync(
                     ReportedTemplateId,
                     "Sự cố mới trên chuyến {{trip_id}}",
-                    "Tài xế {{reporter_name}} vừa báo sự cố {{incident_type}} mức {{severity}}. Yêu cầu cứu hộ: {{requires_rescue}}.");
+                    "{{reporter_name}} vừa báo sự cố {{incident_type}} mức rủi ro {{risk_level}}. Yêu cầu cứu hàng: {{requires_rescue}}.");
 
                 var parameters = JsonSerializer.Serialize(new Dictionary<string, string>
                 {
@@ -182,6 +212,7 @@ public class IncidentReportService : IIncidentReportService
                     ["reporter_name"] = reporter.FullName,
                     ["incident_type"] = incident.IncidentType,
                     ["severity"] = incident.Severity,
+                    ["risk_level"] = incident.RiskLevel ?? incident.Severity,
                     ["requires_rescue"] = incident.RequiresRescue ? "Có" : "Không"
                 });
 
@@ -226,7 +257,7 @@ public class IncidentReportService : IIncidentReportService
                 var customerTemplateId = await EnsureNotificationTemplateAsync(
                     "INCIDENT_AUTO_ETA",
                     "⚠️ Thông báo sự cố trong quá trình vận chuyển: Chuyến {{trip_code}}",
-                    "Xe vận chuyển chuỗi lạnh gặp sự cố ({{incident_type}}: {{description}}) trên đường đi, lộ trình giao đến bãi của bạn có thể bị gián đoạn hoặc trễ hơn kế hoạch. Cam kết hệ thống bảo quản nhiệt độ 2°C - 8°C vẫn đang hoạt động ổn định!");
+                    "Xe vận chuyển chuỗi lạnh gặp sự cố ({{incident_type}}: {{description}}) trên đường đi; lộ trình giao có thể bị gián đoạn hoặc trễ. Đội điều phối đang xác minh điều kiện nhiệt độ và sẽ cập nhật phương án an toàn.");
 
                 if (customerTemplateId != null)
                 {
@@ -235,7 +266,7 @@ public class IncidentReportService : IIncidentReportService
                         where o.MasterTripId == incident.TripId.Value && o.CustomerId != null
                         join c in _db.Customers on o.CustomerId equals c.CustomerId
                         where c.Email != null && c.Email != ""
-                        join u in _db.Users on c.Email.ToLower() equals u.Email!.ToLower()
+                        join u in _db.Users on c.Email!.ToLower() equals u.Email!.ToLower()
                         select u.UserId
                     ).Distinct().ToListAsync();
 
@@ -308,6 +339,7 @@ public class IncidentReportService : IIncidentReportService
                     incident.TripId,
                     incident.IncidentType,
                     incident.Severity,
+                    incident.RiskLevel,
                     incident.Description,
                     incident.CurrentLatitude,
                     incident.CurrentLongitude,
@@ -357,9 +389,12 @@ public class IncidentReportService : IIncidentReportService
                 return ApiResponse<IncidentResponse>.Failure("Cannot add evidence to a resolved incident.");
 
             var actor = await _db.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.UserId == userId);
+            if (actor == null)
+                return ApiResponse<IncidentResponse>.Failure("Evidence uploader user not found.", 404);
+
             var isPrivileged = actor?.Role?.RoleName is not null &&
                                (actor.Role.RoleName.Equals("Admin", StringComparison.OrdinalIgnoreCase) ||
-                                actor.Role.RoleName.Equals("WarehouseWorker", StringComparison.OrdinalIgnoreCase));
+                                actor.Role.RoleName.Equals("Dispatcher", StringComparison.OrdinalIgnoreCase));
             if (incident.ReportedBy != userId && !isPrivileged)
                 return ApiResponse<IncidentResponse>.Failure("You cannot add evidence to this incident.", 403);
 
@@ -385,6 +420,203 @@ public class IncidentReportService : IIncidentReportService
         {
             _logger.LogError(ex, "Failed to upload incident evidence. IncidentId: {IncidentId}", incidentId);
             return ApiResponse<IncidentResponse>.Failure($"Failed to upload incident evidence: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponse<IncidentRiskAssessmentResponse>> AssessRiskAsync(
+        Guid incidentId,
+        AssessIncidentRiskRequest request,
+        Guid userId)
+    {
+        if (request == null)
+            return ApiResponse<IncidentRiskAssessmentResponse>.Failure("Request is null.");
+        if (!Enum.IsDefined(request.RiskLevel))
+            return ApiResponse<IncidentRiskAssessmentResponse>.Failure("RiskLevel must be LOW, WARNING or CRITICAL.");
+        if (!Enum.IsDefined(request.TemperatureSource))
+            return ApiResponse<IncidentRiskAssessmentResponse>.Failure("TemperatureSource is invalid.");
+        if (request.RiskLevel == IncidentRiskLevel.LOW && !request.CanSafelyRepairOnSite.HasValue)
+        {
+            return ApiResponse<IncidentRiskAssessmentResponse>.Failure(
+                "CanSafelyRepairOnSite is required for LOW risk incidents.");
+        }
+
+        try
+        {
+            var incident = await _db.IncidentReports
+                .Include(i => i.Trip)
+                .Include(i => i.IncidentEvidences)
+                .FirstOrDefaultAsync(i => i.IncidentId == incidentId);
+            if (incident == null)
+                return ApiResponse<IncidentRiskAssessmentResponse>.Failure("Incident not found.", 404);
+            if (incident.Status == "RESOLVED")
+                return ApiResponse<IncidentRiskAssessmentResponse>.Failure("Incident is already resolved.");
+            if (incident.Trip == null)
+                return ApiResponse<IncidentRiskAssessmentResponse>.Failure(
+                    "Risk assessment requires an incident linked to a MasterTrip.");
+            if (!await _db.Users.AnyAsync(u => u.UserId == userId))
+                return ApiResponse<IncidentRiskAssessmentResponse>.Failure("Assessor user not found.", 404);
+
+            var now = DbNow();
+            var recentTelemetry = await _db.TelemetryLogs
+                .AsNoTracking()
+                .Where(t => t.TripId == incident.TripId)
+                .OrderByDescending(t => t.Timestamp)
+                .Take(12)
+                .ToListAsync();
+            recentTelemetry.Reverse();
+
+            decimal? measuredTemperature;
+            DateTime? measuredAt;
+            if (request.TemperatureSource == TemperatureReadingSource.IOT)
+            {
+                var latestTelemetry = recentTelemetry.LastOrDefault();
+                measuredTemperature = latestTelemetry?.Temperature;
+                measuredAt = latestTelemetry?.Timestamp;
+            }
+            else
+            {
+                measuredTemperature = request.MeasuredTemperature;
+                measuredAt = request.MeasuredAt ?? (request.MeasuredTemperature.HasValue ? now : null);
+            }
+
+            var hasPhotoEvidence = incident.IncidentEvidences.Any(e =>
+                e.EvidenceType.Contains("PHOTO", StringComparison.OrdinalIgnoreCase)
+                || e.EvidenceType.Contains("IMAGE", StringComparison.OrdinalIgnoreCase));
+            var readingAge = measuredAt.HasValue ? now - measuredAt.Value : TimeSpan.MaxValue;
+            var hasTrustedSource = request.TemperatureSource != TemperatureReadingSource.NONE
+                && measuredTemperature.HasValue
+                && readingAge >= TimeSpan.Zero
+                && readingAge <= TimeSpan.FromMinutes(TrustedReadingMaxAgeMinutes)
+                && (request.TemperatureSource != TemperatureReadingSource.TIMESTAMPED_PHOTO || hasPhotoEvidence);
+
+            var target = incident.Trip.TargetTemperature;
+            var tolerance = incident.TemperatureTolerance > 0
+                ? incident.TemperatureTolerance
+                : DefaultTemperatureTolerance;
+            var currentThresholdBreached = measuredTemperature.HasValue
+                && (measuredTemperature.Value < target - tolerance
+                    || measuredTemperature.Value > target + tolerance);
+            var thresholdBreached = incident.TemperatureThresholdBreached || currentThresholdBreached;
+
+            var effectiveRisk = request.RiskLevel;
+            var reasons = new List<string>();
+            if (request.RiskLevel == IncidentRiskLevel.WARNING && !hasTrustedSource)
+            {
+                effectiveRisk = IncidentRiskLevel.CRITICAL;
+                reasons.Add("No recent trusted temperature reading is available.");
+            }
+            if (!request.TemperatureStable && request.RiskLevel != IncidentRiskLevel.CRITICAL)
+            {
+                effectiveRisk = IncidentRiskLevel.CRITICAL;
+                reasons.Add("Temperature is not confirmed stable.");
+            }
+            if (currentThresholdBreached)
+            {
+                effectiveRisk = IncidentRiskLevel.CRITICAL;
+                reasons.Add("The measured temperature is outside the MasterTrip target tolerance.");
+            }
+            else if (incident.TemperatureThresholdBreached)
+            {
+                effectiveRisk = IncidentRiskLevel.CRITICAL;
+                reasons.Add("A temperature threshold breach was recorded earlier in this incident.");
+            }
+            if (incident.PreviousIncidentId.HasValue && effectiveRisk != IncidentRiskLevel.LOW)
+            {
+                effectiveRisk = IncidentRiskLevel.CRITICAL;
+                reasons.Add("This is a repeated incident on the running replacement trip.");
+            }
+
+            var (remainingSafeMinutes, safeTimeCalculation) = CalculateRemainingSafeTime(
+                target,
+                tolerance,
+                measuredTemperature,
+                measuredAt,
+                recentTelemetry,
+                thresholdBreached);
+
+            incident.RiskLevel = effectiveRisk.ToString();
+            incident.TemperatureSource = request.TemperatureSource.ToString();
+            incident.LatestTemperature = measuredTemperature;
+            incident.TemperatureMeasuredAt = measuredAt;
+            incident.TemperatureTolerance = tolerance;
+            incident.TemperatureThresholdBreached = thresholdBreached;
+            incident.RemainingSafeTimeMinutes = remainingSafeMinutes;
+            incident.SafeTimeCalculation = safeTimeCalculation;
+            incident.HandledBy = userId;
+            incident.HandledAt = now;
+            if (!string.IsNullOrWhiteSpace(request.Note))
+                incident.HandlingNote = request.Note.Trim();
+
+            if (effectiveRisk == IncidentRiskLevel.CRITICAL)
+            {
+                incident.RequiresRescue = true;
+                incident.DirectDeliveryLocked = thresholdBreached;
+                if (request.ContainmentConfirmed)
+                    incident.ContainmentConfirmedAt = now;
+
+                incident.Status = request.ContainmentConfirmed
+                    ? "RESCUE_PLANNING"
+                    : "CONTAINMENT_REQUIRED";
+                if (!request.ContainmentConfirmed)
+                    reasons.Add("Cold containment must be confirmed before rescue handling starts.");
+                else if (thresholdBreached)
+                    reasons.Add("Temperature threshold was breached; direct delivery stays locked while rescue planning starts.");
+            }
+            else if (effectiveRisk == IncidentRiskLevel.WARNING)
+            {
+                incident.RequiresRescue = false;
+                incident.DirectDeliveryLocked = false;
+                incident.Status = "MONITORING";
+                reasons.Add("A recent trusted reading confirms stable temperature; manual monitoring may continue.");
+            }
+            else
+            {
+                incident.RequiresRescue = request.CanSafelyRepairOnSite == false;
+                incident.DirectDeliveryLocked = false;
+                incident.Status = incident.RequiresRescue ? "RESCUE_PLANNING" : "TRIAGED";
+                reasons.Add(incident.RequiresRescue
+                    ? "The issue cannot be repaired safely on site; a cargo rescue plan is required."
+                    : "Temperature is stable and the issue can be repaired safely on site.");
+            }
+
+            await _db.SaveChangesAsync();
+
+            var response = new IncidentRiskAssessmentResponse
+            {
+                IncidentId = incident.IncidentId,
+                RequestedRiskLevel = request.RiskLevel.ToString(),
+                EffectiveRiskLevel = effectiveRisk.ToString(),
+                IncidentStatus = incident.Status!,
+                EscalatedToCritical = request.RiskLevel != IncidentRiskLevel.CRITICAL
+                    && effectiveRisk == IncidentRiskLevel.CRITICAL,
+                DecisionReason = string.Join(" ", reasons.Distinct()),
+                TargetTemperature = target,
+                TemperatureTolerance = tolerance,
+                LatestTemperature = measuredTemperature,
+                TemperatureMeasuredAt = measuredAt,
+                TemperatureSource = request.TemperatureSource.ToString(),
+                HasTrustedTemperatureSource = hasTrustedSource,
+                TemperatureThresholdBreached = thresholdBreached,
+                DirectDeliveryLocked = incident.DirectDeliveryLocked,
+                RequiresRescue = incident.RequiresRescue,
+                RemainingSafeTimeMinutes = remainingSafeMinutes,
+                SafeTimeCalculation = safeTimeCalculation
+            };
+
+            await SafeNotifyGroupsAsync(
+                new[] { "Group_Dispatcher", "Group_Admin" },
+                "IncidentRiskAssessed",
+                response);
+
+            return ApiResponse<IncidentRiskAssessmentResponse>.SuccessResponse(
+                response,
+                "Incident temperature risk assessed successfully.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to assess incident risk. IncidentId: {IncidentId}", incidentId);
+            return ApiResponse<IncidentRiskAssessmentResponse>.Failure(
+                $"Failed to assess incident risk: {ex.Message}");
         }
     }
 
@@ -600,13 +832,15 @@ public class IncidentReportService : IIncidentReportService
 
             if (incident.TripId.HasValue)
             {
-                var requiredOperationalStatus = incident.RequiresRescue
-                    ? "TRANSLOAD_COMPLETED"
-                    : "CONTINUED";
-                if (incident.Status != requiredOperationalStatus)
+                var operationallyReady = incident.RequiresRescue
+                    ? incident.Status is "TRANSLOAD_COMPLETED" or "REDISPATCH_PLANNED"
+                    : incident.Status == "CONTINUED";
+                if (!operationallyReady)
                 {
                     return ApiResponse<bool>.Failure(
-                        $"Incident can only be resolved after operational status {requiredOperationalStatus}.");
+                        incident.RequiresRescue
+                            ? "A rescue incident can only be resolved after transload completion or a clear redispatch plan."
+                            : "Incident can only be resolved after the trip has continued.");
                 }
             }
 
@@ -630,7 +864,12 @@ public class IncidentReportService : IIncidentReportService
                 TripId = incident.TripId?.ToString() ?? "N/A",
                 incident.IncidentType,
                 incident.Severity,
+                RiskLevel = incident.RiskLevel ?? incident.Severity,
                 incident.Description,
+                TargetTemperature = incident.Trip?.TargetTemperature.ToString("0.##", CultureInfo.InvariantCulture) ?? "N/A",
+                LatestTemperature = incident.LatestTemperature?.ToString("0.##", CultureInfo.InvariantCulture) ?? "N/A",
+                TemperatureThresholdBreached = incident.TemperatureThresholdBreached ? "Có" : "Không",
+                RescuePlanType = incident.RescuePlanType ?? "N/A",
                 ResolutionNote = resolutionNote,
                 Location = FormatLocation(incident.CurrentLatitude, incident.CurrentLongitude),
                 DriverPaidAmount = incident.DriverPaidAmount.ToString("N2", viCulture),
@@ -764,6 +1003,76 @@ public class IncidentReportService : IIncidentReportService
             _logger.LogError(ex, "Failed to retrieve paged incidents.");
             return ApiResponse<PagedResult<IncidentResponse>>.Failure($"Failed to retrieve incidents: {ex.Message}");
         }
+    }
+
+    public async Task<int> EscalateOverdueReportedIncidentsAsync(DateTime asOf)
+    {
+        var normalizedAsOf = DateTime.SpecifyKind(asOf, DateTimeKind.Unspecified);
+        var repeatBefore = normalizedAsOf.AddMinutes(-_reportedSlaMinutes);
+        var overdue = await _db.IncidentReports
+            .Where(i => i.Status == "REPORTED"
+                        && i.SlaDueAt.HasValue
+                        && i.SlaDueAt.Value <= normalizedAsOf
+                        && (!i.LastSlaEscalatedAt.HasValue || i.LastSlaEscalatedAt.Value <= repeatBefore))
+            .OrderBy(i => i.SlaDueAt)
+            .ToListAsync();
+        if (overdue.Count == 0)
+            return 0;
+
+        var recipients = await _db.Users
+            .Where(u => u.Role != null && IncidentRecipientRoles.Contains(u.Role.RoleName.ToUpper()))
+            .Select(u => u.UserId)
+            .ToListAsync();
+        var templateId = await EnsureNotificationTemplateAsync(
+            SlaEscalatedTemplateId,
+            "Incident {{incident_id}} is awaiting triage",
+            "Incident {{incident_id}} on trip {{trip_id}} has remained REPORTED beyond its handling SLA.");
+
+        foreach (var incident in overdue)
+        {
+            incident.LastSlaEscalatedAt = normalizedAsOf;
+            if (templateId == null)
+                continue;
+
+            var parameters = JsonSerializer.Serialize(new Dictionary<string, string>
+            {
+                ["incident_id"] = incident.IncidentId.ToString(),
+                ["trip_id"] = incident.TripId?.ToString() ?? "N/A",
+                ["risk_level"] = incident.RiskLevel ?? incident.Severity,
+                ["sla_due_at"] = incident.SlaDueAt?.ToString("O") ?? "N/A"
+            });
+            foreach (var recipient in recipients.Distinct())
+            {
+                _db.Notifications.Add(new Notification
+                {
+                    NotiId = Guid.NewGuid(),
+                    UserId = recipient,
+                    SenderId = incident.ReportedBy,
+                    TemplateId = templateId,
+                    Params = parameters,
+                    IsRead = false,
+                    CreatedAt = normalizedAsOf
+                });
+            }
+        }
+
+        await _db.SaveChangesAsync();
+        foreach (var incident in overdue)
+        {
+            await SafeNotifyGroupsAsync(
+                new[] { "Group_Dispatcher", "Group_Admin" },
+                "IncidentSlaEscalated",
+                new
+                {
+                    incident.IncidentId,
+                    incident.TripId,
+                    incident.RiskLevel,
+                    incident.SlaDueAt,
+                    incident.LastSlaEscalatedAt
+                });
+        }
+
+        return overdue.Count;
     }
 
     private Task<IncidentReport?> LoadIncidentAsync(Guid incidentId)
@@ -937,11 +1246,27 @@ public class IncidentReportService : IIncidentReportService
             TripCode = incident.TripId?.ToString() ?? "N/A",
             IncidentType = incident.IncidentType,
             Severity = incident.Severity,
+            RiskLevel = incident.RiskLevel,
             Description = description,
             CurrentLatitude = incident.CurrentLatitude,
             CurrentLongitude = incident.CurrentLongitude,
             DriverPaidAmount = incident.DriverPaidAmount,
             RequiresRescue = incident.RequiresRescue,
+            TemperatureSource = incident.TemperatureSource,
+            LatestTemperature = incident.LatestTemperature,
+            TemperatureMeasuredAt = incident.TemperatureMeasuredAt,
+            TemperatureTolerance = incident.TemperatureTolerance,
+            TemperatureThresholdBreached = incident.TemperatureThresholdBreached,
+            ContainmentConfirmedAt = incident.ContainmentConfirmedAt,
+            RemainingSafeTimeMinutes = incident.RemainingSafeTimeMinutes,
+            SafeTimeCalculation = incident.SafeTimeCalculation,
+            DirectDeliveryLocked = incident.DirectDeliveryLocked,
+            PreviousIncidentId = incident.PreviousIncidentId,
+            SlaDueAt = incident.SlaDueAt,
+            LastSlaEscalatedAt = incident.LastSlaEscalatedAt,
+            RescuePlanType = incident.RescuePlanType,
+            RescuePlanDetails = incident.RescuePlanDetails,
+            RedispatchPlan = incident.RedispatchPlan,
             ApprovedAmount = incident.ApprovedAmount,
             ReimbursedAmount = incident.ReimbursedAmount,
             ExpenseStatus = incident.ExpenseStatus,
@@ -959,6 +1284,7 @@ public class IncidentReportService : IIncidentReportService
             TransloadConfirmedBy = incident.TransloadConfirmedBy,
             TransloadConfirmedAt = incident.TransloadConfirmedAt,
             TransloadNote = incident.TransloadNote,
+            TransloadDetails = DeserializeTransloadRecord(incident.TransloadDetailsJson),
             ExpenseApprovedBy = incident.ExpenseApprovedBy,
             ExpenseApprovedAt = incident.ExpenseApprovedAt,
             ExpenseApprovalNote = incident.ExpenseApprovalNote,
@@ -975,6 +1301,87 @@ public class IncidentReportService : IIncidentReportService
             }).ToList()
         };
     }
+
+    private static IncidentRiskLevel MapLegacySeverityToRisk(IncidentSeverity? severity)
+        => severity switch
+        {
+            IncidentSeverity.LOW => IncidentRiskLevel.LOW,
+            IncidentSeverity.MEDIUM => IncidentRiskLevel.WARNING,
+            IncidentSeverity.HIGH => IncidentRiskLevel.CRITICAL,
+            IncidentSeverity.CRITICAL => IncidentRiskLevel.CRITICAL,
+            _ => IncidentRiskLevel.WARNING
+        };
+
+    private static IncidentSeverity MapRiskToLegacySeverity(IncidentRiskLevel riskLevel)
+        => riskLevel switch
+        {
+            IncidentRiskLevel.LOW => IncidentSeverity.LOW,
+            IncidentRiskLevel.WARNING => IncidentSeverity.MEDIUM,
+            _ => IncidentSeverity.CRITICAL
+        };
+
+    private static (int? Minutes, string Method) CalculateRemainingSafeTime(
+        decimal targetTemperature,
+        decimal tolerance,
+        decimal? measuredTemperature,
+        DateTime? measuredAt,
+        IReadOnlyList<TelemetryLog> telemetry,
+        bool thresholdBreached)
+    {
+        if (thresholdBreached)
+            return (0, "THRESHOLD_ALREADY_BREACHED");
+        if (!measuredTemperature.HasValue)
+            return (null, "NO_TRUSTED_TEMPERATURE");
+
+        var samples = telemetry
+            .Where(t => t.Timestamp <= (measuredAt ?? DateTime.MaxValue))
+            .OrderBy(t => t.Timestamp)
+            .TakeLast(12)
+            .ToList();
+        if (samples.Count < 2)
+            return (null, "INSUFFICIENT_TREND_DATA");
+
+        var first = samples[0];
+        var last = samples[^1];
+        var elapsedMinutes = (decimal)(last.Timestamp - first.Timestamp).TotalMinutes;
+        if (elapsedMinutes <= 0)
+            return (null, "INSUFFICIENT_TREND_DATA");
+
+        var slope = (last.Temperature - first.Temperature) / elapsedMinutes;
+        var upperBound = targetTemperature + tolerance;
+        var lowerBound = targetTemperature - tolerance;
+        decimal minutesToBoundary;
+        if (slope > 0.001m)
+            minutesToBoundary = (upperBound - measuredTemperature.Value) / slope;
+        else if (slope < -0.001m)
+            minutesToBoundary = (measuredTemperature.Value - lowerBound) / -slope;
+        else
+            return (null, "STABLE_TREND_NO_PREDICTED_BREACH");
+
+        if (minutesToBoundary <= 0)
+            return (0, "LINEAR_TELEMETRY_TREND");
+
+        return ((int)Math.Ceiling(Math.Min(minutesToBoundary, 24m * 60m)), "LINEAR_TELEMETRY_TREND");
+    }
+
+    private static TransloadRecord? DeserializeTransloadRecord(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return null;
+        try
+        {
+            return JsonSerializer.Deserialize<TransloadRecord>(json);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static bool IsValidEvidenceUrl(string url)
+        => !string.IsNullOrWhiteSpace(url)
+           && Uri.TryCreate(url, UriKind.Absolute, out var parsed)
+           && (parsed.Scheme == Uri.UriSchemeHttp || parsed.Scheme == Uri.UriSchemeHttps);
 
     private static string FormatLocation(decimal? latitude, decimal? longitude)
     {

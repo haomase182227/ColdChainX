@@ -10,6 +10,13 @@ namespace ColdChainX.Application.Interfaces
     {
         Task<ApiResponse<List<RescueCandidateResponse>>> GetRescueCandidatesAsync(Guid incidentId);
 
+        Task<ApiResponse<IncidentRescuePlanResponse>> GetRescuePlanAsync(Guid incidentId);
+
+        Task<ApiResponse<RescueFallbackResult>> RecordFallbackAsync(
+            Guid incidentId,
+            RecordRescueFallbackRequest request,
+            Guid dispatcherId);
+
         Task<ApiResponse<IncidentWorkflowResult>> ContinueTripAsync(
             Guid incidentId,
             ContinueTripAfterIncidentRequest request,

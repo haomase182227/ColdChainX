@@ -210,7 +210,16 @@ public sealed class IncidentRescueFlowTests : IDisposable
         _mqtt.PublishSucceeds = true;
         var confirmation = await _service.ConfirmTransloadAsync(
             _incidentId,
-            new ConfirmTransloadRequest { ConfirmationNote = "Đã sang đủ toàn bộ LPN." },
+            new ConfirmTransloadRequest
+            {
+                ConfirmationNote = "Đã sang đủ toàn bộ LPN.",
+                LpnIds = { _lpnId },
+                SealNumber = "SEAL-RESCUE-001",
+                TransferTemperature = -5m,
+                Latitude = 10.7m,
+                Longitude = 106.7m,
+                EvidenceUrls = { "https://evidence.test/transload.jpg" }
+            },
             _dispatcherId);
 
         Assert.True(confirmation.Success, confirmation.Message);
@@ -219,6 +228,147 @@ public sealed class IncidentRescueFlowTests : IDisposable
         Assert.Equal(new[] { "IOT-REPLACEMENT" }, _mqtt.StreamingDeviceCodes);
         Assert.Equal(_tripId, (await _db.Lpns.FindAsync(_lpnId))!.TripId);
         Assert.Equal(_tripId, (await _db.TransportOrders.FindAsync(_orderId))!.MasterTripId);
+        var transloadJson = (await _db.IncidentReports.FindAsync(_incidentId))!.TransloadDetailsJson;
+        var transload = JsonSerializer.Deserialize<TransloadRecord>(transloadJson!);
+        Assert.Equal("SEAL-RESCUE-001", transload!.SealNumber);
+        Assert.Equal(-5m, transload.TransferTemperature);
+        Assert.Equal(new[] { _lpnId }, transload.LpnIds);
+        Assert.Contains(await _db.IncidentEvidences.ToListAsync(), e => e.EvidenceType == "TRANSLOAD_EVIDENCE");
+    }
+
+    [Fact]
+    public async Task DispatchRescue_RejectsVehicleThatCannotArriveWithinRemainingSafeTime()
+    {
+        await SeedRescueTripAsync(replacementOnline: true);
+        var warehouseId = Guid.NewGuid();
+        _db.Warehouses.Add(new Warehouse
+        {
+            WarehouseId = warehouseId,
+            WarehouseCode = "FAR-RESCUE",
+            WarehouseName = "Far Rescue Base",
+            WarehouseType = "HUB",
+            Address = "11.7,107.7",
+            MaxPallets = 100,
+            Status = "ACTIVE"
+        });
+        (await _db.Vehicles.FindAsync(_replacementVehicleId))!.CurrentLocation = warehouseId.ToString();
+        (await _db.IncidentReports.FindAsync(_incidentId))!.RemainingSafeTimeMinutes = 5;
+        await _db.SaveChangesAsync();
+
+        var result = await _service.DispatchRescueAsync(
+            _incidentId,
+            new DispatchRescueRequest { ReplacementVehicleId = _replacementVehicleId },
+            _dispatcherId);
+
+        Assert.False(result.Success);
+        Assert.Contains("vượt thời gian an toàn còn lại", result.Message);
+        Assert.Equal("REPORTED", (await _db.IncidentReports.FindAsync(_incidentId))!.Status);
+    }
+
+    [Fact]
+    public async Task BreachedIncident_AllowsWarehouseRescueDespiteZeroRemainingSafeTime()
+    {
+        await SeedRescueTripAsync(replacementOnline: true);
+        var warehouseId = Guid.NewGuid();
+        _db.Warehouses.Add(new Warehouse
+        {
+            WarehouseId = warehouseId,
+            WarehouseCode = "BREACH-COLD",
+            WarehouseName = "Breach Cold Storage",
+            WarehouseType = "HUB",
+            Address = "10.8,106.8",
+            MaxPallets = 100,
+            CurrentPallets = 0,
+            Status = "ACTIVE",
+            DefaultMinTemp = -20m,
+            DefaultMaxTemp = 10m
+        });
+        (await _db.Vehicles.FindAsync(_replacementVehicleId))!.CurrentLocation = warehouseId.ToString();
+        var incident = (await _db.IncidentReports.FindAsync(_incidentId))!;
+        incident.DirectDeliveryLocked = true;
+        incident.TemperatureThresholdBreached = true;
+        incident.RemainingSafeTimeMinutes = 0;
+        incident.Status = "RESCUE_PLANNING";
+        incident.ContainmentConfirmedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        var plan = await _service.GetRescuePlanAsync(_incidentId);
+
+        Assert.True(plan.Success, plan.Message);
+        Assert.Equal("WAREHOUSE_RESCUE", plan.Data!.RecommendedAction);
+        Assert.True(plan.Data.DirectDeliveryLocked);
+        Assert.Null(Assert.Single(plan.Data.Vehicles).CanArriveWithinSafeTime);
+
+        var directDispatch = await _service.DispatchRescueAsync(
+            _incidentId,
+            new DispatchRescueRequest
+            {
+                ReplacementVehicleId = _replacementVehicleId,
+                PlanType = IncidentRescuePlanType.DIRECT_RESCUE
+            },
+            _dispatcherId);
+
+        Assert.False(directDispatch.Success);
+        Assert.Contains("nhiệt độ đã vượt ngưỡng", directDispatch.Message);
+
+        var warehouseDispatch = await _service.DispatchRescueAsync(
+            _incidentId,
+            new DispatchRescueRequest
+            {
+                ReplacementVehicleId = _replacementVehicleId,
+                PlanType = IncidentRescuePlanType.WAREHOUSE_RESCUE,
+                DestinationWarehouseId = warehouseId
+            },
+            _dispatcherId);
+
+        Assert.True(warehouseDispatch.Success, warehouseDispatch.Message);
+        Assert.Equal("RESCUE_DISPATCHED", (await _db.IncidentReports.FindAsync(_incidentId))!.Status);
+    }
+
+    [Fact]
+    public async Task BreachedIncident_WithoutInternalColdStorage_RecommendsExternalFallback()
+    {
+        await SeedRescueTripAsync(replacementOnline: true);
+        var incident = (await _db.IncidentReports.FindAsync(_incidentId))!;
+        incident.DirectDeliveryLocked = true;
+        incident.TemperatureThresholdBreached = true;
+        incident.RemainingSafeTimeMinutes = 0;
+        incident.Status = "RESCUE_PLANNING";
+        await _db.SaveChangesAsync();
+
+        var result = await _service.GetRescuePlanAsync(_incidentId);
+
+        Assert.True(result.Success, result.Message);
+        Assert.Equal("EXTERNAL_COLD_STORAGE", result.Data!.RecommendedAction);
+        Assert.True(result.Data.RequiresExternalStorageSearch);
+        Assert.True(result.Data.RequiresManualEscalation);
+    }
+
+    [Fact]
+    public async Task ExternalStorageFallback_WithPickupPlan_RemainsOpenAndAwaitsControlledPickup()
+    {
+        await SeedRescueTripAsync(replacementOnline: true);
+
+        var result = await _service.RecordFallbackAsync(
+            _incidentId,
+            new RecordRescueFallbackRequest
+            {
+                PlanType = IncidentRescuePlanType.EXTERNAL_COLD_STORAGE,
+                ExternalStorageName = "Certified temporary cold room",
+                ExternalStorageAddress = "Emergency site",
+                StorageTemperature = -5m,
+                ConfirmedByName = "Site operator",
+                RedispatchPlan = "Dispatcher will collect with internal reefer at 14:00.",
+                Note = "No compatible internal vehicle can arrive in time."
+            },
+            _dispatcherId);
+
+        Assert.True(result.Success, result.Message);
+        Assert.True(result.Data!.IncidentRemainsOpen);
+        Assert.Equal("PICKUP_PLANNED", result.Data.IncidentStatus);
+        Assert.Equal("DELAYED", result.Data.TripStatus);
+        Assert.Equal("EXTERNAL_COLD_STORAGE", result.Data.PlanType);
+        Assert.NotEqual("RESOLVED", (await _db.IncidentReports.FindAsync(_incidentId))!.Status);
     }
 
     [Fact]

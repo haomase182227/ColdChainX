@@ -69,6 +69,9 @@ public class IncidentRescueService : IIncidentRescueService
                 return ApiResponse<List<RescueCandidateResponse>>.Failure("Sự cố này không yêu cầu xe cứu hộ.");
             if (incident.Status == "RESOLVED")
                 return ApiResponse<List<RescueCandidateResponse>>.Failure("Sự cố đã được xử lý xong.");
+            if (incident.Status == "CONTAINMENT_REQUIRED")
+                return ApiResponse<List<RescueCandidateResponse>>.Failure(
+                    "Hãy xác nhận chống thất thoát nhiệt trước khi tìm phương án cứu hàng.");
 
             var trip = await _db.MasterTrips.FirstOrDefaultAsync(t => t.TripId == incident.TripId.Value);
             if (trip == null)
@@ -125,6 +128,14 @@ public class IncidentRescueService : IIncidentRescueService
                 }
 
                 var iotDeviceCount = v.IotDevices.Count(d => !string.IsNullOrWhiteSpace(d.DeviceCode));
+                var estimatedArrivalMinutes = distanceKm.HasValue
+                    ? (int?)Math.Ceiling(distanceKm.Value / FallbackAvgSpeedKmh * 60m)
+                    : null;
+                var canArriveWithinSafeTime = incident.TemperatureThresholdBreached
+                    ? null
+                    : incident.RemainingSafeTimeMinutes.HasValue && estimatedArrivalMinutes.HasValue
+                        ? estimatedArrivalMinutes.Value <= incident.RemainingSafeTimeMinutes.Value
+                        : (bool?)null;
                 return new RescueCandidateResponse
                 {
                     VehicleId = v.VehicleId,
@@ -141,13 +152,41 @@ public class IncidentRescueService : IIncidentRescueService
                     IotDeviceCount = iotDeviceCount,
                     OnlineIotDeviceCount = v.IotDevices.Count(d => !string.IsNullOrWhiteSpace(d.DeviceCode) && d.IsOnline),
                     HasOnlineIot = v.IotDevices.Any(d => !string.IsNullOrWhiteSpace(d.DeviceCode) && d.IsOnline),
+                    EstimatedArrivalMinutes = estimatedArrivalMinutes,
+                    CanArriveWithinSafeTime = canArriveWithinSafeTime,
+                    RemainingSafeTimeMinutes = incident.RemainingSafeTimeMinutes,
+                    RemainingWeightCapacity = v.MaxWeight - totalWeight,
+                    RemainingCbmCapacity = v.MaxCbm - totalCbm,
+                    TransferCount = 1,
+                    RecommendationReason = incident.TemperatureThresholdBreached
+                        ? "Nhiệt đã vượt ngưỡng; xe chỉ phù hợp cho phương án chuyển có kiểm soát về kho lạnh."
+                        : canArriveWithinSafeTime == false
+                            ? "Thời gian tiếp cận dự kiến vượt thời gian an toàn còn lại."
+                            : "Đáp ứng nhiệt độ, tải/CBM và chỉ cần một lần chuyển hàng.",
                     Label = $"{v.TruckPlate} — {v.VehicleType} | tải {v.MaxWeight}kg / {v.MaxCbm}m³ | nhiệt {v.MinTemp}..{v.MaxTemp}°C | IoT {iotDeviceCount}"
                 };
             })
-            .OrderBy(item => item.DistanceKm.HasValue ? 0 : 1)
+            .OrderBy(item => item.CanArriveWithinSafeTime == true ? 0 : item.CanArriveWithinSafeTime == null ? 1 : 2)
+            .ThenBy(item => item.HasOnlineIot ? 0 : 1)
+            .ThenBy(item => item.TransferCount)
+            .ThenBy(item => item.DistanceKm.HasValue ? 0 : 1)
             .ThenBy(item => item.DistanceKm)
-            .ThenBy(item => item.MaxWeight)
+            .ThenByDescending(item => item.RemainingWeightCapacity)
             .ToList();
+
+            if (items.Count > 0)
+            {
+                var recommended = items.FirstOrDefault(i => i.CanArriveWithinSafeTime != false);
+                if (recommended != null)
+                {
+                    recommended.Recommended = true;
+                    recommended.RecommendationReason = incident.TemperatureThresholdBreached
+                        ? "Phù hợp nhiệt độ và tải/CBM để chuyển có kiểm soát về kho lạnh; không giao trực tiếp."
+                        : recommended.CanArriveWithinSafeTime == true
+                            ? "Phù hợp nhiệt độ và tải/CBM, có IoT, đồng thời đến kịp thời gian an toàn còn lại."
+                            : "Phù hợp nhiệt độ và tải/CBM; chưa đủ dữ liệu để so sánh với thời gian an toàn còn lại.";
+                }
+            }
 
             return ApiResponse<List<RescueCandidateResponse>>.SuccessResponse(
                 items,
@@ -159,6 +198,256 @@ public class IncidentRescueService : IIncidentRescueService
         {
             _logger.LogError(ex, "Failed to get rescue candidates. IncidentId: {IncidentId}", incidentId);
             return ApiResponse<List<RescueCandidateResponse>>.Failure($"Failed to get rescue candidates: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponse<IncidentRescuePlanResponse>> GetRescuePlanAsync(Guid incidentId)
+    {
+        var candidatesResult = await GetRescueCandidatesAsync(incidentId);
+        if (!candidatesResult.Success)
+        {
+            return ApiResponse<IncidentRescuePlanResponse>.Failure(
+                candidatesResult.Message,
+                candidatesResult.StatusCode);
+        }
+
+        try
+        {
+            var incident = await _db.IncidentReports.AsNoTracking()
+                .FirstAsync(i => i.IncidentId == incidentId);
+            var trip = await _db.MasterTrips.AsNoTracking()
+                .FirstAsync(t => t.TripId == incident.TripId);
+            var warehouses = await _db.Warehouses.AsNoTracking()
+                .Where(w => (w.Status == null || w.Status == "ACTIVE")
+                            && (!w.DefaultMinTemp.HasValue || w.DefaultMinTemp.Value <= trip.TargetTemperature)
+                            && (!w.DefaultMaxTemp.HasValue || w.DefaultMaxTemp.Value >= trip.TargetTemperature))
+                .ToListAsync();
+            var warehouseCoordinates = await ResolveWarehouseCoordinatesAsync(warehouses);
+
+            var storageOptions = warehouses.Select(warehouse =>
+            {
+                decimal? distanceKm = null;
+                if (incident.CurrentLatitude.HasValue
+                    && incident.CurrentLongitude.HasValue
+                    && warehouseCoordinates.TryGetValue(warehouse.WarehouseId, out var coordinates))
+                {
+                    distanceKm = Math.Round(HaversineKm(
+                        incident.CurrentLatitude.Value,
+                        incident.CurrentLongitude.Value,
+                        coordinates.Latitude,
+                        coordinates.Longitude), 2);
+                }
+
+                var arrivalMinutes = distanceKm.HasValue
+                    ? (int?)Math.Ceiling(distanceKm.Value / FallbackAvgSpeedKmh * 60m)
+                    : null;
+                return new InternalColdStorageOption
+                {
+                    WarehouseId = warehouse.WarehouseId,
+                    WarehouseName = warehouse.WarehouseName,
+                    Address = warehouse.Address,
+                    DistanceKm = distanceKm,
+                    EstimatedArrivalMinutes = arrivalMinutes,
+                    CanArriveWithinSafeTime = incident.TemperatureThresholdBreached
+                        ? null
+                        : incident.RemainingSafeTimeMinutes.HasValue && arrivalMinutes.HasValue
+                            ? arrivalMinutes.Value <= incident.RemainingSafeTimeMinutes.Value
+                            : null,
+                    MinTemperature = warehouse.DefaultMinTemp,
+                    MaxTemperature = warehouse.DefaultMaxTemp,
+                    AvailablePalletPositions = Math.Max(0, warehouse.MaxPallets - (warehouse.CurrentPallets ?? 0))
+                };
+            })
+            .OrderBy(w => w.CanArriveWithinSafeTime == true ? 0 : w.CanArriveWithinSafeTime == null ? 1 : 2)
+            .ThenBy(w => w.DistanceKm.HasValue ? 0 : 1)
+            .ThenBy(w => w.DistanceKm)
+            .ToList();
+
+            var vehicles = candidatesResult.Data ?? new List<RescueCandidateResponse>();
+            var timelyVehicle = vehicles.FirstOrDefault(v => v.CanArriveWithinSafeTime != false);
+            var timelyWarehouse = storageOptions.FirstOrDefault(w => w.CanArriveWithinSafeTime != false);
+            string action;
+            string reason;
+            if (timelyVehicle != null && !incident.DirectDeliveryLocked)
+            {
+                action = IncidentRescuePlanType.DIRECT_RESCUE.ToString();
+                reason = "A temperature-compatible vehicle can carry the remaining load with one controlled transfer.";
+            }
+            else if (timelyVehicle != null && timelyWarehouse != null)
+            {
+                action = IncidentRescuePlanType.WAREHOUSE_RESCUE.ToString();
+                reason = "Direct delivery is locked; use the compatible vehicle to reach controlled internal inspection/storage.";
+            }
+            else if (timelyWarehouse != null)
+            {
+                action = IncidentRescuePlanType.INTERNAL_COLD_STORAGE.ToString();
+                reason = "No suitable vehicle can be proven timely; compatible internal cold storage is the next fallback.";
+            }
+            else
+            {
+                action = IncidentRescuePlanType.EXTERNAL_COLD_STORAGE.ToString();
+                reason = "No timely internal vehicle or cold-storage option is available; Dispatcher must verify external cold storage.";
+            }
+
+            var response = new IncidentRescuePlanResponse
+            {
+                IncidentId = incident.IncidentId,
+                TripId = trip.TripId,
+                TargetTemperature = trip.TargetTemperature,
+                RemainingSafeTimeMinutes = incident.RemainingSafeTimeMinutes,
+                TemperatureThresholdBreached = incident.TemperatureThresholdBreached,
+                DirectDeliveryLocked = incident.DirectDeliveryLocked,
+                RecommendedAction = action,
+                RecommendationReason = reason,
+                Vehicles = vehicles,
+                InternalColdStorages = storageOptions,
+                RequiresExternalStorageSearch = action == IncidentRescuePlanType.EXTERNAL_COLD_STORAGE.ToString(),
+                RequiresManualEscalation = action == IncidentRescuePlanType.EXTERNAL_COLD_STORAGE.ToString()
+            };
+            return ApiResponse<IncidentRescuePlanResponse>.SuccessResponse(
+                response,
+                "Risk-aware rescue options retrieved successfully.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to build rescue plan. IncidentId: {IncidentId}", incidentId);
+            return ApiResponse<IncidentRescuePlanResponse>.Failure($"Failed to build rescue plan: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponse<RescueFallbackResult>> RecordFallbackAsync(
+        Guid incidentId,
+        RecordRescueFallbackRequest request,
+        Guid dispatcherId)
+    {
+        if (request == null || string.IsNullOrWhiteSpace(request.Note))
+            return ApiResponse<RescueFallbackResult>.Failure("A fallback handling note is required.");
+        if (request.PlanType is not (IncidentRescuePlanType.INTERNAL_COLD_STORAGE
+            or IncidentRescuePlanType.EXTERNAL_COLD_STORAGE
+            or IncidentRescuePlanType.MANUAL_ESCALATION))
+        {
+            return ApiResponse<RescueFallbackResult>.Failure(
+                "PlanType must be INTERNAL_COLD_STORAGE, EXTERNAL_COLD_STORAGE or MANUAL_ESCALATION.");
+        }
+
+        try
+        {
+            if (!await _db.Users.AnyAsync(u => u.UserId == dispatcherId))
+                return ApiResponse<RescueFallbackResult>.Failure("Dispatcher user not found.", 404);
+            var incident = await _db.IncidentReports.FirstOrDefaultAsync(i => i.IncidentId == incidentId);
+            if (incident == null)
+                return ApiResponse<RescueFallbackResult>.Failure("Incident not found.", 404);
+            if (!incident.TripId.HasValue)
+                return ApiResponse<RescueFallbackResult>.Failure("Incident is not linked to a trip.");
+            if (!incident.RequiresRescue)
+                return ApiResponse<RescueFallbackResult>.Failure("Incident does not require a rescue fallback.");
+            if (incident.Status == "CONTAINMENT_REQUIRED")
+                return ApiResponse<RescueFallbackResult>.Failure("Confirm cold containment before recording a fallback.");
+            if (incident.Status == "RESOLVED")
+                return ApiResponse<RescueFallbackResult>.Failure("Incident is already resolved.");
+
+            var trip = await _db.MasterTrips.FirstOrDefaultAsync(t => t.TripId == incident.TripId.Value);
+            if (trip == null)
+                return ApiResponse<RescueFallbackResult>.Failure("Incident trip not found.", 404);
+
+            string details;
+            if (request.PlanType == IncidentRescuePlanType.INTERNAL_COLD_STORAGE)
+            {
+                if (!request.WarehouseId.HasValue)
+                    return ApiResponse<RescueFallbackResult>.Failure("WarehouseId is required for internal cold storage.");
+                var warehouse = await _db.Warehouses.AsNoTracking()
+                    .FirstOrDefaultAsync(w => w.WarehouseId == request.WarehouseId.Value);
+                if (warehouse == null || (warehouse.Status != null && warehouse.Status != "ACTIVE"))
+                    return ApiResponse<RescueFallbackResult>.Failure("Internal cold storage is not active or does not exist.");
+                if ((warehouse.DefaultMinTemp.HasValue && warehouse.DefaultMinTemp.Value > trip.TargetTemperature)
+                    || (warehouse.DefaultMaxTemp.HasValue && warehouse.DefaultMaxTemp.Value < trip.TargetTemperature))
+                {
+                    return ApiResponse<RescueFallbackResult>.Failure(
+                        "Internal cold storage cannot maintain the MasterTrip target temperature.");
+                }
+
+                details = JsonSerializer.Serialize(new
+                {
+                    warehouse.WarehouseId,
+                    warehouse.WarehouseName,
+                    warehouse.Address,
+                    trip.TargetTemperature,
+                    Note = request.Note.Trim()
+                });
+            }
+            else if (request.PlanType == IncidentRescuePlanType.EXTERNAL_COLD_STORAGE)
+            {
+                if (string.IsNullOrWhiteSpace(request.ExternalStorageName)
+                    || !request.StorageTemperature.HasValue
+                    || string.IsNullOrWhiteSpace(request.ConfirmedByName))
+                {
+                    return ApiResponse<RescueFallbackResult>.Failure(
+                        "External storage requires name, storage temperature and confirming person.");
+                }
+                if (Math.Abs(request.StorageTemperature.Value - trip.TargetTemperature) > incident.TemperatureTolerance)
+                {
+                    return ApiResponse<RescueFallbackResult>.Failure(
+                        "External storage temperature is outside the MasterTrip target tolerance.");
+                }
+
+                details = JsonSerializer.Serialize(new
+                {
+                    request.ExternalStorageName,
+                    request.ExternalStorageAddress,
+                    request.StorageTemperature,
+                    request.ConfirmedByName,
+                    IsSystemWarehouse = false,
+                    Note = request.Note.Trim()
+                });
+            }
+            else
+            {
+                details = JsonSerializer.Serialize(new
+                {
+                    RequiresDispatcherAdminDecision = true,
+                    Note = request.Note.Trim()
+                });
+            }
+
+            var now = DbNow();
+            incident.RescuePlanType = request.PlanType.ToString();
+            incident.RescuePlanDetails = details;
+            incident.RedispatchPlan = request.RedispatchPlan?.Trim();
+            incident.HandledBy = dispatcherId;
+            incident.HandledAt = now;
+            incident.HandlingNote = request.Note.Trim();
+            incident.Status = request.PlanType switch
+            {
+                IncidentRescuePlanType.MANUAL_ESCALATION => "AWAITING_EMERGENCY_PLAN",
+                IncidentRescuePlanType.EXTERNAL_COLD_STORAGE when !string.IsNullOrWhiteSpace(request.RedispatchPlan)
+                    => "PICKUP_PLANNED",
+                IncidentRescuePlanType.EXTERNAL_COLD_STORAGE => "AT_EXTERNAL_COLD_STORAGE",
+                _ when !string.IsNullOrWhiteSpace(request.RedispatchPlan) => "REDISPATCH_PLANNED",
+                _ => "AT_INTERNAL_COLD_STORAGE"
+            };
+            trip.Status = "DELAYED";
+            await _db.SaveChangesAsync();
+
+            var response = new RescueFallbackResult
+            {
+                IncidentId = incident.IncidentId,
+                TripId = trip.TripId,
+                IncidentStatus = incident.Status,
+                TripStatus = trip.Status ?? "DELAYED",
+                PlanType = incident.RescuePlanType,
+                PlanDetails = details,
+                IncidentRemainsOpen = true
+            };
+            await _hubContext.Clients.Groups("Group_Dispatcher", "Group_Admin")
+                .SendAsync("IncidentFallbackRecorded", response);
+            return ApiResponse<RescueFallbackResult>.SuccessResponse(
+                response,
+                "Cold-chain fallback recorded; the incident remains open.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to record incident fallback. IncidentId: {IncidentId}", incidentId);
+            return ApiResponse<RescueFallbackResult>.Failure($"Failed to record fallback: {ex.Message}");
         }
     }
 
@@ -255,7 +544,7 @@ public class IncidentRescueService : IIncidentRescueService
     public async Task<ApiResponse<IncidentWorkflowResult>> ContinueTripAsync(
         Guid incidentId,
         ContinueTripAfterIncidentRequest request,
-        Guid driverUserId)
+        Guid actorUserId)
     {
         var handlingNote = string.IsNullOrWhiteSpace(request.HandlingNote)
             ? DefaultHandlingNote
@@ -263,15 +552,22 @@ public class IncidentRescueService : IIncidentRescueService
 
         try
         {
+            var actor = await _db.Users
+                .Include(u => u.Role)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.UserId == actorUserId);
+            if (actor == null)
+                return ApiResponse<IncidentWorkflowResult>.Failure("Không tìm thấy người xử lý.", 404);
+
             var driver = await _db.Drivers
                 .AsNoTracking()
-                .FirstOrDefaultAsync(d => d.UserId == driverUserId);
-            if (driver == null)
-            {
+                .FirstOrDefaultAsync(d => d.UserId == actorUserId);
+            var isDispatcher = actor.Role?.RoleName.Equals("Dispatcher", StringComparison.OrdinalIgnoreCase) == true
+                               || actor.Role?.RoleName.Equals("Admin", StringComparison.OrdinalIgnoreCase) == true;
+            if (driver == null && !isDispatcher)
                 return ApiResponse<IncidentWorkflowResult>.Failure(
-                    "Tài khoản hiện tại không có hồ sơ tài xế.",
+                    "Chỉ tài xế được phân công hoặc Dispatcher mới có thể cho chuyến tiếp tục.",
                     403);
-            }
 
             var incident = await _db.IncidentReports
                 .Include(i => i.Trip)
@@ -286,15 +582,25 @@ public class IncidentRescueService : IIncidentRescueService
                 return ApiResponse<IncidentWorkflowResult>.Failure("Sự cố đã được đóng.");
             if (!incident.TripId.HasValue || incident.Trip == null || incident.Trip.Vehicle == null)
                 return ApiResponse<IncidentWorkflowResult>.Failure("Sự cố không gắn với chuyến/xe hợp lệ.");
-
-            var trip = incident.Trip;
-            var isAssignedDriver = await _db.TripDrivers
-                .AnyAsync(td => td.TripId == trip.TripId && td.DriverId == driver.DriverId);
-            if (!isAssignedDriver)
+            if (incident.RiskLevel == IncidentRiskLevel.CRITICAL.ToString()
+                || incident.TemperatureThresholdBreached
+                || incident.DirectDeliveryLocked)
             {
                 return ApiResponse<IncidentWorkflowResult>.Failure(
-                    "Bạn không phải tài xế được phân công cho chuyến này.",
-                    403);
+                    "Không thể tiếp tục trực tiếp khi incident đang CRITICAL hoặc giao trực tiếp đang bị khóa.");
+            }
+
+            var trip = incident.Trip;
+            if (driver != null)
+            {
+                var isAssignedDriver = await _db.TripDrivers
+                    .AnyAsync(td => td.TripId == trip.TripId && td.DriverId == driver.DriverId);
+                if (!isAssignedDriver)
+                {
+                    return ApiResponse<IncidentWorkflowResult>.Failure(
+                        "Bạn không phải tài xế được phân công cho chuyến này.",
+                        403);
+                }
             }
 
             if (incident.Status == "CONTINUED" && trip.Status == "IN_TRANSIT")
@@ -305,7 +611,7 @@ public class IncidentRescueService : IIncidentRescueService
                     "Trip already continued.");
             }
 
-            if (incident.Status != "REPORTED")
+            if (incident.Status is not ("REPORTED" or "TRIAGED" or "MONITORING"))
             {
                 return ApiResponse<IncidentWorkflowResult>.Failure(
                     $"Sự cố đang ở trạng thái {incident.Status ?? "UNKNOWN"} và không thể tiếp tục theo nhánh tự xử lý.");
@@ -316,9 +622,28 @@ public class IncidentRescueService : IIncidentRescueService
                     $"Chuyến đang ở trạng thái {trip.Status ?? "UNKNOWN"} và không thể tiếp tục từ luồng sự cố.");
 
             var now = DbNow();
+            if (request.ExpectedDelayMinutes < 0)
+                return ApiResponse<IncidentWorkflowResult>.Failure("ExpectedDelayMinutes cannot be negative.");
+            if (request.ExpectedDelayMinutes > 0)
+            {
+                var delay = TimeSpan.FromMinutes(request.ExpectedDelayMinutes);
+                var remainingStops = await _db.TripStops
+                    .Where(s => s.TripId == trip.TripId
+                                && s.ActualArrivalTime == null
+                                && s.Status != "COMPLETED"
+                                && s.Status != "CANCELLED")
+                    .ToListAsync();
+                foreach (var stop in remainingStops)
+                {
+                    stop.PlannedArrivalTime += delay;
+                    stop.PlannedDepartureTime += delay;
+                    stop.Status = "DELAYED_INCIDENT";
+                }
+                trip.PlannedEndTime += delay;
+            }
             trip.Status = "IN_TRANSIT";
             incident.Status = "CONTINUED";
-            incident.HandledBy = driverUserId;
+            incident.HandledBy = actorUserId;
             incident.HandledAt = now;
             incident.HandlingNote = handlingNote;
 
@@ -369,6 +694,8 @@ public class IncidentRescueService : IIncidentRescueService
     {
         if (request == null || request.ReplacementVehicleId == Guid.Empty)
             return ApiResponse<IncidentRescueResult>.Failure("Vui lòng chọn xe thay thế (ReplacementVehicleId).");
+        if (request.PlanType is not (IncidentRescuePlanType.DIRECT_RESCUE or IncidentRescuePlanType.WAREHOUSE_RESCUE))
+            return ApiResponse<IncidentRescueResult>.Failure("PlanType must be DIRECT_RESCUE or WAREHOUSE_RESCUE.");
 
         try
         {
@@ -385,6 +712,9 @@ public class IncidentRescueService : IIncidentRescueService
                 return ApiResponse<IncidentRescueResult>.Failure("Sự cố đã được xử lý xong trước đó.");
             if (incident.Status == RescueDispatchedStatus)
                 return ApiResponse<IncidentRescueResult>.Failure("Sự cố này đã có lệnh điều xe cứu hộ.");
+            if (incident.Status == "CONTAINMENT_REQUIRED")
+                return ApiResponse<IncidentRescueResult>.Failure(
+                    "Hãy xác nhận chống thất thoát nhiệt trước khi điều xe cứu hàng.");
             if (!incident.RequiresRescue)
                 return ApiResponse<IncidentRescueResult>.Failure(
                     "Sự cố này không yêu cầu xe cứu hộ.");
@@ -410,6 +740,28 @@ public class IncidentRescueService : IIncidentRescueService
 
             if (request.ReplacementVehicleId == brokenVehicle.VehicleId)
                 return ApiResponse<IncidentRescueResult>.Failure("Xe thay thế phải khác xe đang gặp sự cố.");
+            if (request.PlanType == IncidentRescuePlanType.DIRECT_RESCUE && incident.DirectDeliveryLocked)
+            {
+                return ApiResponse<IncidentRescueResult>.Failure(
+                    "Giao trực tiếp đang bị khóa vì nhiệt độ đã vượt ngưỡng; hãy chọn WAREHOUSE_RESCUE.");
+            }
+
+            Warehouse? destinationWarehouse = null;
+            if (request.PlanType == IncidentRescuePlanType.WAREHOUSE_RESCUE)
+            {
+                if (!request.DestinationWarehouseId.HasValue)
+                    return ApiResponse<IncidentRescueResult>.Failure("DestinationWarehouseId is required for WAREHOUSE_RESCUE.");
+                destinationWarehouse = await _db.Warehouses.AsNoTracking()
+                    .FirstOrDefaultAsync(w => w.WarehouseId == request.DestinationWarehouseId.Value);
+                if (destinationWarehouse == null || (destinationWarehouse.Status != null && destinationWarehouse.Status != "ACTIVE"))
+                    return ApiResponse<IncidentRescueResult>.Failure("Destination cold storage is not active or does not exist.");
+                if ((destinationWarehouse.DefaultMinTemp.HasValue && destinationWarehouse.DefaultMinTemp > trip.TargetTemperature)
+                    || (destinationWarehouse.DefaultMaxTemp.HasValue && destinationWarehouse.DefaultMaxTemp < trip.TargetTemperature))
+                {
+                    return ApiResponse<IncidentRescueResult>.Failure(
+                        "Destination cold storage cannot maintain the MasterTrip target temperature.");
+                }
+            }
 
             var rescueVehicle = await _db.Vehicles
                 .Include(v => v.IotDevices)
@@ -441,6 +793,17 @@ public class IncidentRescueService : IIncidentRescueService
                 return ApiResponse<IncidentRescueResult>.Failure(
                     $"Xe {rescueVehicle.TruckPlate} không đủ tải để sang hàng: cần {totalWeight}kg / {totalCbm}m³, " +
                     $"xe chỉ chở tối đa {rescueVehicle.MaxWeight}kg / {rescueVehicle.MaxCbm}m³.");
+
+            var estimatedArrivalMinutes = await EstimateVehicleArrivalMinutesAsync(rescueVehicle, incident);
+            if (!incident.TemperatureThresholdBreached
+                && incident.RemainingSafeTimeMinutes.HasValue
+                && estimatedArrivalMinutes.HasValue
+                && estimatedArrivalMinutes.Value > incident.RemainingSafeTimeMinutes.Value)
+            {
+                return ApiResponse<IncidentRescueResult>.Failure(
+                    $"Xe {rescueVehicle.TruckPlate} dự kiến tiếp cận sau {estimatedArrivalMinutes} phút, " +
+                    $"vượt thời gian an toàn còn lại {incident.RemainingSafeTimeMinutes} phút. Hãy dùng phương án bảo quản lạnh fallback.");
+            }
 
             var now = DbNow();
 
@@ -477,6 +840,17 @@ public class IncidentRescueService : IIncidentRescueService
             incident.ReplacementVehicleId = rescueVehicle.VehicleId;
             incident.MaintenanceTicketId = ticket.TicketId;
             incident.RescueDispatchedAt = now;
+            incident.RescuePlanType = request.PlanType.ToString();
+            incident.RescuePlanDetails = JsonSerializer.Serialize(new
+            {
+                request.PlanType,
+                request.ReplacementVehicleId,
+                request.DestinationWarehouseId,
+                DestinationWarehouseName = destinationWarehouse?.WarehouseName,
+                EstimatedArrivalMinutes = estimatedArrivalMinutes,
+                incident.RemainingSafeTimeMinutes,
+                Note = request.Note?.Trim()
+            });
 
             var transloadMinutes = request.TransloadMinutes is > 0 ? request.TransloadMinutes.Value : DefaultTransloadMinutes;
             var departFromScene = now.AddMinutes(transloadMinutes);
@@ -714,6 +1088,10 @@ public class IncidentRescueService : IIncidentRescueService
     {
         if (request == null || string.IsNullOrWhiteSpace(request.ConfirmationNote))
             return ApiResponse<IncidentWorkflowResult>.Failure("Vui lòng nhập ghi chú xác nhận sang hàng.");
+        if (request.Latitude is < -90m or > 90m || request.Longitude is < -180m or > 180m)
+            return ApiResponse<IncidentWorkflowResult>.Failure("Transload coordinates are invalid.");
+        if ((request.EvidenceUrls ?? new List<string>()).Any(url => !IsValidEvidenceUrl(url)))
+            return ApiResponse<IncidentWorkflowResult>.Failure("EvidenceUrls must contain valid HTTP/HTTPS URLs.");
 
         try
         {
@@ -769,6 +1147,26 @@ public class IncidentRescueService : IIncidentRescueService
                 return ApiResponse<IncidentWorkflowResult>.Failure(
                     "Chỉ xác nhận sang hàng khi incident ở RESCUE_DISPATCHED và trip ở DELAYED.");
 
+            var shippingLpns = await _db.Lpns
+                .Where(l => l.TripId == trip.TripId && l.State == LpnState.SHIPPING)
+                .ToListAsync();
+            var requestedLpnIds = request.LpnIds ?? new List<Guid>();
+            var selectedLpnIds = requestedLpnIds.Count > 0
+                ? requestedLpnIds.Distinct().ToList()
+                : shippingLpns.Select(l => l.LpnId).ToList();
+            var shippingLpnIds = shippingLpns.Select(l => l.LpnId).ToHashSet();
+            var invalidLpnIds = selectedLpnIds.Where(id => !shippingLpnIds.Contains(id)).ToList();
+            if (invalidLpnIds.Count > 0)
+            {
+                return ApiResponse<IncidentWorkflowResult>.Failure(
+                    $"LPNs are not shipping on this trip: {string.Join(", ", invalidLpnIds)}.");
+            }
+            if (selectedLpnIds.Count != shippingLpnIds.Count)
+            {
+                return ApiResponse<IncidentWorkflowResult>.Failure(
+                    "This short-term workflow requires confirming every remaining SHIPPING LPN in the controlled transload.");
+            }
+
             var devices = trip.Vehicle.IotDevices
                 .Where(d => !string.IsNullOrWhiteSpace(d.DeviceCode))
                 .ToList();
@@ -797,11 +1195,52 @@ public class IncidentRescueService : IIncidentRescueService
             }
 
             var now = DbNow();
+            var transferTemperature = request.TransferTemperature;
+            if (!transferTemperature.HasValue)
+            {
+                transferTemperature = await _db.TelemetryLogs
+                    .AsNoTracking()
+                    .Where(t => t.TripId == trip.TripId)
+                    .OrderByDescending(t => t.Timestamp)
+                    .Select(t => (decimal?)t.Temperature)
+                    .FirstOrDefaultAsync();
+            }
+            var transferredAt = request.TransferredAt.HasValue
+                ? DateTime.SpecifyKind(request.TransferredAt.Value, DateTimeKind.Unspecified)
+                : now;
+            var evidenceUrls = (request.EvidenceUrls ?? new List<string>())
+                .Where(url => !string.IsNullOrWhiteSpace(url))
+                .Select(url => url.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var transloadRecord = new TransloadRecord
+            {
+                LpnIds = selectedLpnIds,
+                SealNumber = request.SealNumber?.Trim(),
+                TransferTemperature = transferTemperature,
+                TransferredAt = transferredAt,
+                Latitude = request.Latitude ?? incident.CurrentLatitude,
+                Longitude = request.Longitude ?? incident.CurrentLongitude,
+                LocationDescription = request.LocationDescription?.Trim(),
+                EvidenceUrls = evidenceUrls,
+                ConfirmedBy = confirmedBy
+            };
             trip.Status = "IN_TRANSIT";
             incident.Status = "TRANSLOAD_COMPLETED";
             incident.TransloadConfirmedBy = confirmedBy;
             incident.TransloadConfirmedAt = now;
             incident.TransloadNote = request.ConfirmationNote.Trim();
+            incident.TransloadDetailsJson = JsonSerializer.Serialize(transloadRecord);
+            foreach (var evidenceUrl in evidenceUrls)
+            {
+                _db.IncidentEvidences.Add(new IncidentEvidence
+                {
+                    EvidenceId = Guid.NewGuid(),
+                    IncidentId = incident.IncidentId,
+                    EvidenceType = "TRANSLOAD_EVIDENCE",
+                    FileUrl = evidenceUrl
+                });
+            }
 
             await _db.SaveChangesAsync();
 
@@ -830,7 +1269,8 @@ public class IncidentRescueService : IIncidentRescueService
                     VehiclePlate = trip.Vehicle.TruckPlate,
                     DeviceCodes = devices.Select(d => d.DeviceCode).ToArray(),
                     incident.TransloadConfirmedAt,
-                    incident.TransloadNote
+                    incident.TransloadNote,
+                    Transload = transloadRecord
                 };
 
                 await _hubContext.Clients.Groups("Group_Dispatcher", "Group_Admin", "Group_WarehouseWorker")
@@ -852,7 +1292,7 @@ public class IncidentRescueService : IIncidentRescueService
                     trip,
                     trip.Vehicle,
                     now,
-                    "Đã xác nhận sang toàn bộ hàng, bật MQTT streaming và cho chuyến tiếp tục."),
+                    $"Đã xác nhận sang {selectedLpnIds.Count} LPN có kiểm soát, bật MQTT streaming và cho chuyến tiếp tục."),
                 "Transload confirmed and trip resumed successfully.");
         }
         catch (Exception ex)
@@ -861,6 +1301,30 @@ public class IncidentRescueService : IIncidentRescueService
             return ApiResponse<IncidentWorkflowResult>.Failure(
                 $"Failed to confirm transload: {ex.Message}");
         }
+    }
+
+    private async Task<int?> EstimateVehicleArrivalMinutesAsync(Vehicle vehicle, IncidentReport incident)
+    {
+        if (!incident.CurrentLatitude.HasValue || !incident.CurrentLongitude.HasValue)
+            return null;
+
+        var warehouseId = ParseWarehouseId(vehicle.CurrentLocation);
+        if (!warehouseId.HasValue)
+            return null;
+        var warehouse = await _db.Warehouses.AsNoTracking()
+            .FirstOrDefaultAsync(w => w.WarehouseId == warehouseId.Value);
+        if (warehouse == null)
+            return null;
+        var coordinates = await ResolveWarehouseCoordinatesAsync(new[] { warehouse });
+        if (!coordinates.TryGetValue(warehouse.WarehouseId, out var position))
+            return null;
+
+        var distance = HaversineKm(
+            incident.CurrentLatitude.Value,
+            incident.CurrentLongitude.Value,
+            position.Latitude,
+            position.Longitude);
+        return (int)Math.Ceiling(distance / FallbackAvgSpeedKmh * 60m);
     }
 
 
@@ -1079,4 +1543,9 @@ public class IncidentRescueService : IIncidentRescueService
     }
 
     private static double ToRad(double deg) => deg * Math.PI / 180.0;
+
+    private static bool IsValidEvidenceUrl(string url)
+        => !string.IsNullOrWhiteSpace(url)
+           && Uri.TryCreate(url, UriKind.Absolute, out var parsed)
+           && (parsed.Scheme == Uri.UriSchemeHttp || parsed.Scheme == Uri.UriSchemeHttps);
 }

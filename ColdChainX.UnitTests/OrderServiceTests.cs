@@ -56,6 +56,60 @@ namespace ColdChainX.UnitTests
         }
 
         [Fact]
+        public async Task GetOrders_LoadsCustomerContactWithoutCapturingOrderServiceInProjection()
+        {
+            var customerId = Guid.NewGuid();
+            var orderId = Guid.NewGuid();
+            const string customerEmail = "customer@example.com";
+
+            _db.Customers.Add(new Customer
+            {
+                CustomerId = customerId,
+                CompanyName = "Projection Test Customer",
+                TaxCode = "PROJECTION-001",
+                Email = customerEmail,
+                Status = "ACTIVE"
+            });
+            _db.Users.Add(new User
+            {
+                UserId = Guid.NewGuid(),
+                Username = "projection-customer",
+                Email = customerEmail,
+                FullName = "Nguyen Van Contact",
+                Phone = "0901234567",
+                Status = "ACTIVE"
+            });
+            _db.TransportOrders.Add(new TransportOrder
+            {
+                OrderId = orderId,
+                TrackingCode = "TRK-PROJECTION-001",
+                CustomerId = customerId,
+                ItemName = "Frozen cargo",
+                Category = "MEAT_SEAFOOD",
+                Quantity = 1,
+                PackingType = "Carton Box",
+                TempCondition = "-18",
+                Status = "PENDING_REVIEW",
+                CreatedAt = DateTime.UtcNow
+            });
+            await _db.SaveChangesAsync();
+
+            var result = await _service.GetOrdersAsync(1, 10);
+
+            Assert.True(result.Success, result.Message);
+            var page = Assert.IsType<ColdChainX.Application.DTOs.Common.PagedResult<OrderResponse>>(result.Data);
+            var order = Assert.Single(page.Data);
+            Assert.Equal("Nguyen Van Contact", order.CustomerContactName);
+            Assert.Equal("0901234567", order.CustomerPhone);
+
+            var detailResult = await _service.GetOrderByIdAsync(orderId);
+            Assert.True(detailResult.Success, detailResult.Message);
+            var detail = Assert.IsType<OrderResponse>(detailResult.Data);
+            Assert.Equal("Nguyen Van Contact", detail.CustomerContactName);
+            Assert.Equal("0901234567", detail.CustomerPhone);
+        }
+
+        [Fact]
         public async Task ReviewOrder_Approve_SetsStatusToApproved()
         {
             var customerId = Guid.NewGuid();

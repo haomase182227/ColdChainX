@@ -8,6 +8,9 @@ public class EpodDto
     public Guid? OrderId { get; set; }
     public DateTime CheckinTime { get; set; }
     public DateTime? SignedAt { get; set; }
+    public string? ReceiverName { get; set; }
+    public string? ReceiverPhone { get; set; }
+    public bool ReceiverConfirmed { get; set; }
     public string? SignImageUrl { get; set; }
     public decimal? SignLatitude { get; set; }
     public decimal? SignLongitude { get; set; }

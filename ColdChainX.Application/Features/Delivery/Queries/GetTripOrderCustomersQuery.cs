@@ -104,6 +104,8 @@ public class GetTripOrderCustomersQueryHandler : IRequestHandler<GetTripOrderCus
             ItemName = o.ItemName ?? string.Empty,
             PickupAddress = o.PickupLocationNavigation?.Address ?? string.Empty,
             DestAddress = o.DestLocationNavigation?.Address ?? string.Empty,
+            ReceiverName = o.ReceiverName ?? string.Empty,
+            ReceiverPhone = o.ReceiverPhone ?? string.Empty,
 
             CustomerId = o.CustomerId,
             CompanyName = o.Customer?.CompanyName ?? "N/A",

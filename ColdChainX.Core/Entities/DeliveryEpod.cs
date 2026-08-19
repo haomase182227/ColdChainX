@@ -17,6 +17,8 @@ public partial class DeliveryEpod
 
     public string? ReceiverPhone { get; set; }
 
+    public bool ReceiverConfirmed { get; set; }
+
     public string? SignImageUrl { get; set; }
 
     public decimal? SignLatitude { get; set; }
