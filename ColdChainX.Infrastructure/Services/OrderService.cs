@@ -76,11 +76,18 @@ namespace ColdChainX.Infrastructure.Services
             }
             query = query.OrderByDescending(o => o.CreatedAt);
             var totalRecords = await query.CountAsync();
-            var orders = await query
+            var pageOrders = await query
                 .Skip(NormalizeSkip(pageNumber, pageSize))
                 .Take(NormalizePageSize(pageSize))
-                .Select(o => ToOrderResponse(o))
                 .ToListAsync();
+            var contactsByEmail = await LoadCustomerContactsAsync(pageOrders);
+            var orders = pageOrders
+                .Select(order =>
+                {
+                    var contact = FindCustomerContact(contactsByEmail, order.Customer?.Email);
+                    return ToOrderResponse(order, contact?.FullName, contact?.Phone);
+                })
+                .ToList();
 
             return ApiResponse<PagedResult<OrderResponse>>.SuccessResponse(
                 PagedResult<OrderResponse>.Create(orders, totalRecords, pageNumber, NormalizePageSize(pageSize)),
@@ -164,7 +171,12 @@ namespace ColdChainX.Infrastructure.Services
             if (order == null)
                 return ApiResponse<OrderResponse>.Failure("Order not found");
 
-            return ApiResponse<OrderResponse>.SuccessResponse(ToOrderResponse(order), "Order retrieved successfully");
+            var contactsByEmail = await LoadCustomerContactsAsync([order]);
+            var contact = FindCustomerContact(contactsByEmail, order.Customer?.Email);
+
+            return ApiResponse<OrderResponse>.SuccessResponse(
+                ToOrderResponse(order, contact?.FullName, contact?.Phone),
+                "Order retrieved successfully");
         }
 
         public async Task<ApiResponse<PagedResult<CustomerOrderSummaryResponse>>> GetOrdersByCustomerAsync(Guid customerId, int pageNumber, int pageSize, string? status = null)
@@ -194,6 +206,8 @@ namespace ColdChainX.Infrastructure.Services
                     TempCondition = o.TempCondition,
                     ExpectedWeightKg = o.OrderDimension != null ? o.OrderDimension.ExpectedWeightKg : 0,
                     ExpectedCbm = o.OrderDimension != null ? o.OrderDimension.ExpectedCbm : 0,
+                    ReceiverName = o.ReceiverName,
+                    ReceiverPhone = o.ReceiverPhone,
                     Status = o.Status,
                     MasterTripId = o.MasterTripId,
                     CreatedAt = o.CreatedAt
@@ -215,6 +229,15 @@ namespace ColdChainX.Infrastructure.Services
                 return ApiResponse<CreateOrderResponse>.Failure("Dimensions must be greater than 0", 400);
             if (string.IsNullOrWhiteSpace(request.ItemName) || string.IsNullOrWhiteSpace(request.Category))
                 return ApiResponse<CreateOrderResponse>.Failure("Item name and category are required", 400);
+            if (!request.HasStrongOdor.HasValue || !request.IsStackable.HasValue)
+                return ApiResponse<CreateOrderResponse>.Failure("Has_Strong_Odor and Is_Stackable are required", 400);
+            if (request.LegalDocuments == null || request.LegalDocuments.Count == 0)
+                return ApiResponse<CreateOrderResponse>.Failure("At least one legal document is required", 400);
+            if (request.CargoPhotos == null || request.CargoPhotos.Count == 0)
+                return ApiResponse<CreateOrderResponse>.Failure("At least one cargo photo is required", 400);
+            var recipientValidationError = ValidateRecipient(request.ReceiverName, request.ReceiverPhone);
+            if (recipientValidationError != null)
+                return ApiResponse<CreateOrderResponse>.Failure(recipientValidationError, 400);
 
             var strategy = _db.Database.CreateExecutionStrategy();
 
@@ -269,8 +292,10 @@ namespace ColdChainX.Infrastructure.Services
                     Quantity = request.Quantity,
                     PackingType = request.PackagingType.Trim(),
                     TempCondition = request.TempCondition.ToString("0.##", CultureInfo.InvariantCulture),
-                    HasStrongOdor = request.HasStrongOdor,
-                    IsStackable = request.IsStackable,
+                    HasStrongOdor = request.HasStrongOdor.Value,
+                    IsStackable = request.IsStackable.Value,
+                    ReceiverName = request.ReceiverName.Trim(),
+                    ReceiverPhone = request.ReceiverPhone.Trim(),
                     OrderDimension = new OrderDimension
                     {
                         ExpectedWeightKg = request.ExpectedWeightKg,
@@ -363,6 +388,8 @@ namespace ColdChainX.Infrastructure.Services
                     TempCondition = order.TempCondition,
                     ExpectedWeightKg = order.OrderDimension?.ExpectedWeightKg ?? 0,
                     ExpectedCbm = order.OrderDimension?.ExpectedCbm ?? 0,
+                    ReceiverName = order.ReceiverName!,
+                    ReceiverPhone = order.ReceiverPhone!,
                     Status = order.Status,
                     CreatedAt = order.CreatedAt ?? DateTime.UtcNow
                 }, "Order created successfully");
@@ -398,6 +425,14 @@ namespace ColdChainX.Infrastructure.Services
 
                 if (request.HeightCm.HasValue && request.HeightCm.Value <= 0)
                     return ApiResponse<CreateOrderResponse>.Failure("Height must be greater than 0", 400);
+                if (request.ReceiverName != null || request.ReceiverPhone != null)
+                {
+                    var recipientValidationError = ValidateRecipient(
+                        request.ReceiverName ?? order.ReceiverName,
+                        request.ReceiverPhone ?? order.ReceiverPhone);
+                    if (recipientValidationError != null)
+                        return ApiResponse<CreateOrderResponse>.Failure(recipientValidationError, 400);
+                }
 
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
@@ -408,6 +443,8 @@ namespace ColdChainX.Infrastructure.Services
                 if (request.TempCondition.HasValue) order.TempCondition = request.TempCondition.Value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
                 if (request.HasStrongOdor.HasValue) order.HasStrongOdor = request.HasStrongOdor.Value;
                 if (request.IsStackable.HasValue) order.IsStackable = request.IsStackable.Value;
+                if (request.ReceiverName != null) order.ReceiverName = request.ReceiverName.Trim();
+                if (request.ReceiverPhone != null) order.ReceiverPhone = request.ReceiverPhone.Trim();
                 
                 bool dimensionChanged = false;
 
@@ -509,6 +546,8 @@ namespace ColdChainX.Infrastructure.Services
                     TempCondition = order.TempCondition,
                     ExpectedWeightKg = order.OrderDimension?.ExpectedWeightKg ?? 0,
                     ExpectedCbm = order.OrderDimension?.ExpectedCbm ?? 0,
+                    ReceiverName = order.ReceiverName ?? string.Empty,
+                    ReceiverPhone = order.ReceiverPhone ?? string.Empty,
                     Status = order.Status,
                     CreatedAt = order.CreatedAt ?? DateTime.UtcNow
                 }, "Order updated successfully by Admin");
@@ -535,6 +574,15 @@ namespace ColdChainX.Infrastructure.Services
                 if (order == null)
                     return ApiResponse<CreateOrderResponse>.Failure("Order not found or you don't have permission");
 
+                if (request.ReceiverName != null || request.ReceiverPhone != null)
+                {
+                    var recipientValidationError = ValidateRecipient(
+                        request.ReceiverName ?? order.ReceiverName,
+                        request.ReceiverPhone ?? order.ReceiverPhone);
+                    if (recipientValidationError != null)
+                        return ApiResponse<CreateOrderResponse>.Failure(recipientValidationError, 400);
+                }
+
                 if (!string.Equals(order.Status, PendingReview, StringComparison.OrdinalIgnoreCase)
                     && !string.Equals(order.Status, "NEEDS_UPDATE", StringComparison.OrdinalIgnoreCase))
                 {
@@ -551,6 +599,8 @@ namespace ColdChainX.Infrastructure.Services
                 if (request.TempCondition.HasValue) order.TempCondition = request.TempCondition.Value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
                 if (request.HasStrongOdor.HasValue) order.HasStrongOdor = request.HasStrongOdor.Value;
                 if (request.IsStackable.HasValue) order.IsStackable = request.IsStackable.Value;
+                if (request.ReceiverName != null) order.ReceiverName = request.ReceiverName.Trim();
+                if (request.ReceiverPhone != null) order.ReceiverPhone = request.ReceiverPhone.Trim();
                 
                 if (request.ExpectedWeightKg.HasValue && order.OrderDimension != null)
                 {
@@ -637,6 +687,8 @@ namespace ColdChainX.Infrastructure.Services
                     TempCondition = order.TempCondition,
                     ExpectedWeightKg = order.OrderDimension?.ExpectedWeightKg ?? 0,
                     ExpectedCbm = order.OrderDimension?.ExpectedCbm ?? 0,
+                    ReceiverName = order.ReceiverName ?? string.Empty,
+                    ReceiverPhone = order.ReceiverPhone ?? string.Empty,
                     Status = order.Status,
                     CreatedAt = order.CreatedAt ?? DateTime.UtcNow
                 }, "Order updated successfully");
@@ -1098,6 +1150,28 @@ namespace ColdChainX.Infrastructure.Services
             return (safePageNumber - 1) * NormalizePageSize(pageSize);
         }
 
+        private static string? ValidateRecipient(string? receiverName, string? receiverPhone)
+        {
+            if (string.IsNullOrWhiteSpace(receiverName))
+                return "Receiver name is required";
+            if (receiverName.Trim().Length > 100)
+                return "Receiver name must not exceed 100 characters";
+            if (string.IsNullOrWhiteSpace(receiverPhone))
+                return "Receiver phone is required";
+            if (receiverPhone.Trim().Length > 20)
+                return "Receiver phone must not exceed 20 characters";
+
+            var digitCount = receiverPhone.Count(char.IsDigit);
+            if (digitCount is < 8 or > 15
+                || receiverPhone.Any(character => !char.IsDigit(character)
+                    && character is not ('+' or ' ' or '-' or '(' or ')')))
+            {
+                return "Receiver phone must contain between 8 and 15 digits";
+            }
+
+            return null;
+        }
+
         private IQueryable<TransportOrder> BuildOrderQuery()
         {
             return _db.TransportOrders
@@ -1110,8 +1184,54 @@ namespace ColdChainX.Infrastructure.Services
                 .Include(o => o.Quotations);
         }
 
-        private static OrderResponse ToOrderResponse(TransportOrder order)
+        private async Task<IReadOnlyDictionary<string, CustomerContact>> LoadCustomerContactsAsync(
+            IEnumerable<TransportOrder> orders)
         {
+            var customerEmails = orders
+                .Select(order => order.Customer?.Email)
+                .Where(email => !string.IsNullOrWhiteSpace(email))
+                .Select(email => email!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (customerEmails.Count == 0)
+                return new Dictionary<string, CustomerContact>(StringComparer.OrdinalIgnoreCase);
+
+            var users = await _db.Users
+                .AsNoTracking()
+                .Where(user => user.Email != null && customerEmails.Contains(user.Email))
+                .Select(user => new
+                {
+                    Email = user.Email!,
+                    user.FullName,
+                    user.Phone
+                })
+                .ToListAsync();
+
+            return users
+                .GroupBy(user => user.Email, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    group => group.Key,
+                    group => new CustomerContact(group.First().FullName, group.First().Phone),
+                    StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static CustomerContact? FindCustomerContact(
+            IReadOnlyDictionary<string, CustomerContact> contactsByEmail,
+            string? customerEmail)
+        {
+            return !string.IsNullOrWhiteSpace(customerEmail)
+                && contactsByEmail.TryGetValue(customerEmail, out var contact)
+                    ? contact
+                    : null;
+        }
+
+        private static OrderResponse ToOrderResponse(
+            TransportOrder order,
+            string? customerContactName = null,
+            string? customerPhone = null)
+        {
+
             return new OrderResponse
             {
                 OrderId = order.OrderId,
@@ -1173,6 +1293,8 @@ namespace ColdChainX.Infrastructure.Services
                     .ToList(),
                 CustomerId = order.CustomerId,
                 CustomerName = order.Customer?.CompanyName,
+                CustomerContactName = customerContactName,
+                CustomerPhone = customerPhone,
                 Quotations = order.Quotations
                     .OrderByDescending(q => q.CreatedAt)
                     .Select(q => new OrderQuotationResponse
@@ -1190,6 +1312,8 @@ namespace ColdChainX.Infrastructure.Services
                     .ToList()
             };
         }
+
+        private sealed record CustomerContact(string FullName, string? Phone);
 
         private sealed record RoutePricing(
             decimal BaseFreight,

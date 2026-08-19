@@ -19,6 +19,13 @@ namespace ColdChainX.API.Swagger
             ApplyEnum(schema, "PackagingType", CreateOrderRequestValidator.AllowedPackagingTypes);
             ApplyTemperatureRange(schema, "tempCondition");
             ApplyTemperatureRange(schema, "TempCondition");
+            MarkAllFieldsRequired(schema);
+        }
+
+        private static void MarkAllFieldsRequired(OpenApiSchema schema)
+        {
+            schema.Required ??= new HashSet<string>();
+            schema.Required.UnionWith(schema.Properties.Keys);
         }
 
         private static void ApplyEnum(OpenApiSchema schema, string propertyName, IEnumerable<string> values)

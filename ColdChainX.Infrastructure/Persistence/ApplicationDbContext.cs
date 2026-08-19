@@ -581,6 +581,9 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.ReceiverPhone)
                 .HasMaxLength(20)
                 .HasColumnName("receiver_phone");
+            entity.Property(e => e.ReceiverConfirmed)
+                .HasDefaultValue(false)
+                .HasColumnName("receiver_confirmed");
             entity.Property(e => e.SignImageUrl)
                 .HasMaxLength(255)
                 .HasColumnName("sign_image_url");
@@ -1895,6 +1898,12 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.PickupLocation).HasColumnName("pickup_location");
             entity.Property(e => e.ScheduleId).HasColumnName("schedule_id");
             entity.Property(e => e.DropoffStopId).HasColumnName("dropoff_stop_id");
+            entity.Property(e => e.ReceiverName)
+                .HasMaxLength(100)
+                .HasColumnName("receiver_name");
+            entity.Property(e => e.ReceiverPhone)
+                .HasMaxLength(20)
+                .HasColumnName("receiver_phone");
             entity.Property(e => e.PackingType)
                 .HasMaxLength(50)
                 .HasDefaultValueSql("'Thùng'::character varying")

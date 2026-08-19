@@ -103,6 +103,11 @@ public class ReceivePaymentWebhookCommandHandler : IRequestHandler<ReceivePaymen
                 };
                 _context.PaymentTransactions.Add(qrTx);
 
+                epod.PaymentStatus = "PAID";
+                epod.CodAmountPaid = epod.CodAmount ?? request.Amount;
+                epod.PaymentMethod = "QR";
+                epod.PaymentConfirmedAt = DateTime.UtcNow;
+
                 await _context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
             }

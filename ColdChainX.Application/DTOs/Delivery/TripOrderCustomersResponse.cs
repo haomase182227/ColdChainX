@@ -64,6 +64,8 @@ public class TripOrderCustomerItem
     public string ItemName { get; set; } = string.Empty;
     public string PickupAddress { get; set; } = string.Empty;
     public string DestAddress { get; set; } = string.Empty;
+    public string ReceiverName { get; set; } = string.Empty;
+    public string ReceiverPhone { get; set; } = string.Empty;
 
     public Guid? CustomerId { get; set; }
     public string CompanyName { get; set; } = string.Empty;

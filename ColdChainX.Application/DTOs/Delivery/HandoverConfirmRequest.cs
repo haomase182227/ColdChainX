@@ -10,8 +10,11 @@ public class HandoverConfirmRequest
     public Guid TripId { get; set; }
     public Guid CustomerId { get; set; }
 
+    public bool IsReceiverConfirmed { get; set; }
+
     [Required]
     public IFormFile SignatureFile { get; set; } = null!;
 
-    public IFormFile? HandoverPhotoFile { get; set; }
+    [Required]
+    public IFormFile HandoverPhotoFile { get; set; } = null!;
 }

@@ -84,6 +84,8 @@ public class ConfirmHandoverCommandHandler : IRequestHandler<ConfirmHandoverComm
         if (existingEpod != null)
             throw new ConflictException($"Handover for order '{order.TrackingCode}' has already been confirmed at {existingEpod.HandoverConfirmedAt:O} (ePOD: {existingEpod.EpodId}). Cannot confirm again.");
 
+        ValidateHandoverConfirmation(order, request);
+
         var lpns = await _context.Lpns
             .Where(l => l.OrderId == order.OrderId && l.TripId == trip.TripId)
             .ToListAsync(cancellationToken);
@@ -92,9 +94,7 @@ public class ConfirmHandoverCommandHandler : IRequestHandler<ConfirmHandoverComm
             throw new ValidationException("No LPNs found for this order on this trip. Ensure dispatch was completed.");
 
         var signatureTask = _fileService.UploadFileAsync(request.SignatureFile);
-        var handoverPhotoTask = request.HandoverPhotoFile != null
-            ? _fileService.UploadFileAsync(request.HandoverPhotoFile)
-            : Task.FromResult<string>(null!);
+        var handoverPhotoTask = _fileService.UploadFileAsync(request.HandoverPhotoFile);
 
         await Task.WhenAll(signatureTask, handoverPhotoTask);
         var signatureUrl = signatureTask.Result;
@@ -126,6 +126,9 @@ public class ConfirmHandoverCommandHandler : IRequestHandler<ConfirmHandoverComm
                     CheckinTime = stop.ActualArrivalTime ?? now,
                     SignedAt = now,
                     HandoverConfirmedAt = now,
+                    ReceiverName = order.ReceiverName,
+                    ReceiverPhone = order.ReceiverPhone,
+                    ReceiverConfirmed = true,
                     SignImageUrl = signatureUrl,
                     SignLatitude = stop.Location?.Latitude,
                     SignLongitude = stop.Location?.Longitude,
@@ -139,7 +142,7 @@ public class ConfirmHandoverCommandHandler : IRequestHandler<ConfirmHandoverComm
 
                 var pdfData = BuildHandoverPdfData(
                     order, trip, driver, stop.Location, lpns,
-                    request, signatureUrl, handoverPhotoUrl, recordedTemp, now);
+                    signatureUrl, handoverPhotoUrl, recordedTemp, now);
 
                 var pdfBytes = await _pdfGeneratorService.GeneratePdfAsync("Epod", pdfData);
                 var pdfUrl = await _fileService.UploadFileAsync(
@@ -200,7 +203,7 @@ public class ConfirmHandoverCommandHandler : IRequestHandler<ConfirmHandoverComm
 
     private static object BuildHandoverPdfData(
         TransportOrder order, MasterTrip trip, Driver driver, Location? location,
-        List<Lpn> lpns, HandoverConfirmRequest request, string signatureUrl,
+        List<Lpn> lpns, string signatureUrl,
         string? handoverPhotoUrl, decimal recordedTemp, DateTime now)
     {
         return new
@@ -212,8 +215,8 @@ public class ConfirmHandoverCommandHandler : IRequestHandler<ConfirmHandoverComm
             VehiclePlateNumber = trip.Vehicle?.TruckPlate ?? "N/A",
             DriverName = driver.FullName,
             CustomerName = order.Customer?.CompanyName ?? "Khách hàng",
-            ReceiverName = order.Customer?.CompanyName ?? "Khách hàng",
-            ReceiverPhone = "N/A",
+            ReceiverName = order.ReceiverName ?? "N/A",
+            ReceiverPhone = order.ReceiverPhone ?? "N/A",
             OrderCode = order.TrackingCode,
             RecordedTemperatureCelsius = recordedTemp,
             SignatureUrl = signatureUrl,
@@ -232,5 +235,26 @@ public class ConfirmHandoverCommandHandler : IRequestHandler<ConfirmHandoverComm
                 PhotoUrl = (string?)null
             }).ToList()
         };
+    }
+
+    private static void ValidateHandoverConfirmation(
+        TransportOrder order,
+        HandoverConfirmRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(order.ReceiverName)
+            || string.IsNullOrWhiteSpace(order.ReceiverPhone))
+        {
+            throw new ValidationException(
+                $"Order '{order.TrackingCode}' does not have registered recipient information. Update the order before confirming handover.");
+        }
+
+        if (!request.IsReceiverConfirmed)
+            throw new ValidationException("Driver must confirm that the displayed name and phone belong to the correct recipient.");
+
+        if (request.SignatureFile == null || request.SignatureFile.Length == 0)
+            throw new ValidationException("Receiver signature is required to confirm handover.");
+
+        if (request.HandoverPhotoFile == null || request.HandoverPhotoFile.Length == 0)
+            throw new ValidationException("Handover photo is required to confirm handover.");
     }
 }
