@@ -18,7 +18,7 @@ namespace ColdChainX.Application.DTOs.Orders
         public decimal ExpectedWeightKg { get; set; }
 
         [FromForm(Name = "Quantity")]
-        public int Quantity { get; set; } = 1;
+        public int Quantity { get; set; }
 
         [FromForm(Name = "Packaging_Type")]
         public string PackagingType { get; set; } = null!;
@@ -41,11 +41,17 @@ namespace ColdChainX.Application.DTOs.Orders
         [FromForm(Name = "Dropoff_Stop_ID")]
         public Guid DropoffStopId { get; set; }
 
+        [FromForm(Name = "Receiver_Name")]
+        public string ReceiverName { get; set; } = null!;
+
+        [FromForm(Name = "Receiver_Phone")]
+        public string ReceiverPhone { get; set; } = null!;
+
         [FromForm(Name = "Has_Strong_Odor")]
-        public bool HasStrongOdor { get; set; } = false;
+        public bool? HasStrongOdor { get; set; }
 
         [FromForm(Name = "Is_Stackable")]
-        public bool IsStackable { get; set; } = true;
+        public bool? IsStackable { get; set; }
 
         [FromForm(Name = "Legal_Documents")]
         public List<IFormFile> LegalDocuments { get; set; } = new();

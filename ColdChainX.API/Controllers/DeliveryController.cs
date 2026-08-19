@@ -36,7 +36,7 @@ public class DeliveryController : ControllerBase
     }
 
     [HttpGet("trips/{tripId:guid}/customer-orders")]
-    [AllowAnonymous]
+    [Authorize(Roles = "Driver")]
     public async Task<IActionResult> GetTripOrderCustomers(Guid tripId)
     {
         var query = new GetTripOrderCustomersQuery { TripId = tripId };

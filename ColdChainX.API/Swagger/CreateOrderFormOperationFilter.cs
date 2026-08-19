@@ -29,6 +29,13 @@ namespace ColdChainX.API.Swagger
             ApplyEnum(mediaType.Schema, "category", CreateOrderRequestValidator.AllowedCategories);
             ApplyEnum(mediaType.Schema, "Packaging_Type", CreateOrderRequestValidator.AllowedPackagingTypes);
             ApplyEnum(mediaType.Schema, "packagingType", CreateOrderRequestValidator.AllowedPackagingTypes);
+            MarkAllFieldsRequired(mediaType.Schema);
+        }
+
+        private static void MarkAllFieldsRequired(OpenApiSchema schema)
+        {
+            schema.Required ??= new HashSet<string>();
+            schema.Required.UnionWith(schema.Properties.Keys);
         }
 
         private static void ApplyEnum(OpenApiSchema schema, string propertyName, IEnumerable<string> values)
