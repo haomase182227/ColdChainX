@@ -257,7 +257,7 @@ app.MapGet("/api/fleet/trip/{tripId}/polyline", async (string tripId, IConfigura
         }
 
         using var client = new HttpClient();
-        var backendUrl = (config["BackendApiUrl"] ?? "http://localhost:5244").TrimEnd('/');
+        var backendUrl = ResolveBackendApiUrl(config);
         var backendAccessToken = config["BackendAccessToken"];
         if (!string.IsNullOrWhiteSpace(backendAccessToken))
         {
@@ -271,6 +271,7 @@ app.MapGet("/api/fleet/trip/{tripId}/polyline", async (string tripId, IConfigura
             return Results.BadRequest(new
             {
                 error = $"Cannot fetch route from ColdChainX API. Status: {(int)res.StatusCode} {res.ReasonPhrase}",
+                backendUrl,
                 details = errorBody
             });
         }
@@ -299,6 +300,19 @@ app.MapGet("/api/fleet/trip/{tripId}/polyline", async (string tripId, IConfigura
         return Results.BadRequest(ex.Message);
     }
 });
+
+static string ResolveBackendApiUrl(IConfiguration config)
+{
+    var configuredUrl = (config["BackendApiUrl"] ?? "").Trim();
+    if (string.IsNullOrWhiteSpace(configuredUrl) ||
+        configuredUrl.Contains("localhost", StringComparison.OrdinalIgnoreCase) ||
+        configuredUrl.Contains("127.0.0.1", StringComparison.OrdinalIgnoreCase))
+    {
+        configuredUrl = "https://api.coldchainx.online";
+    }
+
+    return configuredUrl.TrimEnd('/');
+}
 
 app.MapPost("/api/fleet/start", async (SimulationRequest req, ILoggerFactory loggerFactory, IConfiguration config) =>
 {

@@ -515,31 +515,39 @@ public class DispatchService : IDispatchService
 
     private async Task<int> SendCustomerNotificationsAsync(MasterTrip trip, List<TransportOrder> orders)
     {
-        var templateExists = await _context.NotificationTemplates
-            .AnyAsync(t => t.TemplateId == CustomerEtaTemplateId
-                        && (t.Status == null || t.Status == "ACTIVE"));
+        const string titleTemplate = "Đơn hàng {orderCode} đã được xếp lên xe";
+        const string bodyTemplate =
+            "Đơn hàng của bạn đã được xếp lên xe {vehicle}. Dự kiến giao hàng ngày {eta} tại {address}.";
 
-        if (!templateExists)
+        var customerEtaTemplate = await _context.NotificationTemplates
+            .FirstOrDefaultAsync(t => t.TemplateId == CustomerEtaTemplateId);
+        if (customerEtaTemplate == null)
         {
             var msgType = await _context.Messagetypes.FirstOrDefaultAsync();
             if (msgType != null)
             {
-                _context.NotificationTemplates.Add(new NotificationTemplate
+                customerEtaTemplate = new NotificationTemplate
                 {
                     TemplateId = CustomerEtaTemplateId,
                     TypeId = msgType.TypeId,
-                    TitleTemplate = "Đơn hàng {orderCode} đã được xếp lên xe",
-                    BodyTemplate = "Đơn hàng của bạn đã được xếp lên xe {vehicle}. Dự kiến giao hàng lúc {eta} tại {address}.",
+                    TitleTemplate = titleTemplate,
+                    BodyTemplate = bodyTemplate,
                     Channel = "IN_APP",
                     Status = "ACTIVE"
-                });
+                };
+                _context.NotificationTemplates.Add(customerEtaTemplate);
                 await _context.SaveChangesAsync();
             }
         }
+        else
+        {
+            customerEtaTemplate.TitleTemplate = titleTemplate;
+            customerEtaTemplate.BodyTemplate = bodyTemplate;
+            customerEtaTemplate.Channel = "IN_APP";
+            customerEtaTemplate.Status = "ACTIVE";
+        }
 
-        var actualTemplateId = await _context.NotificationTemplates
-            .AnyAsync(t => t.TemplateId == CustomerEtaTemplateId
-                        && (t.Status == null || t.Status == "ACTIVE"))
+        var actualTemplateId = customerEtaTemplate != null
             ? CustomerEtaTemplateId
             : await GetFallbackTemplateIdAsync();
 
@@ -559,8 +567,13 @@ public class DispatchService : IDispatchService
             if (user == null) continue;
 
             var destLocationId = customerGroup.First().DestLocation;
-            var stop = await _context.TripStops.FirstOrDefaultAsync(s => s.TripId == trip.TripId && s.LocationId == destLocationId);
-            var eta = stop != null ? stop.PlannedArrivalTime.ToString("dd/MM/yyyy HH:mm") : "N/A";
+            var stop = _context.TripStops.Local
+                .FirstOrDefault(s => s.TripId == trip.TripId && s.LocationId == destLocationId)
+                ?? await _context.TripStops
+                    .FirstOrDefaultAsync(s => s.TripId == trip.TripId && s.LocationId == destLocationId);
+            var eta = stop != null
+                ? stop.PlannedArrivalTime.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)
+                : "N/A";
             var address = customerGroup.First().DestLocationNavigation?.Address ?? "N/A";
 
             var orderCodes = string.Join(", ", customerGroup.Select(o => o.TrackingCode));

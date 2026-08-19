@@ -505,7 +505,7 @@ public class IncidentRescueService : IIncidentRescueService
                     "Chuyến hàng {{tracking_code}} dự kiến trễ {{delay_minutes}} phút do sự cố vận chuyển",
                     "Xe {{old_plate}} gặp sự cố ({{incident_type}}) trên đường giao hàng. " +
                     "Chúng tôi đã lập tức điều xe lạnh {{new_plate}} đến thay thế để đảm bảo chất lượng hàng hóa. " +
-                    "Thời gian giao dự kiến mới: {{new_eta}} (kế hoạch cũ: {{old_eta}}). " +
+                    "Ngày giao dự kiến mới: {{new_eta}} (kế hoạch cũ: {{old_eta}}). " +
                     "Thành thật xin lỗi quý khách vì sự bất tiện này.")
                 : null;
 
@@ -530,8 +530,8 @@ public class IncidentRescueService : IIncidentRescueService
                         { "incident_type", incident.IncidentType },
                         { "old_plate",     brokenVehicle.TruckPlate },
                         { "new_plate",     rescueVehicle.TruckPlate },
-                        { "old_eta",       FormatVnTime(change.OldEta) },
-                        { "new_eta",       FormatVnTime(change.NewEta) },
+                        { "old_eta",       FormatCustomerEtaDate(change.OldEta) },
+                        { "new_eta",       FormatCustomerEtaDate(change.NewEta) },
                         { "delay_minutes", change.DelayMinutes.ToString(CultureInfo.InvariantCulture) }
                     });
 
@@ -1040,8 +1040,8 @@ public class IncidentRescueService : IIncidentRescueService
             .FirstOrDefaultAsync();
     }
 
-    private static string FormatVnTime(DateTime value)
-        => value.AddHours(7).ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+    private static string FormatCustomerEtaDate(DateTime value)
+        => value.AddHours(7).ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
 
     private static DateTime DbNow()
         => DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
