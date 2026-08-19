@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
@@ -1179,13 +1179,58 @@ public class DispatchController : ControllerBase
             .Include(t => t.DestinationLocation)
             .Include(t => t.TripStops)
                 .ThenInclude(ts => ts.Location)
+            .Include(t => t.TransportOrders)
+                .ThenInclude(o => o.DestLocationNavigation)
             .FirstOrDefaultAsync(t => t.TripId == id);
 
         if (trip == null)
             return NotFound(new { Success = false, Error = "Khong tim thay chuyen di." });
 
+        var tripLpns = await _db.Lpns
+            .Where(l => l.TripId == id && l.Order != null && l.Order.DestLocationNavigation != null)
+            .Include(l => l.Order)
+                .ThenInclude(o => o.DestLocationNavigation)
+            .ToListAsync();
+
         var actualDestinationLocation = trip.DestinationLocation;
-        if (trip.TripStops != null && trip.TripStops.Any())
+        var deliveryStops = trip.TripStops?
+            .Where(stop => stop.Location != null)
+            .Where(stop => !IsSameLocation(stop.Location!, trip.OriginLocation)
+                && !IsSameLocation(stop.Location!, actualDestinationLocation))
+            .OrderBy(stop => stop.StopSequence)
+            .ToList() ?? new List<TripStop>();
+
+        // Fallback sang điểm giao của các đơn hàng nếu TripStops trống
+        if (deliveryStops.Count == 0 && (trip.TransportOrders.Any() || tripLpns.Any()))
+        {
+            var orderDestLocations = trip.TransportOrders
+                .Where(o => o.DestLocationNavigation != null)
+                .Select(o => o.DestLocationNavigation!)
+                .Concat(tripLpns.Select(l => l.Order!.DestLocationNavigation!))
+                .Where(l => !IsSameLocation(l, trip.OriginLocation))
+                .GroupBy(l => l.LocationId)
+                .Select(g => g.First())
+                .ToList();
+
+            if (orderDestLocations.Count > 0)
+            {
+                actualDestinationLocation = orderDestLocations.Last();
+                deliveryStops = orderDestLocations
+                    .Take(orderDestLocations.Count - 1)
+                    .Select((loc, idx) => new TripStop
+                    {
+                        StopId = Guid.NewGuid(),
+                        TripId = trip.TripId,
+                        LocationId = loc.LocationId,
+                        Location = loc,
+                        StopSequence = idx + 1,
+                        StopType = "DELIVERY",
+                        Status = "PLANNED"
+                    })
+                    .ToList();
+            }
+        }
+        else if (trip.TripStops != null && trip.TripStops.Any())
         {
             var lastStop = trip.TripStops.OrderBy(s => s.StopSequence).LastOrDefault(s => s.Location != null);
             if (lastStop != null && lastStop.Location != null)
@@ -1193,13 +1238,6 @@ public class DispatchController : ControllerBase
                 actualDestinationLocation = lastStop.Location;
             }
         }
-
-        var deliveryStops = trip.TripStops
-            .Where(stop => stop.Location != null)
-            .Where(stop => !IsSameLocation(stop.Location!, trip.OriginLocation)
-                && !IsSameLocation(stop.Location!, actualDestinationLocation))
-            .OrderBy(stop => stop.StopSequence)
-            .ToList();
 
         var origin = GoongMapService.FormatCoordinate(
             trip.OriginLocation.Latitude,
@@ -1217,7 +1255,7 @@ public class DispatchController : ControllerBase
                 destination,
                 string.IsNullOrWhiteSpace(waypoints) ? null : waypoints,
                 HttpContext.RequestAborted);
-            var response = await BuildTripRouteResponseAsync(trip, deliveryStops, optimizedRoute);
+            var response = await BuildTripRouteResponseAsync(trip, actualDestinationLocation, deliveryStops, optimizedRoute);
             return Ok(new { Success = true, Data = response });
         }
         catch (Exception ex)
@@ -2279,6 +2317,7 @@ public class DispatchController : ControllerBase
 
     private async Task<TripRouteResponse> BuildTripRouteResponseAsync(
         MasterTrip trip,
+        Location actualDestinationLocation,
         IReadOnlyList<TripStop> deliveryStops,
         GoongOptimizedRouteResult optimizedRoute)
     {
@@ -2286,11 +2325,12 @@ public class DispatchController : ControllerBase
         var destinationLocationIds = sortedStops
             .Where(stop => stop.LocationId.HasValue)
             .Select(stop => stop.LocationId!.Value)
+            .Concat(actualDestinationLocation != null ? new[] { actualDestinationLocation.LocationId } : Array.Empty<Guid>())
             .Distinct()
             .ToList();
 
         var orders = await _db.TransportOrders
-            .Where(order => order.MasterTripId == trip.TripId
+            .Where(order => (order.MasterTripId == trip.TripId || _db.Lpns.Any(l => l.OrderId == order.OrderId && l.TripId == trip.TripId))
                 && order.DestLocation.HasValue
                 && destinationLocationIds.Contains(order.DestLocation.Value))
             .ToListAsync();
@@ -2318,10 +2358,10 @@ public class DispatchController : ControllerBase
             },
             Destination = new TripRoutePointDto
             {
-                LocationId = trip.DestinationLocation.LocationId,
-                Address = trip.DestinationLocation.Address,
-                Lat = trip.DestinationLocation.Latitude,
-                Lon = trip.DestinationLocation.Longitude
+                LocationId = actualDestinationLocation.LocationId,
+                Address = actualDestinationLocation.Address,
+                Lat = actualDestinationLocation.Latitude,
+                Lon = actualDestinationLocation.Longitude
             },
             OptimizedStops = sortedStops.Select((stop, index) =>
             {

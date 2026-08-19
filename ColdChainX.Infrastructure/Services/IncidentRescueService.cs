@@ -28,6 +28,7 @@ public class IncidentRescueService : IIncidentRescueService
     private readonly ILogger<IncidentRescueService> _logger;
     private readonly INotificationService? _notificationService;
     private readonly ILocationService? _locationService;
+    private readonly IIncidentWorkflowNotificationService? _workflowNotificationService;
 
     private static readonly string[] OnRoadTripStatuses = { "SEALED", "DISPATCHED", "IN_TRANSIT", "DELAYED" };
 
@@ -46,7 +47,8 @@ public class IncidentRescueService : IIncidentRescueService
         IMqttCommandPublisher mqttPublisher,
         ILogger<IncidentRescueService> logger,
         INotificationService? notificationService = null,
-        ILocationService? locationService = null)
+        ILocationService? locationService = null,
+        IIncidentWorkflowNotificationService? workflowNotificationService = null)
     {
         _db = db;
         _goongMapService = goongMapService;
@@ -55,6 +57,7 @@ public class IncidentRescueService : IIncidentRescueService
         _logger = logger;
         _notificationService = notificationService;
         _locationService = locationService;
+        _workflowNotificationService = workflowNotificationService;
     }
 
 
@@ -621,8 +624,21 @@ public class IncidentRescueService : IIncidentRescueService
                 trip,
                 plan,
                 $"Đã ghi nhận xe lạnh thuê ngoài {plan.VehiclePlate} chở hàng về {warehouse.WarehouseName}.");
-            await _hubContext.Clients.Groups("Group_Dispatcher", "Group_Admin", "Group_WarehouseWorker")
-                .SendAsync("ExternalReeferDispatched", result);
+            if (_workflowNotificationService != null)
+            {
+                await NotifyExternalReeferAudiencesAsync(
+                    incident,
+                    trip,
+                    warehouse,
+                    plan,
+                    dispatcherId,
+                    result);
+            }
+            else
+            {
+                await _hubContext.Clients.Groups("Group_Dispatcher", "Group_Admin", "Group_WarehouseWorker")
+                    .SendAsync("ExternalReeferDispatched", result);
+            }
             return ApiResponse<ExternalReeferWorkflowResult>.SuccessResponse(result, "External reefer dispatched to route destination warehouse.");
         }
         catch (Exception ex)
@@ -742,8 +758,22 @@ public class IncidentRescueService : IIncidentRescueService
                 trip,
                 plan,
                 $"Đã inbound {lpns.Count} LPN tại {warehouse.WarehouseName} bằng seal; chờ Dispatcher ghép chuyến mới.");
-            await _hubContext.Clients.Groups("Group_Dispatcher", "Group_Admin", "Group_WarehouseWorker")
-                .SendAsync("IncidentCargoInboundedAtRouteWarehouse", result);
+            if (_workflowNotificationService != null)
+            {
+                await NotifyRouteWarehouseInboundAudiencesAsync(
+                    incident,
+                    trip,
+                    warehouse,
+                    plan,
+                    confirmedBy,
+                    lpns.Select(lpn => lpn.LpnCode).ToList(),
+                    result);
+            }
+            else
+            {
+                await _hubContext.Clients.Groups("Group_Dispatcher", "Group_Admin", "Group_WarehouseWorker")
+                    .SendAsync("IncidentCargoInboundedAtRouteWarehouse", result);
+            }
             return ApiResponse<ExternalReeferWorkflowResult>.SuccessResponse(result, "Cargo inbounded at route warehouse without QC.");
         }
         catch (Exception ex)
@@ -1822,6 +1852,236 @@ public class IncidentRescueService : IIncidentRescueService
         };
     }
 
+
+    private async Task NotifyExternalReeferAudiencesAsync(
+        IncidentReport incident,
+        MasterTrip trip,
+        Warehouse warehouse,
+        ExternalReeferPlanRecord plan,
+        Guid dispatcherId,
+        ExternalReeferWorkflowResult payload)
+    {
+        if (_workflowNotificationService == null)
+            return;
+
+        await _workflowNotificationService.NotifyAsync(new IncidentWorkflowNotification
+        {
+            IncidentId = incident.IncidentId,
+            TripId = trip.TripId,
+            Action = "EXTERNAL_REEFER_DISPATCHED",
+            Title = "Đã điều xe lạnh cứu hộ",
+            Body = $"Xe {plan.VehiclePlate} đã được điều đến nhận hàng và chở về {warehouse.WarehouseName}.",
+            RecipientRoles = new[] { "ADMIN", "DISPATCHER" },
+            AdditionalUserIds = new[] { dispatcherId },
+            IncludeReporter = false,
+            IncludeTripDrivers = false,
+            RealtimeGroups = new[] { "Group_Admin", "Group_Dispatcher" },
+            RealtimeEventName = "ExternalReeferDispatched",
+            Payload = payload
+        });
+
+        await _workflowNotificationService.NotifyAsync(new IncidentWorkflowNotification
+        {
+            IncidentId = incident.IncidentId,
+            TripId = trip.TripId,
+            Action = "EMERGENCY_INBOUND_PREPARE",
+            Title = "Chuẩn bị nhập hàng sự cố khẩn cấp",
+            Body = $"Xe lạnh ngoài {plan.VehiclePlate} đang về {warehouse.WarehouseName}. Chuẩn bị inbound bằng seal {plan.SealNumber}, không QC.",
+            RecipientRoles = new[] { "WAREHOUSEWORKER" },
+            RecipientWarehouseId = warehouse.WarehouseId,
+            IncludeReporter = false,
+            IncludeTripDrivers = false,
+            RealtimeEventName = "WarehouseEmergencyInboundRequested",
+            Payload = new
+            {
+                incident.IncidentId,
+                trip.TripId,
+                warehouse.WarehouseId,
+                warehouse.WarehouseName,
+                plan.VehiclePlate,
+                plan.SealNumber,
+                LpnCount = plan.LpnIds.Count,
+                plan.ExpectedWarehouseArrivalAt
+            }
+        });
+
+        await _workflowNotificationService.NotifyAsync(new IncidentWorkflowNotification
+        {
+            IncidentId = incident.IncidentId,
+            TripId = trip.TripId,
+            Action = "RESCUE_VEHICLE_SENT",
+            Title = "Xe cứu hộ đã được điều đến",
+            Body = $"Xe lạnh {plan.VehiclePlate} của {plan.RentalProvider} đang đến nhận hàng và đưa về {warehouse.WarehouseName}.",
+            IncludeReporter = false,
+            IncludeTripDrivers = true,
+            RealtimeEventName = "DriverRescueVehicleDispatched",
+            Payload = new
+            {
+                incident.IncidentId,
+                trip.TripId,
+                plan.VehiclePlate,
+                plan.DriverName,
+                plan.DriverPhone,
+                warehouse.WarehouseName,
+                plan.ExpectedWarehouseArrivalAt
+            }
+        });
+
+        var orderTargets = await _db.Lpns
+            .AsNoTracking()
+            .Where(lpn => plan.LpnIds.Contains(lpn.LpnId))
+            .Select(lpn => new
+            {
+                lpn.OrderId,
+                lpn.Order.TrackingCode,
+                lpn.Order.CustomerId
+            })
+            .Distinct()
+            .ToListAsync();
+        var customerUserCache = new Dictionary<Guid, Guid?>();
+        foreach (var order in orderTargets)
+        {
+            var customerUserId = await ResolveCustomerUserIdAsync(order.CustomerId, customerUserCache);
+            if (!customerUserId.HasValue)
+                continue;
+
+            await _workflowNotificationService.NotifyAsync(new IncidentWorkflowNotification
+            {
+                IncidentId = incident.IncidentId,
+                TripId = trip.TripId,
+                Action = "CUSTOMER_ORDER_DELAYED_VEHICLE_CHANGE",
+                Title = $"Đơn {order.TrackingCode} có thể giao trễ",
+                Body = "Xe vận chuyển gặp sự cố nên ColdChainX đang đổi sang xe lạnh khác. Hàng được bảo quản lạnh và lịch giao sẽ được cập nhật sớm.",
+                AdditionalUserIds = new[] { customerUserId.Value },
+                IncludeReporter = false,
+                IncludeTripDrivers = false,
+                RealtimeEventName = "CustomerOrderDelayedByVehicleChange",
+                NotificationType = "ORDER_DELAYED",
+                ReferenceId = order.OrderId.ToString(),
+                Screen = "ORDER_DETAIL",
+                AdditionalData = new Dictionary<string, string>
+                {
+                    ["orderId"] = order.OrderId.ToString(),
+                    ["trackingCode"] = order.TrackingCode
+                },
+                Payload = new
+                {
+                    incident.IncidentId,
+                    trip.TripId,
+                    order.OrderId,
+                    order.TrackingCode,
+                    Reason = "VEHICLE_CHANGE"
+                }
+            });
+        }
+    }
+
+    private async Task NotifyRouteWarehouseInboundAudiencesAsync(
+        IncidentReport incident,
+        MasterTrip trip,
+        Warehouse warehouse,
+        ExternalReeferPlanRecord plan,
+        Guid confirmedBy,
+        IReadOnlyCollection<string> lpnCodes,
+        ExternalReeferWorkflowResult payload)
+    {
+        if (_workflowNotificationService == null)
+            return;
+
+        var lpnSummary = FormatLpnCodes(lpnCodes);
+        await _workflowNotificationService.NotifyAsync(new IncidentWorkflowNotification
+        {
+            IncidentId = incident.IncidentId,
+            TripId = trip.TripId,
+            Action = "URGENT_REDISPATCH_REQUIRED",
+            Title = "Cần tạo lại chuyến giao hàng gấp",
+            Body = $"Hàng đã vào {warehouse.WarehouseName}. Hãy tạo trip mới cho {lpnCodes.Count} LPN: {lpnSummary}.",
+            RecipientRoles = new[] { "ADMIN", "DISPATCHER" },
+            IncludeReporter = false,
+            IncludeTripDrivers = false,
+            RealtimeGroups = new[] { "Group_Admin", "Group_Dispatcher" },
+            RealtimeEventName = "IncidentCargoInboundedAtRouteWarehouse",
+            Payload = new
+            {
+                Incident = payload,
+                LpnCodes = lpnCodes,
+                RequiredAction = "CREATE_REDISPATCH_TRIP",
+                Priority = "URGENT"
+            }
+        });
+
+        await _workflowNotificationService.NotifyAsync(new IncidentWorkflowNotification
+        {
+            IncidentId = incident.IncidentId,
+            TripId = trip.TripId,
+            Action = "ROUTE_WAREHOUSE_INBOUNDED",
+            Title = "Đã nhập hàng sự cố khẩn cấp",
+            Body = $"Đã đối chiếu seal {plan.SealNumber} và nhập {lpnCodes.Count} LPN vào {warehouse.WarehouseName}; không qua QC.",
+            RecipientRoles = new[] { "WAREHOUSEWORKER" },
+            RecipientWarehouseId = warehouse.WarehouseId,
+            AdditionalUserIds = new[] { confirmedBy },
+            IncludeReporter = false,
+            IncludeTripDrivers = false,
+            RealtimeEventName = "IncidentCargoInboundedAtRouteWarehouse",
+            Payload = payload
+        });
+
+        await _workflowNotificationService.NotifyAsync(new IncidentWorkflowNotification
+        {
+            IncidentId = incident.IncidentId,
+            TripId = trip.TripId,
+            Action = "RESCUE_VEHICLE_ARRIVED_WAREHOUSE",
+            Title = "Xe cứu hộ đã đến kho",
+            Body = $"Hàng đã được xe {plan.VehiclePlate} đưa đến {warehouse.WarehouseName} và bàn giao đủ seal.",
+            IncludeReporter = false,
+            IncludeTripDrivers = true,
+            RealtimeEventName = "DriverRescueArrivedAtWarehouse",
+            Payload = payload
+        });
+
+        var orderTargets = await _db.Lpns
+            .AsNoTracking()
+            .Where(lpn => plan.LpnIds.Contains(lpn.LpnId))
+            .Select(lpn => new { lpn.OrderId, lpn.Order.TrackingCode, lpn.Order.CustomerId })
+            .Distinct()
+            .ToListAsync();
+        var customerUserCache = new Dictionary<Guid, Guid?>();
+        foreach (var order in orderTargets)
+        {
+            var customerUserId = await ResolveCustomerUserIdAsync(order.CustomerId, customerUserCache);
+            if (!customerUserId.HasValue)
+                continue;
+
+            await _workflowNotificationService.NotifyAsync(new IncidentWorkflowNotification
+            {
+                IncidentId = incident.IncidentId,
+                TripId = trip.TripId,
+                Action = "CUSTOMER_ORDER_AT_ROUTE_WAREHOUSE",
+                Title = $"Đơn {order.TrackingCode} đã về kho tuyến",
+                Body = "Hàng đã được đưa về kho an toàn. ColdChainX đang ưu tiên sắp xếp xe khác để tiếp tục giao đơn.",
+                AdditionalUserIds = new[] { customerUserId.Value },
+                IncludeReporter = false,
+                IncludeTripDrivers = false,
+                RealtimeEventName = "CustomerOrderAwaitingReplacementVehicle",
+                NotificationType = "ORDER_DELAYED",
+                ReferenceId = order.OrderId.ToString(),
+                Screen = "ORDER_DETAIL",
+                AdditionalData = new Dictionary<string, string>
+                {
+                    ["orderId"] = order.OrderId.ToString(),
+                    ["trackingCode"] = order.TrackingCode
+                },
+                Payload = new { incident.IncidentId, order.OrderId, order.TrackingCode, warehouse.WarehouseName }
+            });
+        }
+    }
+
+    private static string FormatLpnCodes(IReadOnlyCollection<string> lpnCodes)
+    {
+        var codes = lpnCodes.Where(code => !string.IsNullOrWhiteSpace(code)).Distinct().ToList();
+        var visible = string.Join(", ", codes.Take(10));
+        return codes.Count > 10 ? $"{visible} và {codes.Count - 10} LPN khác" : visible;
+    }
 
     private async Task<Guid?> ResolveCustomerUserIdAsync(Guid? customerId, Dictionary<Guid, Guid?> cache)
     {

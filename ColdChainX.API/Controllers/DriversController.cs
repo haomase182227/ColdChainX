@@ -258,7 +258,12 @@ namespace ColdChainX.API.Controllers
                     TripId = td.TripId,
                     TripCode = "TRIP-" + td.TripId.ToString().Substring(0, 8).ToUpper(),
                     Status = td.Trip!.Status,
-                    VehiclePlate = td.Trip.Vehicle != null ? td.Trip.Vehicle.TruckPlate : null,
+                    VehiclePlate = (from i in _dbContext.IncidentReports
+                                    where i.TripId == td.TripId && i.ReplacementVehicleId != null && i.Status != "CANCELLED" && i.Status != "REJECTED"
+                                    orderby i.ReportedAt descending
+                                    join v in _dbContext.Vehicles on i.ReplacementVehicleId equals v.VehicleId
+                                    select v.TruckPlate).FirstOrDefault()
+                                   ?? (td.Trip.Vehicle != null ? td.Trip.Vehicle.TruckPlate : null),
                     RouteName = td.Trip.Route != null ? td.Trip.Route.RouteCode : null,
                     Origin = td.Trip.OriginLocation != null ? td.Trip.OriginLocation.Address : "N/A",
                     Destination = td.Trip.DestinationLocation != null ? td.Trip.DestinationLocation.Address : "N/A",
@@ -281,6 +286,12 @@ namespace ColdChainX.API.Controllers
             var driverId = GetDriverId();
             if (driverId == Guid.Empty) return Unauthorized(new { success = false, message = "Driver ID not found in token." });
 
+            var replacementVehicle = await (from i in _dbContext.IncidentReports
+                                            where i.TripId == tripId && i.ReplacementVehicleId != null && i.Status != "CANCELLED" && i.Status != "REJECTED"
+                                            orderby i.ReportedAt descending
+                                            join v in _dbContext.Vehicles on i.ReplacementVehicleId equals v.VehicleId
+                                            select v).FirstOrDefaultAsync();
+
             var trip = await _dbContext.MasterTrips
                 .Include(t => t.Vehicle)
                 .Include(t => t.TripStops)
@@ -297,13 +308,13 @@ namespace ColdChainX.API.Controllers
                     t.TotalDistanceKm,
                     t.EstimatedDurationHours,
                     t.TargetTemperature,
-                    Vehicle = t.Vehicle != null ? new 
+                    Vehicle = (replacementVehicle ?? t.Vehicle) != null ? new 
                     { 
-                        t.Vehicle.VehicleId, 
-                        t.Vehicle.TruckPlate, 
-                        t.Vehicle.VehicleType,
-                        t.Vehicle.MaxWeight,
-                        t.Vehicle.MaxCbm
+                        VehicleId = (replacementVehicle ?? t.Vehicle)!.VehicleId, 
+                        TruckPlate = (replacementVehicle ?? t.Vehicle)!.TruckPlate, 
+                        VehicleType = (replacementVehicle ?? t.Vehicle)!.VehicleType,
+                        MaxWeight = (replacementVehicle ?? t.Vehicle)!.MaxWeight,
+                        MaxCbm = (replacementVehicle ?? t.Vehicle)!.MaxCbm
                     } : null,
                     StopCount = t.TripStops.Count,
                     Stops = t.TripStops.OrderBy(s => s.StopSequence).Select(s => new
