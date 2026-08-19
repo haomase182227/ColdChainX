@@ -80,6 +80,11 @@ public class ReportNoShowCommandHandler : IRequestHandler<ReportNoShowCommand, A
             var order = stop.Trip.TransportOrders.FirstOrDefault(o => o.DestLocation == stop.LocationId);
             if (order != null)
             {
+                var existingEpod = await _context.DeliveryEpods
+                    .FirstOrDefaultAsync(e => e.OrderId == order.OrderId && e.HandoverConfirmedAt != null, cancellationToken);
+                if (existingEpod != null)
+                    throw new ConflictException($"Order '{order.TrackingCode}' already has a completed ePOD ({existingEpod.EpodId}). Cannot report no-show again.");
+
                 order.Status = "DELIVERY_FAILED_NOSHOW";
 
                 var lpns = await _context.Lpns.Where(l => l.OrderId == order.OrderId).ToListAsync(cancellationToken);
@@ -88,6 +93,23 @@ public class ReportNoShowCommandHandler : IRequestHandler<ReportNoShowCommand, A
                     lpn.State = ColdChainX.Core.Enums.LpnState.RETURN_PENDING;
                 }
 
+                var now = DateTime.UtcNow;
+                _context.DeliveryEpods.Add(new DeliveryEpod
+                {
+                    EpodId = Guid.NewGuid(),
+                    OrderId = order.OrderId,
+                    CheckinTime = stop.ActualArrivalTime ?? now,
+                    SignedAt = now,
+                    HandoverConfirmedAt = now,
+                    SignLatitude = stop.Location?.Latitude,
+                    SignLongitude = stop.Location?.Longitude,
+                    Status = "NO_SHOW",
+                    CodAmount = 0m,
+                    CodAmountPaid = 0m,
+                    PaymentStatus = "SKIPPED_NO_SHOW",
+                    Note = $"Customer no-show / refused to receive. Evidence: {proofUrl}",
+                    CreatedAt = now
+                });
             }
         }
 
