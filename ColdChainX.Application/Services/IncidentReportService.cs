@@ -41,6 +41,7 @@ public class IncidentReportService : IIncidentReportService
     private readonly IIncidentRealtimeNotifier? _realtimeNotifier;
     private readonly INotificationService? _notificationService;
     private readonly IRealtimeTelemetryService? _realtimeTelemetryService;
+    private readonly IIncidentWorkflowNotificationService? _workflowNotificationService;
     private readonly int _reportedSlaMinutes;
 
     public IncidentReportService(
@@ -51,7 +52,8 @@ public class IncidentReportService : IIncidentReportService
         IIncidentRealtimeNotifier? realtimeNotifier = null,
         INotificationService? notificationService = null,
         IRealtimeTelemetryService? realtimeTelemetryService = null,
-        IConfiguration? configuration = null)
+        IConfiguration? configuration = null,
+        IIncidentWorkflowNotificationService? workflowNotificationService = null)
     {
         _db = db;
         _pdfGeneratorService = pdfGeneratorService;
@@ -60,6 +62,7 @@ public class IncidentReportService : IIncidentReportService
         _realtimeNotifier = realtimeNotifier;
         _notificationService = notificationService;
         _realtimeTelemetryService = realtimeTelemetryService;
+        _workflowNotificationService = workflowNotificationService;
         _reportedSlaMinutes = Math.Max(
             1,
             configuration?.GetValue<int?>("IncidentWorkflow:ReportedSlaMinutes")
@@ -152,8 +155,11 @@ public class IncidentReportService : IIncidentReportService
 
             var now = DbNow();
             var riskLevel = request.RiskLevel ?? MapLegacySeverityToRisk(request.Severity);
+            var mandatoryExternalRelay = RequiresMandatoryExternalReeferRelay(request.IncidentType.Value);
+            if (mandatoryExternalRelay)
+                riskLevel = IncidentRiskLevel.CRITICAL;
             if (previousIncident?.ReplacementVehicleId == trip?.VehicleId
-                && (riskLevel == IncidentRiskLevel.WARNING || request.RequiresRescue))
+                && (riskLevel == IncidentRiskLevel.WARNING || request.RequiresRescue || mandatoryExternalRelay))
             {
                 riskLevel = IncidentRiskLevel.CRITICAL;
             }
@@ -168,7 +174,7 @@ public class IncidentReportService : IIncidentReportService
                 CurrentLatitude = resolvedLocation.Latitude,
                 CurrentLongitude = resolvedLocation.Longitude,
                 DriverPaidAmount = request.DriverPaidAmount,
-                RequiresRescue = request.RequiresRescue,
+                RequiresRescue = request.RequiresRescue || mandatoryExternalRelay,
                 TemperatureTolerance = DefaultTemperatureTolerance,
                 PreviousIncidentId = previousIncident?.IncidentId,
                 SlaDueAt = now.AddMinutes(_reportedSlaMinutes),
@@ -392,7 +398,7 @@ public class IncidentReportService : IIncidentReportService
             if (actor == null)
                 return ApiResponse<IncidentResponse>.Failure("Evidence uploader user not found.", 404);
 
-            var isPrivileged = actor?.Role?.RoleName is not null &&
+            var isPrivileged = actor.Role?.RoleName is not null &&
                                (actor.Role.RoleName.Equals("Admin", StringComparison.OrdinalIgnoreCase) ||
                                 actor.Role.RoleName.Equals("Dispatcher", StringComparison.OrdinalIgnoreCase));
             if (incident.ReportedBy != userId && !isPrivileged)
@@ -412,6 +418,29 @@ public class IncidentReportService : IIncidentReportService
 
             await _db.SaveChangesAsync();
             var saved = await LoadIncidentAsync(incidentId);
+            if (_workflowNotificationService != null)
+            {
+                await _workflowNotificationService.NotifyAsync(new IncidentWorkflowNotification
+                {
+                    IncidentId = incident.IncidentId,
+                    TripId = incident.TripId,
+                    Action = "EVIDENCE_ADDED",
+                    Title = "Đã bổ sung bằng chứng sự cố",
+                    Body = $"{actor.FullName} đã tải lên {files.Count} tệp loại {normalizedType}.",
+                    RecipientRoles = new[] { "ADMIN", "DISPATCHER" },
+                    AdditionalUserIds = new[] { userId },
+                    RealtimeGroups = new[] { "Group_Admin", "Group_Dispatcher" },
+                    RealtimeEventName = "IncidentEvidenceAdded",
+                    Payload = new
+                    {
+                        incident.IncidentId,
+                        incident.TripId,
+                        EvidenceType = normalizedType,
+                        FileCount = files.Count,
+                        UploadedBy = userId
+                    }
+                });
+            }
             return ApiResponse<IncidentResponse>.SuccessResponse(
                 MapToResponse(saved!),
                 "Incident evidence uploaded successfully.");
@@ -525,6 +554,11 @@ public class IncidentReportService : IIncidentReportService
                 effectiveRisk = IncidentRiskLevel.CRITICAL;
                 reasons.Add("This is a repeated incident on the running replacement trip.");
             }
+            if (RequiresMandatoryExternalReeferRelay(incident.IncidentType))
+            {
+                effectiveRisk = IncidentRiskLevel.CRITICAL;
+                reasons.Add("Vehicle/reefer breakdown requires mandatory external refrigerated transport to the route destination warehouse.");
+            }
 
             var (remainingSafeMinutes, safeTimeCalculation) = CalculateRemainingSafeTime(
                 target,
@@ -603,10 +637,28 @@ public class IncidentReportService : IIncidentReportService
                 SafeTimeCalculation = safeTimeCalculation
             };
 
-            await SafeNotifyGroupsAsync(
-                new[] { "Group_Dispatcher", "Group_Admin" },
-                "IncidentRiskAssessed",
-                response);
+            if (_workflowNotificationService != null)
+            {
+                await _workflowNotificationService.NotifyAsync(new IncidentWorkflowNotification
+                {
+                    IncidentId = incident.IncidentId,
+                    TripId = incident.TripId,
+                    Action = "RISK_ASSESSED",
+                    Title = "Đã đánh giá mức độ sự cố",
+                    Body = $"Sự cố được xếp mức {response.EffectiveRiskLevel}; trạng thái {response.IncidentStatus}.",
+                    RecipientRoles = new[] { "ADMIN", "DISPATCHER" },
+                    RealtimeGroups = new[] { "Group_Admin", "Group_Dispatcher" },
+                    RealtimeEventName = "IncidentRiskAssessed",
+                    Payload = response
+                });
+            }
+            else
+            {
+                await SafeNotifyGroupsAsync(
+                    new[] { "Group_Dispatcher", "Group_Admin" },
+                    "IncidentRiskAssessed",
+                    response);
+            }
 
             return ApiResponse<IncidentRiskAssessmentResponse>.SuccessResponse(
                 response,
@@ -619,6 +671,16 @@ public class IncidentReportService : IIncidentReportService
                 $"Failed to assess incident risk: {ex.Message}");
         }
     }
+
+    private static bool RequiresMandatoryExternalReeferRelay(IncidentType incidentType)
+        => incidentType is IncidentType.VEHICLE_BREAKDOWN or IncidentType.REEFER_BREAKDOWN;
+
+    private static bool RequiresMandatoryExternalReeferRelay(string incidentType)
+        => incidentType.Equals(IncidentType.VEHICLE_BREAKDOWN.ToString(), StringComparison.OrdinalIgnoreCase)
+            || incidentType.Equals(IncidentType.REEFER_BREAKDOWN.ToString(), StringComparison.OrdinalIgnoreCase)
+            || incidentType.Equals("BREAKDOWN", StringComparison.OrdinalIgnoreCase)
+            || incidentType.Equals("COOLING_FAILURE", StringComparison.OrdinalIgnoreCase)
+            || incidentType.Equals("REFRIGERATION_BREAKDOWN", StringComparison.OrdinalIgnoreCase);
 
     public async Task<ApiResponse<IncidentResponse>> ApproveExpenseAsync(
         Guid incidentId,
@@ -832,14 +894,19 @@ public class IncidentReportService : IIncidentReportService
 
             if (incident.TripId.HasValue)
             {
+                var mandatoryExternalRelay = RequiresMandatoryExternalReeferRelay(incident.IncidentType);
                 var operationallyReady = incident.RequiresRescue
-                    ? incident.Status is "TRANSLOAD_COMPLETED" or "REDISPATCH_PLANNED"
+                    ? mandatoryExternalRelay
+                        ? incident.Status == "REDISPATCHED_TO_CUSTOMER"
+                        : incident.Status is "TRANSLOAD_COMPLETED" or "REDISPATCH_PLANNED" or "REDISPATCHED_TO_CUSTOMER"
                     : incident.Status == "CONTINUED";
                 if (!operationallyReady)
                 {
                     return ApiResponse<bool>.Failure(
-                        incident.RequiresRescue
-                            ? "A rescue incident can only be resolved after transload completion or a clear redispatch plan."
+                        mandatoryExternalRelay
+                            ? "Vehicle/reefer breakdown can only be resolved after the new warehouse trip is sealed and dispatched to customers."
+                            : incident.RequiresRescue
+                                ? "A rescue incident can only be resolved after transload completion or a clear redispatch plan."
                             : "Incident can only be resolved after the trip has continued.");
                 }
             }
@@ -1266,6 +1333,9 @@ public class IncidentReportService : IIncidentReportService
             LastSlaEscalatedAt = incident.LastSlaEscalatedAt,
             RescuePlanType = incident.RescuePlanType,
             RescuePlanDetails = incident.RescuePlanDetails,
+            ExternalReeferPlan = incident.RescuePlanType == "EXTERNAL_REEFER_TO_ROUTE_WAREHOUSE"
+                ? DeserializeExternalReeferPlan(incident.RescuePlanDetails)
+                : null,
             RedispatchPlan = incident.RedispatchPlan,
             ApprovedAmount = incident.ApprovedAmount,
             ReimbursedAmount = incident.ReimbursedAmount,
@@ -1371,6 +1441,20 @@ public class IncidentReportService : IIncidentReportService
         try
         {
             return JsonSerializer.Deserialize<TransloadRecord>(json);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static ExternalReeferPlanRecord? DeserializeExternalReeferPlan(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return null;
+        try
+        {
+            return JsonSerializer.Deserialize<ExternalReeferPlanRecord>(json);
         }
         catch (JsonException)
         {

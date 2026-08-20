@@ -30,6 +30,7 @@ namespace ColdChainX.Application.DTOs.Incident
         public DateTime? LastSlaEscalatedAt { get; set; }
         public string? RescuePlanType { get; set; }
         public string? RescuePlanDetails { get; set; }
+        public ExternalReeferPlanRecord? ExternalReeferPlan { get; set; }
         public string? RedispatchPlan { get; set; }
         public decimal? ApprovedAmount { get; set; }
         public decimal? ReimbursedAmount { get; set; }

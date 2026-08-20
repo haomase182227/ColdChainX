@@ -17,6 +17,16 @@ namespace ColdChainX.Application.Interfaces
             RecordRescueFallbackRequest request,
             Guid dispatcherId);
 
+        Task<ApiResponse<ExternalReeferWorkflowResult>> DispatchExternalReeferAsync(
+            Guid incidentId,
+            DispatchExternalReeferRequest request,
+            Guid dispatcherId);
+
+        Task<ApiResponse<ExternalReeferWorkflowResult>> InboundRouteWarehouseAsync(
+            Guid incidentId,
+            InboundRouteWarehouseRequest request,
+            Guid confirmedBy);
+
         Task<ApiResponse<IncidentWorkflowResult>> ContinueTripAsync(
             Guid incidentId,
             ContinueTripAfterIncidentRequest request,

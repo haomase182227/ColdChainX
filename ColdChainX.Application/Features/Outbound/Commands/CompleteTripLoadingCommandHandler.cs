@@ -1,3 +1,4 @@
+using ColdChainX.Application.DTOs.Incident;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Enums;
 using MediatR;
@@ -12,17 +13,20 @@ public class CompleteTripLoadingCommandHandler : IRequestHandler<CompleteTripLoa
     private readonly ILogger<CompleteTripLoadingCommandHandler> _logger;
     private readonly IMediator _mediator;
     private readonly IPdfService _pdfService;
+    private readonly IIncidentWorkflowNotificationService? _workflowNotificationService;
 
     public CompleteTripLoadingCommandHandler(
         IApplicationDbContext context,
         ILogger<CompleteTripLoadingCommandHandler> logger,
         IMediator mediator,
-        IPdfService pdfService)
+        IPdfService pdfService,
+        IIncidentWorkflowNotificationService? workflowNotificationService = null)
     {
         _context = context;
         _logger = logger;
         _mediator = mediator;
         _pdfService = pdfService;
+        _workflowNotificationService = workflowNotificationService;
     }
 
     public async Task<CompleteTripLoadingResponse> Handle(CompleteTripLoadingCommand request, CancellationToken cancellationToken)
@@ -114,6 +118,37 @@ public class CompleteTripLoadingCommandHandler : IRequestHandler<CompleteTripLoa
         if (!string.IsNullOrEmpty(manifestUrl) || !string.IsNullOrEmpty(outboundTicketUrl))
         {
             await _context.SaveChangesAsync(cancellationToken);
+        }
+
+        var linkedIncident = await _context.IncidentReports
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                incident => incident.TripId == trip.TripId && incident.Status == "REDISPATCH_PLANNED",
+                cancellationToken);
+        if (linkedIncident != null && _workflowNotificationService != null)
+        {
+            await _workflowNotificationService.NotifyAsync(new IncidentWorkflowNotification
+            {
+                IncidentId = linkedIncident.IncidentId,
+                TripId = trip.TripId,
+                Action = "REDISPATCH_LOADING_COMPLETED",
+                Title = "Đã xếp xong chuyến giao lại",
+                Body = $"Kho đã xếp xong {allLpns.Count} LPN cho chuyến {trip.TripId}; sẵn sàng kẹp seal.",
+                RecipientRoles = new[] { "ADMIN", "DISPATCHER", "WAREHOUSEWORKER" },
+                IncludeReporter = false,
+                IncludeTripDrivers = false,
+                RealtimeGroups = new[] { "Group_Admin", "Group_Dispatcher", "Group_WarehouseWorker" },
+                RealtimeEventName = "IncidentRedispatchLoadingCompleted",
+                Payload = new
+                {
+                    linkedIncident.IncidentId,
+                    TripId = trip.TripId,
+                    LpnCount = allLpns.Count,
+                    TripStatus = trip.Status,
+                    ManifestPdfUrl = manifestUrl,
+                    OutboundTicketPdfUrl = outboundTicketUrl
+                }
+            }, cancellationToken);
         }
 
         return new CompleteTripLoadingResponse
