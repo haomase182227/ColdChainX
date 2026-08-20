@@ -41,15 +41,22 @@ namespace ColdChainX.Application.Validators
                 .WithMessage($"Category must be one of: {string.Join(", ", AllowedCategories)}");
 
             RuleFor(x => x.TempCondition)
+                .NotNull().WithMessage("Temp_Condition is required")
                 .InclusiveBetween(-18m, 5m)
                 .WithMessage("Temp_Condition must be between -18 and 5 Celsius");
 
             RuleFor(x => x.ExpectedWeightKg)
+                .NotNull()
+                .When(x => string.IsNullOrWhiteSpace(x.PackageLinesJson))
+                .WithMessage("Expected_Weight_KG is required when Package_Lines is not provided")
                 .GreaterThan(0)
                 .When(x => string.IsNullOrWhiteSpace(x.PackageLinesJson))
                 .WithMessage("Expected_Weight_KG must be greater than 0 when Package_Lines is not provided");
 
             RuleFor(x => x.Quantity)
+                .NotNull()
+                .When(x => string.IsNullOrWhiteSpace(x.PackageLinesJson))
+                .WithMessage("Quantity is required when Package_Lines is not provided")
                 .GreaterThan(0)
                 .When(x => string.IsNullOrWhiteSpace(x.PackageLinesJson))
                 .WithMessage("Quantity must be greater than 0 when Package_Lines is not provided");
@@ -93,10 +100,12 @@ namespace ColdChainX.Application.Validators
                 .MaximumLength(500).WithMessage("Dest_Address_Text must not exceed 500 characters");
 
             RuleFor(x => x.ScheduleId)
-                .NotEmpty().WithMessage("Schedule_ID is required");
+                .Must(id => id.HasValue && id.Value != Guid.Empty)
+                .WithMessage("Schedule_ID is required");
 
             RuleFor(x => x.DropoffStopId)
-                .NotEmpty().WithMessage("Dropoff_Stop_ID is required");
+                .Must(id => id.HasValue && id.Value != Guid.Empty)
+                .WithMessage("Dropoff_Stop_ID is required");
 
             RuleFor(x => x.ReceiverName)
                 .NotEmpty().WithMessage("Receiver_Name is required")
