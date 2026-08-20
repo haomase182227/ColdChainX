@@ -16,6 +16,11 @@ namespace ColdChainX.Application.DTOs.Orders
         public decimal? LengthCm { get; set; }
         public decimal? WidthCm { get; set; }
         public decimal? HeightCm { get; set; }
+        public string? CbmEstimationMethod { get; set; }
+        public string? CbmEstimationConfidence { get; set; }
+        public decimal? CustomerProvidedTotalCbm { get; set; }
+        public int? TotalPackageQuantity { get; set; }
+        public IReadOnlyCollection<OrderPackageLineResponse> PackageLines { get; set; } = Array.Empty<OrderPackageLineResponse>();
         public Guid? DropoffStopId { get; set; }
 
         public string Status { get; set; } = null!;
@@ -95,5 +100,13 @@ namespace ColdChainX.Application.DTOs.Orders
         public string? FileUrl { get; set; }
         public string Status { get; set; } = null!;
         public DateTime? CreatedAt { get; set; }
+    }
+
+    public class OrderPackageLineResponse
+    {
+        public Guid OrderPackageLineId { get; set; }
+        public string Label { get; set; } = null!;
+        public decimal CapacityKg { get; set; }
+        public int Quantity { get; set; }
     }
 }

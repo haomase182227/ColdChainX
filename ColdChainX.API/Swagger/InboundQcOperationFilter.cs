@@ -1,18 +1,17 @@
-using ColdChainX.Application.Validators;
-using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi.Any;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
 namespace ColdChainX.API.Swagger
 {
-    public class CreateOrderFormOperationFilter : IOperationFilter
+    public class InboundQcOperationFilter : IOperationFilter
     {
         public void Apply(OpenApiOperation operation, OperationFilterContext context)
         {
             var path = context.ApiDescription.RelativePath?.TrimEnd('/');
             var httpMethod = context.ApiDescription.HttpMethod;
 
-            if (!string.Equals(path, "api/orders", StringComparison.OrdinalIgnoreCase)
+            if (!string.Equals(path, "api/Inbound/qc", StringComparison.OrdinalIgnoreCase)
                 || !string.Equals(httpMethod, "POST", StringComparison.OrdinalIgnoreCase))
             {
                 return;
@@ -25,42 +24,18 @@ namespace ColdChainX.API.Swagger
                 return;
             }
 
-            ApplyEnum(mediaType.Schema, "Category", CreateOrderRequestValidator.AllowedCategories);
-            ApplyEnum(mediaType.Schema, "category", CreateOrderRequestValidator.AllowedCategories);
-            ApplyEnum(mediaType.Schema, "Packaging_Type", CreateOrderRequestValidator.AllowedPackagingTypes);
-            ApplyEnum(mediaType.Schema, "packagingType", CreateOrderRequestValidator.AllowedPackagingTypes);
             ApplyStringExample(
                 mediaType.Schema,
-                "Package_Lines",
-                """[{"label":"Thung 5kg","capacityKg":5,"quantity":4},{"label":"Thung 10kg","capacityKg":10,"quantity":6},{"label":"Thung 22kg","capacityKg":22,"quantity":3}]""",
-                "Paste JSON array of package lines. Backend calculates ExpectedWeightKg and ExpectedCbm from this value.");
+                "Actual_Package_Lines",
+                """[{"label":"Thung 5kg","quantity":4,"actualWeightKg":22,"lengthCm":35,"widthCm":25,"heightCm":20},{"label":"Thung 10kg","quantity":6,"actualWeightKg":63,"lengthCm":45,"widthCm":30,"heightCm":25}]""",
+                "Paste JSON array of actual package lines measured by warehouse QC.");
 
             RemoveProperties(mediaType.Schema,
-                "Length_CM",
-                "Width_CM",
-                "Height_CM",
-                "Expected_Weight_KG",
-                "Quantity");
-        }
-
-        private static void ApplyEnum(OpenApiSchema schema, string propertyName, IEnumerable<string> values)
-        {
-            var property = FindProperty(schema, propertyName);
-            if (property == null)
-                return;
-
-            property.Type = "string";
-            property.Enum = values.Select(value => (IOpenApiAny)new OpenApiString(value)).ToList();
-        }
-
-        private static OpenApiSchema? FindProperty(OpenApiSchema schema, string propertyName)
-        {
-            if (schema.Properties.TryGetValue(propertyName, out var exactMatch))
-                return exactMatch;
-
-            return schema.Properties
-                .FirstOrDefault(entry => string.Equals(entry.Key, propertyName, StringComparison.OrdinalIgnoreCase))
-                .Value;
+                "WarehouseId",
+                "ActualWeightKg",
+                "LengthCm",
+                "WidthCm",
+                "HeightCm");
         }
 
         private static void ApplyStringExample(OpenApiSchema schema, string propertyName, string example, string description)
@@ -73,6 +48,16 @@ namespace ColdChainX.API.Swagger
             property.Example = new OpenApiString(example);
             property.Default = new OpenApiString(example);
             property.Description = description;
+        }
+
+        private static OpenApiSchema? FindProperty(OpenApiSchema schema, string propertyName)
+        {
+            if (schema.Properties.TryGetValue(propertyName, out var exactMatch))
+                return exactMatch;
+
+            return schema.Properties
+                .FirstOrDefault(entry => string.Equals(entry.Key, propertyName, StringComparison.OrdinalIgnoreCase))
+                .Value;
         }
 
         private static void RemoveProperties(OpenApiSchema schema, params string[] propertyNames)

@@ -22,6 +22,8 @@ namespace ColdChainX.Application.Interfaces
         DbSet<OutboundOrderItem> OutboundOrderItems { get; }
 
         DbSet<TransportOrder> TransportOrders { get; }
+        DbSet<OrderPackageLine> OrderPackageLines { get; }
+        DbSet<InboundQcPackageLine> InboundQcPackageLines { get; }
         DbSet<Customer> Customers { get; }
         DbSet<Driver> Drivers { get; }
         DbSet<MasterTrip> MasterTrips { get; }

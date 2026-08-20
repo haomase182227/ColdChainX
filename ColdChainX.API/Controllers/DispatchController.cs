@@ -738,13 +738,25 @@ public class DispatchController : ControllerBase
         var lpns = await _db.Lpns
             .Include(l => l.Order)
                 .ThenInclude(o => o.Schedule)
+            .Include(l => l.InboundQcPackageLines)
             .Where(l => request.LpnIds.Contains(l.LpnId))
             .ToListAsync();
 
         var lpnsWithoutDimensions = lpns
-            .Where(l => !l.LengthCm.HasValue || l.LengthCm.Value <= 0
-                || !l.WidthCm.HasValue || l.WidthCm.Value <= 0
-                || !l.HeightCm.HasValue || l.HeightCm.Value <= 0)
+            .Where(l =>
+            {
+                var hasPackageLineDimensions = l.InboundQcPackageLines.Any(line =>
+                    line.Quantity > 0
+                    && line.LengthCm > 0
+                    && line.WidthCm > 0
+                    && line.HeightCm > 0);
+
+                var hasLpnDimensions = l.LengthCm.HasValue && l.LengthCm.Value > 0
+                    && l.WidthCm.HasValue && l.WidthCm.Value > 0
+                    && l.HeightCm.HasValue && l.HeightCm.Value > 0;
+
+                return !hasPackageLineDimensions && !hasLpnDimensions;
+            })
             .Select(l => l.LpnCode)
             .ToList();
         if (lpnsWithoutDimensions.Count > 0)
@@ -803,20 +815,53 @@ public class DispatchController : ControllerBase
         for (int i = 0; i < orderedLpns.Count; i++)
         {
             var lpn = orderedLpns[i];
-            int qty = Math.Max(1, lpn.Quantity);
-            for (int j = 0; j < qty; j++)
+            var packageLines = lpn.InboundQcPackageLines
+                .Where(line => line.Quantity > 0 && line.LengthCm > 0 && line.WidthCm > 0 && line.HeightCm > 0)
+                .ToList();
+
+            if (packageLines.Any())
             {
-                engineItems.Add(new ColdChainX.Application.Services.LpnDims
+                foreach (var line in packageLines)
                 {
-                    LpnId = lpn.LpnId,
-                    Length = lpn.LengthCm!.Value,
-                    Width = lpn.WidthCm!.Value,
-                    Height = lpn.HeightCm!.Value,
-                    RouteStopSequence = orderedLpns.Count - i,
-                    WeightKg = lpn.ActualWeightKg,
-                    RequiredTemperature = _cargoCompatibilityService.ResolveRequiredTemperature(lpn) ?? 5m,
-                    IsStackable = lpn.Order?.IsStackable ?? true
-                });
+                    var itemWeight = Math.Round(line.ActualWeightKg / line.Quantity, 2);
+                    for (int j = 0; j < line.Quantity; j++)
+                    {
+                        engineItems.Add(new ColdChainX.Application.Services.LpnDims
+                        {
+                            LpnId = lpn.LpnId,
+                            PackageLineId = line.InboundQcPackageLineId,
+                            PackageLabel = line.Label,
+                            Length = line.LengthCm,
+                            Width = line.WidthCm,
+                            Height = line.HeightCm,
+                            RouteStopSequence = orderedLpns.Count - i,
+                            WeightKg = itemWeight,
+                            RequiredTemperature = _cargoCompatibilityService.ResolveRequiredTemperature(lpn) ?? 5m,
+                            IsStackable = lpn.Order?.IsStackable ?? true
+                        });
+                    }
+                }
+            }
+            else
+            {
+                int qty = Math.Max(1, lpn.Quantity);
+                var itemWeight = Math.Round(lpn.ActualWeightKg / qty, 2);
+                for (int j = 0; j < qty; j++)
+                {
+                    engineItems.Add(new ColdChainX.Application.Services.LpnDims
+                    {
+                        LpnId = lpn.LpnId,
+                        PackageLineId = null,
+                        PackageLabel = lpn.LpnCode,
+                        Length = lpn.LengthCm!.Value,
+                        Width = lpn.WidthCm!.Value,
+                        Height = lpn.HeightCm!.Value,
+                        RouteStopSequence = orderedLpns.Count - i,
+                        WeightKg = itemWeight,
+                        RequiredTemperature = _cargoCompatibilityService.ResolveRequiredTemperature(lpn) ?? 5m,
+                        IsStackable = lpn.Order?.IsStackable ?? true
+                    });
+                }
             }
         }
 
@@ -879,6 +924,8 @@ public class DispatchController : ControllerBase
                 {
                     LpnId = pi.LpnId,
                     LpnCode = lpn.LpnCode,
+                    PackageLineId = pi.PackageLineId,
+                    PackageLabel = pi.PackageLabel,
                     X = pi.X,
                     Y = pi.Y,
                     Z = pi.Z,
@@ -1498,6 +1545,7 @@ public class DispatchController : ControllerBase
             .Include(lpn => lpn.Customer)
             .Include(lpn => lpn.Warehouse)
             .Include(lpn => lpn.Receipt)
+            .Include(lpn => lpn.InboundQcPackageLines)
             .AsSplitQuery()
             .ToListAsync(cancellationToken);
 
@@ -1515,6 +1563,7 @@ public class DispatchController : ControllerBase
             .Include(order => order.Schedule)
                 .ThenInclude(schedule => schedule!.Route)
             .Include(order => order.OrderDimension)
+            .Include(order => order.OrderPackageLines)
             .Include(order => order.TransportDocuments)
             .Include(order => order.DeliveryEpods)
             .AsSplitQuery()
@@ -2022,10 +2071,24 @@ public class DispatchController : ControllerBase
                     ActualWeightKg = order.OrderDimension.ActualWeightKg,
                     ExpectedCbm = order.OrderDimension.ExpectedCbm,
                     ActualCbm = order.OrderDimension.ActualCbm,
-                    LengthCm = order.OrderDimension.LengthCm,
-                    WidthCm = order.OrderDimension.WidthCm,
-                    HeightCm = order.OrderDimension.HeightCm
+                    LengthCm = order.OrderPackageLines.Any() ? null : order.OrderDimension.LengthCm,
+                    WidthCm = order.OrderPackageLines.Any() ? null : order.OrderDimension.WidthCm,
+                    HeightCm = order.OrderPackageLines.Any() ? null : order.OrderDimension.HeightCm,
+                    CbmEstimationMethod = order.OrderDimension.CbmEstimationMethod,
+                    CbmEstimationConfidence = order.OrderDimension.CbmEstimationConfidence,
+                    CustomerProvidedTotalCbm = order.OrderDimension.CustomerProvidedTotalCbm,
+                    TotalPackageQuantity = order.OrderDimension.TotalPackageQuantity
                 },
+            PackageLines = order.OrderPackageLines
+                .OrderBy(line => line.CreatedAt)
+                .Select(line => new TripOrderPackageLineDto
+                {
+                    OrderPackageLineId = line.OrderPackageLineId,
+                    Label = line.Label,
+                    CapacityKg = line.CapacityKg,
+                    Quantity = line.Quantity
+                })
+                .ToList(),
             LpnIds = orderLpns.Select(lpn => lpn.LpnId).ToList(),
             LpnCodes = orderLpns.Select(lpn => lpn.LpnCode).ToList(),
             Documents = order.TransportDocuments
@@ -2089,9 +2152,24 @@ public class DispatchController : ControllerBase
             Quantity = lpn.Quantity,
             ActualWeightKg = lpn.ActualWeightKg,
             ActualCbm = lpn.ActualCbm,
-            LengthCm = lpn.LengthCm,
-            WidthCm = lpn.WidthCm,
-            HeightCm = lpn.HeightCm,
+            LengthCm = lpn.InboundQcPackageLines.Any() ? null : lpn.LengthCm,
+            WidthCm = lpn.InboundQcPackageLines.Any() ? null : lpn.WidthCm,
+            HeightCm = lpn.InboundQcPackageLines.Any() ? null : lpn.HeightCm,
+            ActualPackageLines = lpn.InboundQcPackageLines
+                .OrderBy(line => line.CreatedAt)
+                .Select(line => new TripInboundQcPackageLineDto
+                {
+                    InboundQcPackageLineId = line.InboundQcPackageLineId,
+                    AsnId = line.AsnId,
+                    Label = line.Label,
+                    Quantity = line.Quantity,
+                    ActualWeightKg = line.ActualWeightKg,
+                    LengthCm = line.LengthCm,
+                    WidthCm = line.WidthCm,
+                    HeightCm = line.HeightCm,
+                    ActualCbm = line.ActualCbm
+                })
+                .ToList(),
             RequiredTemperature = lpn.RequiredTemperature,
             RecordedTemperature = lpn.RecordedTemperature,
             StorageLocation = lpn.StorageLocation,

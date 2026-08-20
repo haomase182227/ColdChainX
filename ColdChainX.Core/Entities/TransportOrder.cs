@@ -69,6 +69,10 @@ public partial class TransportOrder
 
     public virtual ICollection<Quotation> Quotations { get; set; } = new List<Quotation>();
 
+    public virtual ICollection<OrderPackageLine> OrderPackageLines { get; set; } = new List<OrderPackageLine>();
+
+    public virtual ICollection<InboundQcPackageLine> InboundQcPackageLines { get; set; } = new List<InboundQcPackageLine>();
+
     public virtual ICollection<TransportDocument> TransportDocuments { get; set; } = new List<TransportDocument>();
 
     public virtual ICollection<WarehouseReceipt> WarehouseReceipts { get; set; } = new List<WarehouseReceipt>();

@@ -104,6 +104,10 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
 
     public virtual DbSet<TransportOrder> TransportOrders { get; set; }
 
+    public virtual DbSet<OrderPackageLine> OrderPackageLines { get; set; }
+
+    public virtual DbSet<InboundQcPackageLine> InboundQcPackageLines { get; set; }
+
     public virtual DbSet<TripStop> TripStops { get; set; }
 
     public virtual DbSet<User> Users { get; set; }
@@ -1904,11 +1908,73 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.LengthCm).HasPrecision(10, 2).HasColumnName("length_cm");
             entity.Property(e => e.WidthCm).HasPrecision(10, 2).HasColumnName("width_cm");
             entity.Property(e => e.HeightCm).HasPrecision(10, 2).HasColumnName("height_cm");
+            entity.Property(e => e.CbmEstimationMethod).HasMaxLength(50).HasColumnName("cbm_estimation_method");
+            entity.Property(e => e.CbmEstimationConfidence).HasMaxLength(20).HasColumnName("cbm_estimation_confidence");
+            entity.Property(e => e.CustomerProvidedTotalCbm).HasPrecision(8, 4).HasColumnName("customer_provided_total_cbm");
+            entity.Property(e => e.TotalPackageQuantity).HasColumnName("total_package_quantity");
 
             entity.HasOne(d => d.Order)
                 .WithOne(p => p.OrderDimension)
                 .HasForeignKey<OrderDimension>(d => d.OrderId)
                 .HasConstraintName("fk_order_dimensions_order");
+        });
+
+        modelBuilder.Entity<OrderPackageLine>(entity =>
+        {
+            entity.HasKey(e => e.OrderPackageLineId).HasName("order_package_lines_pkey");
+
+            entity.ToTable("order_package_lines");
+
+            entity.Property(e => e.OrderPackageLineId).HasColumnName("order_package_line_id");
+            entity.Property(e => e.OrderId).HasColumnName("order_id");
+            entity.Property(e => e.Label).HasMaxLength(100).HasColumnName("label");
+            entity.Property(e => e.CapacityKg).HasPrecision(10, 2).HasColumnName("capacity_kg");
+            entity.Property(e => e.Quantity).HasColumnName("quantity");
+            entity.Property(e => e.CreatedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+
+            entity.HasOne(d => d.Order)
+                .WithMany(p => p.OrderPackageLines)
+                .HasForeignKey(d => d.OrderId)
+                .HasConstraintName("fk_order_package_lines_order");
+        });
+
+        modelBuilder.Entity<InboundQcPackageLine>(entity =>
+        {
+            entity.HasKey(e => e.InboundQcPackageLineId).HasName("inbound_qc_package_lines_pkey");
+
+            entity.ToTable("inbound_qc_package_lines");
+
+            entity.Property(e => e.InboundQcPackageLineId).HasColumnName("inbound_qc_package_line_id");
+            entity.Property(e => e.OrderId).HasColumnName("order_id");
+            entity.Property(e => e.AsnId).HasColumnName("asn_id");
+            entity.Property(e => e.LpnId).HasColumnName("lpn_id");
+            entity.Property(e => e.Label).HasMaxLength(100).HasColumnName("label");
+            entity.Property(e => e.Quantity).HasColumnName("quantity");
+            entity.Property(e => e.ActualWeightKg).HasPrecision(10, 2).HasColumnName("actual_weight_kg");
+            entity.Property(e => e.LengthCm).HasPrecision(10, 2).HasColumnName("length_cm");
+            entity.Property(e => e.WidthCm).HasPrecision(10, 2).HasColumnName("width_cm");
+            entity.Property(e => e.HeightCm).HasPrecision(10, 2).HasColumnName("height_cm");
+            entity.Property(e => e.ActualCbm).HasPrecision(18, 4).HasColumnName("actual_cbm");
+            entity.Property(e => e.CreatedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+
+            entity.HasOne(d => d.Order)
+                .WithMany(p => p.InboundQcPackageLines)
+                .HasForeignKey(d => d.OrderId)
+                .HasConstraintName("fk_inbound_qc_package_lines_order");
+
+            entity.HasOne(d => d.Asn)
+                .WithMany()
+                .HasForeignKey(d => d.AsnId)
+                .HasConstraintName("fk_inbound_qc_package_lines_asn");
+
+            entity.HasOne(d => d.Lpn)
+                .WithMany(p => p.InboundQcPackageLines)
+                .HasForeignKey(d => d.LpnId)
+                .HasConstraintName("fk_inbound_qc_package_lines_lpn");
         });
 
         modelBuilder.Entity<TripStop>(entity =>

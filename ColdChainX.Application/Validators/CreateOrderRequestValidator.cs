@@ -10,6 +10,7 @@ namespace ColdChainX.Application.Validators
         public static readonly string[] AllowedCategories =
         [
             "MEAT_SEAFOOD",
+            "FRUITS_VEGGIES",
             "FROZEN_FRUITS_VEGGIES",
             "ICE_CREAM_BEVERAGES",
             "PHARMACEUTICALS",
@@ -40,14 +41,18 @@ namespace ColdChainX.Application.Validators
                 .WithMessage($"Category must be one of: {string.Join(", ", AllowedCategories)}");
 
             RuleFor(x => x.TempCondition)
-                .InclusiveBetween(-18m, -5m)
-                .WithMessage("Temp_Condition must be between -18 and -5 Celsius");
+                .InclusiveBetween(-18m, 5m)
+                .WithMessage("Temp_Condition must be between -18 and 5 Celsius");
 
             RuleFor(x => x.ExpectedWeightKg)
-                .GreaterThan(0).WithMessage("Expected_Weight_KG must be greater than 0");
+                .GreaterThan(0)
+                .When(x => string.IsNullOrWhiteSpace(x.PackageLinesJson))
+                .WithMessage("Expected_Weight_KG must be greater than 0 when Package_Lines is not provided");
 
             RuleFor(x => x.Quantity)
-                .GreaterThan(0).WithMessage("Quantity must be greater than 0");
+                .GreaterThan(0)
+                .When(x => string.IsNullOrWhiteSpace(x.PackageLinesJson))
+                .WithMessage("Quantity must be greater than 0 when Package_Lines is not provided");
 
             RuleFor(x => x.PackagingType)
                 .NotEmpty().WithMessage("Packaging_Type is required")
@@ -55,13 +60,33 @@ namespace ColdChainX.Application.Validators
                 .WithMessage(request => BuildPackagingTypeErrorMessage(request.PackagingType));
 
             RuleFor(x => x.LengthCm)
-                .GreaterThan(0).WithMessage("Length_CM must be greater than 0");
+                .NotNull()
+                .When(x => string.IsNullOrWhiteSpace(x.PackageLinesJson) && !x.CustomerProvidedTotalCbm.HasValue)
+                .WithMessage("Length_CM is required when Package_Lines and Customer_Provided_Total_CBM are not provided")
+                .GreaterThan(0)
+                .When(x => string.IsNullOrWhiteSpace(x.PackageLinesJson) && !x.CustomerProvidedTotalCbm.HasValue)
+                .WithMessage("Length_CM must be greater than 0 when Package_Lines and Customer_Provided_Total_CBM are not provided");
 
             RuleFor(x => x.WidthCm)
-                .GreaterThan(0).WithMessage("Width_CM must be greater than 0");
+                .NotNull()
+                .When(x => string.IsNullOrWhiteSpace(x.PackageLinesJson) && !x.CustomerProvidedTotalCbm.HasValue)
+                .WithMessage("Width_CM is required when Package_Lines and Customer_Provided_Total_CBM are not provided")
+                .GreaterThan(0)
+                .When(x => string.IsNullOrWhiteSpace(x.PackageLinesJson) && !x.CustomerProvidedTotalCbm.HasValue)
+                .WithMessage("Width_CM must be greater than 0 when Package_Lines and Customer_Provided_Total_CBM are not provided");
 
             RuleFor(x => x.HeightCm)
-                .GreaterThan(0).WithMessage("Height_CM must be greater than 0");
+                .NotNull()
+                .When(x => string.IsNullOrWhiteSpace(x.PackageLinesJson) && !x.CustomerProvidedTotalCbm.HasValue)
+                .WithMessage("Height_CM is required when Package_Lines and Customer_Provided_Total_CBM are not provided")
+                .GreaterThan(0)
+                .When(x => string.IsNullOrWhiteSpace(x.PackageLinesJson) && !x.CustomerProvidedTotalCbm.HasValue)
+                .WithMessage("Height_CM must be greater than 0 when Package_Lines and Customer_Provided_Total_CBM are not provided");
+
+            RuleFor(x => x.CustomerProvidedTotalCbm)
+                .GreaterThan(0)
+                .When(x => x.CustomerProvidedTotalCbm.HasValue)
+                .WithMessage("Customer_Provided_Total_CBM must be greater than 0");
 
             RuleFor(x => x.DestAddressText)
                 .NotEmpty().WithMessage("Dest_Address_Text is required")

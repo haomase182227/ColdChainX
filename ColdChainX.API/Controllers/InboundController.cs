@@ -34,6 +34,7 @@ public class InboundController : ControllerBase
             LengthCm = request.LengthCm,
             WidthCm = request.WidthCm,
             HeightCm = request.HeightCm,
+            ActualPackageLinesJson = request.ActualPackageLinesJson,
             Temperature = request.Temperature,
             EvidenceImages = request.EvidenceImages,
             ReceiverId = receiverId,

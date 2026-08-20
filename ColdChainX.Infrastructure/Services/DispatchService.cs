@@ -93,6 +93,7 @@ public class DispatchService : IDispatchService
             .Include(l => l.Order)
                 .ThenInclude(o => o.DestLocationNavigation)
             .Include(l => l.Receipt)
+            .Include(l => l.InboundQcPackageLines)
             .Where(l => request.LpnIds.Contains(l.LpnId)
                         && l.State == LpnState.IN_STOCK)
             .ToListAsync();
@@ -725,15 +726,16 @@ public class DispatchService : IDispatchService
     {
         if (!HasPositiveDimensions(vehicle.InnerLengthCm, vehicle.InnerWidthCm, vehicle.InnerHeightCm))
             throw new InvalidOperationException(
-                $"Xe {vehicle.TruckPlate} chưa có đủ kích thước thùng xe (dài, rộng, cao) để kiểm tra xếp hàng.");
+                $"Xe {vehicle.TruckPlate} chua co du kich thuoc long thung de kiem tra xep hang.");
 
         var lpnsWithoutDimensions = lpns
-            .Where(l => !HasPositiveDimensions(l.LengthCm, l.WidthCm, l.HeightCm))
+            .Where(l => !HasActualPackageLineDimensions(l)
+                && !HasPositiveDimensions(l.LengthCm, l.WidthCm, l.HeightCm))
             .Select(l => l.LpnCode)
             .ToList();
         if (lpnsWithoutDimensions.Count > 0)
             throw new InvalidOperationException(
-                $"Các LPN sau chưa có đủ kích thước dài, rộng, cao: {string.Join(", ", lpnsWithoutDimensions)}.");
+                $"Cac LPN sau chua co actual package lines hoac kich thuoc LPN fallback: {string.Join(", ", lpnsWithoutDimensions)}.");
 
         var vehicleDimensions = new[]
         {
@@ -743,32 +745,65 @@ public class DispatchService : IDispatchService
         };
         Array.Sort(vehicleDimensions);
 
-        var oversizedLpn = lpns.FirstOrDefault(l =>
+        var oversizedLpn = lpns.FirstOrDefault(l => GetLoadItemDimensions(l).Any(dimensions =>
         {
-            var lpnDimensions = new[]
-            {
-                l.LengthCm!.Value,
-                l.WidthCm!.Value,
-                l.HeightCm!.Value
-            };
-            Array.Sort(lpnDimensions);
+            var itemDimensions = new[] { dimensions.length, dimensions.width, dimensions.height };
+            Array.Sort(itemDimensions);
 
-            return lpnDimensions[0] > vehicleDimensions[0]
-                || lpnDimensions[1] > vehicleDimensions[1]
-                || lpnDimensions[2] > vehicleDimensions[2];
-        });
+            return itemDimensions[0] > vehicleDimensions[0]
+                || itemDimensions[1] > vehicleDimensions[1]
+                || itemDimensions[2] > vehicleDimensions[2];
+        }));
 
         if (oversizedLpn != null)
             throw new InvalidOperationException(
-                $"LPN {oversizedLpn.LpnCode} ({oversizedLpn.LengthCm:F2} x {oversizedLpn.WidthCm:F2} x {oversizedLpn.HeightCm:F2} cm) " +
-                $"không lọt thùng xe {vehicle.TruckPlate} ({vehicle.InnerLengthCm:F2} x {vehicle.InnerWidthCm:F2} x {vehicle.InnerHeightCm:F2} cm), kể cả khi xoay kiện.");
-
-
+                $"LPN {oversizedLpn.LpnCode} co kien khong lot thung xe {vehicle.TruckPlate} ({vehicle.InnerLengthCm:F2} x {vehicle.InnerWidthCm:F2} x {vehicle.InnerHeightCm:F2} cm), ke ca khi xoay kien.");
     }
 
     private static bool HasPositiveDimensions(decimal? lengthCm, decimal? widthCm, decimal? heightCm)
         => lengthCm > 0 && widthCm > 0 && heightCm > 0;
 
+    private static bool HasActualPackageLineDimensions(Lpn lpn)
+        => lpn.InboundQcPackageLines.Any(line =>
+            line.Quantity > 0
+            && line.LengthCm > 0
+            && line.WidthCm > 0
+            && line.HeightCm > 0);
+
+    private static IReadOnlyCollection<(Guid? packageLineId, string? packageLabel, int quantity, decimal length, decimal width, decimal height, decimal totalWeight)> GetLoadItemDimensions(Lpn lpn)
+    {
+        var packageLines = lpn.InboundQcPackageLines
+            .Where(line => line.Quantity > 0 && line.LengthCm > 0 && line.WidthCm > 0 && line.HeightCm > 0)
+            .Select(line => (
+                packageLineId: (Guid?)line.InboundQcPackageLineId,
+                packageLabel: (string?)line.Label,
+                quantity: line.Quantity,
+                length: line.LengthCm,
+                width: line.WidthCm,
+                height: line.HeightCm,
+                totalWeight: line.ActualWeightKg))
+            .ToList();
+
+        if (packageLines.Count > 0)
+            return packageLines;
+
+        if (HasPositiveDimensions(lpn.LengthCm, lpn.WidthCm, lpn.HeightCm))
+        {
+            return new[]
+            {
+                (
+                    packageLineId: (Guid?)null,
+                    packageLabel: (string?)lpn.LpnCode,
+                    quantity: Math.Max(1, lpn.Quantity),
+                    length: lpn.LengthCm!.Value,
+                    width: lpn.WidthCm!.Value,
+                    height: lpn.HeightCm!.Value,
+                    totalWeight: lpn.ActualWeightKg)
+            };
+        }
+
+        return Array.Empty<(Guid? packageLineId, string? packageLabel, int quantity, decimal length, decimal width, decimal height, decimal totalWeight)>();
+    }
     private static double ToRad(double deg) => deg * Math.PI / 180.0;
 
 
@@ -965,20 +1000,25 @@ public class DispatchService : IDispatchService
             var stop = routeResult.StopSequence.FirstOrDefault(s => s.LocationId == lpn.Order?.DestLocation);
             int seq = stop?.Sequence ?? 1;
 
-            int qty = Math.Max(1, lpn.Quantity);
-            for (int i = 0; i < qty; i++)
+            foreach (var dimensions in GetLoadItemDimensions(lpn))
             {
-                engineItems.Add(new ColdChainX.Application.Services.LpnDims
+                var itemWeight = Math.Round(dimensions.totalWeight / dimensions.quantity, 2);
+                for (int i = 0; i < dimensions.quantity; i++)
                 {
-                    LpnId = lpn.LpnId,
-                    Length = lpn.LengthCm ?? 120m,
-                    Width = lpn.WidthCm ?? 100m,
-                    Height = lpn.HeightCm ?? 150m,
-                    RouteStopSequence = seq,
-                    WeightKg = lpn.ActualWeightKg,
-                    RequiredTemperature = _cargoCompatibilityService.ResolveRequiredTemperature(lpn) ?? requiredMinTemp,
-                    IsStackable = lpn.Order?.IsStackable ?? true
-                });
+                    engineItems.Add(new ColdChainX.Application.Services.LpnDims
+                    {
+                        LpnId = lpn.LpnId,
+                        PackageLineId = dimensions.packageLineId,
+                        PackageLabel = dimensions.packageLabel,
+                        Length = dimensions.length,
+                        Width = dimensions.width,
+                        Height = dimensions.height,
+                        RouteStopSequence = seq,
+                        WeightKg = itemWeight,
+                        RequiredTemperature = _cargoCompatibilityService.ResolveRequiredTemperature(lpn) ?? requiredMinTemp,
+                        IsStackable = lpn.Order?.IsStackable ?? true
+                    });
+                }
             }
         }
 
