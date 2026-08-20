@@ -258,31 +258,6 @@ namespace ColdChainX.Infrastructure.Services
                     || request.HeightCm.Value <= 0))
                 return ApiResponse<CreateOrderResponse>.Failure("Dimensions must be greater than 0 when package lines or total CBM are not provided", 400);
 
-            var packageLinesResult = ParseOrderPackageLines(request.PackageLinesJson);
-            if (!packageLinesResult.Success)
-                return ApiResponse<CreateOrderResponse>.Failure(packageLinesResult.Error!, 400);
-
-            var packageLines = packageLinesResult.PackageLines;
-            var hasPackageLines = packageLines.Count > 0;
-            var totalPackageQuantity = hasPackageLines ? packageLines.Sum(line => line.Quantity) : request.Quantity;
-            var expectedWeightKg = hasPackageLines
-                ? packageLines.Sum(line => line.CapacityKg * line.Quantity)
-                : request.ExpectedWeightKg;
-
-            if (expectedWeightKg <= 0)
-                return ApiResponse<CreateOrderResponse>.Failure("Expected weight must be greater than 0", 400);
-            if (totalPackageQuantity <= 0)
-                return ApiResponse<CreateOrderResponse>.Failure("Quantity must be greater than 0", 400);
-            if (!hasPackageLines
-                && !request.CustomerProvidedTotalCbm.HasValue
-                && (!request.LengthCm.HasValue
-                    || !request.WidthCm.HasValue
-                    || !request.HeightCm.HasValue
-                    || request.LengthCm.Value <= 0
-                    || request.WidthCm.Value <= 0
-                    || request.HeightCm.Value <= 0))
-                return ApiResponse<CreateOrderResponse>.Failure("Dimensions must be greater than 0 when package lines or total CBM are not provided", 400);
-
             var strategy = _db.Database.CreateExecutionStrategy();
 
             return await strategy.ExecuteAsync(async () =>
@@ -1211,28 +1186,6 @@ namespace ColdChainX.Infrastructure.Services
         {
             var safePageNumber = pageNumber <= 0 ? 1 : pageNumber;
             return (safePageNumber - 1) * NormalizePageSize(pageSize);
-        }
-
-        private static string? ValidateRecipient(string? receiverName, string? receiverPhone)
-        {
-            if (string.IsNullOrWhiteSpace(receiverName))
-                return "Receiver name is required";
-            if (receiverName.Trim().Length > 100)
-                return "Receiver name must not exceed 100 characters";
-            if (string.IsNullOrWhiteSpace(receiverPhone))
-                return "Receiver phone is required";
-            if (receiverPhone.Trim().Length > 20)
-                return "Receiver phone must not exceed 20 characters";
-
-            var digitCount = receiverPhone.Count(char.IsDigit);
-            if (digitCount is < 8 or > 15
-                || receiverPhone.Any(character => !char.IsDigit(character)
-                    && character is not ('+' or ' ' or '-' or '(' or ')')))
-            {
-                return "Receiver phone must contain between 8 and 15 digits";
-            }
-
-            return null;
         }
 
         private static string? ValidateRecipient(string? receiverName, string? receiverPhone)
