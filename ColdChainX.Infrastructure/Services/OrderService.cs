@@ -1295,6 +1295,8 @@ namespace ColdChainX.Infrastructure.Services
                 CustomerName = order.Customer?.CompanyName,
                 CustomerContactName = customerContactName,
                 CustomerPhone = customerPhone,
+                ReceiverName = order.ReceiverName,
+                ReceiverPhone = order.ReceiverPhone,
                 Quotations = order.Quotations
                     .OrderByDescending(q => q.CreatedAt)
                     .Select(q => new OrderQuotationResponse
