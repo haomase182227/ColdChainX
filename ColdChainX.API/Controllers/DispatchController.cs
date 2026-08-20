@@ -738,6 +738,8 @@ public class DispatchController : ControllerBase
         var lpns = await _db.Lpns
             .Include(l => l.Order)
                 .ThenInclude(o => o.Schedule)
+            .Include(l => l.Order)
+                .ThenInclude(o => o.DestLocationNavigation)
             .Include(l => l.InboundQcPackageLines)
             .Where(l => request.LpnIds.Contains(l.LpnId))
             .ToListAsync();
@@ -809,12 +811,58 @@ public class DispatchController : ControllerBase
             blockingReasons.Add($"OVERCAPACITY: Total CBM {totalCbm:0.##} exceeds vehicle max CBM {vehicle.MaxCbm:0.##}.");
         }
 
+        var stopSequenceByLocation = new Dictionary<Guid, int>();
+        var tripIds = lpns
+            .Where(l => l.TripId.HasValue)
+            .Select(l => l.TripId!.Value)
+            .Distinct()
+            .ToList();
+
+        if (tripIds.Count > 0)
+        {
+            stopSequenceByLocation = await _db.TripStops
+                .AsNoTracking()
+                .Where(stop => stop.TripId.HasValue
+                    && tripIds.Contains(stop.TripId.Value)
+                    && stop.LocationId.HasValue
+                    && stop.StopType == "DELIVERY"
+                    && stop.Status != "CANCELLED")
+                .GroupBy(stop => stop.LocationId!.Value)
+                .ToDictionaryAsync(
+                    group => group.Key,
+                    group => group.Min(stop => stop.StopSequence));
+        }
+
+        var fallbackSequenceByLocation = lpns
+            .Where(l => l.Order?.DestLocation.HasValue == true)
+            .Select(l => l.Order!.DestLocation!.Value)
+            .Distinct()
+            .Select((locationId, index) => new { locationId, sequence = index + 1 })
+            .ToDictionary(item => item.locationId, item => item.sequence);
+
+        int ResolveDeliverySequence(Lpn lpn)
+        {
+            if (lpn.Order?.DestLocation is not Guid locationId)
+                return 999;
+
+            if (stopSequenceByLocation.TryGetValue(locationId, out var tripStopSequence))
+                return tripStopSequence;
+
+            return fallbackSequenceByLocation.TryGetValue(locationId, out var fallbackSequence)
+                ? fallbackSequence
+                : 999;
+        }
+
         var engineItems = new List<ColdChainX.Application.Services.LpnDims>();
-        
-        var orderedLpns = lpns.OrderByDescending(l => l.SlaDeadline).ToList();
+
+        var orderedLpns = lpns
+            .OrderByDescending(ResolveDeliverySequence)
+            .ThenByDescending(l => l.SlaDeadline)
+            .ToList();
         for (int i = 0; i < orderedLpns.Count; i++)
         {
             var lpn = orderedLpns[i];
+            var deliverySequence = ResolveDeliverySequence(lpn);
             var packageLines = lpn.InboundQcPackageLines
                 .Where(line => line.Quantity > 0 && line.LengthCm > 0 && line.WidthCm > 0 && line.HeightCm > 0)
                 .ToList();
@@ -834,7 +882,7 @@ public class DispatchController : ControllerBase
                             Length = line.LengthCm,
                             Width = line.WidthCm,
                             Height = line.HeightCm,
-                            RouteStopSequence = orderedLpns.Count - i,
+                            RouteStopSequence = deliverySequence,
                             WeightKg = itemWeight,
                             RequiredTemperature = _cargoCompatibilityService.ResolveRequiredTemperature(lpn) ?? 5m,
                             IsStackable = lpn.Order?.IsStackable ?? true
@@ -856,7 +904,7 @@ public class DispatchController : ControllerBase
                         Length = lpn.LengthCm!.Value,
                         Width = lpn.WidthCm!.Value,
                         Height = lpn.HeightCm!.Value,
-                        RouteStopSequence = orderedLpns.Count - i,
+                        RouteStopSequence = deliverySequence,
                         WeightKg = itemWeight,
                         RequiredTemperature = _cargoCompatibilityService.ResolveRequiredTemperature(lpn) ?? 5m,
                         IsStackable = lpn.Order?.IsStackable ?? true
