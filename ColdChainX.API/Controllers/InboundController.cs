@@ -58,6 +58,7 @@ public class InboundController : ControllerBase
         var command = new ReEvaluateInboundQcCommand
         {
             LpnId = request.LpnId,
+            ActualPackageLinesJson = request.ActualPackageLinesJson,
             ActualWeightKg = request.ActualWeightKg,
             LengthCm = request.LengthCm,
             WidthCm = request.WidthCm,
