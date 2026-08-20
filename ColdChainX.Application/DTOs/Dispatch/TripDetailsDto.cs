@@ -204,6 +204,7 @@ public sealed class TripOrderDetailsDto
     public TripLocationDetailsDto? DestinationLocation { get; set; }
     public TripScheduleDetailsDto? Schedule { get; set; }
     public TripOrderDimensionDto? Dimension { get; set; }
+    public List<TripOrderPackageLineDto> PackageLines { get; set; } = new();
     public List<Guid> LpnIds { get; set; } = new();
     public List<string> LpnCodes { get; set; } = new();
     public List<TripTransportDocumentDto> Documents { get; set; } = new();
@@ -227,9 +228,21 @@ public sealed class TripOrderDimensionDto
     public decimal ActualWeightKg { get; set; }
     public decimal ExpectedCbm { get; set; }
     public decimal? ActualCbm { get; set; }
-    public decimal LengthCm { get; set; }
-    public decimal WidthCm { get; set; }
-    public decimal HeightCm { get; set; }
+    public decimal? LengthCm { get; set; }
+    public decimal? WidthCm { get; set; }
+    public decimal? HeightCm { get; set; }
+    public string? CbmEstimationMethod { get; set; }
+    public string? CbmEstimationConfidence { get; set; }
+    public decimal? CustomerProvidedTotalCbm { get; set; }
+    public int? TotalPackageQuantity { get; set; }
+}
+
+public sealed class TripOrderPackageLineDto
+{
+    public Guid OrderPackageLineId { get; set; }
+    public string Label { get; set; } = string.Empty;
+    public decimal CapacityKg { get; set; }
+    public int Quantity { get; set; }
 }
 
 public sealed class TripTransportDocumentDto
@@ -283,6 +296,7 @@ public sealed class TripLpnDetailsDto
     public decimal? LengthCm { get; set; }
     public decimal? WidthCm { get; set; }
     public decimal? HeightCm { get; set; }
+    public List<TripInboundQcPackageLineDto> ActualPackageLines { get; set; } = new();
     public decimal? RequiredTemperature { get; set; }
     public decimal? RecordedTemperature { get; set; }
     public string? StorageLocation { get; set; }
@@ -306,6 +320,19 @@ public sealed class TripLpnDetailsDto
     public TripWarehouseDetailsDto? Warehouse { get; set; }
     public TripWarehouseReceiptDto? Receipt { get; set; }
     public TripLpnDeliveryConfirmationDto? DeliveryConfirmation { get; set; }
+}
+
+public sealed class TripInboundQcPackageLineDto
+{
+    public Guid InboundQcPackageLineId { get; set; }
+    public Guid AsnId { get; set; }
+    public string Label { get; set; } = string.Empty;
+    public int Quantity { get; set; }
+    public decimal ActualWeightKg { get; set; }
+    public decimal LengthCm { get; set; }
+    public decimal WidthCm { get; set; }
+    public decimal HeightCm { get; set; }
+    public decimal ActualCbm { get; set; }
 }
 
 public sealed class TripWarehouseDetailsDto

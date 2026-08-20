@@ -7,6 +7,8 @@ namespace ColdChainX.Application.Services
     public class LpnDims
     {
         public Guid LpnId { get; set; }
+        public Guid? PackageLineId { get; set; }
+        public string? PackageLabel { get; set; }
         public decimal Length { get; set; }
         public decimal Width { get; set; }
         public decimal Height { get; set; }
@@ -26,6 +28,8 @@ namespace ColdChainX.Application.Services
     public class PlacedItem
     {
         public Guid LpnId { get; set; }
+        public Guid? PackageLineId { get; set; }
+        public string? PackageLabel { get; set; }
         public decimal X { get; set; }
         public decimal Y { get; set; }
         public decimal Z { get; set; }
@@ -65,8 +69,9 @@ namespace ColdChainX.Application.Services
             var sortedItems = itemsToPack
                 .OrderByDescending(i => i.RouteStopSequence)
                 .ThenBy(i => i.RequiredTemperature) // Colder items first (front)
-                .ThenByDescending(i => i.WeightKg) // Heavier items first (bottom)
                 .ThenByDescending(i => i.Length * i.Width * i.Height)
+                .ThenByDescending(i => CountSameFootprint(itemsToPack, i))
+                .ThenByDescending(i => i.WeightKg) // Heavier items first (bottom)
                 .ToList();
 
             var placedItems = new List<PlacedItem>();
@@ -98,7 +103,6 @@ namespace ColdChainX.Application.Services
             foreach (var item in sortedItems)
             {
                 var orientations = GetOrientations(item);
-                bool placed = false;
 
                 var candidatePoints = new List<(decimal x, decimal y, decimal z)> { (0, 0, 0) };
 
@@ -110,11 +114,13 @@ namespace ColdChainX.Application.Services
                 }
 
                 candidatePoints = candidatePoints
+                    .Distinct()
                     .OrderBy(p => p.z)
                     .ThenBy(p => p.y)
                     .ThenBy(p => p.x)
                     .ToList();
 
+                var bestPlacement = default((decimal x, decimal y, decimal z, decimal w, decimal h, decimal d, decimal score)?);
                 foreach (var point in candidatePoints)
                 {
                     foreach (var (w, h, d) in orientations)
@@ -145,27 +151,39 @@ namespace ColdChainX.Application.Services
                             collision = true;
                         }
 
+                        if (!collision && !HasSufficientSupport(point.x, point.y, point.z, w, d, placedItems))
+                        {
+                            collision = true;
+                        }
+
                         if (!collision)
                         {
-                            placedItems.Add(new PlacedItem
+                            var score = ScorePlacement(point.x, point.y, point.z, w, h, d, placedItems);
+                            if (!bestPlacement.HasValue || score < bestPlacement.Value.score)
                             {
-                                LpnId = item.LpnId,
-                                X = point.x,
-                                Y = point.y,
-                                Z = point.z,
-                                W = w,
-                                H = h,
-                                D = d
-                            });
-                            placed = true;
-                            break; // Stop checking orientations
+                                bestPlacement = (point.x, point.y, point.z, w, h, d, score);
+                            }
                         }
                     }
-
-                    if (placed) break; // Stop checking points
                 }
 
-                if (!placed)
+                if (bestPlacement.HasValue)
+                {
+                    var placement = bestPlacement.Value;
+                    placedItems.Add(new PlacedItem
+                    {
+                        LpnId = item.LpnId,
+                        PackageLineId = item.PackageLineId,
+                        PackageLabel = item.PackageLabel,
+                        X = placement.x,
+                        Y = placement.y,
+                        Z = placement.z,
+                        W = placement.w,
+                        H = placement.h,
+                        D = placement.d
+                    });
+                }
+                else
                 {
                     unplacedIds.Add(item.LpnId);
                 }
@@ -219,6 +237,12 @@ namespace ColdChainX.Application.Services
             return list.Distinct().ToList();
         }
 
+        private int CountSameFootprint(List<LpnDims> items, LpnDims item)
+            => items.Count(other =>
+                other.Length == item.Length
+                && other.Width == item.Width
+                && other.Height == item.Height);
+
         private bool Overlap(decimal x1, decimal y1, decimal z1, decimal w1, decimal h1, decimal d1,
                              decimal x2, decimal y2, decimal z2, decimal w2, decimal h2, decimal d2)
         {
@@ -265,6 +289,94 @@ namespace ColdChainX.Application.Services
             }
 
             return false;
+        }
+
+        private bool HasSufficientSupport(
+            decimal x,
+            decimal y,
+            decimal z,
+            decimal w,
+            decimal d,
+            List<PlacedItem> placedItems)
+        {
+            if (y <= 0)
+            {
+                return true;
+            }
+
+            var supportedArea = 0m;
+            foreach (var placed in placedItems)
+            {
+                if (placed.Y + placed.H != y)
+                {
+                    continue;
+                }
+
+                var overlapX = Math.Max(0m, Math.Min(x + w, placed.X + placed.W) - Math.Max(x, placed.X));
+                var overlapZ = Math.Max(0m, Math.Min(z + d, placed.Z + placed.D) - Math.Max(z, placed.Z));
+                supportedArea += overlapX * overlapZ;
+            }
+
+            var baseArea = w * d;
+            return baseArea > 0 && supportedArea / baseArea >= 0.70m;
+        }
+
+        private decimal ScorePlacement(
+            decimal x,
+            decimal y,
+            decimal z,
+            decimal w,
+            decimal h,
+            decimal d,
+            List<PlacedItem> placedItems)
+        {
+            var maxZAfterPlace = Math.Max(z + d, placedItems.Where(p => p.LpnId != Guid.Empty).Select(p => p.Z + p.D).DefaultIfEmpty(0m).Max());
+            var maxYAfterPlace = Math.Max(y + h, placedItems.Where(p => p.LpnId != Guid.Empty).Select(p => p.Y + p.H).DefaultIfEmpty(0m).Max());
+            var contact = CalculateContactScore(x, y, z, w, h, d, placedItems);
+
+            return (maxZAfterPlace * 1_000_000m)
+                + (z * 10_000m)
+                + (maxYAfterPlace * 1_000m)
+                + (y * 100m)
+                + x
+                - contact;
+        }
+
+        private decimal CalculateContactScore(
+            decimal x,
+            decimal y,
+            decimal z,
+            decimal w,
+            decimal h,
+            decimal d,
+            List<PlacedItem> placedItems)
+        {
+            var contact = 0m;
+            foreach (var placed in placedItems)
+            {
+                if (x == placed.X + placed.W || x + w == placed.X)
+                {
+                    var overlapY = Math.Max(0m, Math.Min(y + h, placed.Y + placed.H) - Math.Max(y, placed.Y));
+                    var overlapZ = Math.Max(0m, Math.Min(z + d, placed.Z + placed.D) - Math.Max(z, placed.Z));
+                    contact += overlapY * overlapZ;
+                }
+
+                if (y == placed.Y + placed.H || y + h == placed.Y)
+                {
+                    var overlapX = Math.Max(0m, Math.Min(x + w, placed.X + placed.W) - Math.Max(x, placed.X));
+                    var overlapZ = Math.Max(0m, Math.Min(z + d, placed.Z + placed.D) - Math.Max(z, placed.Z));
+                    contact += overlapX * overlapZ;
+                }
+
+                if (z == placed.Z + placed.D || z + d == placed.Z)
+                {
+                    var overlapX = Math.Max(0m, Math.Min(x + w, placed.X + placed.W) - Math.Max(x, placed.X));
+                    var overlapY = Math.Max(0m, Math.Min(y + h, placed.Y + placed.H) - Math.Max(y, placed.Y));
+                    contact += overlapX * overlapY;
+                }
+            }
+
+            return contact;
         }
     }
 }

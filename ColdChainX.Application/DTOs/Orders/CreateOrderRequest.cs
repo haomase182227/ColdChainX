@@ -20,17 +20,23 @@ namespace ColdChainX.Application.DTOs.Orders
         [FromForm(Name = "Quantity")]
         public int Quantity { get; set; }
 
+        [FromForm(Name = "Package_Lines")]
+        public string? PackageLinesJson { get; set; }
+
+        [FromForm(Name = "Customer_Provided_Total_CBM")]
+        public decimal? CustomerProvidedTotalCbm { get; set; }
+
         [FromForm(Name = "Packaging_Type")]
         public string PackagingType { get; set; } = null!;
 
         [FromForm(Name = "Length_CM")]
-        public decimal LengthCm { get; set; }
+        public decimal? LengthCm { get; set; }
 
         [FromForm(Name = "Width_CM")]
-        public decimal WidthCm { get; set; }
+        public decimal? WidthCm { get; set; }
 
         [FromForm(Name = "Height_CM")]
-        public decimal HeightCm { get; set; }
+        public decimal? HeightCm { get; set; }
 
         [FromForm(Name = "Dest_Address_Text")]
         public string DestAddressText { get; set; } = null!;
@@ -58,6 +64,13 @@ namespace ColdChainX.Application.DTOs.Orders
 
         [FromForm(Name = "Cargo_Photos")]
         public List<IFormFile> CargoPhotos { get; set; } = new();
+    }
+
+    public class OrderPackageLineRequest
+    {
+        public string? Label { get; set; }
+        public decimal CapacityKg { get; set; }
+        public int Quantity { get; set; }
     }
 }
 

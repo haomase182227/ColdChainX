@@ -11,8 +11,6 @@ namespace ColdChainX.Application.Features.Inbound.Commands;
 
 public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCommand, ProcessInboundQcResponse>
 {
-    private const decimal DiscrepancyThresholdPercent = 5m;
-
     private readonly IApplicationDbContext _context;
     private readonly ILogger<ProcessInboundQcCommandHandler> _logger;
     private readonly IFileService _fileService;
@@ -41,8 +39,23 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
         if (request.ReceiverId == Guid.Empty)
             return Failure("ReceiverId is required.");
 
-        if (request.ActualWeightKg <= 0 || request.LengthCm <= 0 || request.WidthCm <= 0 || request.HeightCm <= 0)
-            return Failure("Actual weight and dimensions must be greater than 0.");
+        var packageLinesResult = ParseActualPackageLines(request.ActualPackageLinesJson);
+        if (!packageLinesResult.Success)
+            return Failure(packageLinesResult.Error!);
+
+        var actualPackageLines = packageLinesResult.PackageLines;
+        var hasActualPackageLines = actualPackageLines.Count > 0;
+
+        if (!hasActualPackageLines
+            && (!request.ActualWeightKg.HasValue
+                || !request.LengthCm.HasValue
+                || !request.WidthCm.HasValue
+                || !request.HeightCm.HasValue
+                || request.ActualWeightKg.Value <= 0
+                || request.LengthCm.Value <= 0
+                || request.WidthCm.Value <= 0
+                || request.HeightCm.Value <= 0))
+            return Failure("Actual weight and dimensions must be greater than 0 when Actual_Package_Lines is not provided.");
 
         var receiver = await _context.Users
             .AsNoTracking()
@@ -90,28 +103,23 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
 
         var order = asn.Order;
         var now = DbNow();
-        var storedExpectedCbm = order.OrderDimension.ExpectedCbm;
-        var expectedCbm = InboundQcMeasurementCalculator.CalculateExpectedCbm(order.OrderDimension, order.Quantity);
-        var actualCbm = InboundQcMeasurementCalculator.CalculateCbm(request.LengthCm, request.WidthCm, request.HeightCm, order.Quantity);
+        var actualWeightKg = hasActualPackageLines
+            ? actualPackageLines.Sum(line => line.ActualWeightKg)
+            : request.ActualWeightKg!.Value;
+        var actualQuantity = hasActualPackageLines
+            ? actualPackageLines.Sum(line => line.Quantity)
+            : order.Quantity;
+        var actualCbm = hasActualPackageLines
+            ? actualPackageLines.Sum(line => CalculateCbm(line.LengthCm, line.WidthCm, line.HeightCm, line.Quantity))
+            : InboundQcMeasurementCalculator.CalculateCbm(request.LengthCm!.Value, request.WidthCm!.Value, request.HeightCm!.Value, order.Quantity);
 
 #if DEBUG
         _logger.LogDebug(
-            "Inbound QC CBM trace storedExpectedCbm={StoredExpectedCbm} calculatedExpectedCbmFromDimensions={CalculatedExpectedCbmFromDimensions} actualCbm={ActualCbm} expectedDimensionsCm={ExpectedLengthCm}x{ExpectedWidthCm}x{ExpectedHeightCm} actualDimensionsCm={ActualLengthCm}x{ActualWidthCm}x{ActualHeightCm}",
-            storedExpectedCbm,
-            expectedCbm,
+            "Inbound QC CBM trace storedExpectedCbm={StoredExpectedCbm} actualCbm={ActualCbm} actualPackageLines={ActualPackageLinesCount}",
+            order.OrderDimension.ExpectedCbm,
             actualCbm,
-            order.OrderDimension.LengthCm,
-            order.OrderDimension.WidthCm,
-            order.OrderDimension.HeightCm,
-            request.LengthCm,
-            request.WidthCm,
-            request.HeightCm);
+            actualPackageLines.Count);
 #endif
-
-        var weightDiff = CalculateDiffPercent(order.OrderDimension.ExpectedWeightKg, request.ActualWeightKg);
-        var cbmDiff = CalculateDiffPercent(expectedCbm, actualCbm);
-        var maxDiff = Math.Max(weightDiff, cbmDiff);
-        var hasDiscrepancy = maxDiff > DiscrepancyThresholdPercent;
 
         var existingLpn = await _context.Lpns
             .AsNoTracking()
@@ -120,7 +128,7 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
             .FirstOrDefaultAsync(cancellationToken);
 
         if (existingLpn != null)
-            return Failure($"Order already has LPN {existingLpn.LpnCode}. Use putaway or discrepancy flow instead.");
+            return Failure($"Order already has LPN {existingLpn.LpnCode}. Use putaway flow instead.");
 
         var receipt = await _context.WarehouseReceipts
             .FirstOrDefaultAsync(r => r.OrderId == order.OrderId
@@ -134,17 +142,17 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
             {
                 ReceiptId = Guid.NewGuid(),
                 ReceiptCode = GenerateCode("REC"),
-                ReferenceDocNo = hasDiscrepancy ? "DISCREPANCY_HOLD" : "PENDING_PUTAWAY",
+                ReferenceDocNo = "PENDING_PUTAWAY",
                 OrderId = order.OrderId,
                 WarehouseId = warehouseId.Value,
                 ReceiptType = "INBOUND",
-                Reason = hasDiscrepancy ? "QC discrepancy hold" : null,
+                Reason = null,
                 TotalExpectedQty = order.Quantity,
-                TotalActualQty = order.Quantity,
+                TotalActualQty = actualQuantity,
                 RecordedTemperature = request.Temperature,
                 DelivererName = "",
                 ReceiverId = request.ReceiverId,
-                Note = hasDiscrepancy ? "Generated during QC with variance greater than 5%." : "Generated during QC.",
+                Note = "Generated during QC.",
                 CreatedAt = now
             };
 
@@ -152,11 +160,11 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
         }
         else
         {
-            receipt.ReferenceDocNo = hasDiscrepancy ? "DISCREPANCY_HOLD" : "PENDING_PUTAWAY";
+            receipt.ReferenceDocNo = "PENDING_PUTAWAY";
             receipt.RecordedTemperature = request.Temperature;
             receipt.TotalExpectedQty = order.Quantity;
-            receipt.TotalActualQty = order.Quantity;
-            receipt.Note = hasDiscrepancy ? "QC discrepancy hold." : "QC passed and waiting putaway.";
+            receipt.TotalActualQty = actualQuantity;
+            receipt.Note = "QC passed and waiting putaway.";
         }
 
         var lpn = new Lpn
@@ -167,18 +175,16 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
             CustomerId = order.CustomerId,
             ReceiptId = receipt.ReceiptId,
             TripId = order.MasterTripId,
-            Quantity = order.Quantity,
-            ActualWeightKg = request.ActualWeightKg,
+            Quantity = actualQuantity,
+            ActualWeightKg = actualWeightKg,
             ActualCbm = actualCbm,
-            LengthCm = request.LengthCm,
-            WidthCm = request.WidthCm,
-            HeightCm = request.HeightCm,
+            LengthCm = hasActualPackageLines ? null : request.LengthCm!.Value,
+            WidthCm = hasActualPackageLines ? null : request.WidthCm!.Value,
+            HeightCm = hasActualPackageLines ? null : request.HeightCm!.Value,
             RequiredTemperature = ParseTemperature(order.TempCondition),
             RecordedTemperature = request.Temperature,
-            State = hasDiscrepancy ? LpnState.DISCREPANCY_HOLD : LpnState.RECEIVING,
-            DiscrepancyReason = hasDiscrepancy
-                ? $"Actual cargo differs from expected by {maxDiff:0.##}% (weight {weightDiff:0.##}%, cbm {cbmDiff:0.##}%). Actual dimensions: {request.LengthCm:0.##} x {request.WidthCm:0.##} x {request.HeightCm:0.##} cm."
-                : null,
+            State = LpnState.RECEIVING,
+            DiscrepancyReason = null,
             EvidenceImageUrl = evidenceImageUrl,
             SlaDeadline = now.AddHours(24),
             CreatedAt = now
@@ -186,194 +192,47 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
 
         _context.Lpns.Add(lpn);
 
-        asn.Status = hasDiscrepancy ? "DISCREPANCY_HOLD" : "QC_PASSED";
+        foreach (var line in actualPackageLines)
+        {
+            _context.InboundQcPackageLines.Add(new InboundQcPackageLine
+            {
+                InboundQcPackageLineId = Guid.NewGuid(),
+                OrderId = order.OrderId,
+                AsnId = asn.AsnId,
+                LpnId = lpn.LpnId,
+                Label = string.IsNullOrWhiteSpace(line.Label) ? "Package" : line.Label.Trim(),
+                Quantity = line.Quantity,
+                ActualWeightKg = line.ActualWeightKg,
+                LengthCm = line.LengthCm,
+                WidthCm = line.WidthCm,
+                HeightCm = line.HeightCm,
+                ActualCbm = CalculateCbm(line.LengthCm, line.WidthCm, line.HeightCm, line.Quantity),
+                CreatedAt = now
+            });
+        }
+
+        asn.Status = "QC_PASSED";
         if (order.OrderDimension != null)
         {
-            order.OrderDimension.ActualWeightKg = request.ActualWeightKg;
+            order.OrderDimension.ActualWeightKg = actualWeightKg;
             order.OrderDimension.ActualCbm = actualCbm;
         }
-        order.Status = hasDiscrepancy ? "DISCREPANCY_HOLD" : "RECEIVING";
+        order.Status = "RECEIVING";
 
-        if (!hasDiscrepancy)
+        await CreateFinalQuotationFromActualAsync(order.OrderId, actualWeightKg, actualCbm, now, cancellationToken);
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return new ProcessInboundQcResponse
         {
-            await _context.SaveChangesAsync(cancellationToken);
-
-            return new ProcessInboundQcResponse
-            {
-                Success = true,
-                Message = "QC passed successfully. LPN ready for putaway.",
-                LpnId = lpn.LpnId,
-                LpnCode = lpn.LpnCode,
-                State = lpn.State.ToString(),
-                ReceiptId = receipt?.ReceiptId,
-                DiffPercent = maxDiff
-            };
-        }
-
-        if (receipt == null)
-            return Failure("Warehouse receipt could not be created for discrepancy QC.");
-
-        var strategy = _context.Database.CreateExecutionStrategy();
-        return await strategy.ExecuteAsync(async () =>
-        {
-            await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
-            try
-            {
-                await _context.SaveChangesAsync(cancellationToken);
-
-                string? pdfUrl = null;
-                if (hasDiscrepancy && receipt != null)
-                {
-                    var pdfBytes = await _mediator.Send(new ColdChainX.Application.Features.Discrepancy.Queries.GenerateDiscrepancyPdfQuery(receipt.ReceiptId), cancellationToken);
-
-                    var pdfFileName = $"discrepancy-{order.TrackingCode}-{now:yyyyMMddHHmmss}.pdf";
-                    pdfUrl = await _fileService.UploadFileAsync(pdfBytes, pdfFileName);
-
-                    receipt.PdfUrl = pdfUrl;
-
-                    var existingDoc = await _context.TransportDocuments
-                        .FirstOrDefaultAsync(d => d.OrderId == order.OrderId && d.DocType == "DISCREPANCY_REPORT", cancellationToken);
-
-            if (existingDoc == null)
-            {
-                _context.TransportDocuments.Add(new TransportDocument
-                {
-                    DocId = Guid.NewGuid(),
-                    OrderId = order.OrderId,
-                    DocType = "DISCREPANCY_REPORT",
-                    ImageUrl = pdfUrl,
-                    UploadedBy = request.ReceiverId,
-                    CreatedAt = now
-                });
-            }
-            else
-            {
-                existingDoc.ImageUrl = pdfUrl;
-                existingDoc.UploadedBy = request.ReceiverId;
-                existingDoc.CreatedAt = now;
-            }
-
-                    await _context.SaveChangesAsync(cancellationToken);
-
-                    var salesUserId = await _context.Users
-                        .Include(u => u.Role)
-                        .Where(u => u.Role != null && u.Role.RoleName.ToLower() == "sales")
-                        .Select(u => u.UserId)
-                        .FirstOrDefaultAsync(cancellationToken);
-
-                    if (salesUserId == Guid.Empty)
-                    {
-                        salesUserId = await _context.Users
-                            .Include(u => u.Role)
-                            .Where(u => u.Role != null && (u.Role.RoleName.ToLower() == "admin" || u.Role.RoleName.ToLower() == "warehouseworker"))
-                            .Select(u => u.UserId)
-                            .FirstOrDefaultAsync(cancellationToken);
-                    }
-
-                    if (salesUserId == Guid.Empty)
-                    {
-                        salesUserId = request.ReceiverId;
-                    }
-
-            var isWeightHigher = request.ActualWeightKg > (order.OrderDimension?.ExpectedWeightKg ?? 0m);
-            var isCbmHigher = actualCbm > expectedCbm;
-            var weightSign = isWeightHigher ? "+" : "-";
-            var cbmSign = isCbmHigher ? "+" : "-";
-
-                    var appendixReason = $"Phát hiện chênh lệch thực tế khi kiểm đếm QC tại Hub (Trọng lượng chênh lệch: {weightSign}{weightDiff:0.##}%, Thể tích chênh lệch: {cbmSign}{cbmDiff:0.##}%).";
-
-                    var appendixResult = await _appendixService.GenerateAppendixAsync(
-                        order.OrderId,
-                        null,
-                        appendixReason,
-                        salesUserId);
-
-                    if (!appendixResult.Success || appendixResult.Data == null || string.IsNullOrWhiteSpace(appendixResult.Data.DraftHtmlContent))
-                    {
-                        var appendixFailureMessage = appendixResult.Success
-                            ? "Contract appendix draft was generated without HTML content."
-                            : appendixResult.Message;
-
-                        _logger.LogError(
-                            "Failed to automatically generate contract appendix for order {OrderId} tracking {TrackingCode}: {Message}",
-                            order.OrderId,
-                            order.TrackingCode,
-                            appendixFailureMessage);
-
-                        await transaction.RollbackAsync(cancellationToken);
-                        return Failure($"Inbound QC discrepancy hold was not saved because contract appendix draft generation failed: {appendixFailureMessage}");
-                    }
-
-                    var appendixIdStr = appendixResult.Success ? appendixResult.Data!.AppendixId.ToString() : "";
-                    var appendixNumberStr = appendixResult.Success ? appendixResult.Data!.AppendixNumber : "";
-
-                    // Send notification to Sales, Admin, and WarehouseOperator
-                    await EnsureNotificationTemplateAsync("NOTI_QC_DISCREPANCY", cancellationToken);
-                    var salesUsers = await _context.Users
-                        .Include(u => u.Role)
-                        .Where(u => u.Role != null && (u.Role.RoleName.ToLower() == "sales" || u.Role.RoleName.ToLower() == "admin" || u.Role.RoleName.ToLower() == "warehouseworker"))
-                        .ToListAsync(cancellationToken);
-
-                    foreach (var user in salesUsers)
-                    {
-                        _context.Notifications.Add(new Notification
-                        {
-                            NotiId = Guid.NewGuid(),
-                            UserId = user.UserId,
-                            SenderId = request.ReceiverId,
-                            TemplateId = "NOTI_QC_DISCREPANCY",
-                            Params = JsonSerializer.Serialize(new
-                            {
-                                Tracking_Code = order.TrackingCode,
-                                Pdf_URL = pdfUrl ?? "",
-                                Appendix_Id = appendixIdStr,
-                                Appendix_Number = appendixNumberStr
-                            }),
-                            OrderId = order.OrderId,
-                            IsRead = false,
-                            CreatedAt = now
-                        });
-                    }
-                    await _context.SaveChangesAsync(cancellationToken);
-                }
-
-                if (hasDiscrepancy)
-                {
-                    _logger.LogWarning(
-                        "Inbound QC discrepancy detected lpn={LpnCode} order={OrderId} maxDiff={MaxDiffPercent}",
-                        lpn.LpnCode,
-                        order.OrderId,
-                        maxDiff);
-                }
-
-                await transaction.CommitAsync(cancellationToken);
-
-                return new ProcessInboundQcResponse
-                {
-                    Success = true,
-                    Message = hasDiscrepancy
-                        ? "QC completed. LPN created and placed on DISCREPANCY_HOLD."
-                        : "QC passed successfully. LPN ready for putaway.",
-                    LpnId = lpn.LpnId,
-                    LpnCode = lpn.LpnCode,
-                    State = lpn.State.ToString(),
-                    ReceiptId = receipt?.ReceiptId,
-                    DiffPercent = maxDiff,
-                    PdfUrl = pdfUrl
-                };
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Failed to complete inbound QC discrepancy hold for order {OrderId} tracking {TrackingCode}. Database changes were rolled back.",
-                    order.OrderId,
-                    order.TrackingCode);
-
-                await transaction.RollbackAsync(cancellationToken);
-                return Failure($"Inbound QC discrepancy hold was not saved because contract appendix generation failed: {ex.Message}");
-            }
-        });
+            Success = true,
+            Message = "QC passed successfully. LPN ready for putaway.",
+            LpnId = lpn.LpnId,
+            LpnCode = lpn.LpnCode,
+            State = lpn.State.ToString(),
+            ReceiptId = receipt?.ReceiptId,
+            DiffPercent = 0m
+        };
     }
 
     private async Task EnsureNotificationTemplateAsync(string templateId, CancellationToken cancellationToken)
@@ -428,12 +287,100 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
     private static ProcessInboundQcResponse Failure(string message)
         => new() { Success = false, Message = message };
 
-    private static decimal CalculateDiffPercent(decimal expected, decimal actual)
+    private static (bool Success, List<InboundQcPackageLineRequest> PackageLines, string? Error) ParseActualPackageLines(string? json)
     {
-        if (expected <= 0)
-            throw new ArgumentOutOfRangeException(nameof(expected), "Expected measurement must be greater than 0.");
+        if (string.IsNullOrWhiteSpace(json))
+            return (true, new List<InboundQcPackageLineRequest>(), null);
 
-        return Math.Round(Math.Abs(actual - expected) / expected * 100m, 2);
+        try
+        {
+            var lines = JsonSerializer.Deserialize<List<InboundQcPackageLineRequest>>(
+                json,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<InboundQcPackageLineRequest>();
+
+            foreach (var line in lines)
+            {
+                if (line.Quantity <= 0)
+                    return (false, lines, "Each actual package line quantity must be greater than 0.");
+
+                if (line.ActualWeightKg <= 0)
+                    return (false, lines, "Each actual package line weight must be greater than 0.");
+
+                if (line.LengthCm <= 0 || line.WidthCm <= 0 || line.HeightCm <= 0)
+                    return (false, lines, "Each actual package line length, width, and height must be greater than 0.");
+            }
+
+            return (true, lines, null);
+        }
+        catch (JsonException)
+        {
+            return (false, new List<InboundQcPackageLineRequest>(), "Actual_Package_Lines must be valid JSON.");
+        }
+    }
+
+    private static decimal CalculateCbm(decimal lengthCm, decimal widthCm, decimal heightCm, int quantity)
+        => Math.Round(lengthCm * widthCm * heightCm * quantity / 1_000_000m, 4);
+
+    private async Task CreateFinalQuotationFromActualAsync(
+        Guid orderId,
+        decimal actualWeightKg,
+        decimal actualCbm,
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+        var existingFinal = await _context.Quotations
+            .AnyAsync(q => q.OrderId == orderId
+                && q.Status == "FINAL"
+                && q.PricingSource == "AUTO_ACTUAL", cancellationToken);
+
+        if (existingFinal)
+            return;
+
+        var sourceQuotation = await _context.Quotations
+            .Where(q => q.OrderId == orderId)
+            .OrderByDescending(q => q.Status == "ACCEPTED")
+            .ThenByDescending(q => q.AcceptedAt)
+            .ThenByDescending(q => q.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (sourceQuotation == null || !sourceQuotation.PricePerKg.HasValue)
+            return;
+
+        const decimal minChargeableWeightKg = 30m;
+        const decimal defaultVolumetricConversionRate = 250m;
+        var volumetricWeight = Math.Round(actualCbm * defaultVolumetricConversionRate, 2);
+        var chargeableWeight = Math.Max(Math.Max(actualWeightKg, volumetricWeight), minChargeableWeightKg);
+        var baseFreight = Math.Round(chargeableWeight * sourceQuotation.PricePerKg.Value, 0);
+
+        var sourceSubtotal = sourceQuotation.FinalAmount - sourceQuotation.VatAmount;
+        var finalSubtotal = sourceSubtotal - sourceQuotation.BaseFreight + baseFreight;
+        var vatPercentage = sourceQuotation.VatPercentage ?? 8m;
+        var vatAmount = Math.Round(finalSubtotal * vatPercentage / 100m, 0);
+
+        _context.Quotations.Add(new Quotation
+        {
+            QuoteId = Guid.NewGuid(),
+            OrderId = orderId,
+            BaseFreight = baseFreight,
+            LastMileSurcharge = sourceQuotation.LastMileSurcharge,
+            VasAmount = sourceQuotation.VasAmount,
+            VatPercentage = vatPercentage,
+            VatAmount = vatAmount,
+            FinalAmount = finalSubtotal + vatAmount,
+            ChargeableWeightKg = chargeableWeight,
+            VolumetricWeightKg = volumetricWeight,
+            PricePerKg = sourceQuotation.PricePerKg,
+            DistanceKm = sourceQuotation.DistanceKm,
+            SystemBaseFreight = baseFreight,
+            ManualAdjustment = sourceQuotation.ManualAdjustment,
+            AdditionalCharges = sourceQuotation.AdditionalCharges,
+            MandatoryCharges = sourceQuotation.MandatoryCharges,
+            OptionalServicesMenu = sourceQuotation.OptionalServicesMenu,
+            OverrideReason = sourceQuotation.OverrideReason,
+            PricingSource = "AUTO_ACTUAL",
+            Status = "FINAL",
+            CreatedAt = now
+        });
     }
 
     private static ProductCategory ParseProductCategory(string? value)

@@ -14,6 +14,8 @@ namespace ColdChainX.Application.DTOs.Dispatch
     {
         public Guid LpnId { get; set; }
         public string LpnCode { get; set; } = null!;
+        public Guid? PackageLineId { get; set; }
+        public string? PackageLabel { get; set; }
         public decimal X { get; set; }
         public decimal Y { get; set; }
         public decimal Z { get; set; }

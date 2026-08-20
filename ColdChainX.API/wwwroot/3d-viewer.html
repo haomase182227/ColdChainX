@@ -211,6 +211,77 @@
             font-weight: 500;
         }
 
+        .package-panel {
+            margin-top: 18px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 14px;
+        }
+
+        .package-panel h2 {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .package-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 42vh;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .package-row {
+            display: grid;
+            grid-template-columns: 12px 1fr auto;
+            gap: 8px;
+            align-items: center;
+            padding: 9px 10px;
+            background-color: rgba(15, 23, 42, 0.55);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            cursor: pointer;
+            color: inherit;
+            text-align: left;
+        }
+
+        .package-row.active {
+            border-color: var(--accent);
+            background-color: rgba(59, 130, 246, 0.16);
+        }
+
+        .package-swatch {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .package-name {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-main);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .package-dims {
+            display: block;
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .package-count {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
         .canvas-container {
             position: absolute;
             left: 388px;
@@ -241,6 +312,51 @@
             z-index: 20;
             box-shadow: 0 4px 6px rgba(0,0,0,0.3);
             backdrop-filter: blur(4px);
+        }
+
+        .toolbox {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            display: flex;
+            gap: 8px;
+            z-index: 12;
+            background-color: rgba(30, 41, 59, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 8px;
+            backdrop-filter: blur(12px);
+        }
+
+        .tool-btn {
+            width: 38px;
+            height: 34px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: rgba(15, 23, 42, 0.8);
+            color: var(--text-main);
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .tool-btn.active {
+            border-color: var(--accent);
+            background: rgba(59, 130, 246, 0.25);
+        }
+
+        .selection-label {
+            position: absolute;
+            right: 24px;
+            top: 78px;
+            z-index: 12;
+            max-width: 280px;
+            color: var(--text-muted);
+            background-color: rgba(15, 23, 42, 0.78);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 6px;
+            padding: 8px 10px;
+            font-size: 12px;
+            backdrop-filter: blur(8px);
         }
     </style>
 </head>
@@ -274,6 +390,11 @@
                     <li><span>Kích thước:</span> <span id="res-dims">-</span></li>
                     <li><span>Đã xếp:</span> <span id="res-placed">0 kiện</span></li>
                 </ul>
+
+                <div class="package-panel">
+                    <h2>Packing trong don</h2>
+                    <div class="package-list" id="package-list"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -282,6 +403,13 @@
     <div class="main-view">
         <div class="canvas-container">
             <canvas id="webgl-canvas"></canvas>
+            <div class="toolbox">
+                <button class="tool-btn active" id="tool-move" title="Move selected package">↔</button>
+                <button class="tool-btn" id="tool-rotate" title="Rotate selected package">⟳</button>
+                <button class="tool-btn" id="tool-snap" title="Toggle 5cm snap">⌗</button>
+                <button class="tool-btn" id="tool-free" title="Allow moving outside truck">?</button>
+            </div>
+            <div class="selection-label" id="selection-label">Click a package to move or rotate it.</div>
             <div class="tooltip" id="tooltip"></div>
         </div>
     </div>
@@ -289,13 +417,20 @@
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { TransformControls } from 'three/addons/controls/TransformControls.js';
 
         // Globals for 3D
-        let scene, camera, renderer, controls;
+        let scene, camera, renderer, controls, transformControls;
         let containerMesh, itemsGroup;
         let raycaster, mouse;
         let interactableMeshes = [];
+        let selectedMesh = null;
+        let currentPlan = null;
+        let snapEnabled = true;
+        let freeMoveEnabled = false;
+        let activePackageKey = null;
         const tooltip = document.getElementById('tooltip');
+        const selectionLabel = document.getElementById('selection-label');
 
         // Initialize
         initThreeJS();
@@ -370,7 +505,9 @@
                 unplacedBox.classList.remove('warning');
             }
 
+            preparePackageGroups(plan);
             drawPlan(plan);
+            renderPackageGroups(plan);
         }
 
         function showMessage(text, type) {
@@ -398,6 +535,25 @@
             controls = new OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
             controls.dampingFactor = 0.05;
+
+            transformControls = new TransformControls(camera, renderer.domElement);
+            transformControls.setMode('translate');
+            transformControls.setTranslationSnap(5);
+            transformControls.setRotationSnap(Math.PI / 2);
+            transformControls.addEventListener('dragging-changed', (event) => {
+                controls.enabled = !event.value;
+                if (!event.value && selectedMesh) {
+                    clampSelectedMeshToContainer(selectedMesh);
+                    updateSelectedItemFromMesh(selectedMesh);
+                }
+            });
+            transformControls.addEventListener('objectChange', () => {
+                if (selectedMesh) {
+                    clampSelectedMeshToContainer(selectedMesh);
+                    updateSelectedItemFromMesh(selectedMesh);
+                }
+            });
+            scene.add(transformControls);
 
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
             scene.add(ambientLight);
@@ -429,6 +585,36 @@
                 tooltip.style.left = event.clientX + 'px';
                 tooltip.style.top = event.clientY + 'px';
             });
+
+            canvas.addEventListener('pointerdown', (event) => {
+                if (transformControls.dragging) return;
+
+                const rect = container.getBoundingClientRect();
+                mouse.x = ((event.clientX - rect.left) / container.clientWidth) * 2 - 1;
+                mouse.y = -((event.clientY - rect.top) / container.clientHeight) * 2 + 1;
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(interactableMeshes);
+
+                if (intersects.length > 0) {
+                    selectMesh(intersects[0].object);
+                }
+            });
+
+            document.getElementById('tool-move').addEventListener('click', () => setTransformMode('translate'));
+            document.getElementById('tool-rotate').addEventListener('click', () => setTransformMode('rotate'));
+            document.getElementById('tool-snap').addEventListener('click', () => {
+                snapEnabled = !snapEnabled;
+                transformControls.setTranslationSnap(snapEnabled ? 5 : null);
+                transformControls.setRotationSnap(snapEnabled ? Math.PI / 2 : null);
+                document.getElementById('tool-snap').classList.toggle('active', snapEnabled);
+            });
+            document.getElementById('tool-free').addEventListener('click', () => {
+                freeMoveEnabled = !freeMoveEnabled;
+                document.getElementById('tool-free').classList.toggle('active', freeMoveEnabled);
+                selectionLabel.textContent = freeMoveEnabled
+                    ? 'Free mode: packages can be moved outside the truck.'
+                    : 'Bounded mode: packages stay inside the truck.';
+            });
         }
 
         function animate() {
@@ -456,6 +642,9 @@
         }
 
         function drawPlan(plan) {
+            currentPlan = plan;
+            selectedMesh = null;
+            transformControls.detach();
             if (containerMesh) scene.remove(containerMesh);
             itemsGroup.clear();
             interactableMeshes = [];
@@ -517,7 +706,15 @@
                 const itemEdgeMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 });
                 mesh.add(new THREE.LineSegments(itemEdges, itemEdgeMat));
 
-                mesh.userData = { lpnCode: item.lpnCode, w: item.w, h: item.h, d: item.d };
+                mesh.userData = {
+                    item,
+                    lpnCode: item.lpnCode,
+                    packageLabel: item.packageLabel,
+                    packageKey: item.packageKey,
+                    w: item.w,
+                    h: item.h,
+                    d: item.d
+                };
                 itemsGroup.add(mesh);
                 interactableMeshes.push(mesh);
             });
@@ -525,6 +722,134 @@
             camera.position.set(cW * 1.5, cH * 1.5, cL * 1.5);
             controls.target.set(cW / 2, cH / 2, cL / 2);
             controls.update();
+        }
+
+        function setTransformMode(mode) {
+            transformControls.setMode(mode);
+            document.getElementById('tool-move').classList.toggle('active', mode === 'translate');
+            document.getElementById('tool-rotate').classList.toggle('active', mode === 'rotate');
+        }
+
+        function selectMesh(mesh) {
+            if (selectedMesh && selectedMesh.material?.emissive) {
+                selectedMesh.material.emissive.setHex(0x000000);
+            }
+
+            selectedMesh = mesh;
+            if (selectedMesh.material?.emissive) {
+                selectedMesh.material.emissive.setHex(0x334155);
+            }
+
+            transformControls.attach(selectedMesh);
+            const data = selectedMesh.userData;
+            selectionLabel.textContent = `${data.packageLabel || data.lpnCode}: ${data.w} x ${data.h} x ${data.d} cm`;
+            setActivePackage(data.packageKey);
+        }
+
+        function clampSelectedMeshToContainer(mesh) {
+            if (!currentPlan || freeMoveEnabled) return;
+
+            const halfX = mesh.userData.w / 2;
+            const halfY = mesh.userData.h / 2;
+            const halfZ = mesh.userData.d / 2;
+
+            mesh.position.x = THREE.MathUtils.clamp(mesh.position.x, halfX, currentPlan.containerWidth - halfX);
+            mesh.position.y = THREE.MathUtils.clamp(mesh.position.y, halfY, currentPlan.containerHeight - halfY);
+            mesh.position.z = THREE.MathUtils.clamp(mesh.position.z, halfZ, currentPlan.containerLength - halfZ);
+        }
+
+        function updateSelectedItemFromMesh(mesh) {
+            const item = mesh.userData.item;
+            if (!item) return;
+
+            item.x = Number((mesh.position.x - item.w / 2).toFixed(2));
+            item.y = Number((mesh.position.y - item.h / 2).toFixed(2));
+            item.z = Number((mesh.position.z - item.d / 2).toFixed(2));
+            item.rotationY = Number(mesh.rotation.y.toFixed(4));
+        }
+
+        function preparePackageGroups(plan) {
+            const groups = new Map();
+            for (const item of plan.placedItems) {
+                const label = item.packageLabel || item.lpnCode || 'Package';
+                const key = `${label}|${item.w}|${item.h}|${item.d}|${item.color}`;
+                item.packageKey = key;
+
+                if (!groups.has(key)) {
+                    groups.set(key, {
+                        key,
+                        label,
+                        w: item.w,
+                        h: item.h,
+                        d: item.d,
+                        color: item.color || '#3b82f6',
+                        count: 0
+                    });
+                }
+
+                groups.get(key).count += 1;
+            }
+
+            plan.packageGroups = Array.from(groups.values());
+        }
+
+        function renderPackageGroups(plan) {
+            const list = document.getElementById('package-list');
+            list.innerHTML = '';
+
+            for (const group of plan.packageGroups || []) {
+                const row = document.createElement('button');
+                row.type = 'button';
+                row.className = 'package-row';
+                row.dataset.packageKey = group.key;
+                row.innerHTML = `
+                    <span class="package-swatch" style="background:${escapeHtml(group.color)}"></span>
+                    <span>
+                        <span class="package-name">${escapeHtml(group.label)}</span>
+                        <span class="package-dims">${group.w} x ${group.h} x ${group.d} cm</span>
+                    </span>
+                    <span class="package-count">x${group.count}</span>`;
+                row.addEventListener('click', () => selectNextPackageInGroup(group.key));
+                list.appendChild(row);
+            }
+        }
+
+        function selectNextPackageInGroup(packageKey) {
+            const meshes = interactableMeshes.filter(mesh => mesh.userData.packageKey === packageKey);
+            if (meshes.length === 0) return;
+
+            const currentIndex = selectedMesh ? meshes.indexOf(selectedMesh) : -1;
+            const next = meshes[(currentIndex + 1) % meshes.length];
+            selectMesh(next);
+            focusCameraOnMesh(next);
+        }
+
+        function setActivePackage(packageKey) {
+            activePackageKey = packageKey;
+
+            document.querySelectorAll('.package-row').forEach(row => {
+                row.classList.toggle('active', row.dataset.packageKey === packageKey);
+            });
+
+            for (const mesh of interactableMeshes) {
+                if (!mesh.material) continue;
+                const isActive = !packageKey || mesh.userData.packageKey === packageKey;
+                mesh.material.opacity = isActive ? 0.88 : 0.32;
+            }
+        }
+
+        function focusCameraOnMesh(mesh) {
+            controls.target.copy(mesh.position);
+            controls.update();
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
         }
     </script>
 </body>

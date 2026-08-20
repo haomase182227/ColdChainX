@@ -12,6 +12,10 @@ public partial class OrderDimension
     public decimal LengthCm { get; set; }
     public decimal WidthCm { get; set; }
     public decimal HeightCm { get; set; }
+    public string? CbmEstimationMethod { get; set; }
+    public string? CbmEstimationConfidence { get; set; }
+    public decimal? CustomerProvidedTotalCbm { get; set; }
+    public int? TotalPackageQuantity { get; set; }
 
     public virtual TransportOrder Order { get; set; } = null!;
 }

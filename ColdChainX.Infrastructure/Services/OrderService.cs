@@ -221,12 +221,6 @@ namespace ColdChainX.Infrastructure.Services
 
         public async Task<ApiResponse<CreateOrderResponse>> CreateOrderAsync(CreateOrderRequest request, Guid customerId)
         {
-            if (request.ExpectedWeightKg <= 0)
-                return ApiResponse<CreateOrderResponse>.Failure("Expected weight must be greater than 0", 400);
-            if (request.Quantity <= 0)
-                return ApiResponse<CreateOrderResponse>.Failure("Quantity must be greater than 0", 400);
-            if (request.LengthCm <= 0 || request.WidthCm <= 0 || request.HeightCm <= 0)
-                return ApiResponse<CreateOrderResponse>.Failure("Dimensions must be greater than 0", 400);
             if (string.IsNullOrWhiteSpace(request.ItemName) || string.IsNullOrWhiteSpace(request.Category))
                 return ApiResponse<CreateOrderResponse>.Failure("Item name and category are required", 400);
             if (!request.HasStrongOdor.HasValue || !request.IsStackable.HasValue)
@@ -238,6 +232,31 @@ namespace ColdChainX.Infrastructure.Services
             var recipientValidationError = ValidateRecipient(request.ReceiverName, request.ReceiverPhone);
             if (recipientValidationError != null)
                 return ApiResponse<CreateOrderResponse>.Failure(recipientValidationError, 400);
+
+            var packageLinesResult = ParseOrderPackageLines(request.PackageLinesJson);
+            if (!packageLinesResult.Success)
+                return ApiResponse<CreateOrderResponse>.Failure(packageLinesResult.Error!, 400);
+
+            var packageLines = packageLinesResult.PackageLines;
+            var hasPackageLines = packageLines.Count > 0;
+            var totalPackageQuantity = hasPackageLines ? packageLines.Sum(line => line.Quantity) : request.Quantity;
+            var expectedWeightKg = hasPackageLines
+                ? packageLines.Sum(line => line.CapacityKg * line.Quantity)
+                : request.ExpectedWeightKg;
+
+            if (expectedWeightKg <= 0)
+                return ApiResponse<CreateOrderResponse>.Failure("Expected weight must be greater than 0", 400);
+            if (totalPackageQuantity <= 0)
+                return ApiResponse<CreateOrderResponse>.Failure("Quantity must be greater than 0", 400);
+            if (!hasPackageLines
+                && !request.CustomerProvidedTotalCbm.HasValue
+                && (!request.LengthCm.HasValue
+                    || !request.WidthCm.HasValue
+                    || !request.HeightCm.HasValue
+                    || request.LengthCm.Value <= 0
+                    || request.WidthCm.Value <= 0
+                    || request.HeightCm.Value <= 0))
+                return ApiResponse<CreateOrderResponse>.Failure("Dimensions must be greater than 0 when package lines or total CBM are not provided", 400);
 
             var strategy = _db.Database.CreateExecutionStrategy();
 
@@ -267,7 +286,7 @@ namespace ColdChainX.Infrastructure.Services
 
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
-                var expectedCbm = Math.Round(request.LengthCm * request.WidthCm * request.HeightCm * request.Quantity / 1000000m, 4);
+                var cbmEstimate = CalculateExpectedCbm(request, expectedWeightKg, totalPackageQuantity, hasPackageLines);
                 var coordinates = await _locationService.GetCoordinatesAsync(request.DestAddressText);
 
                 var location = new Location
@@ -289,7 +308,7 @@ namespace ColdChainX.Infrastructure.Services
                     CustomerId = customerId,
                     ItemName = request.ItemName.Trim(),
                     Category = request.Category.Trim(),
-                    Quantity = request.Quantity,
+                    Quantity = totalPackageQuantity,
                     PackingType = request.PackagingType.Trim(),
                     TempCondition = request.TempCondition.ToString("0.##", CultureInfo.InvariantCulture),
                     HasStrongOdor = request.HasStrongOdor.Value,
@@ -298,13 +317,17 @@ namespace ColdChainX.Infrastructure.Services
                     ReceiverPhone = request.ReceiverPhone.Trim(),
                     OrderDimension = new OrderDimension
                     {
-                        ExpectedWeightKg = request.ExpectedWeightKg,
-                        ActualWeightKg = request.ExpectedWeightKg,
-                        ExpectedCbm = expectedCbm,
-                        ActualCbm = expectedCbm,
-                        LengthCm = request.LengthCm,
-                        WidthCm = request.WidthCm,
-                        HeightCm = request.HeightCm
+                        ExpectedWeightKg = expectedWeightKg,
+                        ActualWeightKg = expectedWeightKg,
+                        ExpectedCbm = cbmEstimate.ExpectedCbm,
+                        ActualCbm = cbmEstimate.ExpectedCbm,
+                        LengthCm = hasPackageLines ? 0m : request.LengthCm ?? 0m,
+                        WidthCm = hasPackageLines ? 0m : request.WidthCm ?? 0m,
+                        HeightCm = hasPackageLines ? 0m : request.HeightCm ?? 0m,
+                        CbmEstimationMethod = cbmEstimate.Method,
+                        CbmEstimationConfidence = cbmEstimate.Confidence,
+                        CustomerProvidedTotalCbm = request.CustomerProvidedTotalCbm,
+                        TotalPackageQuantity = totalPackageQuantity
                     },
                     ScheduleId = request.ScheduleId,
                     DropoffStopId = request.DropoffStopId,
@@ -313,6 +336,21 @@ namespace ColdChainX.Infrastructure.Services
                     CreatedAt = DbNow()
                 };
                 _db.TransportOrders.Add(order);
+
+                foreach (var packageLine in packageLines)
+                {
+                    _db.OrderPackageLines.Add(new OrderPackageLine
+                    {
+                        OrderPackageLineId = Guid.NewGuid(),
+                        OrderId = order.OrderId,
+                        Label = packageLine.Label?.Trim() is { Length: > 0 } label
+                            ? label
+                            : $"Thùng {packageLine.CapacityKg:0.##}kg",
+                        CapacityKg = packageLine.CapacityKg,
+                        Quantity = packageLine.Quantity,
+                        CreatedAt = DbNow()
+                    });
+                }
 
                                 var uploadedBy = await ResolveCustomerUserIdAsync(customerId);
                 if (!uploadedBy.HasValue)
@@ -1172,6 +1210,142 @@ namespace ColdChainX.Infrastructure.Services
             return null;
         }
 
+        private static (bool Success, List<OrderPackageLineRequest> PackageLines, string? Error) ParseOrderPackageLines(string? packageLinesJson)
+        {
+            if (string.IsNullOrWhiteSpace(packageLinesJson))
+                return (true, new List<OrderPackageLineRequest>(), null);
+
+            try
+            {
+                var lines = JsonSerializer.Deserialize<List<OrderPackageLineRequest>>(
+                    packageLinesJson,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<OrderPackageLineRequest>();
+
+                if (lines.Count == 0)
+                    return (false, lines, "Package_Lines must contain at least one item when provided");
+
+                for (var i = 0; i < lines.Count; i++)
+                {
+                    if (lines[i].CapacityKg <= 0)
+                        return (false, lines, $"Package_Lines[{i}].CapacityKg must be greater than 0");
+                    if (lines[i].Quantity <= 0)
+                        return (false, lines, $"Package_Lines[{i}].Quantity must be greater than 0");
+                }
+
+                return (true, lines, null);
+            }
+            catch (JsonException)
+            {
+                return (false, new List<OrderPackageLineRequest>(), "Package_Lines must be valid JSON");
+            }
+        }
+
+        private static CbmEstimate CalculateExpectedCbm(
+            CreateOrderRequest request,
+            decimal expectedWeightKg,
+            int totalPackageQuantity,
+            bool hasPackageLines)
+        {
+            if (request.CustomerProvidedTotalCbm.HasValue)
+            {
+                return new CbmEstimate(
+                    Math.Round(request.CustomerProvidedTotalCbm.Value, 4),
+                    "CUSTOMER_PROVIDED_TOTAL_CBM",
+                    "CUSTOMER_PROVIDED");
+            }
+
+            if (hasPackageLines)
+            {
+                var density = GetConservativeDensity(request.Category);
+                var tempFactor = GetTemperatureFactor(request.TempCondition, request.PackagingType);
+                var boxFactor = GetPackagingFactor(request.PackagingType);
+                var expectedCbm = Math.Round((expectedWeightKg / density) * tempFactor * boxFactor, 4);
+
+                return new CbmEstimate(expectedCbm, "DENSITY_FACTOR", GetEstimationConfidence(request.Category, request.PackagingType));
+            }
+
+            var legacyCbm = Math.Round(request.LengthCm!.Value * request.WidthCm!.Value * request.HeightCm!.Value * totalPackageQuantity / 1000000m, 4);
+            return new CbmEstimate(legacyCbm, "LEGACY_DIMENSION", "HIGH");
+        }
+
+        private static decimal GetConservativeDensity(string category)
+        {
+            return category.Trim().ToUpperInvariant() switch
+            {
+                "MEAT_SEAFOOD" => 380m,
+                "FRUITS_VEGGIES" or "FROZEN_FRUITS_VEGGIES" => 450m,
+                "ICE_CREAM_BEVERAGES" => 350m,
+                "PHARMACEUTICALS" => 280m,
+                "RAW_MATERIALS_OTHERS" => 450m,
+                _ => 450m
+            };
+        }
+
+        private static decimal GetTemperatureFactor(decimal tempCondition, string packagingType)
+        {
+            if (!ContainsPackagingType(packagingType, "Foam Box"))
+                return 1.00m;
+
+            if (tempCondition >= 2m && tempCondition <= 5m) return 1.00m;
+            if (tempCondition >= -5m && tempCondition <= 0m) return 1.02m;
+            if (tempCondition >= -10m && tempCondition <= -6m) return 1.05m;
+            if (tempCondition >= -18m && tempCondition <= -11m) return 1.10m;
+
+            return 1.00m;
+        }
+
+        private static decimal GetPackagingFactor(string packagingType)
+        {
+            var types = packagingType
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            if (types.Length == 0)
+                return 1.08m;
+
+            if (types.Any(t => string.Equals(t, "MixedPackaging", StringComparison.OrdinalIgnoreCase)))
+                return 1.15m;
+
+            var maxBase = types.Max(GetPackagingBaseFactor);
+            var margin = types.Length switch
+            {
+                <= 1 => 0m,
+                2 => 0.05m,
+                _ => 0.10m
+            };
+
+            return maxBase + margin;
+        }
+
+        private static decimal GetPackagingBaseFactor(string packagingType)
+        {
+            return packagingType.Trim() switch
+            {
+                "Carton Box" => 1.05m,
+                "ThÃ¹ng" or "Thùng" => 1.08m,
+                "Plastic Box" => 1.10m,
+                "Pallet" => 1.15m,
+                "Bao" => 1.15m,
+                "Foam Box" => 1.25m,
+                "CustomUnknown" => 1.25m,
+                _ => 1.08m
+            };
+        }
+
+        private static string GetEstimationConfidence(string category, string packagingType)
+        {
+            var normalizedCategory = category.Trim().ToUpperInvariant();
+            if (normalizedCategory is "ICE_CREAM_BEVERAGES" or "PHARMACEUTICALS")
+                return "LOW";
+            if (ContainsPackagingType(packagingType, "CustomUnknown") || ContainsPackagingType(packagingType, "MixedPackaging"))
+                return "MEDIUM";
+            return "MEDIUM";
+        }
+
+        private static bool ContainsPackagingType(string packagingType, string expected)
+            => packagingType
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Any(type => string.Equals(type, expected, StringComparison.OrdinalIgnoreCase));
+
         private IQueryable<TransportOrder> BuildOrderQuery()
         {
             return _db.TransportOrders
@@ -1180,6 +1354,7 @@ namespace ColdChainX.Infrastructure.Services
                 .Include(o => o.Schedule).ThenInclude(s => s.Route)
                 .Include(o => o.DestLocationNavigation)
                 .Include(o => o.OrderDimension)
+                .Include(o => o.OrderPackageLines)
                 .Include(o => o.TransportDocuments)
                 .Include(o => o.Quotations);
         }
@@ -1245,9 +1420,23 @@ namespace ColdChainX.Infrastructure.Services
                 ActualWeightKg = (order.OrderDimension?.ActualWeightKg ?? 0m),
                 ExpectedCbm = (order.OrderDimension?.ExpectedCbm ?? 0m),
                 ActualCbm = (order.OrderDimension?.ActualCbm ?? 0m),
-                LengthCm = order.OrderDimension?.LengthCm,
-                WidthCm = order.OrderDimension?.WidthCm,
-                HeightCm = order.OrderDimension?.HeightCm,
+                LengthCm = order.OrderPackageLines.Any() ? null : order.OrderDimension?.LengthCm,
+                WidthCm = order.OrderPackageLines.Any() ? null : order.OrderDimension?.WidthCm,
+                HeightCm = order.OrderPackageLines.Any() ? null : order.OrderDimension?.HeightCm,
+                CbmEstimationMethod = order.OrderDimension?.CbmEstimationMethod,
+                CbmEstimationConfidence = order.OrderDimension?.CbmEstimationConfidence,
+                CustomerProvidedTotalCbm = order.OrderDimension?.CustomerProvidedTotalCbm,
+                TotalPackageQuantity = order.OrderDimension?.TotalPackageQuantity,
+                PackageLines = order.OrderPackageLines
+                    .OrderBy(line => line.CreatedAt)
+                    .Select(line => new OrderPackageLineResponse
+                    {
+                        OrderPackageLineId = line.OrderPackageLineId,
+                        Label = line.Label,
+                        CapacityKg = line.CapacityKg,
+                        Quantity = line.Quantity
+                    })
+                    .ToList(),
                 DropoffStopId = order.DropoffStopId,
                 Status = order.Status,
                 MasterTripId = order.MasterTripId,
@@ -1575,6 +1764,7 @@ namespace ColdChainX.Infrastructure.Services
 
             return ApiResponse<byte[]>.SuccessResponse(memoryStream.ToArray(), "Archive generated successfully.");
         }
+        private sealed record CbmEstimate(decimal ExpectedCbm, string Method, string Confidence);
     }
 }
 

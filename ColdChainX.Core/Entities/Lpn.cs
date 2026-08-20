@@ -66,5 +66,7 @@ public partial class Lpn
 
     public virtual Warehouse? Warehouse { get; set; }
 
+    public virtual ICollection<InboundQcPackageLine> InboundQcPackageLines { get; set; } = new List<InboundQcPackageLine>();
+
     public virtual ICollection<PenaltyBill> PenaltyBills { get; set; } = new List<PenaltyBill>();
 }
