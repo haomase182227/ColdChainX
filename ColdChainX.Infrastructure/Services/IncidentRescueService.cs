@@ -1549,7 +1549,7 @@ public class IncidentRescueService : IIncidentRescueService
                 }
             }
 
-            if (incident.Status == "TRANSLOAD_COMPLETED" && trip.Status == "IN_TRANSIT")
+            if (incident.TransloadConfirmedAt.HasValue && trip.Status == "IN_TRANSIT")
             {
                 return ApiResponse<IncidentWorkflowResult>.SuccessResponse(
                     BuildWorkflowResult(
@@ -1561,9 +1561,14 @@ public class IncidentRescueService : IIncidentRescueService
                     "Việc sang hàng đã được xác nhận trước đó.");
             }
 
-            if (incident.Status != RescueDispatchedStatus || trip.Status != "DELAYED")
+            var wasResolvedAfterReplacementDispatch = incident.Status == "RESOLVED"
+                && incident.ResolvedAt.HasValue
+                && incident.ReplacementVehicleId.HasValue
+                && incident.RescueDispatchedAt.HasValue;
+            if ((incident.Status != RescueDispatchedStatus && !wasResolvedAfterReplacementDispatch)
+                || trip.Status != "DELAYED")
                 return ApiResponse<IncidentWorkflowResult>.Failure(
-                    "Chỉ xác nhận sang hàng khi incident ở RESCUE_DISPATCHED và trip ở DELAYED.");
+                    "Chỉ xác nhận sang hàng sau khi xe thay thế đã được điều và trip đang DELAYED.");
 
             var shippingLpns = await _db.Lpns
                 .Where(l => l.TripId == trip.TripId && l.State == LpnState.SHIPPING)
@@ -1644,7 +1649,8 @@ public class IncidentRescueService : IIncidentRescueService
                 ConfirmedBy = confirmedBy
             };
             trip.Status = "IN_TRANSIT";
-            incident.Status = "TRANSLOAD_COMPLETED";
+            if (!wasResolvedAfterReplacementDispatch)
+                incident.Status = "TRANSLOAD_COMPLETED";
             incident.TransloadConfirmedBy = confirmedBy;
             incident.TransloadConfirmedAt = now;
             incident.TransloadNote = request.ConfirmationNote.Trim();

@@ -237,6 +237,41 @@ public sealed class IncidentRescueFlowTests : IDisposable
     }
 
     [Fact]
+    public async Task ConfirmTransload_AfterIncidentClosedForDispatchedReplacement_KeepsIncidentResolved()
+    {
+        await SeedRescueTripAsync(replacementOnline: true);
+        var dispatch = await _service.DispatchRescueAsync(
+            _incidentId,
+            new DispatchRescueRequest
+            {
+                ReplacementVehicleId = _replacementVehicleId,
+                Note = "Đã điều xe thay thế."
+            },
+            _dispatcherId);
+        Assert.True(dispatch.Success, dispatch.Message);
+
+        var incident = (await _db.IncidentReports.FindAsync(_incidentId))!;
+        incident.Status = "RESOLVED";
+        incident.ResolvedAt = DateTime.UtcNow;
+        incident.ResolvedBy = _dispatcherId;
+        await _db.SaveChangesAsync();
+
+        var confirmation = await _service.ConfirmTransloadAsync(
+            _incidentId,
+            new ConfirmTransloadRequest
+            {
+                ConfirmationNote = "Đã sang đủ hàng sau khi Incident được đóng.",
+                LpnIds = { _lpnId }
+            },
+            _dispatcherId);
+
+        Assert.True(confirmation.Success, confirmation.Message);
+        Assert.Equal("IN_TRANSIT", (await _db.MasterTrips.FindAsync(_tripId))!.Status);
+        Assert.Equal("RESOLVED", (await _db.IncidentReports.FindAsync(_incidentId))!.Status);
+        Assert.NotNull((await _db.IncidentReports.FindAsync(_incidentId))!.TransloadConfirmedAt);
+    }
+
+    [Fact]
     public async Task DispatchRescue_RejectsVehicleThatCannotArriveWithinRemainingSafeTime()
     {
         await SeedRescueTripAsync(replacementOnline: true);

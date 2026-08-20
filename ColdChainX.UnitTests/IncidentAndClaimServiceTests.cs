@@ -405,6 +405,7 @@ namespace ColdChainX.UnitTests
 
             var persistedIncident = await _db.IncidentReports.FindAsync(incidentId);
             persistedIncident!.Status = "REDISPATCHED_TO_CUSTOMER";
+            persistedIncident.ReplacementVehicleId = Guid.NewGuid();
             await _db.SaveChangesAsync();
 
             var approveResult = await _incidentService.ApproveExpenseAsync(
@@ -468,6 +469,172 @@ namespace ColdChainX.UnitTests
             var savedEvidences = await _db.IncidentEvidences.ToListAsync();
             Assert.Equal(2, savedEvidences.Count);
             Assert.All(savedEvidences, evidence => Assert.Equal(incidentId, evidence.IncidentId));
+        }
+
+        [Fact]
+        public async Task ResolveIncident_ReplacementVehicleDispatched_AllowsCloseBeforeTransload()
+        {
+            var dispatcherId = Guid.NewGuid();
+            var tripId = Guid.NewGuid();
+            var incidentId = Guid.NewGuid();
+            _db.Users.Add(new User
+            {
+                UserId = dispatcherId,
+                Username = "dispatcher_close_after_rescue",
+                PasswordHash = "hash",
+                RoleId = Guid.NewGuid(),
+                Email = "dispatcher.close.rescue@test.com",
+                FullName = "Dispatcher Rescue"
+            });
+            _db.MasterTrips.Add(new MasterTrip
+            {
+                TripId = tripId,
+                Status = "DELAYED",
+                VehicleId = Guid.NewGuid(),
+                PlannedStartTime = DateTime.UtcNow,
+                PlannedEndTime = DateTime.UtcNow.AddHours(4),
+                OriginLocationId = Guid.NewGuid(),
+                DestinationLocationId = Guid.NewGuid()
+            });
+            _db.IncidentReports.Add(new IncidentReport
+            {
+                IncidentId = incidentId,
+                TripId = tripId,
+                IncidentType = "ACCIDENT",
+                Severity = "HIGH",
+                Description = "Cần điều xe thay thế.",
+                RequiresRescue = true,
+                Status = "RESCUE_DISPATCHED",
+                ReplacementVehicleId = Guid.NewGuid(),
+                RescueDispatchedAt = DateTime.UtcNow,
+                DriverPaidAmount = 0m,
+                ReportedBy = dispatcherId,
+                ReportedAt = DateTime.UtcNow
+            });
+            await _db.SaveChangesAsync();
+
+            var result = await _incidentService.ResolveIncidentAsync(
+                incidentId,
+                new ResolveIncidentRequest { ResolutionNote = "Xe thay thế đã được điều." },
+                dispatcherId);
+
+            Assert.True(result.Success, result.Message);
+            Assert.Equal("RESOLVED", (await _db.IncidentReports.FindAsync(incidentId))!.Status);
+        }
+
+        [Fact]
+        public async Task ResolveIncident_ReplacementDispatched_WithPendingDriverExpense_RequiresReimbursement()
+        {
+            var dispatcherId = Guid.NewGuid();
+            var tripId = Guid.NewGuid();
+            var incidentId = Guid.NewGuid();
+            _db.Users.Add(new User
+            {
+                UserId = dispatcherId,
+                Username = "dispatcher_pending_reimbursement",
+                PasswordHash = "hash",
+                RoleId = Guid.NewGuid(),
+                Email = "dispatcher.pending.reimbursement@test.com",
+                FullName = "Dispatcher Pending Expense"
+            });
+            _db.MasterTrips.Add(new MasterTrip
+            {
+                TripId = tripId,
+                Status = "DELAYED",
+                VehicleId = Guid.NewGuid(),
+                PlannedStartTime = DateTime.UtcNow,
+                PlannedEndTime = DateTime.UtcNow.AddHours(4),
+                OriginLocationId = Guid.NewGuid(),
+                DestinationLocationId = Guid.NewGuid()
+            });
+            _db.IncidentReports.Add(new IncidentReport
+            {
+                IncidentId = incidentId,
+                TripId = tripId,
+                IncidentType = "ACCIDENT",
+                Severity = "HIGH",
+                Description = "Xe thay thế đã điều nhưng còn khoản ứng.",
+                RequiresRescue = true,
+                Status = "RESCUE_DISPATCHED",
+                ReplacementVehicleId = Guid.NewGuid(),
+                RescueDispatchedAt = DateTime.UtcNow,
+                DriverPaidAmount = 500_000m,
+                ExpenseStatus = "APPROVED",
+                ReportedBy = dispatcherId,
+                ReportedAt = DateTime.UtcNow
+            });
+            await _db.SaveChangesAsync();
+
+            var result = await _incidentService.ResolveIncidentAsync(
+                incidentId,
+                new ResolveIncidentRequest { ResolutionNote = "Xe thay thế đã được điều." },
+                dispatcherId);
+
+            Assert.False(result.Success);
+            Assert.Contains("reimbursed", result.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal("RESCUE_DISPATCHED", (await _db.IncidentReports.FindAsync(incidentId))!.Status);
+        }
+
+        [Fact]
+        public async Task ResolveIncident_ExternalRelay_RequiresColdChainXRedispatchVehicle()
+        {
+            var dispatcherId = Guid.NewGuid();
+            var tripId = Guid.NewGuid();
+            var incidentId = Guid.NewGuid();
+            _db.Users.Add(new User
+            {
+                UserId = dispatcherId,
+                Username = "dispatcher_external_relay_close",
+                PasswordHash = "hash",
+                RoleId = Guid.NewGuid(),
+                Email = "dispatcher.external.relay.close@test.com",
+                FullName = "Dispatcher External Relay"
+            });
+            _db.MasterTrips.Add(new MasterTrip
+            {
+                TripId = tripId,
+                Status = "RELAY_COMPLETED",
+                VehicleId = Guid.NewGuid(),
+                PlannedStartTime = DateTime.UtcNow,
+                PlannedEndTime = DateTime.UtcNow.AddHours(4),
+                OriginLocationId = Guid.NewGuid(),
+                DestinationLocationId = Guid.NewGuid()
+            });
+            var incident = new IncidentReport
+            {
+                IncidentId = incidentId,
+                TripId = tripId,
+                IncidentType = "VEHICLE_BREAKDOWN",
+                Severity = "CRITICAL",
+                Description = "Xe ngoài đang trung chuyển hàng về kho tuyến.",
+                RequiresRescue = true,
+                Status = "EXTERNAL_REEFER_IN_TRANSIT",
+                RescueDispatchedAt = DateTime.UtcNow,
+                DriverPaidAmount = 0m,
+                ReportedBy = dispatcherId,
+                ReportedAt = DateTime.UtcNow
+            };
+            _db.IncidentReports.Add(incident);
+            await _db.SaveChangesAsync();
+
+            var tooEarly = await _incidentService.ResolveIncidentAsync(
+                incidentId,
+                new ResolveIncidentRequest { ResolutionNote = "Mới xác nhận xe ngoài." },
+                dispatcherId);
+
+            Assert.False(tooEarly.Success);
+
+            incident.Status = "REDISPATCH_PLANNED";
+            incident.ReplacementVehicleId = Guid.NewGuid();
+            await _db.SaveChangesAsync();
+
+            var afterRedispatch = await _incidentService.ResolveIncidentAsync(
+                incidentId,
+                new ResolveIncidentRequest { ResolutionNote = "Đã điều xe ColdChainX giao lại." },
+                dispatcherId);
+
+            Assert.True(afterRedispatch.Success, afterRedispatch.Message);
+            Assert.Equal("RESOLVED", incident.Status);
         }
 
         [Fact]

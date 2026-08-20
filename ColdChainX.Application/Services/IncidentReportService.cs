@@ -897,16 +897,18 @@ public class IncidentReportService : IIncidentReportService
                 var mandatoryExternalRelay = RequiresMandatoryExternalReeferRelay(incident.IncidentType);
                 var operationallyReady = incident.RequiresRescue
                     ? mandatoryExternalRelay
-                        ? incident.Status == "REDISPATCHED_TO_CUSTOMER"
-                        : incident.Status is "TRANSLOAD_COMPLETED" or "REDISPATCH_PLANNED" or "REDISPATCHED_TO_CUSTOMER"
+                        ? incident.ReplacementVehicleId.HasValue
+                            && incident.Status is "REDISPATCH_PLANNED" or "REDISPATCHED_TO_CUSTOMER"
+                        : incident.ReplacementVehicleId.HasValue
+                            && incident.RescueDispatchedAt.HasValue
                     : incident.Status == "CONTINUED";
                 if (!operationallyReady)
                 {
                     return ApiResponse<bool>.Failure(
                         mandatoryExternalRelay
-                            ? "Vehicle/reefer breakdown can only be resolved after the new warehouse trip is sealed and dispatched to customers."
+                            ? "Vehicle/reefer breakdown can only be resolved after a new ColdChainX vehicle has been assigned to the redispatch trip."
                             : incident.RequiresRescue
-                                ? "A rescue incident can only be resolved after transload completion or a clear redispatch plan."
+                                ? "A rescue incident can only be resolved after a replacement vehicle has been dispatched."
                             : "Incident can only be resolved after the trip has continued.");
                 }
             }
