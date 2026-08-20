@@ -29,18 +29,32 @@ namespace ColdChainX.API.Extensions
         private static readonly Guid StopFullLocId = Guid.Parse("d0000000-0000-0000-0000-000000000013");
         private static readonly Guid StopNoShowLocId = Guid.Parse("d0000000-0000-0000-0000-000000000014");
 
-        private static readonly Guid SharedIotDeviceId = Guid.Parse("d0000000-0000-0000-0000-000000000050");
-
-        // Existing Pre-Seeded Identities
+        // Shared Identities
         private static readonly Guid SharedAdminUserId = Guid.Parse("11111111-1111-1111-1111-111111111111");
         private static readonly Guid SharedWarehouseWorkerUserId = Guid.Parse("22222222-2222-2222-2222-222222222222");
         private static readonly Guid SharedCustomerUserId = Guid.Parse("33333333-3333-3333-3333-333333333333");
-        private static readonly Guid SharedDriverUserId = Guid.Parse("44444444-4444-4444-4444-444444444444");
-
-        private static readonly Guid SharedDriverId = Guid.Parse("55555555-5555-5555-5555-555555555555");
-        private static readonly Guid SharedLicenseId = Guid.Parse("5a000000-0000-0000-0000-000000000001");
         private static readonly Guid SharedCustomerId = Guid.Parse("33333333-3333-3333-3333-333333333333");
-        private static readonly Guid SharedVehicleId = Guid.Parse("77777777-7777-7777-7777-777777777777");
+
+        // Driver 1 (Scenario A: Partial Delivery)
+        private static readonly Guid Driver1UserId = Guid.Parse("44444444-4444-4444-4444-444444444444");
+        private static readonly Guid Driver1Id = Guid.Parse("55555555-5555-5555-5555-555555555555");
+        private static readonly Guid License1Id = Guid.Parse("5a000000-0000-0000-0000-000000000001");
+        private static readonly Guid Vehicle1Id = Guid.Parse("77777777-7777-7777-7777-777777777777");
+        private static readonly Guid IotDevice1Id = Guid.Parse("d0000000-0000-0000-0000-000000000050");
+
+        // Driver 2 (Scenario B: Full Rejection)
+        private static readonly Guid Driver2UserId = Guid.Parse("44444444-4444-4444-4444-444444444442");
+        private static readonly Guid Driver2Id = Guid.Parse("55555555-5555-5555-5555-555555555552");
+        private static readonly Guid License2Id = Guid.Parse("5a000000-0000-0000-0000-000000000002");
+        private static readonly Guid Vehicle2Id = Guid.Parse("77777777-7777-7777-7777-777777777772");
+        private static readonly Guid IotDevice2Id = Guid.Parse("d0000000-0000-0000-0000-000000000052");
+
+        // Driver 3 (Scenario C: Customer No-Show)
+        private static readonly Guid Driver3UserId = Guid.Parse("44444444-4444-4444-4444-444444444443");
+        private static readonly Guid Driver3Id = Guid.Parse("55555555-5555-5555-5555-555555555553");
+        private static readonly Guid License3Id = Guid.Parse("5a000000-0000-0000-0000-000000000003");
+        private static readonly Guid Vehicle3Id = Guid.Parse("77777777-7777-7777-7777-777777777773");
+        private static readonly Guid IotDevice3Id = Guid.Parse("d0000000-0000-0000-0000-000000000053");
 
         // Scenario A (Partial Delivery - 2 Stops)
         public static readonly Guid TripPartialId = Guid.Parse("d1000000-0000-0000-0000-000000000001");
@@ -101,14 +115,26 @@ namespace ColdChainX.API.Extensions
                 // Step 2: Ensure shared master baseline (Users, Fleet, Warehouses, Locations, IoT)
                 await EnsureSharedMasterDataAsync(db, passwordHasher, logger);
 
+                var d1 = await db.Drivers.FirstAsync(d => d.PhoneNumber == "0900000001");
+                var d2 = await db.Drivers.FirstAsync(d => d.PhoneNumber == "0900000002");
+                var d3 = await db.Drivers.FirstAsync(d => d.PhoneNumber == "0900000003");
+
+                var v1 = await db.Vehicles.FirstAsync(v => v.TruckPlate == "51C-99999");
+                var v2 = await db.Vehicles.FirstAsync(v => v.TruckPlate == "51C-88888");
+                var v3 = await db.Vehicles.FirstAsync(v => v.TruckPlate == "51C-77777");
+
+                var i1 = await db.IotDevices.FirstAsync(i => i.DeviceCode == "IOT-HYUNDAI-01");
+                var i2 = await db.IotDevices.FirstAsync(i => i.DeviceCode == "IOT-ISUZU-02");
+                var i3 = await db.IotDevices.FirstAsync(i => i.DeviceCode == "IOT-HINO-03");
+
                 // Step 3: Seed Scenario A (Partial Delivery)
-                SeedScenarioPartial(db, logger);
+                SeedScenarioPartial(db, d1.DriverId, v1.VehicleId, i1.DeviceId, logger);
 
                 // Step 4: Seed Scenario B (Full Rejection)
-                SeedScenarioFullReject(db, logger);
+                SeedScenarioFullReject(db, d2.DriverId, v2.VehicleId, i2.DeviceId, logger);
 
                 // Step 5: Seed Scenario C (No-Show)
-                SeedScenarioNoShow(db, logger);
+                SeedScenarioNoShow(db, d3.DriverId, v3.VehicleId, i3.DeviceId, logger);
 
                 await db.SaveChangesAsync();
 
@@ -275,10 +301,12 @@ namespace ColdChainX.API.Extensions
             // 1. Ensure Standard Default Users
             var usersToSeed = new[]
             {
-                new { Id = SharedAdminUserId, Username = "admin01", Email = "admin01@coldchainx.com", Name = "System Admin", RoleId = adminRole.RoleId },
-                new { Id = SharedWarehouseWorkerUserId, Username = "warehouseworker01", Email = "warehouseworker01@coldchainx.com", Name = "Warehouse Worker", RoleId = whRole.RoleId },
-                new { Id = SharedCustomerUserId, Username = "customer01", Email = "customer01@coldchainx.com", Name = "Vinamilk Customer", RoleId = customerRole.RoleId },
-                new { Id = SharedDriverUserId, Username = "driver01", Email = "driver01@coldchainx.com", Name = "Main Driver", RoleId = driverRole.RoleId },
+                new { Id = SharedAdminUserId, Username = "admin01", Email = "admin01@coldchainx.com", Name = "System Admin", RoleId = adminRole.RoleId, WarehouseId = (Guid?)null },
+                new { Id = SharedWarehouseWorkerUserId, Username = "warehouseworker01", Email = "warehouseworker01@coldchainx.com", Name = "Warehouse Worker", RoleId = whRole.RoleId, WarehouseId = (Guid?)OriginWhId },
+                new { Id = SharedCustomerUserId, Username = "customer01", Email = "customer01@coldchainx.com", Name = "Vinamilk Customer", RoleId = customerRole.RoleId, WarehouseId = (Guid?)null },
+                new { Id = Driver1UserId, Username = "driver01", Email = "driver01@coldchainx.com", Name = "Nguyen Van Tai (Driver 1)", RoleId = driverRole.RoleId, WarehouseId = (Guid?)null },
+                new { Id = Driver2UserId, Username = "driver02", Email = "driver02@coldchainx.com", Name = "Tran Van Binh (Driver 2)", RoleId = driverRole.RoleId, WarehouseId = (Guid?)null },
+                new { Id = Driver3UserId, Username = "driver03", Email = "driver03@coldchainx.com", Name = "Le Hoang Nam (Driver 3)", RoleId = driverRole.RoleId, WarehouseId = (Guid?)null },
             };
 
             foreach (var u in usersToSeed)
@@ -293,6 +321,7 @@ namespace ColdChainX.API.Extensions
                         Email = u.Email,
                         FullName = u.Name,
                         RoleId = u.RoleId,
+                        WarehouseId = u.WarehouseId,
                         Status = "ACTIVE",
                         CreatedAt = DateTime.UtcNow.AddDays(-30)
                     };
@@ -306,6 +335,7 @@ namespace ColdChainX.API.Extensions
                     existingUser.Username = u.Username;
                     existingUser.FullName = u.Name;
                     existingUser.RoleId = u.RoleId;
+                    existingUser.WarehouseId = u.WarehouseId;
                     existingUser.Status = "ACTIVE";
                     existingUser.DeletedAt = null;
                     existingUser.DeletedBy = null;
@@ -313,78 +343,115 @@ namespace ColdChainX.API.Extensions
                     logger.LogInformation("[DEV SEEDER] Updated & activated user {Email} ({Role})", u.Email, u.Username);
                 }
             }
+            await db.SaveChangesAsync();
 
-            // 2. Ensure Vehicle
-            var vehicle = await db.Vehicles.FirstOrDefaultAsync(v => v.VehicleId == SharedVehicleId);
-            if (vehicle == null)
-            {
-                db.Vehicles.Add(new Vehicle
-                {
-                    VehicleId = SharedVehicleId,
-                    TruckPlate = "51C-99999",
-                    Brand = "Hyundai",
-                    VehicleType = "REEFER_TRUCK",
-                    MaxWeight = 5000m,
-                    MaxCbm = 30m,
-                    MinTemp = -20m,
-                    MaxTemp = 8m,
-                    CurrentOdometer = 12000,
-                    NextMaintenanceOdometer = 20000,
-                    Status = "ACTIVE",
-                    CurrentLocation = OriginWhId.ToString(),
-                    CreatedAt = DateTime.UtcNow.AddDays(-30)
-                });
-            }
-            else
-            {
-                vehicle.Status = "ACTIVE";
-                vehicle.CurrentLocation = OriginWhId.ToString();
-            }
+            var u1 = await db.Users.FirstAsync(u => u.Email == "driver01@coldchainx.com");
+            var u2 = await db.Users.FirstAsync(u => u.Email == "driver02@coldchainx.com");
+            var u3 = await db.Users.FirstAsync(u => u.Email == "driver03@coldchainx.com");
 
-            // 3. Ensure Driver profile
-            var driver = await db.Drivers.FirstOrDefaultAsync(d => d.DriverId == SharedDriverId || d.UserId == SharedDriverUserId);
-            if (driver == null)
+            // 2. Ensure 3 Vehicles
+            var vehicleConfigs = new[]
             {
-                db.Drivers.Add(new Driver
+                new { Id = Vehicle1Id, Plate = "51C-99999", Brand = "Hyundai", Type = "REEFER_TRUCK", Weight = 5000m, Cbm = 30m, MinT = -20m, MaxT = 8m },
+                new { Id = Vehicle2Id, Plate = "51C-88888", Brand = "Isuzu", Type = "REEFER_TRUCK", Weight = 3500m, Cbm = 20m, MinT = -20m, MaxT = 8m },
+                new { Id = Vehicle3Id, Plate = "51C-77777", Brand = "Hino", Type = "REEFER_TRUCK", Weight = 5000m, Cbm = 30m, MinT = -25m, MaxT = 5m },
+            };
+
+            foreach (var vc in vehicleConfigs)
+            {
+                var vehicle = await db.Vehicles.FirstOrDefaultAsync(v => v.VehicleId == vc.Id || v.TruckPlate == vc.Plate);
+                if (vehicle == null)
                 {
-                    DriverId = SharedDriverId,
-                    UserId = SharedDriverUserId,
-                    FullName = "Nguyen Van Tai",
-                    IdentityNumber = "079200000001",
-                    PhoneNumber = "0900000001",
-                    DateOfBirth = new DateOnly(1990, 1, 1),
-                    JoinDate = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-2)),
-                    Status = "ACTIVE",
-                    CreatedAt = DateTime.UtcNow.AddDays(-30)
-                });
-            }
-            else
-            {
-                driver.UserId = SharedDriverUserId;
-                driver.Status = "ACTIVE";
+                    db.Vehicles.Add(new Vehicle
+                    {
+                        VehicleId = vc.Id,
+                        TruckPlate = vc.Plate,
+                        Brand = vc.Brand,
+                        VehicleType = vc.Type,
+                        MaxWeight = vc.Weight,
+                        MaxCbm = vc.Cbm,
+                        MinTemp = vc.MinT,
+                        MaxTemp = vc.MaxT,
+                        CurrentOdometer = 12000,
+                        NextMaintenanceOdometer = 20000,
+                        Status = "ACTIVE",
+                        CurrentLocation = OriginWhId.ToString(),
+                        CreatedAt = DateTime.UtcNow.AddDays(-30)
+                    });
+                }
+                else
+                {
+                    vehicle.Status = "ACTIVE";
+                    vehicle.CurrentLocation = OriginWhId.ToString();
+                }
             }
 
-            // 4. Ensure DriverLicense
-            var license = await db.DriverLicenses.FirstOrDefaultAsync(l => l.LicenseId == SharedLicenseId || l.DriverId == SharedDriverId);
-            if (license == null)
+            // 3. Ensure 3 Driver profiles & licenses
+            var driverConfigs = new[]
             {
-                db.DriverLicenses.Add(new DriverLicense
+                new { DriverId = Driver1Id, UserId = u1.UserId, Name = "Nguyen Van Tai", IdNum = "079200000001", Phone = "0900000001", LicId = License1Id, LicNum = "B2-000001" },
+                new { DriverId = Driver2Id, UserId = u2.UserId, Name = "Tran Van Binh", IdNum = "079200000002", Phone = "0900000002", LicId = License2Id, LicNum = "B2-000002" },
+                new { DriverId = Driver3Id, UserId = u3.UserId, Name = "Le Hoang Nam", IdNum = "079200000003", Phone = "0900000003", LicId = License3Id, LicNum = "B2-000003" },
+            };
+
+            // 3. Ensure 3 Driver profiles
+            foreach (var dc in driverConfigs)
+            {
+                var driver = await db.Drivers.FirstOrDefaultAsync(d => d.DriverId == dc.DriverId || d.UserId == dc.UserId || d.IdentityNumber == dc.IdNum || d.PhoneNumber == dc.Phone);
+                if (driver == null)
                 {
-                    LicenseId = SharedLicenseId,
-                    DriverId = SharedDriverId,
-                    LicenseNumber = "B2-000001",
-                    LicenseClass = "FC",
-                    IssueDate = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-2)),
-                    ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(3)),
-                    Status = "ACTIVE",
-                    CreatedAt = DateTime.UtcNow.AddDays(-30)
-                });
+                    db.Drivers.Add(new Driver
+                    {
+                        DriverId = dc.DriverId,
+                        UserId = dc.UserId,
+                        FullName = dc.Name,
+                        IdentityNumber = dc.IdNum,
+                        PhoneNumber = dc.Phone,
+                        DateOfBirth = new DateOnly(1990, 1, 1),
+                        JoinDate = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-2)),
+                        Status = "ACTIVE",
+                        CreatedAt = DateTime.UtcNow.AddDays(-30)
+                    });
+                }
+                else
+                {
+                    driver.UserId = dc.UserId;
+                    driver.FullName = dc.Name;
+                    driver.IdentityNumber = dc.IdNum;
+                    driver.PhoneNumber = dc.Phone;
+                    driver.Status = "ACTIVE";
+                }
             }
-            else
+            await db.SaveChangesAsync();
+
+            // 4. Ensure 3 Driver licenses
+            foreach (var dc in driverConfigs)
             {
-                license.Status = "ACTIVE";
-                license.ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(3));
+                var driver = await db.Drivers.FirstAsync(d => d.DriverId == dc.DriverId || d.UserId == dc.UserId);
+                var license = await db.DriverLicenses.FirstOrDefaultAsync(l => l.DriverId == driver.DriverId);
+                if (license == null)
+                {
+                    var existingWithNum = await db.DriverLicenses.FirstOrDefaultAsync(l => l.LicenseNumber == dc.LicNum);
+                    var finalLicNum = existingWithNum == null ? dc.LicNum : $"B2-{driver.DriverId.ToString()[..6].ToUpper()}";
+                    db.DriverLicenses.Add(new DriverLicense
+                    {
+                        LicenseId = dc.LicId,
+                        DriverId = driver.DriverId,
+                        LicenseNumber = finalLicNum,
+                        LicenseClass = "FC",
+                        IssueDate = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-2)),
+                        ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(3)),
+                        Status = "ACTIVE",
+                        CreatedAt = DateTime.UtcNow.AddDays(-30)
+                    });
+                }
+                else
+                {
+                    license.Status = "ACTIVE";
+                    license.ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(3));
+                }
             }
+            await db.SaveChangesAsync();
 
             // 5. Customer row in Customers table
             var customer = await db.Customers.FirstOrDefaultAsync(c => c.CustomerId == SharedCustomerId);
@@ -446,9 +513,9 @@ namespace ColdChainX.API.Extensions
             {
                 new { Id = OriginLocId, Addr = "Kho Tổng Tân Bình, 102 Trường Chinh, Q. Tân Bình, TP.HCM", Lat = 10.7981m, Lon = 106.6542m },
                 new { Id = Stop1PartialLocId, Addr = "Cửa hàng Vinamilk 1, 150 Nguyễn Thị Minh Khai, P.6, Q.3, TP.HCM", Lat = 10.7769m, Lon = 106.6908m },
-                new { Id = Stop2PartialLocId, Addr = "Cửa hàng Vinamilk 2, 280 Hai Bà Trưng, P. Tân Định, Q.1, TP.HCM", Lat = 10.7892m, Lon = 106.6953m },
-                new { Id = StopFullLocId, Addr = "Siêu thị Co.opmart Cống Quỳnh, 189C Cống Quỳnh, Q.1, TP.HCM", Lat = 10.7675m, Lon = 106.6874m },
-                new { Id = StopNoShowLocId, Addr = "Bách Hóa Xanh Đinh Tiên Hoàng, 128 Đinh Tiên Hoàng, Q. Bình Thạnh, TP.HCM", Lat = 10.7951m, Lon = 106.6978m }
+                new { Id = Stop2PartialLocId, Addr = "Cửa hàng Vinamilk 2, 280 Hai Bà Trưng, P. Tân Định, Q.1, TP.HCM", Lat = 10.7912m, Lon = 106.6923m },
+                new { Id = StopFullLocId, Addr = "Siêu thị Co.opmart Cống Quỳnh, 189C Cống Quỳnh, P. Nguyễn Cư Trinh, Q.1, TP.HCM", Lat = 10.7675m, Lon = 106.6874m },
+                new { Id = StopNoShowLocId, Addr = "Bách Hóa Xanh Đinh Tiên Hoàng, 128 Đinh Tiên Hoàng, P.1, Q. Bình Thạnh, TP.HCM", Lat = 10.7951m, Lon = 106.6978m },
             };
 
             foreach (var loc in locationConfigs)
@@ -476,30 +543,40 @@ namespace ColdChainX.API.Extensions
                 }
             }
 
-            // 8. Ensure IoT Device attached to Vehicle
-            var iotDevice = await db.IotDevices.FirstOrDefaultAsync(d => d.DeviceId == SharedIotDeviceId || d.DeviceCode == "IOT-HYUNDAI-01");
-            if (iotDevice == null)
+            // 8. Ensure IoT Devices attached to Vehicles
+            var iotConfigs = new[]
             {
-                db.IotDevices.Add(new IotDevice
+                new { Id = IotDevice1Id, VehId = Vehicle1Id, Code = "IOT-HYUNDAI-01" },
+                new { Id = IotDevice2Id, VehId = Vehicle2Id, Code = "IOT-ISUZU-02" },
+                new { Id = IotDevice3Id, VehId = Vehicle3Id, Code = "IOT-HINO-03" },
+            };
+
+            foreach (var iot in iotConfigs)
+            {
+                var device = await db.IotDevices.FirstOrDefaultAsync(d => d.DeviceId == iot.Id || d.DeviceCode == iot.Code);
+                if (device == null)
                 {
-                    DeviceId = SharedIotDeviceId,
-                    VehicleId = SharedVehicleId,
-                    DeviceCode = "IOT-HYUNDAI-01",
-                    Status = "STREAMING",
-                    BatteryLevel = 98,
-                    CreatedAt = DateTime.UtcNow.AddDays(-30)
-                });
-            }
-            else
-            {
-                iotDevice.VehicleId = SharedVehicleId;
-                iotDevice.Status = "STREAMING";
+                    db.IotDevices.Add(new IotDevice
+                    {
+                        DeviceId = iot.Id,
+                        VehicleId = iot.VehId,
+                        DeviceCode = iot.Code,
+                        Status = "STREAMING",
+                        BatteryLevel = 98,
+                        CreatedAt = DateTime.UtcNow.AddDays(-30)
+                    });
+                }
+                else
+                {
+                    device.VehicleId = iot.VehId;
+                    device.Status = "STREAMING";
+                }
             }
 
             await db.SaveChangesAsync();
         }
 
-        private static void SeedScenarioPartial(ApplicationDbContext db, ILogger logger)
+        private static void SeedScenarioPartial(ApplicationDbContext db, Guid driverId, Guid vehicleId, Guid iotDeviceId, ILogger logger)
         {
             logger.LogInformation("[DEV SEEDER] Seeding Scenario A: TRIP-DEV-PARTIAL-01 (2 Stops, 10 items @ Stop 1, 5 items @ Stop 2)...");
             var now = DateTime.UtcNow;
@@ -508,7 +585,7 @@ namespace ColdChainX.API.Extensions
             var trip = new MasterTrip
             {
                 TripId = TripPartialId,
-                VehicleId = SharedVehicleId,
+                VehicleId = vehicleId,
                 OriginLocationId = OriginLocId,
                 DestinationLocationId = Stop2PartialLocId,
                 PlannedStartTime = now.AddMinutes(-30),
@@ -526,7 +603,7 @@ namespace ColdChainX.API.Extensions
             db.TripDrivers.Add(new TripDriver
             {
                 TripId = TripPartialId,
-                DriverId = SharedDriverId,
+                DriverId = driverId,
                 DriverRole = "PRIMARY",
                 AssignedDurationHours = 2.0m,
                 CreatedAt = now.AddMinutes(-35)
@@ -546,7 +623,7 @@ namespace ColdChainX.API.Extensions
             {
                 LogId = TelemetryPartialId,
                 TripId = TripPartialId,
-                DeviceId = SharedIotDeviceId,
+                DeviceId = iotDeviceId,
                 Latitude = 10.7769m,
                 Longitude = 106.6908m,
                 Temperature = 3.5m,
@@ -618,15 +695,15 @@ namespace ColdChainX.API.Extensions
                 ReceiptId = ReceiptPartial1Id,
                 WarehouseId = OriginWhId,
                 Quantity = 10,
-                ActualWeightKg = 125.0m,
-                ActualCbm = 0.40m,
+                ActualWeightKg = 100.0m,
+                ActualCbm = 0.35m,
                 State = LpnState.SHIPPING,
                 RequiredTemperature = 3.5m,
                 RecordedTemperature = 3.5m,
                 CreatedAt = now.AddDays(-1)
             });
 
-            // Stop 2 (Normal Final Stop: 5 units, 500,000 VND)
+            // Stop 2 (Happy Stop: 5 units, 500,000 VND)
             db.TripStops.Add(new TripStop
             {
                 StopId = StopPartial2Id,
@@ -636,8 +713,8 @@ namespace ColdChainX.API.Extensions
                 StopType = "DROPOFF",
                 Status = "PLANNED",
                 ActualArrivalTime = null,
-                PlannedArrivalTime = now.AddMinutes(35),
-                PlannedDepartureTime = now.AddMinutes(50),
+                PlannedArrivalTime = now.AddMinutes(40),
+                PlannedDepartureTime = now.AddMinutes(55),
                 CreatedAt = now.AddMinutes(-35)
             });
 
@@ -700,7 +777,7 @@ namespace ColdChainX.API.Extensions
             });
         }
 
-        private static void SeedScenarioFullReject(ApplicationDbContext db, ILogger logger)
+        private static void SeedScenarioFullReject(ApplicationDbContext db, Guid driverId, Guid vehicleId, Guid iotDeviceId, ILogger logger)
         {
             logger.LogInformation("[DEV SEEDER] Seeding Scenario B: TRIP-DEV-FULL-01 (1 Stop, 10 items, 800,000 VND)...");
             var now = DateTime.UtcNow;
@@ -708,7 +785,7 @@ namespace ColdChainX.API.Extensions
             var trip = new MasterTrip
             {
                 TripId = TripFullId,
-                VehicleId = SharedVehicleId,
+                VehicleId = vehicleId,
                 OriginLocationId = OriginLocId,
                 DestinationLocationId = StopFullLocId,
                 PlannedStartTime = now.AddMinutes(-30),
@@ -726,7 +803,7 @@ namespace ColdChainX.API.Extensions
             db.TripDrivers.Add(new TripDriver
             {
                 TripId = TripFullId,
-                DriverId = SharedDriverId,
+                DriverId = driverId,
                 DriverRole = "PRIMARY",
                 AssignedDurationHours = 1.5m,
                 CreatedAt = now.AddMinutes(-35)
@@ -746,7 +823,7 @@ namespace ColdChainX.API.Extensions
             {
                 LogId = TelemetryFullId,
                 TripId = TripFullId,
-                DeviceId = SharedIotDeviceId,
+                DeviceId = iotDeviceId,
                 Latitude = 10.7675m,
                 Longitude = 106.6874m,
                 Temperature = 4.0m,
@@ -826,7 +903,7 @@ namespace ColdChainX.API.Extensions
             });
         }
 
-        private static void SeedScenarioNoShow(ApplicationDbContext db, ILogger logger)
+        private static void SeedScenarioNoShow(ApplicationDbContext db, Guid driverId, Guid vehicleId, Guid iotDeviceId, ILogger logger)
         {
             logger.LogInformation("[DEV SEEDER] Seeding Scenario C: TRIP-DEV-NOSHOW-01 (1 Stop, 10 items, 1,200,000 VND)...");
             var now = DateTime.UtcNow;
@@ -834,7 +911,7 @@ namespace ColdChainX.API.Extensions
             var trip = new MasterTrip
             {
                 TripId = TripNoShowId,
-                VehicleId = SharedVehicleId,
+                VehicleId = vehicleId,
                 OriginLocationId = OriginLocId,
                 DestinationLocationId = StopNoShowLocId,
                 PlannedStartTime = now.AddMinutes(-30),
@@ -852,7 +929,7 @@ namespace ColdChainX.API.Extensions
             db.TripDrivers.Add(new TripDriver
             {
                 TripId = TripNoShowId,
-                DriverId = SharedDriverId,
+                DriverId = driverId,
                 DriverRole = "PRIMARY",
                 AssignedDurationHours = 1.5m,
                 CreatedAt = now.AddMinutes(-35)
@@ -872,7 +949,7 @@ namespace ColdChainX.API.Extensions
             {
                 LogId = TelemetryNoShowId,
                 TripId = TripNoShowId,
-                DeviceId = SharedIotDeviceId,
+                DeviceId = iotDeviceId,
                 Latitude = 10.7951m,
                 Longitude = 106.6978m,
                 Temperature = -18.0m,
@@ -958,12 +1035,12 @@ namespace ColdChainX.API.Extensions
                 "=================================================================================\n" +
                 "   COLDCHAINX DEV UNHAPPY SCENARIOS SEEDED SUCCESSFULLY\n" +
                 "=================================================================================\n" +
-                " Driver Login:       driver01@coldchainx.com / Password@123\n" +
                 " Customer Login:     customer01@coldchainx.com / Password@123\n" +
-                " Warehouse Worker:   warehouseworker01@coldchainx.com / Password@123\n" +
-                " Vehicle:            51C-99999 (Hyundai Reefer Truck)\n" +
+                " Warehouse Worker:   warehouseworker01@coldchainx.com / Password@123 (Kho Tân Bình)\n" +
                 "---------------------------------------------------------------------------------\n" +
                 " [SCENARIO A - PARTIAL DELIVERY & SEAL CONTINUATION (2 STOPS)]\n" +
+                "   Driver Login:     driver01@coldchainx.com / Password@123\n" +
+                "   Driver Name:      Nguyen Van Tai (Xe: 51C-99999 - Hyundai Reefer)\n" +
                 "   Trip:             TRIP-DEV-PARTIAL-01 (Id: d1000000-0000-0000-0000-000000000001)\n" +
                 "   Stop 1:           TRK-DEV-PARTIAL-01 (10 thùng sữa tươi, Quotation: 1,000,000 VND)\n" +
                 "                     -> Manual Action: Checkin -> CutSeal -> Reject 3 -> COD: 700k -> Seal\n" +
@@ -971,11 +1048,15 @@ namespace ColdChainX.API.Extensions
                 "                     -> Manual Action: Checkin -> Handover -> Final Stop -> Return Warehouse\n" +
                 "---------------------------------------------------------------------------------\n" +
                 " [SCENARIO B - FULL REJECTION 100% (1 STOP)]\n" +
+                "   Driver Login:     driver02@coldchainx.com / Password@123\n" +
+                "   Driver Name:      Tran Van Binh (Xe: 51C-88888 - Isuzu Reefer)\n" +
                 "   Trip:             TRIP-DEV-FULL-01 (Id: d2000000-0000-0000-0000-000000000001)\n" +
                 "   Stop 1:           TRK-DEV-FULL-01 (10 thùng sữa chua, Quotation: 800,000 VND)\n" +
                 "                     -> Manual Action: Checkin -> CutSeal -> Full Reject -> Skip Pay -> Return WH\n" +
                 "---------------------------------------------------------------------------------\n" +
                 " [SCENARIO C - CUSTOMER NO-SHOW (1 STOP)]\n" +
+                "   Driver Login:     driver03@coldchainx.com / Password@123\n" +
+                "   Driver Name:      Le Hoang Nam (Xe: 51C-77777 - Hino Reefer)\n" +
                 "   Trip:             TRIP-DEV-NOSHOW-01 (Id: d3000000-0000-0000-0000-000000000001)\n" +
                 "   Stop 1:           TRK-DEV-NOSHOW-01 (10 thùng bơ tươi, Quotation: 1,200,000 VND)\n" +
                 "                     -> Manual Action: Checkin -> Report No-Show -> ePOD NO_SHOW -> Return WH\n" +
