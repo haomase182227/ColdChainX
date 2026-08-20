@@ -195,21 +195,35 @@ namespace ColdChainX.Infrastructure.Services
                 return ApiResponse<ChatMessageResponse>.Failure("Order not found", 404);
 
             var customerUserId = await FindCustomerUserIdAsync(order.Customer);
-            var effectiveReceiverId = request.ReceiverId != Guid.Empty
-                ? request.ReceiverId
-                : (customerUserId ?? senderId);
+            var isCustomerSender = senderRoles.Any(role =>
+                string.Equals(role, "Customer", StringComparison.OrdinalIgnoreCase));
+            Guid? effectiveReceiverId = request.ReceiverId is { } requestedReceiverId
+                                        && requestedReceiverId != Guid.Empty
+                ? requestedReceiverId
+                : isCustomerSender
+                    ? await FindStaffReceiverIdAsync(orderId)
+                    : customerUserId;
 
-            var receiverUserExists = await _db.Users.AnyAsync(u => u.UserId == effectiveReceiverId);
-            if (!receiverUserExists)
+            if (!effectiveReceiverId.HasValue)
             {
-                var fallbackUser = customerUserId 
-                    ?? await _db.Users.Where(u => u.Role != null && u.Role.RoleName == "Customer").Select(u => (Guid?)u.UserId).FirstOrDefaultAsync() 
-                    ?? await _db.Users.Select(u => (Guid?)u.UserId).FirstOrDefaultAsync() 
-                    ?? senderId;
-                effectiveReceiverId = fallbackUser;
+                var errorMessage = isCustomerSender
+                    ? "No active Sales, Admin, or WarehouseWorker user is available to receive the message"
+                    : "Customer user for this order could not be resolved";
+                return ApiResponse<ChatMessageResponse>.Failure(errorMessage);
             }
 
-            var access = await ValidateOrderChatAccessAsync(orderId, senderId, senderRoles, senderCustomerId, effectiveReceiverId);
+            var receiverUserExists = await _db.Users
+                .AsNoTracking()
+                .AnyAsync(user => user.UserId == effectiveReceiverId.Value);
+            if (!receiverUserExists)
+                return ApiResponse<ChatMessageResponse>.Failure("Receiver user not found", 404);
+
+            var access = await ValidateOrderChatAccessAsync(
+                orderId,
+                senderId,
+                senderRoles,
+                senderCustomerId,
+                effectiveReceiverId.Value);
             if (!access.Success)
                 return ApiResponse<ChatMessageResponse>.Failure(access.Message);
 
@@ -218,7 +232,7 @@ namespace ColdChainX.Infrastructure.Services
                 Id = Guid.NewGuid(),
                 OrderId = orderId,
                 SenderId = senderId,
-                ReceiverId = effectiveReceiverId,
+                ReceiverId = effectiveReceiverId.Value,
                 MessageContent = request.MessageContent.Trim(),
                 CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
                 IsRead = false
@@ -437,6 +451,50 @@ namespace ColdChainX.Infrastructure.Services
                 .FirstOrDefaultAsync();
         }
 
+        private async Task<Guid?> FindStaffReceiverIdAsync(Guid orderId)
+        {
+            var staffUsers = await _db.Users
+                .AsNoTracking()
+                .Where(user => user.Role != null
+                               && user.DeletedAt == null
+                               && (user.Status == null || user.Status.ToUpper() == "ACTIVE")
+                               && (user.Role.RoleName.ToUpper() == "SALES"
+                                   || user.Role.RoleName.ToUpper() == "ADMIN"
+                                   || user.Role.RoleName.ToUpper() == "WAREHOUSEWORKER"))
+                .Select(user => new
+                {
+                    user.UserId,
+                    RoleName = user.Role!.RoleName,
+                    user.CreatedAt
+                })
+                .ToListAsync();
+
+            if (staffUsers.Count == 0)
+                return null;
+
+            var staffUserIds = staffUsers.Select(user => user.UserId).ToList();
+            var previousStaffParticipantId = await _db.ChatMessages
+                .AsNoTracking()
+                .Where(message => message.OrderId == orderId
+                                  && (staffUserIds.Contains(message.SenderId)
+                                      || staffUserIds.Contains(message.ReceiverId)))
+                .OrderByDescending(message => message.CreatedAt)
+                .Select(message => staffUserIds.Contains(message.SenderId)
+                    ? (Guid?)message.SenderId
+                    : message.ReceiverId)
+                .FirstOrDefaultAsync();
+
+            if (previousStaffParticipantId.HasValue)
+                return previousStaffParticipantId;
+
+            return staffUsers
+                .OrderBy(user => GetStaffRolePriority(user.RoleName))
+                .ThenBy(user => user.CreatedAt ?? DateTime.MaxValue)
+                .ThenBy(user => user.UserId)
+                .Select(user => (Guid?)user.UserId)
+                .First();
+        }
+
         private async Task<bool> IsUserInStaffRoleAsync(Guid userId)
         {
             var roleName = await _db.Users
@@ -454,6 +512,13 @@ namespace ColdChainX.Infrastructure.Services
             return string.Equals(role, "Sales", StringComparison.OrdinalIgnoreCase)
                    || string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase)
                    || string.Equals(role, "WarehouseWorker", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static int GetStaffRolePriority(string role)
+        {
+            if (string.Equals(role, "Sales", StringComparison.OrdinalIgnoreCase)) return 0;
+            if (string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase)) return 1;
+            return 2;
         }
     }
 }
