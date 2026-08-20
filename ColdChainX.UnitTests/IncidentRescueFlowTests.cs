@@ -480,6 +480,63 @@ public sealed class IncidentRescueFlowTests : IDisposable
     }
 
     [Fact]
+    public async Task VehicleBreakdown_ConfirmExternalVehicleOnly_ImmediatelyOpensWarehouseInboundBySeal()
+    {
+        await SeedRescueTripAsync(replacementOnline: true);
+        var routeId = Guid.NewGuid();
+        var hanoiWarehouseId = Guid.NewGuid();
+        _db.RouteMasters.Add(new RouteMaster
+        {
+            RouteId = routeId,
+            RouteCode = "HCM-HN-MINIMAL",
+            OriginCity = "Hồ Chí Minh",
+            DestCity = "Hà Nội",
+            TransitTime = "36:00",
+            Status = "ACTIVE",
+            CreatedAt = DateTime.UtcNow
+        });
+        _db.Warehouses.Add(new Warehouse
+        {
+            WarehouseId = hanoiWarehouseId,
+            WarehouseCode = "HN-HUB-MINIMAL",
+            WarehouseName = "Kho Hà Nội",
+            WarehouseType = "HUB",
+            Address = "Hà Nội",
+            MaxPallets = 100,
+            Status = "ACTIVE",
+            DefaultMinTemp = -20m,
+            DefaultMaxTemp = 10m
+        });
+        var trip = (await _db.MasterTrips.FindAsync(_tripId))!;
+        trip.RouteId = routeId;
+        (await _db.IncidentReports.FindAsync(_incidentId))!.IncidentType = "VEHICLE_BREAKDOWN";
+        await _db.SaveChangesAsync();
+
+        var confirmation = await _service.DispatchExternalReeferAsync(
+            _incidentId,
+            new DispatchExternalReeferRequest { ExternalVehicleConfirmed = true },
+            _dispatcherId);
+
+        Assert.True(confirmation.Success, confirmation.Message);
+        Assert.Equal("EXTERNAL_REEFER_IN_TRANSIT", confirmation.Data!.IncidentStatus);
+        Assert.True(confirmation.Data.WarehouseInboundReady);
+        Assert.Equal("INBOUND_RESCUE_BY_SEAL", confirmation.Data.RequiredWarehouseAction);
+        Assert.Equal(hanoiWarehouseId, confirmation.Data.DestinationWarehouseId);
+
+        var inbound = await _service.InboundRouteWarehouseAsync(
+            _incidentId,
+            new InboundRouteWarehouseRequest { SealNumber = "WAREHOUSE-SEAL-001" },
+            _dispatcherId);
+
+        Assert.True(inbound.Success, inbound.Message);
+        Assert.Equal("READY_FOR_REDISPATCH", inbound.Data!.IncidentStatus);
+        Assert.False(inbound.Data.WarehouseInboundReady);
+        Assert.Equal("CREATE_REDISPATCH_TRIP", inbound.Data.RequiredWarehouseAction);
+        var incident = await _db.IncidentReports.FindAsync(_incidentId);
+        Assert.Contains("WAREHOUSE-SEAL-001", incident!.RescuePlanDetails);
+    }
+
+    [Fact]
     public async Task DispatchRescue_CustomerEtaNotification_ContainsDatesWithoutTimes()
     {
         await SeedRescueTripAsync(replacementOnline: false);

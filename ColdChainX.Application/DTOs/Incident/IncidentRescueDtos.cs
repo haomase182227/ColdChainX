@@ -110,17 +110,18 @@ namespace ColdChainX.Application.DTOs.Incident
 
     public sealed class DispatchExternalReeferRequest
     {
-        public string RentalProvider { get; set; } = null!;
-        public string VehiclePlate { get; set; } = null!;
-        public string DriverName { get; set; } = null!;
+        public bool ExternalVehicleConfirmed { get; set; } = true;
+        public string? RentalProvider { get; set; }
+        public string? VehiclePlate { get; set; }
+        public string? DriverName { get; set; }
         public string? DriverPhone { get; set; }
-        public Guid DestinationWarehouseId { get; set; }
-        public decimal AgreedTemperature { get; set; }
+        public Guid? DestinationWarehouseId { get; set; }
+        public decimal? AgreedTemperature { get; set; }
         public DateTime? ExpectedWarehouseArrivalAt { get; set; }
-        public string SealNumber { get; set; } = null!;
+        public string? SealNumber { get; set; }
         public List<Guid> LpnIds { get; set; } = new();
         public List<string> EvidenceUrls { get; set; } = new();
-        public string Note { get; set; } = null!;
+        public string? Note { get; set; }
     }
 
     public sealed class InboundRouteWarehouseRequest
@@ -165,6 +166,8 @@ namespace ColdChainX.Application.DTOs.Incident
         public string DestinationWarehouseName { get; set; } = null!;
         public string ExternalVehiclePlate { get; set; } = null!;
         public int LpnCount { get; set; }
+        public bool WarehouseInboundReady { get; set; }
+        public string RequiredWarehouseAction { get; set; } = null!;
         public string Message { get; set; } = null!;
     }
 
