@@ -583,6 +583,7 @@ namespace ColdChainX.UnitTests
         public async Task CreateClaim_SavesClaimAndEvidences()
         {
             var userId = Guid.NewGuid();
+            var customerId = Guid.NewGuid();
             var user = new User { UserId = userId, Username = "cust_jane", PasswordHash = "hash", RoleId = Guid.NewGuid(), Email = "jane@test.com", FullName = "Jane Doe" };
             _db.Users.Add(user);
 
@@ -591,7 +592,7 @@ namespace ColdChainX.UnitTests
             { 
                 OrderId = orderId, 
                 TrackingCode = "TRK-999", 
-                CustomerId = userId, 
+                CustomerId = customerId,
                 Quantity = 10, 
                 Status = "DELIVERED", 
                 ItemName = "Meat", 
@@ -619,7 +620,7 @@ namespace ColdChainX.UnitTests
                 EvidenceImages = new List<Microsoft.AspNetCore.Http.IFormFile> { photo1, photo2 }
             };
 
-            var response = await _claimService.CreateClaimAsync(request, userId);
+            var response = await _claimService.CreateClaimAsync(request, userId, customerId, isCustomer: true);
 
             Assert.True(response.Success);
             Assert.NotNull(response.Data);
@@ -633,6 +634,110 @@ namespace ColdChainX.UnitTests
             var dbClaim = await _db.Claims.Include(c => c.ClaimEvidences).FirstOrDefaultAsync(c => c.ClaimId == response.Data.ClaimId);
             Assert.NotNull(dbClaim);
             Assert.Equal(2, dbClaim.ClaimEvidences.Count);
+        }
+
+        [Fact]
+        public async Task CreateClaim_CustomerCannotClaimAnotherCustomersOrder()
+        {
+            var customerId = Guid.NewGuid();
+            var otherCustomerId = Guid.NewGuid();
+            var (userId, orderId) = await SeedClaimOrderAsync("DELIVERED", otherCustomerId);
+
+            var response = await _claimService.CreateClaimAsync(
+                BuildClaimRequest(orderId),
+                userId,
+                customerId,
+                isCustomer: true);
+
+            Assert.False(response.Success);
+            Assert.Equal(403, response.StatusCode);
+            Assert.Empty(await _db.Claims.ToListAsync());
+        }
+
+        [Fact]
+        public async Task CreateClaim_CustomerCannotClaimBeforeOrderDelivered()
+        {
+            var customerId = Guid.NewGuid();
+            var (userId, orderId) = await SeedClaimOrderAsync("IN_TRANSIT", customerId);
+
+            var response = await _claimService.CreateClaimAsync(
+                BuildClaimRequest(orderId),
+                userId,
+                customerId,
+                isCustomer: true);
+
+            Assert.False(response.Success);
+            Assert.Equal(400, response.StatusCode);
+            Assert.Empty(await _db.Claims.ToListAsync());
+        }
+
+        [Fact]
+        public async Task CreateClaim_CustomerCannotCreateDuplicateClaimForOrder()
+        {
+            var customerId = Guid.NewGuid();
+            var (userId, orderId) = await SeedClaimOrderAsync("DELIVERED", customerId);
+            _db.Claims.Add(new Claim
+            {
+                ClaimId = Guid.NewGuid(),
+                ClaimCode = "CLM-EXISTING",
+                OrderId = orderId,
+                ClaimType = "DAMAGE",
+                Description = "Existing claim",
+                Status = "OPEN",
+                CreatedAt = DateTime.UtcNow
+            });
+            await _db.SaveChangesAsync();
+
+            var response = await _claimService.CreateClaimAsync(
+                BuildClaimRequest(orderId),
+                userId,
+                customerId,
+                isCustomer: true);
+
+            Assert.False(response.Success);
+            Assert.Equal(409, response.StatusCode);
+            Assert.Single(await _db.Claims.ToListAsync());
+        }
+
+        private async Task<(Guid UserId, Guid OrderId)> SeedClaimOrderAsync(string status, Guid customerId)
+        {
+            var userId = Guid.NewGuid();
+            var orderId = Guid.NewGuid();
+
+            _db.Users.Add(new User
+            {
+                UserId = userId,
+                Username = $"claim-customer-{userId:N}",
+                PasswordHash = "hash",
+                FullName = "Claim Customer"
+            });
+
+            _db.TransportOrders.Add(new TransportOrder
+            {
+                OrderId = orderId,
+                TrackingCode = $"TRK-{orderId:N}"[..12],
+                CustomerId = customerId,
+                Quantity = 1,
+                Status = status,
+                ItemName = "Frozen cargo",
+                Category = "Food",
+                PackingType = "Pallet",
+                TempCondition = "Frozen",
+                CreatedAt = DateTime.UtcNow
+            });
+
+            await _db.SaveChangesAsync();
+            return (userId, orderId);
+        }
+
+        private static CreateClaimRequest BuildClaimRequest(Guid orderId)
+        {
+            return new CreateClaimRequest
+            {
+                OrderId = orderId,
+                ClaimType = ClaimCategory.DAMAGE,
+                Description = "Frozen cargo was damaged during delivery"
+            };
         }
 
         private async Task<(Guid UserId, Guid TripId, Guid IncidentId)> SeedRiskIncidentAsync()

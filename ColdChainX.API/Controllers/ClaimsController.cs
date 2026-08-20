@@ -36,7 +36,19 @@ namespace ColdChainX.API.Controllers
             if (!Guid.TryParse(userIdClaim, out var userId))
                 return Unauthorized(ApiResponse<object>.Failure("User ID claim is missing or invalid in the token."));
 
-            var result = await _claimService.CreateClaimAsync(request, userId);
+            Guid? customerId = null;
+            var isCustomer = User.IsInRole("Customer");
+            var customerIdClaim = User.FindFirst("CustomerId")?.Value;
+            if (Guid.TryParse(customerIdClaim, out var parsedCustomerId))
+            {
+                customerId = parsedCustomerId;
+            }
+            else if (isCustomer)
+            {
+                return Unauthorized(ApiResponse<object>.Failure("CustomerId claim is missing or invalid in the token."));
+            }
+
+            var result = await _claimService.CreateClaimAsync(request, userId, customerId, isCustomer);
             if (!result.Success)
                 return StatusCode(result.StatusCode != 0 ? result.StatusCode : StatusCodes.Status400BadRequest, result);
 
