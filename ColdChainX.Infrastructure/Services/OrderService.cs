@@ -239,10 +239,10 @@ namespace ColdChainX.Infrastructure.Services
 
             var packageLines = packageLinesResult.PackageLines;
             var hasPackageLines = packageLines.Count > 0;
-            var totalPackageQuantity = hasPackageLines ? packageLines.Sum(line => line.Quantity) : request.Quantity;
+            var totalPackageQuantity = hasPackageLines ? packageLines.Sum(line => line.Quantity) : request.Quantity.GetValueOrDefault();
             var expectedWeightKg = hasPackageLines
                 ? packageLines.Sum(line => line.CapacityKg * line.Quantity)
-                : request.ExpectedWeightKg;
+                : request.ExpectedWeightKg.GetValueOrDefault();
 
             if (expectedWeightKg <= 0)
                 return ApiResponse<CreateOrderResponse>.Failure("Expected weight must be greater than 0", 400);
@@ -269,7 +269,7 @@ namespace ColdChainX.Infrastructure.Services
                 var schedule = await _db.RouteSchedules
                     .AsNoTracking()
                     .Include(s => s.Route)
-                    .FirstOrDefaultAsync(s => s.ScheduleId == request.ScheduleId);
+                    .FirstOrDefaultAsync(s => s.ScheduleId == request.ScheduleId!.Value);
                     
                 if (schedule == null || !string.Equals(schedule.Route?.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
                     return ApiResponse<CreateOrderResponse>.Failure("Schedule_ID or Route is invalid or inactive");
@@ -310,7 +310,7 @@ namespace ColdChainX.Infrastructure.Services
                     Category = request.Category.Trim(),
                     Quantity = totalPackageQuantity,
                     PackingType = request.PackagingType.Trim(),
-                    TempCondition = request.TempCondition.ToString("0.##", CultureInfo.InvariantCulture),
+                    TempCondition = request.TempCondition!.Value.ToString("0.##", CultureInfo.InvariantCulture),
                     HasStrongOdor = request.HasStrongOdor.Value,
                     IsStackable = request.IsStackable.Value,
                     ReceiverName = request.ReceiverName.Trim(),
@@ -329,8 +329,8 @@ namespace ColdChainX.Infrastructure.Services
                         CustomerProvidedTotalCbm = request.CustomerProvidedTotalCbm,
                         TotalPackageQuantity = totalPackageQuantity
                     },
-                    ScheduleId = request.ScheduleId,
-                    DropoffStopId = request.DropoffStopId,
+                    ScheduleId = request.ScheduleId!.Value,
+                    DropoffStopId = request.DropoffStopId!.Value,
                     DestLocation = location.LocationId,
                     Status = PendingReview,
                     CreatedAt = DbNow()
@@ -1257,7 +1257,7 @@ namespace ColdChainX.Infrastructure.Services
             if (hasPackageLines)
             {
                 var density = GetConservativeDensity(request.Category);
-                var tempFactor = GetTemperatureFactor(request.TempCondition, request.PackagingType);
+                var tempFactor = GetTemperatureFactor(request.TempCondition!.Value, request.PackagingType);
                 var boxFactor = GetPackagingFactor(request.PackagingType);
                 var expectedCbm = Math.Round((expectedWeightKg / density) * tempFactor * boxFactor, 4);
 

@@ -30,7 +30,7 @@ public class ProcessInboundQcCommand : IRequest<ProcessInboundQcResponse>
 public class ProcessInboundQcRequest
 {
     [FromForm(Name = "Asn_ID")]
-    public Guid AsnId { get; set; }
+    public Guid? AsnId { get; set; }
 
     [JsonIgnore]
     [Microsoft.AspNetCore.Mvc.ModelBinding.BindNever]

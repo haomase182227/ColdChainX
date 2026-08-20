@@ -12,13 +12,13 @@ namespace ColdChainX.Application.DTOs.Orders
         public string Category { get; set; } = null!;
 
         [FromForm(Name = "Temp_Condition")]
-        public decimal TempCondition { get; set; }
+        public decimal? TempCondition { get; set; }
 
         [FromForm(Name = "Expected_Weight_KG")]
-        public decimal ExpectedWeightKg { get; set; }
+        public decimal? ExpectedWeightKg { get; set; }
 
         [FromForm(Name = "Quantity")]
-        public int Quantity { get; set; }
+        public int? Quantity { get; set; }
 
         [FromForm(Name = "Package_Lines")]
         public string? PackageLinesJson { get; set; }
@@ -42,10 +42,10 @@ namespace ColdChainX.Application.DTOs.Orders
         public string DestAddressText { get; set; } = null!;
 
         [FromForm(Name = "Schedule_ID")]
-        public Guid ScheduleId { get; set; }
+        public Guid? ScheduleId { get; set; }
 
         [FromForm(Name = "Dropoff_Stop_ID")]
-        public Guid DropoffStopId { get; set; }
+        public Guid? DropoffStopId { get; set; }
 
         [FromForm(Name = "Receiver_Name")]
         public string ReceiverName { get; set; } = null!;

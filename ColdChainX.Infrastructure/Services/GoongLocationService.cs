@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using ColdChainX.Application.DTOs.Dispatch;
 using ColdChainX.Application.Interfaces;
@@ -266,9 +267,47 @@ namespace ColdChainX.Infrastructure.Services
             {
                 TotalDistanceKm = Math.Round(totalDist, 2),
                 TotalDurationSeconds = legs.Sum(l => l.DurationSeconds),
-                OverviewPolyline = null,
+                OverviewPolyline = EncodePolyline(waypoints.Select(w => ((double)w.Lat, (double)w.Lon))),
                 Legs = legs
             };
+        }
+
+        private static string EncodePolyline(IEnumerable<(double Lat, double Lon)> points)
+        {
+            var result = new StringBuilder();
+            var previousLat = 0;
+            var previousLon = 0;
+
+            foreach (var point in points)
+            {
+                var lat = (int)Math.Round(point.Lat * 1e5);
+                var lon = (int)Math.Round(point.Lon * 1e5);
+
+                EncodePolylineValue(lat - previousLat, result);
+                EncodePolylineValue(lon - previousLon, result);
+
+                previousLat = lat;
+                previousLon = lon;
+            }
+
+            return result.ToString();
+        }
+
+        private static void EncodePolylineValue(int value, StringBuilder result)
+        {
+            value <<= 1;
+            if (value < 0)
+            {
+                value = ~value;
+            }
+
+            while (value >= 0x20)
+            {
+                result.Append((char)((0x20 | (value & 0x1f)) + 63));
+                value >>= 5;
+            }
+
+            result.Append((char)(value + 63));
         }
 
         private static decimal HaversineKm(decimal lat1, decimal lon1, decimal lat2, decimal lon2)

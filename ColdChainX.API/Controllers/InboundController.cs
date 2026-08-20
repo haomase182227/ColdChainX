@@ -29,7 +29,7 @@ public class InboundController : ControllerBase
 
         var command = new ProcessInboundQcCommand
         {
-            AsnId = request.AsnId,
+            AsnId = request.AsnId ?? Guid.Empty,
             ActualWeightKg = request.ActualWeightKg,
             LengthCm = request.LengthCm,
             WidthCm = request.WidthCm,
