@@ -23,6 +23,10 @@ AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
+
 DotEnvLoader.Load(Path.Combine(builder.Environment.ContentRootPath, ".env"));
 DotEnvLoader.Load(Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", ".env")));
 
@@ -85,6 +89,7 @@ builder.Services.AddSwaggerGen(c =>
     c.SchemaFilter<CreateOrderRequestSchemaFilter>();
     c.SchemaFilter<EnumSchemaFilter>();
     c.OperationFilter<CreateOrderFormOperationFilter>();
+    c.OperationFilter<InboundQcOperationFilter>();
     c.OperationFilter<RegisterOperationFilter>();
     c.OperationFilter<CreateCustomerOperationFilter>();
     c.OperationFilter<CreateDriverOperationFilter>();
@@ -168,6 +173,7 @@ app.UseSwaggerUI(c =>
 {
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "ColdChainX API v1");
     c.RoutePrefix = "swagger"; // Access at /swagger
+    c.InjectJavascript("/swagger-coldchainx-forms.js");
 });
 
 app.UseRouting();
