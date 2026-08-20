@@ -11,9 +11,17 @@ public class CreateIncidentRequestValidator : AbstractValidator<CreateIncidentRe
             .NotNull().WithMessage("Incident type is required.")
             .IsInEnum().WithMessage("Incident type is invalid.");
 
+        RuleFor(x => x)
+            .Must(x => x.Severity.HasValue || x.RiskLevel.HasValue)
+            .WithMessage("Severity or RiskLevel is required.");
+
         RuleFor(x => x.Severity)
-            .NotNull().WithMessage("Severity is required.")
-            .IsInEnum().WithMessage("Severity is invalid.");
+            .IsInEnum().When(x => x.Severity.HasValue)
+            .WithMessage("Severity is invalid.");
+
+        RuleFor(x => x.RiskLevel)
+            .IsInEnum().When(x => x.RiskLevel.HasValue)
+            .WithMessage("RiskLevel is invalid.");
 
         RuleFor(x => x.Description)
             .NotEmpty().WithMessage("Description is required.");

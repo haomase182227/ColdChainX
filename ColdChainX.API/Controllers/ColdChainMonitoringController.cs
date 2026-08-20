@@ -269,6 +269,14 @@ public sealed class ColdChainMonitoringController : ControllerBase
             return NotFound(new { Success = false, Error = "Trip not found." });
         }
 
+        var replacementVehicle = await (from i in _db.IncidentReports
+                                        where i.TripId == tripId && i.ReplacementVehicleId != null && i.Status != "CANCELLED" && i.Status != "REJECTED"
+                                        orderby i.ReportedAt descending
+                                        join v in _db.Vehicles.Include(vh => vh.IotDevices) on i.ReplacementVehicleId equals v.VehicleId
+                                        select v).FirstOrDefaultAsync(cancellationToken);
+
+        var activeVehicle = replacementVehicle ?? trip.Vehicle;
+
         var orders = await _db.TransportOrders
             .Where(o => o.MasterTripId == tripId)
             .Select(o => new
@@ -281,7 +289,7 @@ public sealed class ColdChainMonitoringController : ControllerBase
             })
             .ToListAsync(cancellationToken);
 
-        var device = SelectTrackingDevice(trip.Vehicle?.IotDevices);
+        var device = SelectTrackingDevice(activeVehicle?.IotDevices);
         var redisKey = BuildRedisKey(device);
         var latest = redisKey == null ? null : await _redisService.GetLatestAsync(redisKey);
 
@@ -312,10 +320,10 @@ public sealed class ColdChainMonitoringController : ControllerBase
                 trip.StartedAt,
                 trip.CompletedAt,
                 trip.SealNumber,
-                Vehicle = trip.Vehicle == null ? null : new
+                Vehicle = activeVehicle == null ? null : new
                 {
-                    trip.Vehicle.VehicleId,
-                    trip.Vehicle.TruckPlate
+                    activeVehicle.VehicleId,
+                    activeVehicle.TruckPlate
                 },
                 Driver = drivers.Count == 0 ? null : string.Join(", ", drivers.Select(d => d.FullName)),
                 Drivers = drivers,

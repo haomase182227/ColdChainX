@@ -142,6 +142,65 @@ namespace ColdChainX.UnitTests
         }
 
         [Fact]
+        public async Task AddEvidence_DispatcherCanUploadToIncidentReportedByDriver()
+        {
+            var roleId = Guid.NewGuid();
+            var reporterId = Guid.NewGuid();
+            var dispatcherId = Guid.NewGuid();
+            var incidentId = Guid.NewGuid();
+            _db.Roles.Add(new Role
+            {
+                RoleId = roleId,
+                RoleName = "Dispatcher",
+                Description = "Incident dispatcher"
+            });
+            _db.Users.AddRange(
+                new User
+                {
+                    UserId = reporterId,
+                    Username = "incident_driver",
+                    PasswordHash = "hash",
+                    FullName = "Incident Driver"
+                },
+                new User
+                {
+                    UserId = dispatcherId,
+                    Username = "incident_dispatcher",
+                    PasswordHash = "hash",
+                    FullName = "Incident Dispatcher",
+                    RoleId = roleId
+                });
+            _db.IncidentReports.Add(new IncidentReport
+            {
+                IncidentId = incidentId,
+                IncidentType = "VEHICLE_BREAKDOWN",
+                Severity = "HIGH",
+                RiskLevel = "CRITICAL",
+                Description = "Cooling unit stopped.",
+                Status = "REPORTED",
+                ReportedBy = reporterId,
+                ReportedAt = DateTime.UtcNow
+            });
+            await _db.SaveChangesAsync();
+
+            var imageBytes = new MemoryStream(new byte[] { 1, 2, 3 });
+            var image = new FormFile(imageBytes, 0, imageBytes.Length, "Files", "temperature.jpg")
+            {
+                Headers = new HeaderDictionary(),
+                ContentType = "image/jpeg"
+            };
+
+            var result = await _incidentService.AddEvidenceAsync(
+                incidentId,
+                new[] { image },
+                "INCIDENT_PHOTO",
+                dispatcherId);
+
+            Assert.True(result.Success, result.Message);
+            Assert.Equal("INCIDENT_PHOTO", Assert.Single(result.Data!.Evidences).EvidenceType);
+        }
+
+        [Fact]
         public async Task ResolveIncident_UpdatesStatusToResolved()
         {
             var userId = Guid.NewGuid();
@@ -340,10 +399,13 @@ namespace ColdChainX.UnitTests
             Assert.Equal("REPORTED", reportResult.Data.Status);
             Assert.Equal(1_500_000m, reportResult.Data.DriverPaidAmount);
             Assert.Equal("PENDING_APPROVAL", reportResult.Data.ExpenseStatus);
+            Assert.True(reportResult.Data.RequiresRescue);
+            Assert.Equal("CRITICAL", reportResult.Data.RiskLevel);
             Assert.Empty(reportResult.Data.Evidences);
 
             var persistedIncident = await _db.IncidentReports.FindAsync(incidentId);
-            persistedIncident!.Status = "CONTINUED";
+            persistedIncident!.Status = "REDISPATCHED_TO_CUSTOMER";
+            persistedIncident.ReplacementVehicleId = Guid.NewGuid();
             await _db.SaveChangesAsync();
 
             var approveResult = await _incidentService.ApproveExpenseAsync(
@@ -410,9 +472,285 @@ namespace ColdChainX.UnitTests
         }
 
         [Fact]
+        public async Task ResolveIncident_ReplacementVehicleDispatched_AllowsCloseBeforeTransload()
+        {
+            var dispatcherId = Guid.NewGuid();
+            var tripId = Guid.NewGuid();
+            var incidentId = Guid.NewGuid();
+            _db.Users.Add(new User
+            {
+                UserId = dispatcherId,
+                Username = "dispatcher_close_after_rescue",
+                PasswordHash = "hash",
+                RoleId = Guid.NewGuid(),
+                Email = "dispatcher.close.rescue@test.com",
+                FullName = "Dispatcher Rescue"
+            });
+            _db.MasterTrips.Add(new MasterTrip
+            {
+                TripId = tripId,
+                Status = "DELAYED",
+                VehicleId = Guid.NewGuid(),
+                PlannedStartTime = DateTime.UtcNow,
+                PlannedEndTime = DateTime.UtcNow.AddHours(4),
+                OriginLocationId = Guid.NewGuid(),
+                DestinationLocationId = Guid.NewGuid()
+            });
+            _db.IncidentReports.Add(new IncidentReport
+            {
+                IncidentId = incidentId,
+                TripId = tripId,
+                IncidentType = "ACCIDENT",
+                Severity = "HIGH",
+                Description = "Cần điều xe thay thế.",
+                RequiresRescue = true,
+                Status = "RESCUE_DISPATCHED",
+                ReplacementVehicleId = Guid.NewGuid(),
+                RescueDispatchedAt = DateTime.UtcNow,
+                DriverPaidAmount = 0m,
+                ReportedBy = dispatcherId,
+                ReportedAt = DateTime.UtcNow
+            });
+            await _db.SaveChangesAsync();
+
+            var result = await _incidentService.ResolveIncidentAsync(
+                incidentId,
+                new ResolveIncidentRequest { ResolutionNote = "Xe thay thế đã được điều." },
+                dispatcherId);
+
+            Assert.True(result.Success, result.Message);
+            Assert.Equal("RESOLVED", (await _db.IncidentReports.FindAsync(incidentId))!.Status);
+        }
+
+        [Fact]
+        public async Task ResolveIncident_ReplacementDispatched_WithPendingDriverExpense_RequiresReimbursement()
+        {
+            var dispatcherId = Guid.NewGuid();
+            var tripId = Guid.NewGuid();
+            var incidentId = Guid.NewGuid();
+            _db.Users.Add(new User
+            {
+                UserId = dispatcherId,
+                Username = "dispatcher_pending_reimbursement",
+                PasswordHash = "hash",
+                RoleId = Guid.NewGuid(),
+                Email = "dispatcher.pending.reimbursement@test.com",
+                FullName = "Dispatcher Pending Expense"
+            });
+            _db.MasterTrips.Add(new MasterTrip
+            {
+                TripId = tripId,
+                Status = "DELAYED",
+                VehicleId = Guid.NewGuid(),
+                PlannedStartTime = DateTime.UtcNow,
+                PlannedEndTime = DateTime.UtcNow.AddHours(4),
+                OriginLocationId = Guid.NewGuid(),
+                DestinationLocationId = Guid.NewGuid()
+            });
+            _db.IncidentReports.Add(new IncidentReport
+            {
+                IncidentId = incidentId,
+                TripId = tripId,
+                IncidentType = "ACCIDENT",
+                Severity = "HIGH",
+                Description = "Xe thay thế đã điều nhưng còn khoản ứng.",
+                RequiresRescue = true,
+                Status = "RESCUE_DISPATCHED",
+                ReplacementVehicleId = Guid.NewGuid(),
+                RescueDispatchedAt = DateTime.UtcNow,
+                DriverPaidAmount = 500_000m,
+                ExpenseStatus = "APPROVED",
+                ReportedBy = dispatcherId,
+                ReportedAt = DateTime.UtcNow
+            });
+            await _db.SaveChangesAsync();
+
+            var result = await _incidentService.ResolveIncidentAsync(
+                incidentId,
+                new ResolveIncidentRequest { ResolutionNote = "Xe thay thế đã được điều." },
+                dispatcherId);
+
+            Assert.False(result.Success);
+            Assert.Contains("reimbursed", result.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal("RESCUE_DISPATCHED", (await _db.IncidentReports.FindAsync(incidentId))!.Status);
+        }
+
+        [Fact]
+        public async Task ResolveIncident_ExternalRelay_RequiresColdChainXRedispatchVehicle()
+        {
+            var dispatcherId = Guid.NewGuid();
+            var tripId = Guid.NewGuid();
+            var incidentId = Guid.NewGuid();
+            _db.Users.Add(new User
+            {
+                UserId = dispatcherId,
+                Username = "dispatcher_external_relay_close",
+                PasswordHash = "hash",
+                RoleId = Guid.NewGuid(),
+                Email = "dispatcher.external.relay.close@test.com",
+                FullName = "Dispatcher External Relay"
+            });
+            _db.MasterTrips.Add(new MasterTrip
+            {
+                TripId = tripId,
+                Status = "RELAY_COMPLETED",
+                VehicleId = Guid.NewGuid(),
+                PlannedStartTime = DateTime.UtcNow,
+                PlannedEndTime = DateTime.UtcNow.AddHours(4),
+                OriginLocationId = Guid.NewGuid(),
+                DestinationLocationId = Guid.NewGuid()
+            });
+            var incident = new IncidentReport
+            {
+                IncidentId = incidentId,
+                TripId = tripId,
+                IncidentType = "VEHICLE_BREAKDOWN",
+                Severity = "CRITICAL",
+                Description = "Xe ngoài đang trung chuyển hàng về kho tuyến.",
+                RequiresRescue = true,
+                Status = "EXTERNAL_REEFER_IN_TRANSIT",
+                RescueDispatchedAt = DateTime.UtcNow,
+                DriverPaidAmount = 0m,
+                ReportedBy = dispatcherId,
+                ReportedAt = DateTime.UtcNow
+            };
+            _db.IncidentReports.Add(incident);
+            await _db.SaveChangesAsync();
+
+            var tooEarly = await _incidentService.ResolveIncidentAsync(
+                incidentId,
+                new ResolveIncidentRequest { ResolutionNote = "Mới xác nhận xe ngoài." },
+                dispatcherId);
+
+            Assert.False(tooEarly.Success);
+
+            incident.Status = "REDISPATCH_PLANNED";
+            incident.ReplacementVehicleId = Guid.NewGuid();
+            await _db.SaveChangesAsync();
+
+            var afterRedispatch = await _incidentService.ResolveIncidentAsync(
+                incidentId,
+                new ResolveIncidentRequest { ResolutionNote = "Đã điều xe ColdChainX giao lại." },
+                dispatcherId);
+
+            Assert.True(afterRedispatch.Success, afterRedispatch.Message);
+            Assert.Equal("RESOLVED", incident.Status);
+        }
+
+        [Fact]
+        public async Task AssessRisk_WarningWithoutTrustedReading_EscalatesToCriticalAndRequiresContainment()
+        {
+            var (userId, tripId, incidentId) = await SeedRiskIncidentAsync();
+
+            var result = await _incidentService.AssessRiskAsync(
+                incidentId,
+                new AssessIncidentRiskRequest
+                {
+                    RiskLevel = IncidentRiskLevel.WARNING,
+                    TemperatureSource = TemperatureReadingSource.NONE,
+                    TemperatureStable = true,
+                    ContainmentConfirmed = false,
+                    Note = "IoT and backup thermometer unavailable."
+                },
+                userId);
+
+            Assert.True(result.Success, result.Message);
+            Assert.Equal("CRITICAL", result.Data!.EffectiveRiskLevel);
+            Assert.True(result.Data.EscalatedToCritical);
+            Assert.Equal("CONTAINMENT_REQUIRED", result.Data.IncidentStatus);
+            Assert.False(result.Data.HasTrustedTemperatureSource);
+            Assert.True(result.Data.RequiresRescue);
+
+            var incident = await _db.IncidentReports.FindAsync(incidentId);
+            Assert.Equal("CRITICAL", incident!.RiskLevel);
+            Assert.Equal("CONTAINMENT_REQUIRED", incident.Status);
+            Assert.Equal(tripId, incident.TripId);
+        }
+
+        [Fact]
+        public async Task TemperatureBreach_AfterContainment_GoesDirectlyToRescuePlanning()
+        {
+            var (userId, _, incidentId) = await SeedRiskIncidentAsync();
+
+            var risk = await _incidentService.AssessRiskAsync(
+                incidentId,
+                new AssessIncidentRiskRequest
+                {
+                    RiskLevel = IncidentRiskLevel.CRITICAL,
+                    TemperatureSource = TemperatureReadingSource.BACKUP_THERMOMETER,
+                    MeasuredTemperature = 8m,
+                    MeasuredAt = DateTime.UtcNow,
+                    TemperatureStable = false,
+                    ContainmentConfirmed = true
+                },
+                userId);
+            Assert.True(risk.Success, risk.Message);
+            Assert.True(risk.Data!.TemperatureThresholdBreached);
+            Assert.Equal("RESCUE_PLANNING", risk.Data.IncidentStatus);
+            Assert.True(risk.Data.DirectDeliveryLocked);
+            Assert.Equal(0, risk.Data.RemainingSafeTimeMinutes);
+            Assert.Empty(await _db.Claims.ToListAsync());
+
+            var incident = await _db.IncidentReports.FindAsync(incidentId);
+            Assert.Equal("RESCUE_PLANNING", incident!.Status);
+            Assert.NotNull(incident.ContainmentConfirmedAt);
+        }
+
+        [Fact]
+        public async Task EscalateOverdueReportedIncidents_NotifiesDispatcherAndStampsEscalation()
+        {
+            var dispatcherRole = new Role { RoleId = Guid.NewGuid(), RoleName = "Dispatcher" };
+            var dispatcher = new User
+            {
+                UserId = Guid.NewGuid(),
+                Username = "sla-dispatcher",
+                PasswordHash = "hash",
+                FullName = "SLA Dispatcher",
+                RoleId = dispatcherRole.RoleId,
+                Role = dispatcherRole
+            };
+            var reporter = new User
+            {
+                UserId = Guid.NewGuid(),
+                Username = "sla-reporter",
+                PasswordHash = "hash",
+                FullName = "SLA Reporter"
+            };
+            var incident = new IncidentReport
+            {
+                IncidentId = Guid.NewGuid(),
+                IncidentType = "VEHICLE_BREAKDOWN",
+                Severity = "HIGH",
+                RiskLevel = "CRITICAL",
+                Description = "No dispatcher response.",
+                Status = "REPORTED",
+                ReportedBy = reporter.UserId,
+                ReportedAt = DateTime.UtcNow.AddMinutes(-30),
+                SlaDueAt = DateTime.UtcNow.AddMinutes(-15)
+            };
+            _db.AddRange(
+                dispatcherRole,
+                dispatcher,
+                reporter,
+                new Messagetype { TypeId = Guid.NewGuid(), TypeName = "INCIDENT" },
+                incident);
+            await _db.SaveChangesAsync();
+
+            var count = await _incidentService.EscalateOverdueReportedIncidentsAsync(DateTime.UtcNow);
+
+            Assert.Equal(1, count);
+            Assert.NotNull((await _db.IncidentReports.FindAsync(incident.IncidentId))!.LastSlaEscalatedAt);
+            var notification = Assert.Single(await _db.Notifications.ToListAsync());
+            Assert.Equal(dispatcher.UserId, notification.UserId);
+            Assert.Equal("INCIDENT_SLA_ESCALATED", notification.TemplateId);
+            Assert.Contains(_realtimeNotifier.GroupEvents, e => e.EventName == "IncidentSlaEscalated");
+        }
+
+        [Fact]
         public async Task CreateClaim_SavesClaimAndEvidences()
         {
             var userId = Guid.NewGuid();
+            var customerId = Guid.NewGuid();
             var user = new User { UserId = userId, Username = "cust_jane", PasswordHash = "hash", RoleId = Guid.NewGuid(), Email = "jane@test.com", FullName = "Jane Doe" };
             _db.Users.Add(user);
 
@@ -421,7 +759,7 @@ namespace ColdChainX.UnitTests
             { 
                 OrderId = orderId, 
                 TrackingCode = "TRK-999", 
-                CustomerId = userId, 
+                CustomerId = customerId,
                 Quantity = 10, 
                 Status = "DELIVERED", 
                 ItemName = "Meat", 
@@ -449,7 +787,7 @@ namespace ColdChainX.UnitTests
                 EvidenceImages = new List<Microsoft.AspNetCore.Http.IFormFile> { photo1, photo2 }
             };
 
-            var response = await _claimService.CreateClaimAsync(request, userId);
+            var response = await _claimService.CreateClaimAsync(request, userId, customerId, isCustomer: true);
 
             Assert.True(response.Success);
             Assert.NotNull(response.Data);
@@ -463,6 +801,149 @@ namespace ColdChainX.UnitTests
             var dbClaim = await _db.Claims.Include(c => c.ClaimEvidences).FirstOrDefaultAsync(c => c.ClaimId == response.Data.ClaimId);
             Assert.NotNull(dbClaim);
             Assert.Equal(2, dbClaim.ClaimEvidences.Count);
+        }
+
+        [Fact]
+        public async Task CreateClaim_CustomerCannotClaimAnotherCustomersOrder()
+        {
+            var customerId = Guid.NewGuid();
+            var otherCustomerId = Guid.NewGuid();
+            var (userId, orderId) = await SeedClaimOrderAsync("DELIVERED", otherCustomerId);
+
+            var response = await _claimService.CreateClaimAsync(
+                BuildClaimRequest(orderId),
+                userId,
+                customerId,
+                isCustomer: true);
+
+            Assert.False(response.Success);
+            Assert.Equal(403, response.StatusCode);
+            Assert.Empty(await _db.Claims.ToListAsync());
+        }
+
+        [Fact]
+        public async Task CreateClaim_CustomerCannotClaimBeforeOrderDelivered()
+        {
+            var customerId = Guid.NewGuid();
+            var (userId, orderId) = await SeedClaimOrderAsync("IN_TRANSIT", customerId);
+
+            var response = await _claimService.CreateClaimAsync(
+                BuildClaimRequest(orderId),
+                userId,
+                customerId,
+                isCustomer: true);
+
+            Assert.False(response.Success);
+            Assert.Equal(400, response.StatusCode);
+            Assert.Empty(await _db.Claims.ToListAsync());
+        }
+
+        [Fact]
+        public async Task CreateClaim_CustomerCannotCreateDuplicateClaimForOrder()
+        {
+            var customerId = Guid.NewGuid();
+            var (userId, orderId) = await SeedClaimOrderAsync("DELIVERED", customerId);
+            _db.Claims.Add(new Claim
+            {
+                ClaimId = Guid.NewGuid(),
+                ClaimCode = "CLM-EXISTING",
+                OrderId = orderId,
+                ClaimType = "DAMAGE",
+                Description = "Existing claim",
+                Status = "OPEN",
+                CreatedAt = DateTime.UtcNow
+            });
+            await _db.SaveChangesAsync();
+
+            var response = await _claimService.CreateClaimAsync(
+                BuildClaimRequest(orderId),
+                userId,
+                customerId,
+                isCustomer: true);
+
+            Assert.False(response.Success);
+            Assert.Equal(409, response.StatusCode);
+            Assert.Single(await _db.Claims.ToListAsync());
+        }
+
+        private async Task<(Guid UserId, Guid OrderId)> SeedClaimOrderAsync(string status, Guid customerId)
+        {
+            var userId = Guid.NewGuid();
+            var orderId = Guid.NewGuid();
+
+            _db.Users.Add(new User
+            {
+                UserId = userId,
+                Username = $"claim-customer-{userId:N}",
+                PasswordHash = "hash",
+                FullName = "Claim Customer"
+            });
+
+            _db.TransportOrders.Add(new TransportOrder
+            {
+                OrderId = orderId,
+                TrackingCode = $"TRK-{orderId:N}"[..12],
+                CustomerId = customerId,
+                Quantity = 1,
+                Status = status,
+                ItemName = "Frozen cargo",
+                Category = "Food",
+                PackingType = "Pallet",
+                TempCondition = "Frozen",
+                CreatedAt = DateTime.UtcNow
+            });
+
+            await _db.SaveChangesAsync();
+            return (userId, orderId);
+        }
+
+        private static CreateClaimRequest BuildClaimRequest(Guid orderId)
+        {
+            return new CreateClaimRequest
+            {
+                OrderId = orderId,
+                ClaimType = ClaimCategory.DAMAGE,
+                Description = "Frozen cargo was damaged during delivery"
+            };
+        }
+
+        private async Task<(Guid UserId, Guid TripId, Guid IncidentId)> SeedRiskIncidentAsync()
+        {
+            var userId = Guid.NewGuid();
+            var tripId = Guid.NewGuid();
+            var incidentId = Guid.NewGuid();
+            _db.Users.Add(new User
+            {
+                UserId = userId,
+                Username = $"risk-{userId:N}",
+                PasswordHash = "hash",
+                FullName = "Risk Dispatcher"
+            });
+            _db.MasterTrips.Add(new MasterTrip
+            {
+                TripId = tripId,
+                OriginLocationId = Guid.NewGuid(),
+                DestinationLocationId = Guid.NewGuid(),
+                TargetTemperature = 4m,
+                PlannedStartTime = DateTime.UtcNow.AddHours(-1),
+                PlannedEndTime = DateTime.UtcNow.AddHours(3),
+                Status = "IN_TRANSIT"
+            });
+            _db.IncidentReports.Add(new IncidentReport
+            {
+                IncidentId = incidentId,
+                TripId = tripId,
+                IncidentType = "TEMP_EXCURSION",
+                Severity = "HIGH",
+                RiskLevel = "WARNING",
+                Description = "Temperature monitoring incident.",
+                Status = "REPORTED",
+                ReportedBy = userId,
+                ReportedAt = DateTime.UtcNow,
+                TemperatureTolerance = 2m
+            });
+            await _db.SaveChangesAsync();
+            return (userId, tripId, incidentId);
         }
 
         [Fact]

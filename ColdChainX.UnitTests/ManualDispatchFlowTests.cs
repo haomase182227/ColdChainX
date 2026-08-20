@@ -1,4 +1,5 @@
 using ColdChainX.Application.DTOs.Dispatch;
+using ColdChainX.Application.DTOs.Incident;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
 using ColdChainX.Core.Enums;
@@ -34,6 +35,54 @@ public class ManualDispatchFlowTests
         Assert.Equal(trip.TripId, order.MasterTripId);
         Assert.Equal("LOADING", order.Status);
         Assert.Equal("PLANNING", vehicle.Status);
+    }
+
+    [Fact]
+    public async Task ManualDispatch_AfterIncidentInbound_CreatesNewTripAndLinksIncident()
+    {
+        await using var fixture = await CreateFixtureAsync();
+        var incidentId = Guid.NewGuid();
+        var warehouseId = fixture.Lpn.WarehouseId!.Value;
+        fixture.Db.IncidentReports.Add(new IncidentReport
+        {
+            IncidentId = incidentId,
+            TripId = Guid.NewGuid(),
+            IncidentType = "VEHICLE_BREAKDOWN",
+            Severity = "CRITICAL",
+            RiskLevel = "CRITICAL",
+            Description = "Xe hư, hàng đã inbound về kho tuyến.",
+            RequiresRescue = true,
+            Status = "READY_FOR_REDISPATCH",
+            ReportedBy = Guid.NewGuid(),
+            RescuePlanType = "EXTERNAL_REEFER_TO_ROUTE_WAREHOUSE",
+            RescuePlanDetails = JsonSerializer.Serialize(new ExternalReeferPlanRecord
+            {
+                RentalProvider = "External Reefer",
+                VehiclePlate = "51R-RELAY",
+                DriverName = "External Driver",
+                DestinationWarehouseId = warehouseId,
+                DestinationWarehouseName = "Route warehouse",
+                AgreedTemperature = -18m,
+                OriginalTripId = Guid.NewGuid(),
+                DispatchedAt = DateTime.UtcNow.AddHours(-2),
+                ArrivedAt = DateTime.UtcNow.AddMinutes(-30),
+                SealNumber = "EXT-SEAL-001",
+                LpnIds = { fixture.Lpn.LpnId },
+                RecordedBy = Guid.NewGuid()
+            })
+        });
+        fixture.Request.IncidentId = incidentId;
+        fixture.Request.DispatcherId = Guid.NewGuid();
+        fixture.Request.ScheduleId = null;
+        await fixture.Db.SaveChangesAsync();
+
+        var result = await fixture.Service.ManualDispatchAsync(fixture.Request);
+
+        var incident = await fixture.Db.IncidentReports.SingleAsync(i => i.IncidentId == incidentId);
+        Assert.Equal(result.TripId, incident.TripId);
+        Assert.Equal("REDISPATCH_PLANNED", incident.Status);
+        Assert.Equal(fixture.Vehicle.VehicleId, incident.ReplacementVehicleId);
+        Assert.Contains(result.TripId.ToString(), incident.RedispatchPlan);
     }
 
     [Fact]

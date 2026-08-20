@@ -39,6 +39,10 @@ public partial class TransportOrder
 
     public Guid? DropoffStopId { get; set; }
 
+    public string? ReceiverName { get; set; }
+
+    public string? ReceiverPhone { get; set; }
+
     public DateTime? CreatedAt { get; set; }
 
     public virtual ICollection<Claim> Claims { get; set; } = new List<Claim>();

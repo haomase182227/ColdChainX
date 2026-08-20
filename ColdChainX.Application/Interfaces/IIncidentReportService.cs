@@ -18,6 +18,10 @@ namespace ColdChainX.Application.Interfaces
             IReadOnlyCollection<IFormFile> files,
             string evidenceType,
             Guid userId);
+        Task<ApiResponse<IncidentRiskAssessmentResponse>> AssessRiskAsync(
+            Guid incidentId,
+            AssessIncidentRiskRequest request,
+            Guid userId);
         Task<ApiResponse<IncidentResponse>> ApproveExpenseAsync(
             Guid incidentId,
             ApproveIncidentExpenseRequest request,
@@ -29,5 +33,6 @@ namespace ColdChainX.Application.Interfaces
         Task<ApiResponse<bool>> ResolveIncidentAsync(Guid incidentId, ResolveIncidentRequest request, Guid userId);
         Task<ApiResponse<IncidentResponse>> GetIncidentByIdAsync(Guid incidentId);
         Task<ApiResponse<PagedResult<IncidentResponse>>> GetPagedIncidentsAsync(Guid? tripId, int pageNumber, int pageSize);
+        Task<int> EscalateOverdueReportedIncidentsAsync(DateTime asOf);
     }
 }

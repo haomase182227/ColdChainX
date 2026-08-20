@@ -210,7 +210,16 @@ public sealed class IncidentRescueFlowTests : IDisposable
         _mqtt.PublishSucceeds = true;
         var confirmation = await _service.ConfirmTransloadAsync(
             _incidentId,
-            new ConfirmTransloadRequest { ConfirmationNote = "Đã sang đủ toàn bộ LPN." },
+            new ConfirmTransloadRequest
+            {
+                ConfirmationNote = "Đã sang đủ toàn bộ LPN.",
+                LpnIds = { _lpnId },
+                SealNumber = "SEAL-RESCUE-001",
+                TransferTemperature = -5m,
+                Latitude = 10.7m,
+                Longitude = 106.7m,
+                EvidenceUrls = { "https://evidence.test/transload.jpg" }
+            },
             _dispatcherId);
 
         Assert.True(confirmation.Success, confirmation.Message);
@@ -219,6 +228,347 @@ public sealed class IncidentRescueFlowTests : IDisposable
         Assert.Equal(new[] { "IOT-REPLACEMENT" }, _mqtt.StreamingDeviceCodes);
         Assert.Equal(_tripId, (await _db.Lpns.FindAsync(_lpnId))!.TripId);
         Assert.Equal(_tripId, (await _db.TransportOrders.FindAsync(_orderId))!.MasterTripId);
+        var transloadJson = (await _db.IncidentReports.FindAsync(_incidentId))!.TransloadDetailsJson;
+        var transload = JsonSerializer.Deserialize<TransloadRecord>(transloadJson!);
+        Assert.Equal("SEAL-RESCUE-001", transload!.SealNumber);
+        Assert.Equal(-5m, transload.TransferTemperature);
+        Assert.Equal(new[] { _lpnId }, transload.LpnIds);
+        Assert.Contains(await _db.IncidentEvidences.ToListAsync(), e => e.EvidenceType == "TRANSLOAD_EVIDENCE");
+    }
+
+    [Fact]
+    public async Task ConfirmTransload_AfterIncidentClosedForDispatchedReplacement_KeepsIncidentResolved()
+    {
+        await SeedRescueTripAsync(replacementOnline: true);
+        var dispatch = await _service.DispatchRescueAsync(
+            _incidentId,
+            new DispatchRescueRequest
+            {
+                ReplacementVehicleId = _replacementVehicleId,
+                Note = "Đã điều xe thay thế."
+            },
+            _dispatcherId);
+        Assert.True(dispatch.Success, dispatch.Message);
+
+        var incident = (await _db.IncidentReports.FindAsync(_incidentId))!;
+        incident.Status = "RESOLVED";
+        incident.ResolvedAt = DateTime.UtcNow;
+        incident.ResolvedBy = _dispatcherId;
+        await _db.SaveChangesAsync();
+
+        var confirmation = await _service.ConfirmTransloadAsync(
+            _incidentId,
+            new ConfirmTransloadRequest
+            {
+                ConfirmationNote = "Đã sang đủ hàng sau khi Incident được đóng.",
+                LpnIds = { _lpnId }
+            },
+            _dispatcherId);
+
+        Assert.True(confirmation.Success, confirmation.Message);
+        Assert.Equal("IN_TRANSIT", (await _db.MasterTrips.FindAsync(_tripId))!.Status);
+        Assert.Equal("RESOLVED", (await _db.IncidentReports.FindAsync(_incidentId))!.Status);
+        Assert.NotNull((await _db.IncidentReports.FindAsync(_incidentId))!.TransloadConfirmedAt);
+    }
+
+    [Fact]
+    public async Task DispatchRescue_RejectsVehicleThatCannotArriveWithinRemainingSafeTime()
+    {
+        await SeedRescueTripAsync(replacementOnline: true);
+        var warehouseId = Guid.NewGuid();
+        _db.Warehouses.Add(new Warehouse
+        {
+            WarehouseId = warehouseId,
+            WarehouseCode = "FAR-RESCUE",
+            WarehouseName = "Far Rescue Base",
+            WarehouseType = "HUB",
+            Address = "11.7,107.7",
+            MaxPallets = 100,
+            Status = "ACTIVE"
+        });
+        (await _db.Vehicles.FindAsync(_replacementVehicleId))!.CurrentLocation = warehouseId.ToString();
+        (await _db.IncidentReports.FindAsync(_incidentId))!.RemainingSafeTimeMinutes = 5;
+        await _db.SaveChangesAsync();
+
+        var result = await _service.DispatchRescueAsync(
+            _incidentId,
+            new DispatchRescueRequest { ReplacementVehicleId = _replacementVehicleId },
+            _dispatcherId);
+
+        Assert.False(result.Success);
+        Assert.Contains("vượt thời gian an toàn còn lại", result.Message);
+        Assert.Equal("REPORTED", (await _db.IncidentReports.FindAsync(_incidentId))!.Status);
+    }
+
+    [Fact]
+    public async Task BreachedIncident_AllowsWarehouseRescueDespiteZeroRemainingSafeTime()
+    {
+        await SeedRescueTripAsync(replacementOnline: true);
+        var warehouseId = Guid.NewGuid();
+        _db.Warehouses.Add(new Warehouse
+        {
+            WarehouseId = warehouseId,
+            WarehouseCode = "BREACH-COLD",
+            WarehouseName = "Breach Cold Storage",
+            WarehouseType = "HUB",
+            Address = "10.8,106.8",
+            MaxPallets = 100,
+            CurrentPallets = 0,
+            Status = "ACTIVE",
+            DefaultMinTemp = -20m,
+            DefaultMaxTemp = 10m
+        });
+        (await _db.Vehicles.FindAsync(_replacementVehicleId))!.CurrentLocation = warehouseId.ToString();
+        var incident = (await _db.IncidentReports.FindAsync(_incidentId))!;
+        incident.DirectDeliveryLocked = true;
+        incident.TemperatureThresholdBreached = true;
+        incident.RemainingSafeTimeMinutes = 0;
+        incident.Status = "RESCUE_PLANNING";
+        incident.ContainmentConfirmedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        var plan = await _service.GetRescuePlanAsync(_incidentId);
+
+        Assert.True(plan.Success, plan.Message);
+        Assert.Equal("WAREHOUSE_RESCUE", plan.Data!.RecommendedAction);
+        Assert.True(plan.Data.DirectDeliveryLocked);
+        Assert.Null(Assert.Single(plan.Data.Vehicles).CanArriveWithinSafeTime);
+
+        var directDispatch = await _service.DispatchRescueAsync(
+            _incidentId,
+            new DispatchRescueRequest
+            {
+                ReplacementVehicleId = _replacementVehicleId,
+                PlanType = IncidentRescuePlanType.DIRECT_RESCUE
+            },
+            _dispatcherId);
+
+        Assert.False(directDispatch.Success);
+        Assert.Contains("nhiệt độ đã vượt ngưỡng", directDispatch.Message);
+
+        var warehouseDispatch = await _service.DispatchRescueAsync(
+            _incidentId,
+            new DispatchRescueRequest
+            {
+                ReplacementVehicleId = _replacementVehicleId,
+                PlanType = IncidentRescuePlanType.WAREHOUSE_RESCUE,
+                DestinationWarehouseId = warehouseId
+            },
+            _dispatcherId);
+
+        Assert.True(warehouseDispatch.Success, warehouseDispatch.Message);
+        Assert.Equal("RESCUE_DISPATCHED", (await _db.IncidentReports.FindAsync(_incidentId))!.Status);
+    }
+
+    [Fact]
+    public async Task NonBreakdownIncident_WithoutInternalOption_RecommendsManualEscalation()
+    {
+        await SeedRescueTripAsync(replacementOnline: true);
+        var incident = (await _db.IncidentReports.FindAsync(_incidentId))!;
+        incident.DirectDeliveryLocked = true;
+        incident.TemperatureThresholdBreached = true;
+        incident.RemainingSafeTimeMinutes = 0;
+        incident.Status = "RESCUE_PLANNING";
+        await _db.SaveChangesAsync();
+
+        var result = await _service.GetRescuePlanAsync(_incidentId);
+
+        Assert.True(result.Success, result.Message);
+        Assert.Equal("MANUAL_ESCALATION", result.Data!.RecommendedAction);
+        Assert.True(result.Data.RequiresManualEscalation);
+    }
+
+    [Fact]
+    public async Task VehicleBreakdown_RejectsStorageFallbackAndRequiresExternalReeferToRouteWarehouse()
+    {
+        await SeedRescueTripAsync(replacementOnline: true);
+        (await _db.IncidentReports.FindAsync(_incidentId))!.IncidentType = "VEHICLE_BREAKDOWN";
+        await _db.SaveChangesAsync();
+
+        var result = await _service.RecordFallbackAsync(
+            _incidentId,
+            new RecordRescueFallbackRequest
+            {
+                PlanType = IncidentRescuePlanType.INTERNAL_COLD_STORAGE,
+                WarehouseId = Guid.NewGuid(),
+                Note = "Attempt to use a storage fallback."
+            },
+            _dispatcherId);
+
+        Assert.False(result.Success);
+        Assert.Contains("external-reefer-dispatch", result.Message);
+        Assert.Equal("REPORTED", (await _db.IncidentReports.FindAsync(_incidentId))!.Status);
+    }
+
+    [Theory]
+    [InlineData("VEHICLE_BREAKDOWN")]
+    [InlineData("REEFER_BREAKDOWN")]
+    public async Task VehicleOrReeferBreakdown_RentsExternalReefer_ThenInboundsBySealWithoutQc(
+        string incidentType)
+    {
+        await SeedRescueTripAsync(replacementOnline: true);
+        var routeId = Guid.NewGuid();
+        var hanoiWarehouseId = Guid.NewGuid();
+        _db.RouteMasters.Add(new RouteMaster
+        {
+            RouteId = routeId,
+            RouteCode = "HCM-HN",
+            OriginCity = "Hồ Chí Minh",
+            DestCity = "Hà Nội",
+            TransitTime = "36:00",
+            Status = "ACTIVE",
+            CreatedAt = DateTime.UtcNow
+        });
+        _db.Warehouses.Add(new Warehouse
+        {
+            WarehouseId = hanoiWarehouseId,
+            WarehouseCode = "HN-HUB",
+            WarehouseName = "Kho lạnh Hà Nội",
+            WarehouseType = "HUB",
+            Address = "Hà Nội",
+            MaxPallets = 100,
+            CurrentPallets = 0,
+            Status = "ACTIVE",
+            DefaultMinTemp = -20m,
+            DefaultMaxTemp = 10m
+        });
+        var trip = (await _db.MasterTrips.FindAsync(_tripId))!;
+        trip.RouteId = routeId;
+        (await _db.IncidentReports.FindAsync(_incidentId))!.IncidentType = incidentType;
+        await _db.SaveChangesAsync();
+
+        var options = await _service.GetRescuePlanAsync(_incidentId);
+
+        Assert.True(options.Success, options.Message);
+        Assert.Equal("EXTERNAL_REEFER_TO_ROUTE_WAREHOUSE", options.Data!.RecommendedAction);
+        Assert.True(options.Data.RequiresExternalVehicleRental);
+        Assert.Equal(hanoiWarehouseId, options.Data.RouteDestinationWarehouse!.WarehouseId);
+
+        var forbiddenInternalDispatch = await _service.DispatchRescueAsync(
+            _incidentId,
+            new DispatchRescueRequest
+            {
+                ReplacementVehicleId = _replacementVehicleId,
+                PlanType = IncidentRescuePlanType.WAREHOUSE_RESCUE,
+                DestinationWarehouseId = hanoiWarehouseId
+            },
+            _dispatcherId);
+        Assert.False(forbiddenInternalDispatch.Success);
+        Assert.Contains("bắt buộc thuê xe lạnh ngoài", forbiddenInternalDispatch.Message);
+
+        var externalDispatch = await _service.DispatchExternalReeferAsync(
+            _incidentId,
+            new DispatchExternalReeferRequest
+            {
+                RentalProvider = "Đối tác xe lạnh Bắc Nam",
+                VehiclePlate = "51R-123.45",
+                DriverName = "Nguyễn Văn Thuê",
+                DriverPhone = "0909123456",
+                DestinationWarehouseId = hanoiWarehouseId,
+                AgreedTemperature = -5m,
+                ExpectedWarehouseArrivalAt = DateTime.UtcNow.AddHours(36),
+                SealNumber = "EXT-SEAL-001",
+                LpnIds = { _lpnId },
+                EvidenceUrls = { "https://evidence.test/external-handover.jpg" },
+                Note = "Thuê xe lạnh ngoài chở thẳng về kho Hà Nội."
+            },
+            _dispatcherId);
+
+        Assert.True(externalDispatch.Success, externalDispatch.Message);
+        Assert.Equal("EXTERNAL_REEFER_IN_TRANSIT", externalDispatch.Data!.IncidentStatus);
+        Assert.Equal("DELAYED", externalDispatch.Data.TripStatus);
+        Assert.Equal("MAINTENANCE", (await _db.Vehicles.FindAsync(_brokenVehicleId))!.Status);
+
+        var wrongSealArrival = await _service.InboundRouteWarehouseAsync(
+            _incidentId,
+            new InboundRouteWarehouseRequest
+            {
+                SealNumber = "WRONG-SEAL"
+            },
+            _dispatcherId);
+
+        Assert.False(wrongSealArrival.Success);
+        Assert.Contains("seal", wrongSealArrival.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("EXTERNAL_REEFER_IN_TRANSIT", (await _db.IncidentReports.FindAsync(_incidentId))!.Status);
+
+        var arrival = await _service.InboundRouteWarehouseAsync(
+            _incidentId,
+            new InboundRouteWarehouseRequest
+            {
+                SealNumber = "EXT-SEAL-001"
+            },
+            _dispatcherId);
+
+        Assert.True(arrival.Success, arrival.Message);
+        Assert.Equal("READY_FOR_REDISPATCH", arrival.Data!.IncidentStatus);
+        var lpnAtWarehouse = (await _db.Lpns.FindAsync(_lpnId))!;
+        Assert.Equal(hanoiWarehouseId, lpnAtWarehouse.WarehouseId);
+        Assert.Equal(LpnState.IN_STOCK, lpnAtWarehouse.State);
+        Assert.Null(lpnAtWarehouse.TripId);
+        Assert.NotNull(lpnAtWarehouse.InboundTime);
+        Assert.Equal("READY_FOR_ROUTING", (await _db.TransportOrders.FindAsync(_orderId))!.Status);
+        Assert.Equal("RELAY_COMPLETED", (await _db.MasterTrips.FindAsync(_tripId))!.Status);
+        var receipt = await _db.WarehouseReceipts.SingleAsync(r => r.ReceiptId == lpnAtWarehouse.ReceiptId);
+        Assert.Equal("INCIDENT_RELAY_INBOUND", receipt.ReceiptType);
+        Assert.Contains("EXT-SEAL-001", receipt.Note);
+        Assert.Contains("bỏ qua QC", receipt.Note);
+    }
+
+    [Fact]
+    public async Task VehicleBreakdown_ConfirmExternalVehicleOnly_ImmediatelyOpensWarehouseInboundBySeal()
+    {
+        await SeedRescueTripAsync(replacementOnline: true);
+        var routeId = Guid.NewGuid();
+        var hanoiWarehouseId = Guid.NewGuid();
+        _db.RouteMasters.Add(new RouteMaster
+        {
+            RouteId = routeId,
+            RouteCode = "HCM-HN-MINIMAL",
+            OriginCity = "Hồ Chí Minh",
+            DestCity = "Hà Nội",
+            TransitTime = "36:00",
+            Status = "ACTIVE",
+            CreatedAt = DateTime.UtcNow
+        });
+        _db.Warehouses.Add(new Warehouse
+        {
+            WarehouseId = hanoiWarehouseId,
+            WarehouseCode = "HN-HUB-MINIMAL",
+            WarehouseName = "Kho Hà Nội",
+            WarehouseType = "HUB",
+            Address = "Hà Nội",
+            MaxPallets = 100,
+            Status = "ACTIVE",
+            DefaultMinTemp = -20m,
+            DefaultMaxTemp = 10m
+        });
+        var trip = (await _db.MasterTrips.FindAsync(_tripId))!;
+        trip.RouteId = routeId;
+        (await _db.IncidentReports.FindAsync(_incidentId))!.IncidentType = "VEHICLE_BREAKDOWN";
+        await _db.SaveChangesAsync();
+
+        var confirmation = await _service.DispatchExternalReeferAsync(
+            _incidentId,
+            new DispatchExternalReeferRequest { ExternalVehicleConfirmed = true },
+            _dispatcherId);
+
+        Assert.True(confirmation.Success, confirmation.Message);
+        Assert.Equal("EXTERNAL_REEFER_IN_TRANSIT", confirmation.Data!.IncidentStatus);
+        Assert.True(confirmation.Data.WarehouseInboundReady);
+        Assert.Equal("INBOUND_RESCUE_BY_SEAL", confirmation.Data.RequiredWarehouseAction);
+        Assert.Equal(hanoiWarehouseId, confirmation.Data.DestinationWarehouseId);
+
+        var inbound = await _service.InboundRouteWarehouseAsync(
+            _incidentId,
+            new InboundRouteWarehouseRequest { SealNumber = "WAREHOUSE-SEAL-001" },
+            _dispatcherId);
+
+        Assert.True(inbound.Success, inbound.Message);
+        Assert.Equal("READY_FOR_REDISPATCH", inbound.Data!.IncidentStatus);
+        Assert.False(inbound.Data.WarehouseInboundReady);
+        Assert.Equal("CREATE_REDISPATCH_TRIP", inbound.Data.RequiredWarehouseAction);
+        var incident = await _db.IncidentReports.FindAsync(_incidentId);
+        Assert.Contains("WAREHOUSE-SEAL-001", incident!.RescuePlanDetails);
     }
 
     [Fact]
@@ -445,7 +795,7 @@ public sealed class IncidentRescueFlowTests : IDisposable
         {
             IncidentId = _incidentId,
             TripId = _tripId,
-            IncidentType = "VEHICLE_BREAKDOWN",
+            IncidentType = "ACCIDENT",
             Severity = "HIGH",
             Description = "Xe hỏng giữa đường.",
             RequiresRescue = true,

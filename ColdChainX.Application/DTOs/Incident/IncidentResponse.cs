@@ -10,11 +10,28 @@ namespace ColdChainX.Application.DTOs.Incident
         public string? TripCode { get; set; }
         public string IncidentType { get; set; } = null!;
         public string Severity { get; set; } = null!;
+        public string? RiskLevel { get; set; }
         public string Description { get; set; } = null!;
         public decimal? CurrentLatitude { get; set; }
         public decimal? CurrentLongitude { get; set; }
         public decimal DriverPaidAmount { get; set; }
         public bool RequiresRescue { get; set; }
+        public string? TemperatureSource { get; set; }
+        public decimal? LatestTemperature { get; set; }
+        public DateTime? TemperatureMeasuredAt { get; set; }
+        public decimal TemperatureTolerance { get; set; }
+        public bool TemperatureThresholdBreached { get; set; }
+        public DateTime? ContainmentConfirmedAt { get; set; }
+        public int? RemainingSafeTimeMinutes { get; set; }
+        public string? SafeTimeCalculation { get; set; }
+        public bool DirectDeliveryLocked { get; set; }
+        public Guid? PreviousIncidentId { get; set; }
+        public DateTime? SlaDueAt { get; set; }
+        public DateTime? LastSlaEscalatedAt { get; set; }
+        public string? RescuePlanType { get; set; }
+        public string? RescuePlanDetails { get; set; }
+        public ExternalReeferPlanRecord? ExternalReeferPlan { get; set; }
+        public string? RedispatchPlan { get; set; }
         public decimal? ApprovedAmount { get; set; }
         public decimal? ReimbursedAmount { get; set; }
         public string? ExpenseStatus { get; set; }
@@ -32,6 +49,7 @@ namespace ColdChainX.Application.DTOs.Incident
         public Guid? TransloadConfirmedBy { get; set; }
         public DateTime? TransloadConfirmedAt { get; set; }
         public string? TransloadNote { get; set; }
+        public TransloadRecord? TransloadDetails { get; set; }
         public Guid? ExpenseApprovedBy { get; set; }
         public DateTime? ExpenseApprovedAt { get; set; }
         public string? ExpenseApprovalNote { get; set; }

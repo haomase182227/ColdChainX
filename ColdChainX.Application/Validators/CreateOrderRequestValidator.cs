@@ -98,7 +98,51 @@ namespace ColdChainX.Application.Validators
             RuleFor(x => x.DropoffStopId)
                 .NotEmpty().WithMessage("Dropoff_Stop_ID is required");
 
-                    }
+            RuleFor(x => x.ReceiverName)
+                .NotEmpty().WithMessage("Receiver_Name is required")
+                .MaximumLength(100).WithMessage("Receiver_Name must not exceed 100 characters");
+
+            RuleFor(x => x.ReceiverPhone)
+                .NotEmpty().WithMessage("Receiver_Phone is required")
+                .MaximumLength(20).WithMessage("Receiver_Phone must not exceed 20 characters")
+                .Must(BeAValidPhoneNumber).WithMessage("Receiver_Phone must contain between 8 and 15 digits");
+
+            RuleFor(x => x.HasStrongOdor)
+                .NotNull().WithMessage("Has_Strong_Odor is required");
+
+            RuleFor(x => x.IsStackable)
+                .NotNull().WithMessage("Is_Stackable is required");
+
+            RuleFor(x => x.LegalDocuments)
+                .NotEmpty().WithMessage("At least one Legal_Documents file is required");
+
+            RuleForEach(x => x.LegalDocuments)
+                .Must(file => file != null && file.Length > 0)
+                .WithMessage("Legal_Documents files must not be empty")
+                .Must(file => file == null || file.Length <= MaxDocumentSizeBytes)
+                .WithMessage("Legal_Documents files must not exceed 10 MB");
+
+            RuleFor(x => x.CargoPhotos)
+                .NotEmpty().WithMessage("At least one Cargo_Photos file is required");
+
+            RuleForEach(x => x.CargoPhotos)
+                .Must(file => file != null && file.Length > 0)
+                .WithMessage("Cargo_Photos files must not be empty")
+                .Must(file => file == null || file.Length <= MaxDocumentSizeBytes)
+                .WithMessage("Cargo_Photos files must not exceed 10 MB");
+
+        }
+
+        private static bool BeAValidPhoneNumber(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            var digitCount = value.Count(char.IsDigit);
+            return digitCount is >= 8 and <= 15
+                && value.All(character => char.IsDigit(character)
+                    || character is '+' or ' ' or '-' or '(' or ')');
+        }
 
         private static bool ContainsOnlyAllowedPackagingTypes(string? value)
         {

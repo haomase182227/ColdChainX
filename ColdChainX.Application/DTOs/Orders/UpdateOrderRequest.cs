@@ -41,6 +41,12 @@ namespace ColdChainX.Application.DTOs.Orders
         [FromForm(Name = "Dropoff_Stop_ID")]
         public Guid? DropoffStopId { get; set; }
 
+        [FromForm(Name = "Receiver_Name")]
+        public string? ReceiverName { get; set; }
+
+        [FromForm(Name = "Receiver_Phone")]
+        public string? ReceiverPhone { get; set; }
+
         [FromForm(Name = "Has_Strong_Odor")]
         public bool? HasStrongOdor { get; set; }
 

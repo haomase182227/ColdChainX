@@ -1,7 +1,9 @@
 using System.Security.Claims;
 using ColdChainX.API.Controllers;
+using ColdChainX.Application.DTOs.Incident;
 using ColdChainX.Application.DTOs.Notifications;
 using ColdChainX.Application.Interfaces;
+using ColdChainX.Application.Services;
 using ColdChainX.Core.Entities;
 using ColdChainX.Infrastructure.Persistence;
 using ColdChainX.Infrastructure.Services;
@@ -224,6 +226,115 @@ public class NotificationServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task IncidentWorkflowNotification_PersistsForReporterAndRoles_AndPublishesRealtime()
+    {
+        var dispatcherRole = new Role { RoleId = Guid.NewGuid(), RoleName = "Dispatcher" };
+        var reporter = await AddUserAsync("incident-reporter");
+        var dispatcher = await AddUserAsync("incident-dispatcher");
+        dispatcher.Role = dispatcherRole;
+        dispatcher.RoleId = dispatcherRole.RoleId;
+        _db.Roles.Add(dispatcherRole);
+        var incident = new IncidentReport
+        {
+            IncidentId = Guid.NewGuid(),
+            IncidentType = "VEHICLE_BREAKDOWN",
+            Severity = "CRITICAL",
+            RiskLevel = "CRITICAL",
+            Description = "Vehicle stopped on route",
+            Status = "EXTERNAL_REEFER_IN_TRANSIT",
+            ReportedBy = reporter.UserId,
+            ReportedAt = DateTime.UtcNow
+        };
+        _db.IncidentReports.Add(incident);
+        await _db.SaveChangesAsync();
+
+        var realtime = new FakeIncidentRealtimeNotifier();
+        var workflow = new IncidentWorkflowNotificationService(
+            _db,
+            _service,
+            realtime,
+            NullLogger<IncidentWorkflowNotificationService>.Instance);
+
+        await workflow.NotifyAsync(new IncidentWorkflowNotification
+        {
+            IncidentId = incident.IncidentId,
+            Action = "EXTERNAL_REEFER_DISPATCHED",
+            Title = "Đã điều xe lạnh thuê ngoài",
+            Body = "Xe ngoài đang chở hàng về kho tuyến.",
+            RecipientRoles = new[] { "DISPATCHER" },
+            RealtimeGroups = new[] { "Group_Dispatcher" },
+            RealtimeEventName = "ExternalReeferDispatched",
+            Payload = new { incident.IncidentId }
+        });
+
+        var notifications = await _db.Notifications
+            .Where(notification => notification.ReferenceId == incident.IncidentId.ToString())
+            .ToListAsync();
+        Assert.Equal(2, notifications.Count);
+        Assert.All(notifications, notification => Assert.Equal("INCIDENT_WORKFLOW", notification.Type));
+        Assert.Contains(notifications, notification => notification.UserId == reporter.UserId);
+        Assert.Contains(notifications, notification => notification.UserId == dispatcher.UserId);
+        Assert.Contains(realtime.GroupEvents, item => item.EventName == "ExternalReeferDispatched");
+        Assert.Contains(realtime.UserEvents, item => item.UserId == reporter.UserId);
+    }
+
+    [Fact]
+    public async Task IncidentWorkflowNotification_WarehouseAudience_TargetsOnlyDestinationWarehouse()
+    {
+        var warehouseRole = new Role { RoleId = Guid.NewGuid(), RoleName = "WarehouseWorker" };
+        var destinationWarehouseId = Guid.NewGuid();
+        _db.Roles.Add(warehouseRole);
+        await _db.SaveChangesAsync();
+        var reporter = await AddUserAsync("warehouse-audience-reporter");
+        var destinationWorker = await AddUserAsync("destination-worker");
+        destinationWorker.Role = warehouseRole;
+        destinationWorker.RoleId = warehouseRole.RoleId;
+        destinationWorker.WarehouseId = destinationWarehouseId;
+        await _db.SaveChangesAsync();
+        var otherWorker = await AddUserAsync("other-worker");
+        otherWorker.Role = warehouseRole;
+        otherWorker.RoleId = warehouseRole.RoleId;
+        otherWorker.WarehouseId = Guid.NewGuid();
+        await _db.SaveChangesAsync();
+        var incident = new IncidentReport
+        {
+            IncidentId = Guid.NewGuid(),
+            IncidentType = "VEHICLE_BREAKDOWN",
+            Severity = "CRITICAL",
+            Description = "Vehicle stopped on route",
+            Status = "EXTERNAL_REEFER_IN_TRANSIT",
+            ReportedBy = reporter.UserId
+        };
+        _db.IncidentReports.Add(incident);
+        await _db.SaveChangesAsync();
+
+        var realtime = new FakeIncidentRealtimeNotifier();
+        var workflow = new IncidentWorkflowNotificationService(
+            _db,
+            _service,
+            realtime,
+            NullLogger<IncidentWorkflowNotificationService>.Instance);
+        await workflow.NotifyAsync(new IncidentWorkflowNotification
+        {
+            IncidentId = incident.IncidentId,
+            Action = "EMERGENCY_INBOUND_PREPARE",
+            Title = "Chuẩn bị nhập hàng khẩn cấp",
+            Body = "Xe cứu hộ đang về kho.",
+            RecipientRoles = new[] { "WAREHOUSEWORKER" },
+            RecipientWarehouseId = destinationWarehouseId,
+            IncludeReporter = false,
+            IncludeTripDrivers = false,
+            RealtimeEventName = "WarehouseEmergencyInboundRequested"
+        });
+
+        var notification = Assert.Single(await _db.Notifications.ToListAsync());
+        Assert.Equal(destinationWorker.UserId, notification.UserId);
+        Assert.DoesNotContain(await _db.Notifications.ToListAsync(), item => item.UserId == otherWorker.UserId);
+        Assert.DoesNotContain(await _db.Notifications.ToListAsync(), item => item.UserId == reporter.UserId);
+        Assert.Contains(realtime.UserEvents, item => item.UserId == destinationWorker.UserId);
+    }
+
+    [Fact]
     public async Task NotificationEndpoint_MissingJwtClaim_ReturnsUnauthorized()
     {
         var controller = Controller(environmentName: "Production");
@@ -349,6 +460,32 @@ public class NotificationServiceTests : IDisposable
             IReadOnlyDictionary<string, string> data,
             CancellationToken cancellationToken = default)
             => Task.FromResult(ResultFactory(topic));
+    }
+
+    private sealed class FakeIncidentRealtimeNotifier : IIncidentRealtimeNotifier
+    {
+        public List<(string EventName, object Payload)> GroupEvents { get; } = new();
+        public List<(Guid UserId, string EventName, object Payload)> UserEvents { get; } = new();
+
+        public Task NotifyGroupsAsync(
+            IReadOnlyCollection<string> groups,
+            string eventName,
+            object payload,
+            CancellationToken cancellationToken = default)
+        {
+            GroupEvents.Add((eventName, payload));
+            return Task.CompletedTask;
+        }
+
+        public Task NotifyUserAsync(
+            Guid userId,
+            string eventName,
+            object payload,
+            CancellationToken cancellationToken = default)
+        {
+            UserEvents.Add((userId, eventName, payload));
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FakeWebHostEnvironment : IWebHostEnvironment

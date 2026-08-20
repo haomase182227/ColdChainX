@@ -70,6 +70,11 @@ if (configuration.GetValue("HostedWorkers:AutoInvoicing", true))
     builder.Services.AddHostedService<AutoInvoicingWorker>();
 }
 
+if (configuration.GetValue("HostedWorkers:IncidentSlaEscalation", true))
+{
+    builder.Services.AddHostedService<IncidentSlaEscalationWorker>();
+}
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {

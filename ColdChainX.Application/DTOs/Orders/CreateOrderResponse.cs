@@ -11,6 +11,8 @@ namespace ColdChainX.Application.DTOs.Orders
         public string TempCondition { get; set; } = null!;
         public decimal ExpectedWeightKg { get; set; }
         public decimal ExpectedCbm { get; set; }
+        public string ReceiverName { get; set; } = null!;
+        public string ReceiverPhone { get; set; } = null!;
         public string Status { get; set; } = null!;
         public DateTime CreatedAt { get; set; }
     }
