@@ -14,6 +14,8 @@ namespace ColdChainX.Application.Services
 {
     public class ClaimService : IClaimService
     {
+        private const string CustomerClaimEligibleStatus = "DELIVERED";
+
         private readonly IApplicationDbContext _db;
         private readonly ILogger<ClaimService> _logger;
         private readonly IFileService _fileService;
@@ -25,7 +27,7 @@ namespace ColdChainX.Application.Services
             _fileService = fileService;
         }
 
-        public async Task<ApiResponse<ClaimResponse>> CreateClaimAsync(CreateClaimRequest request, Guid userId)
+        public async Task<ApiResponse<ClaimResponse>> CreateClaimAsync(CreateClaimRequest request, Guid userId, Guid? customerId = null, bool isCustomer = false)
         {
             if (request == null)
                 return ApiResponse<ClaimResponse>.Failure("Request is null", 400);
@@ -42,9 +44,25 @@ namespace ColdChainX.Application.Services
                 if (!userExists)
                     return ApiResponse<ClaimResponse>.Failure("Reporter user not found.", 404);
 
-                var orderExists = await _db.TransportOrders.AnyAsync(o => o.OrderId == request.OrderId.Value);
-                if (!orderExists)
+                var order = await _db.TransportOrders.FirstOrDefaultAsync(o => o.OrderId == request.OrderId.Value);
+                if (order == null)
                     return ApiResponse<ClaimResponse>.Failure("Order not found.", 404);
+
+                if (isCustomer)
+                {
+                    if (!customerId.HasValue)
+                        return ApiResponse<ClaimResponse>.Failure("CustomerId is required for customer claim creation.", 401);
+
+                    if (order.CustomerId != customerId.Value)
+                        return ApiResponse<ClaimResponse>.Failure("Customer can only create claims for their own orders.", 403);
+
+                    if (!IsCustomerClaimEligibleOrderStatus(order.Status))
+                        return ApiResponse<ClaimResponse>.Failure("Claims can only be created after the order has been delivered.", 400);
+
+                    var existingClaim = await _db.Claims.AnyAsync(c => c.OrderId == order.OrderId);
+                    if (existingClaim)
+                        return ApiResponse<ClaimResponse>.Failure("This order already has a claim.", 409);
+                }
 
                 var claimCode = $"CLM-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}";
 
@@ -214,6 +232,12 @@ namespace ColdChainX.Application.Services
                 }).ToList()
             };
         }
+
+        private static bool IsCustomerClaimEligibleOrderStatus(string? status)
+        {
+            return string.Equals(status?.Trim(), CustomerClaimEligibleStatus, StringComparison.OrdinalIgnoreCase);
+        }
+
         public async Task<ApiResponse<bool>> CompleteClaimPayoutAsync(Guid claimId, CompleteClaimPayoutRequest request, Guid userId)
         {
             var claim = await _db.Claims
