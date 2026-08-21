@@ -173,7 +173,7 @@ public class CheckinDriverCommandHandler : IRequestHandler<CheckinDriverCommand,
             );
         }
 
-        double maxDistance = 5000.0;
+        double maxDistance = 10000.0;
         if (_configuration != null)
         {
             var configVal = _configuration["DeliverySettings:MaxCheckinDistanceMeters"];
@@ -213,7 +213,9 @@ public class CheckinDriverCommandHandler : IRequestHandler<CheckinDriverCommand,
             Status = "ARRIVED"
         };
 
-        return ApiResponse<CheckinDriverResponse>.SuccessResponse(response, "Driver checked in and confirmed arrival successfully with Goong geofence verification (< 700m) and proof image.");
+        return ApiResponse<CheckinDriverResponse>.SuccessResponse(
+            response,
+            $"Driver checked in and confirmed arrival successfully with geofence verification (within {maxDistance:F0}m) and proof image.");
     }
 
     private static double CalculateDistanceInMeters(double lat1, double lon1, double lat2, double lon2)
