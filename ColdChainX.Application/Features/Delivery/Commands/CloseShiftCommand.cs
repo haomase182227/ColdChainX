@@ -149,8 +149,7 @@ public class CloseShiftCommandHandler : IRequestHandler<CloseShiftCommand, ApiRe
                         }
                         else
                         {
-                            d.Status = "ACTIVE";
-                            await _driverAvailability.ReconcileStatusAsync(d);
+                            d.Status = "RELAX";
                         }
                     }
                 }
@@ -174,7 +173,7 @@ public class CloseShiftCommandHandler : IRequestHandler<CloseShiftCommand, ApiRe
                     NoShowReturnIncidentId = noShowReturnIncident?.IncidentId,
                     RequiresWarehouseInboundBySeal = noShowReturnIncident != null,
                     Message = noShowReturnIncident == null
-                        ? "Đã đóng ca thành công, tài xế và xe đã được cập nhật trạng thái ACTIVE và sẵn sàng ghép chuyến mới."
+                        ? "Đã đóng ca thành công. Xe đã sẵn sàng; tài xế chuyển sang RELAX trong 4 giờ trước khi nhận chuyến mới."
                         : $"Đã ghi nhận hàng khách vắng mặt đang trở về {warehouse.WarehouseName}. Nhân viên kho nhập lại bằng seal tại màn hình Inbound hàng sự cố; không cần QC."
                 };
 

@@ -377,6 +377,19 @@ public class ConfirmLpnDeliveryCommandHandler : IRequestHandler<ConfirmLpnDelive
             {
                 trip.Status = "COMPLETED";
                 trip.CompletedAt = DateTime.UtcNow;
+
+                var drivers = await _context.TripDrivers
+                    .Where(td => td.TripId == tripId)
+                    .Select(td => td.Driver)
+                    .ToListAsync(ct);
+                foreach (var driver in drivers)
+                {
+                    if (driver.Status?.Trim().ToUpperInvariant()
+                        is not ("INACTIVE" or "SUSPENDED_DOCS" or "DELETED"))
+                    {
+                        driver.Status = "RELAX";
+                    }
+                }
             }
         }
     }

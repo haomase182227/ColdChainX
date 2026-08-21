@@ -1100,6 +1100,11 @@ public class DispatchService : IDispatchService
             ? Math.Round((decimal)directionsResult.TotalDurationSeconds / 3600m, 2)
             : Math.Round(routeResult.TotalDistanceKm / 40m, 2);
 
+        // Estimated hours are retained for workload reporting only. Long trips are
+        // allowed because drivers can alternate and take breaks while the trip is active.
+        var perDriverHours = Math.Round(estimatedDurationHours / driverIds.Count, 2);
+        var startDay = DateOnly.FromDateTime(request.PlannedStartTime);
+
         var masterTrip = new MasterTrip
         {
             TripId              = Guid.NewGuid(),
@@ -1160,22 +1165,6 @@ public class DispatchService : IDispatchService
             {
                 lpn.Order.MasterTripId = masterTrip.TripId;
                 lpn.Order.Status = "LOADING";
-            }
-        }
-
-        var perDriverHours = Math.Round(estimatedDurationHours / driverIds.Count, 2);
-        var startDay = DateOnly.FromDateTime(request.PlannedStartTime);
-
-        foreach (var driver in drivers)
-        {
-            var availability = await _driverAvailability.CheckAsync(driver.DriverId, perDriverHours, startDay);
-            if (!availability.CanAssign)
-            {
-                driver.Status = "RELAX";
-                await _context.SaveChangesAsync();
-                throw new InvalidOperationException(
-                    $"Không thể gán tài xế {driver.FullName}: {availability.Reason} " +
-                    $"Tài xế được chuyển sang trạng thái RELAX (nghỉ bắt buộc).");
             }
         }
 
