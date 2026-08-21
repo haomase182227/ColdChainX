@@ -1415,11 +1415,6 @@ namespace ColdChainX.Infrastructure.Services
             return $"Thung {capacityKg:0.##}kg";
         }
 
-        private static string BuildPackageLabel(decimal capacityKg)
-        {
-            return $"Thung {capacityKg:0.##}kg";
-        }
-
         private static bool HasLegacyPackageUpdate(UpdateOrderRequest request)
             => request.ExpectedWeightKg.HasValue
                 || request.Quantity.HasValue

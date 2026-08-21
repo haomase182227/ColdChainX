@@ -7,6 +7,7 @@ using ColdChainX.Infrastructure.Persistence;
 using ColdChainX.Shared.Responses;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 
 namespace ColdChainX.Infrastructure.Services;
 
@@ -35,10 +36,6 @@ public class WarehouseFlowService : IWarehouseFlowService
             return ApiResponse<LpnResponse>.Failure("Actual weight and dimensions must be greater than 0.");
 
         var actualCbm = CalculateCbm(request.LengthCm, request.WidthCm, request.HeightCm, order.Quantity);
-        var weightDiff = CalculateDiffPercent((order.OrderDimension?.ExpectedWeightKg ?? 0m), request.ActualWeightKg);
-        var cbmDiff = CalculateDiffPercent((order.OrderDimension?.ExpectedCbm ?? 0m), actualCbm);
-        var maxDiff = Math.Max(weightDiff, cbmDiff);
-        var hasDiscrepancy = maxDiff > DiscrepancyThresholdPercent;
         var now = DateTime.UtcNow;
 
         bool isFastTrack = false;
@@ -57,7 +54,7 @@ public class WarehouseFlowService : IWarehouseFlowService
             }
         }
 
-        var initialState = hasDiscrepancy ? LpnState.DISCREPANCY_HOLD : (isFastTrack ? LpnState.IN_STOCK : LpnState.RECEIVING);
+        var initialState = isFastTrack ? LpnState.IN_STOCK : LpnState.RECEIVING;
 
         await using var tx = await _db.Database.BeginTransactionAsync();
 
@@ -79,9 +76,7 @@ public class WarehouseFlowService : IWarehouseFlowService
             RequiredTemperature = ParseTemperature(order.TempCondition),
             RecordedTemperature = request.RecordedTemperature,
             State = initialState,
-            DiscrepancyReason = hasDiscrepancy
-                ? $"Actual cargo differs from expected by {maxDiff:0.##}% (weight {weightDiff:0.##}%, cbm {cbmDiff:0.##}%). Actual dimensions: {request.LengthCm:0.##} x {request.WidthCm:0.##} x {request.HeightCm:0.##} cm."
-                : null,
+            DiscrepancyReason = null,
             SlaDeadline = CalculateSlaDeadline(order.Schedule),
             InboundTime = now,
             IsFastTrack = isFastTrack,
@@ -91,29 +86,12 @@ public class WarehouseFlowService : IWarehouseFlowService
         _db.Lpns.Add(lpn);
         order.OrderDimension.ActualWeightKg = request.ActualWeightKg;
         order.OrderDimension.ActualCbm = actualCbm;
-        order.Status = hasDiscrepancy ? "DISCREPANCY_HOLD" : (isFastTrack ? "IN_STOCK" : "RECEIVING");
+        order.Status = isFastTrack ? "IN_STOCK" : "RECEIVING";
 
         await _db.SaveChangesAsync();
         await tx.CommitAsync();
 
-        if (hasDiscrepancy)
-        {
-            await _hubContext.Clients.Group("Group_Sales").SendAsync("InboundDiscrepancyDetected", new
-            {
-                lpn.LpnId,
-                lpn.LpnCode,
-                order.OrderId,
-                order.TrackingCode,
-                MaxDiffPercent = maxDiff,
-                lpn.DiscrepancyReason
-            });
-        }
-
-        var message = hasDiscrepancy
-            ? "Inbound QC completed with discrepancy hold."
-            : "Inbound QC completed and GRN generated.";
-
-        return ApiResponse<LpnResponse>.SuccessResponse(ToResponse(lpn, order.TrackingCode), message);
+        return ApiResponse<LpnResponse>.SuccessResponse(ToResponse(lpn, order.TrackingCode), "Inbound QC completed and GRN generated.");
     }
 
     public async Task<ApiResponse<object>> ResolveDiscrepancyAsync(Guid lpnId, ResolveDiscrepancyRequest request, Guid salesUserId)
@@ -328,6 +306,33 @@ public class WarehouseFlowService : IWarehouseFlowService
             return actual > 0 ? 100m : 0m;
 
         return Math.Round(Math.Abs(actual - expected) / expected * 100m, 2);
+    }
+
+    private static decimal CalculateCbm(decimal lengthCm, decimal widthCm, decimal heightCm, int quantity)
+        => Math.Round(lengthCm * widthCm * heightCm * Math.Max(quantity, 1) / 1_000_000m, 4);
+
+    private static decimal? ParseTemperature(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var normalized = new string(value
+                .Where(ch => char.IsDigit(ch) || ch == '-' || ch == '.' || ch == ',')
+                .ToArray())
+            .Replace(',', '.')
+            .Trim();
+
+        return decimal.TryParse(normalized, NumberStyles.Any, CultureInfo.InvariantCulture, out var temp)
+            ? temp
+            : null;
+    }
+
+    private static DateTime? CalculateSlaDeadline(RouteSchedule? schedule)
+    {
+        if (schedule == null)
+            return DateTime.UtcNow.AddHours(24);
+
+        return schedule.DepartureDate.Date.Add(schedule.CutOffTime).AddHours(24);
     }
 
     private static string GenerateCode(string prefix)

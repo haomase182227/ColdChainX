@@ -1,7 +1,5 @@
-using ColdChainX.Application.Features.Inbound.Queries;
 using ColdChainX.Application.Helpers;
 using ColdChainX.Application.Interfaces;
-using ColdChainX.Application.Helpers;
 using ColdChainX.Core.Entities;
 using ColdChainX.Core.Enums;
 using MediatR;
@@ -34,39 +32,86 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
         if (request.LpnId == Guid.Empty)
             return Failure("LpnId is required.");
 
-        if (request.ActualWeightKg <= 0 || request.LengthCm <= 0 || request.WidthCm <= 0 || request.HeightCm <= 0)
-            return Failure("Actual weight and dimensions must be greater than 0.");
+        var packageLinesResult = ParseActualPackageLines(request.ActualPackageLinesJson);
+        if (!packageLinesResult.Success)
+            return Failure(packageLinesResult.Error!);
+
+        var actualPackageLines = packageLinesResult.PackageLines;
+        var hasActualPackageLines = actualPackageLines.Count > 0;
+
+        if (!hasActualPackageLines
+            && (!request.ActualWeightKg.HasValue
+                || !request.LengthCm.HasValue
+                || !request.WidthCm.HasValue
+                || !request.HeightCm.HasValue
+                || request.ActualWeightKg.Value <= 0
+                || request.LengthCm.Value <= 0
+                || request.WidthCm.Value <= 0
+                || request.HeightCm.Value <= 0))
+        {
+            return Failure("Actual weight and dimensions must be greater than 0 when Actual_Package_Lines is not provided.");
+        }
 
         var lpn = await _context.Lpns
             .Include(l => l.Receipt)
-            .Include(l => l.Route) // for tracking
-            .Include(l => l.Trip)
+            .Include(l => l.Order)
+                .ThenInclude(o => o!.OrderDimension)
+            .Include(l => l.Order)
+                .ThenInclude(o => o!.Schedule)
+            .Include(l => l.InboundQcPackageLines)
             .FirstOrDefaultAsync(l => l.LpnId == request.LpnId, cancellationToken);
 
         if (lpn == null)
             return Failure("LPN not found.");
 
-        var order = await _context.TransportOrders
-            .Include(o => o.OrderDimension)
-            .FirstOrDefaultAsync(o => o.OrderId == lpn.OrderId, cancellationToken);
-
+        var order = lpn.Order;
         if (order == null)
             return Failure("Linked order not found.");
 
         if (order.OrderDimension == null)
-            return Failure("Expected order measurements were not found. QC re-evaluation cannot be calculated.");
-
-        if (order.OrderDimension.ExpectedWeightKg <= 0 || order.OrderDimension.ExpectedCbm <= 0)
-            return Failure("Expected weight and CBM must be greater than 0 before QC re-evaluation.");
+            return Failure("The order dimensions were not found. QC re-evaluation cannot record actual measurements.");
 
         var asn = await _context.InboundAsns
             .FirstOrDefaultAsync(a => a.OrderId == lpn.OrderId, cancellationToken);
+        if (hasActualPackageLines && asn == null)
+            return Failure("ASN was not found. QC package lines require an ASN reference.");
 
-        var preconditionFailure = ValidateEditableLpn(currentLpn, request.WarehouseId);
+        var preconditionFailure = ValidateEditableLpn(lpn, request.WarehouseId, asn?.WarehouseId);
         if (preconditionFailure != null)
             return Failure(preconditionFailure);
 
-        string? evidenceImageUrl = null;
+        var now = DbNow();
+        var actualWeightKg = hasActualPackageLines
+            ? actualPackageLines.Sum(line => line.ActualWeightKg)
+            : request.ActualWeightKg!.Value;
+        var actualQuantity = hasActualPackageLines
+            ? actualPackageLines.Sum(line => line.Quantity)
+            : Math.Max(1, lpn.Quantity);
+        var actualCbm = hasActualPackageLines
+            ? actualPackageLines.Sum(line => CalculateCbm(line.LengthCm, line.WidthCm, line.HeightCm, line.Quantity))
+            : InboundQcMeasurementCalculator.CalculateCbm(
+                request.LengthCm!.Value,
+                request.WidthCm!.Value,
+                request.HeightCm!.Value,
+                Math.Max(1, lpn.Quantity));
+
+#if DEBUG
+        _logger.LogDebug(
+            "Inbound QC re-evaluation actualCbm={ActualCbm} actualPackageLines={ActualPackageLinesCount}",
+            actualCbm,
+            actualPackageLines.Count);
+#endif
+
+        var finalQuotationResult = await UpsertFinalQuotationFromActualAsync(
+            order,
+            actualWeightKg,
+            actualCbm,
+            now,
+            cancellationToken);
+        if (finalQuotationResult.Error != null)
+            return Failure(finalQuotationResult.Error);
+
+        string? evidenceImageUrl = lpn.EvidenceImageUrl;
         if (request.EvidenceImages is { Count: > 0 })
         {
             var uploadedUrls = new List<string>();
@@ -81,133 +126,217 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
             evidenceImageUrl = string.Join(",", uploadedUrls);
         }
 
-        var now = DateTime.UtcNow;
-        var storedExpectedCbm = order.OrderDimension.ExpectedCbm;
-        var expectedCbm = InboundQcMeasurementCalculator.CalculateExpectedCbm(order.OrderDimension, order.Quantity);
-        var actualCbm = InboundQcMeasurementCalculator.CalculateCbm(request.LengthCm, request.WidthCm, request.HeightCm, order.Quantity);
-
-#if DEBUG
-        _logger.LogDebug(
-            "Inbound QC re-evaluation CBM trace storedExpectedCbm={StoredExpectedCbm} calculatedExpectedCbmFromDimensions={CalculatedExpectedCbmFromDimensions} actualCbm={ActualCbm} expectedDimensionsCm={ExpectedLengthCm}x{ExpectedWidthCm}x{ExpectedHeightCm} actualDimensionsCm={ActualLengthCm}x{ActualWidthCm}x{ActualHeightCm}",
-            storedExpectedCbm,
-            expectedCbm,
-            actualCbm,
-            order.OrderDimension.LengthCm,
-            order.OrderDimension.WidthCm,
-            order.OrderDimension.HeightCm,
-            request.LengthCm,
-            request.WidthCm,
-            request.HeightCm);
-#endif
-
-        var weightDiff = CalculateDiffPercent(order.OrderDimension.ExpectedWeightKg, request.ActualWeightKg);
-        var cbmDiff = CalculateDiffPercent(expectedCbm, actualCbm);
-        var maxDiff = Math.Max(weightDiff, cbmDiff);
-        var hasDiscrepancy = maxDiff > DiscrepancyThresholdPercent;
-
-        lpn.ActualWeightKg = request.ActualWeightKg;
-        lpn.ActualCbm = actualCbm;
-        lpn.LengthCm = request.LengthCm;
-        lpn.WidthCm = request.WidthCm;
-        lpn.HeightCm = request.HeightCm;
-        lpn.RecordedTemperature = request.Temperature;
-        lpn.State = hasDiscrepancy ? LpnState.DISCREPANCY_HOLD : LpnState.RECEIVING;
-        lpn.DiscrepancyReason = hasDiscrepancy
-            ? $"Actual cargo differs from expected by {maxDiff:0.##}% (weight {weightDiff:0.##}%, cbm {cbmDiff:0.##}%). (Re-evaluated)"
-            : null;
-        if (!string.IsNullOrEmpty(evidenceImageUrl))
+        if (hasActualPackageLines)
         {
-            lpn.EvidenceImageUrl = evidenceImageUrl;
-        }
-        lpn.UpdatedAt = now;
+            _context.InboundQcPackageLines.RemoveRange(lpn.InboundQcPackageLines);
 
-        if (order.OrderDimension != null)
-        {
-            order.OrderDimension.ActualWeightKg = request.ActualWeightKg;
-            order.OrderDimension.ActualCbm = actualCbm;
-        }
-
-        if (asn != null)
-        {
-            asn.Status = hasDiscrepancy ? "DISCREPANCY_HOLD" : "QC_PASSED";
-        }
-
-        receipt.ReferenceDocNo = hasDiscrepancy ? "DISCREPANCY_HOLD" : "PENDING_PUTAWAY";
-        receipt.Reason = hasDiscrepancy ? "QC discrepancy hold (Re-evaluated)" : null;
-        receipt.RecordedTemperature = request.Temperature;
-        receipt.Note = hasDiscrepancy ? "QC discrepancy hold. (Re-evaluated)" : "QC passed and waiting putaway. (Re-evaluated)";
-
-        await _context.SaveChangesAsync(cancellationToken);
-
-        var pdfBytes = hasDiscrepancy
-            ? await _mediator.Send(new GenerateDiscrepancyPdfQuery(receipt.ReceiptId), cancellationToken)
-            : await _mediator.Send(new GenerateReceiptPdfQuery(receipt.ReceiptId), cancellationToken);
-
-        var pdfFileName = hasDiscrepancy 
-            ? $"discrepancy-{order.TrackingCode}-{now:yyyyMMddHHmmss}.pdf" 
-            : $"grn-{order.TrackingCode}-{now:yyyyMMddHHmmss}.pdf";
-            
-        var pdfUrl = await _fileService.UploadFileAsync(pdfBytes, pdfFileName);
-        
-        receipt.PdfUrl = pdfUrl;
-
-        var existingDoc = await _context.TransportDocuments
-            .FirstOrDefaultAsync(d => d.OrderId == order.OrderId && d.DocType == "DISCREPANCY_REPORT", cancellationToken);
-
-        if (hasDiscrepancy)
-        {
-            if (existingDoc == null)
+            foreach (var line in actualPackageLines)
             {
-                _context.TransportDocuments.Add(new TransportDocument
+                _context.InboundQcPackageLines.Add(new InboundQcPackageLine
                 {
-                    DocId = Guid.NewGuid(),
+                    InboundQcPackageLineId = Guid.NewGuid(),
                     OrderId = order.OrderId,
-                    DocType = "DISCREPANCY_REPORT",
-                    ImageUrl = pdfUrl,
-                    UploadedBy = receipt.ReceiverId,
+                    AsnId = asn!.AsnId,
+                    LpnId = lpn.LpnId,
+                    Label = string.IsNullOrWhiteSpace(line.Label) ? "Package" : line.Label.Trim(),
+                    Quantity = line.Quantity,
+                    ActualWeightKg = line.ActualWeightKg,
+                    LengthCm = line.LengthCm,
+                    WidthCm = line.WidthCm,
+                    HeightCm = line.HeightCm,
+                    ActualCbm = CalculateCbm(line.LengthCm, line.WidthCm, line.HeightCm, line.Quantity),
                     CreatedAt = now
                 });
             }
-            else
-            {
-                existingDoc.ImageUrl = pdfUrl;
-                existingDoc.CreatedAt = now;
-            }
         }
-        else
+
+        lpn.Quantity = actualQuantity;
+        lpn.ActualWeightKg = actualWeightKg;
+        lpn.ActualCbm = actualCbm;
+        lpn.LengthCm = hasActualPackageLines ? null : request.LengthCm!.Value;
+        lpn.WidthCm = hasActualPackageLines ? null : request.WidthCm!.Value;
+        lpn.HeightCm = hasActualPackageLines ? null : request.HeightCm!.Value;
+        lpn.RecordedTemperature = request.Temperature;
+        lpn.State = LpnState.RECEIVING;
+        lpn.DiscrepancyReason = null;
+        lpn.EvidenceImageUrl = evidenceImageUrl;
+        lpn.UpdatedAt = now;
+
+        order.OrderDimension.ActualWeightKg = actualWeightKg;
+        order.OrderDimension.ActualCbm = actualCbm;
+        order.Status = "RECEIVING";
+
+        if (asn != null)
+            asn.Status = "QC_PASSED";
+
+        if (lpn.Receipt != null)
         {
-            if (existingDoc != null)
-            {
-            }
+            lpn.Receipt.ReferenceDocNo = "PENDING_PUTAWAY";
+            lpn.Receipt.Reason = null;
+            lpn.Receipt.TotalActualQty = actualQuantity;
+            lpn.Receipt.RecordedTemperature = request.Temperature;
+            lpn.Receipt.Note = "QC passed and waiting putaway. (Re-evaluated)";
         }
 
         await _context.SaveChangesAsync(cancellationToken);
-
-        if (hasDiscrepancy)
-        {
-            _logger.LogWarning(
-                "Inbound QC re-evaluation: discrepancy still detected lpn={LpnCode} order={OrderId} maxDiff={MaxDiffPercent}",
-                lpn.LpnCode,
-                order.OrderId,
-                maxDiff);
-        }
 
         return new ReEvaluateInboundQcResponse
         {
             Success = true,
-            Message = hasDiscrepancy
-                ? "Re-evaluation completed. LPN remains in DISCREPANCY_HOLD."
-                : "Re-evaluation passed successfully. LPN ready for putaway.",
+            Message = "Re-evaluation passed successfully. LPN ready for putaway.",
             LpnId = lpn.LpnId,
             LpnCode = lpn.LpnCode,
             State = lpn.State.ToString(),
-            DiffPercent = maxDiff,
-            PdfUrl = pdfUrl
+            DiffPercent = CalculateMaxDiffPercent(order.OrderDimension.ExpectedWeightKg, order.OrderDimension.ExpectedCbm, actualWeightKg, actualCbm),
+            PdfUrl = lpn.Receipt?.PdfUrl,
+            ActualQuantity = actualQuantity,
+            ActualWeightKg = actualWeightKg,
+            ActualCbm = actualCbm,
+            QuoteId = finalQuotationResult.QuoteId
         };
     }
 
     private static ReEvaluateInboundQcResponse Failure(string message)
         => new() { Success = false, Message = message };
+
+    private static string? ValidateEditableLpn(Lpn lpn, Guid requestWarehouseId, Guid? asnWarehouseId)
+    {
+        if (lpn.State is LpnState.SHIPPING or LpnState.DELIVERED)
+            return "Cannot re-evaluate QC after the LPN has started shipping or has been delivered.";
+
+        if (requestWarehouseId != Guid.Empty)
+        {
+            if (asnWarehouseId.HasValue && asnWarehouseId.Value != requestWarehouseId)
+                return "ASN does not belong to current warehouse.";
+
+            if (lpn.WarehouseId.HasValue && lpn.WarehouseId.Value != requestWarehouseId)
+                return "LPN does not belong to current warehouse.";
+        }
+
+        return null;
+    }
+
+    private static (bool Success, List<InboundQcPackageLineRequest> PackageLines, string? Error) ParseActualPackageLines(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return (true, new List<InboundQcPackageLineRequest>(), null);
+
+        try
+        {
+            var lines = JsonSerializer.Deserialize<List<InboundQcPackageLineRequest>>(
+                json,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<InboundQcPackageLineRequest>();
+
+            foreach (var line in lines)
+            {
+                if (line.Quantity <= 0)
+                    return (false, lines, "Each actual package line quantity must be greater than 0.");
+
+                if (line.ActualWeightKg <= 0)
+                    return (false, lines, "Each actual package line weight must be greater than 0.");
+
+                if (line.LengthCm <= 0 || line.WidthCm <= 0 || line.HeightCm <= 0)
+                    return (false, lines, "Each actual package line length, width, and height must be greater than 0.");
+            }
+
+            return (true, lines, null);
+        }
+        catch (JsonException)
+        {
+            return (false, new List<InboundQcPackageLineRequest>(), "Actual_Package_Lines must be valid JSON.");
+        }
+    }
+
+    private async Task<(Guid? QuoteId, string? Error)> UpsertFinalQuotationFromActualAsync(
+        TransportOrder order,
+        decimal actualWeightKg,
+        decimal actualCbm,
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+        var sourceQuotation = await _context.Quotations
+            .Where(q => q.OrderId == order.OrderId && q.Status == "ACCEPTED")
+            .OrderByDescending(q => q.AcceptedAt)
+            .ThenByDescending(q => q.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (sourceQuotation == null)
+            return (null, "The accepted initial quotation was not found. QC re-evaluation cannot create the final quotation.");
+
+        if (order.Schedule == null)
+            return (null, "The order schedule was not found. QC re-evaluation cannot resolve final pricing.");
+
+        var pricing = await ActualQuotationPricingHelper.ResolveAsync(
+            _context,
+            order.Schedule.RouteId,
+            actualWeightKg,
+            actualCbm,
+            cancellationToken);
+        if (!pricing.IsSuccess)
+            return (null, pricing.Error);
+
+        var finalQuotation = await _context.Quotations
+            .Where(q => q.OrderId == order.OrderId
+                && q.Status == "FINAL"
+                && q.PricingSource == "AUTO_ACTUAL")
+            .OrderByDescending(q => q.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var sourceSubtotal = sourceQuotation.FinalAmount - sourceQuotation.VatAmount;
+        var finalSubtotal = sourceSubtotal - sourceQuotation.BaseFreight + pricing.BaseFreight;
+        var vatPercentage = sourceQuotation.VatPercentage ?? 8m;
+        var vatAmount = Math.Round(finalSubtotal * vatPercentage / 100m, 0);
+
+        if (finalQuotation == null)
+        {
+            finalQuotation = new Quotation
+            {
+                QuoteId = Guid.NewGuid(),
+                OrderId = order.OrderId,
+                PricingSource = "AUTO_ACTUAL",
+                Status = "FINAL",
+                CreatedAt = now
+            };
+            _context.Quotations.Add(finalQuotation);
+        }
+
+        finalQuotation.BaseFreight = pricing.BaseFreight;
+        finalQuotation.LastMileSurcharge = sourceQuotation.LastMileSurcharge;
+        finalQuotation.VasAmount = sourceQuotation.VasAmount;
+        finalQuotation.VatPercentage = vatPercentage;
+        finalQuotation.VatAmount = vatAmount;
+        finalQuotation.FinalAmount = finalSubtotal + vatAmount;
+        finalQuotation.ChargeableWeightKg = pricing.ChargeableWeightKg;
+        finalQuotation.VolumetricWeightKg = pricing.VolumetricWeightKg;
+        finalQuotation.PricePerKg = pricing.PricePerKg;
+        finalQuotation.DistanceKm = sourceQuotation.DistanceKm;
+        finalQuotation.SystemBaseFreight = pricing.BaseFreight;
+        finalQuotation.ManualAdjustment = sourceQuotation.ManualAdjustment;
+        finalQuotation.AdditionalCharges = sourceQuotation.AdditionalCharges;
+        finalQuotation.MandatoryCharges = sourceQuotation.MandatoryCharges;
+        finalQuotation.OptionalServicesMenu = sourceQuotation.OptionalServicesMenu;
+        finalQuotation.OverrideReason = sourceQuotation.OverrideReason;
+
+        return (finalQuotation.QuoteId, null);
+    }
+
+    private static decimal CalculateCbm(decimal lengthCm, decimal widthCm, decimal heightCm, int quantity)
+        => Math.Round(lengthCm * widthCm * heightCm * quantity / 1_000_000m, 4);
+
+    private static decimal CalculateMaxDiffPercent(decimal expectedWeightKg, decimal expectedCbm, decimal actualWeightKg, decimal actualCbm)
+    {
+        var weightDiff = CalculateDiffPercentOrZero(expectedWeightKg, actualWeightKg);
+        var cbmDiff = CalculateDiffPercentOrZero(expectedCbm, actualCbm);
+        return Math.Max(weightDiff, cbmDiff);
+    }
+
+    private static decimal CalculateDiffPercentOrZero(decimal expected, decimal actual)
+    {
+        if (expected <= 0)
+            return 0m;
+
+        return Math.Round(Math.Abs(actual - expected) / expected * 100m, 2);
+    }
 
     private static DateTime DbNow()
         => DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
