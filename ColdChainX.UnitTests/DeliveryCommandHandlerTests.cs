@@ -30,6 +30,8 @@ namespace ColdChainX.UnitTests
         private readonly Guid _tripId = Guid.NewGuid();
         private readonly Guid _lpnId = Guid.NewGuid();
         private readonly Guid _orderId = Guid.NewGuid();
+        private readonly Guid _vehicleId = Guid.NewGuid();
+        private readonly Guid _deviceId = Guid.NewGuid();
 
         public DeliveryCommandHandlerTests()
         {
@@ -80,9 +82,26 @@ namespace ColdChainX.UnitTests
                 Status = "AVAILABLE"
             });
 
+            _db.Vehicles.Add(new Vehicle
+            {
+                VehicleId = _vehicleId,
+                TruckPlate = "51C-CHECKIN",
+                VehicleType = "REFRIGERATED_TRUCK",
+                Status = "ON_TRIP"
+            });
+            _db.IotDevices.Add(new IotDevice
+            {
+                DeviceId = _deviceId,
+                DeviceCode = "IOT-CHECKIN-001",
+                VehicleId = _vehicleId,
+                Status = "ACTIVE",
+                IsOnline = true,
+                LastPingTime = DateTime.UtcNow
+            });
             _db.MasterTrips.Add(new MasterTrip
             {
                 TripId = _tripId,
+                VehicleId = _vehicleId,
                 OriginLocationId = Guid.NewGuid(),
                 DestinationLocationId = Guid.NewGuid(),
                 TargetTemperature = 4.5m,
@@ -127,6 +146,25 @@ namespace ColdChainX.UnitTests
         }
 
         public void Dispose() => _db.Dispose();
+
+        private void AddVehicleTelemetry(
+            decimal latitude,
+            decimal longitude,
+            DateTime? timestamp = null,
+            Guid? tripId = null,
+            Guid? deviceId = null)
+        {
+            _db.TelemetryLogs.Add(new TelemetryLog
+            {
+                LogId = Guid.NewGuid(),
+                TripId = tripId ?? _tripId,
+                DeviceId = deviceId ?? _deviceId,
+                Latitude = latitude,
+                Longitude = longitude,
+                Temperature = 4,
+                Timestamp = timestamp ?? DateTime.UtcNow
+            });
+        }
 
         [Fact]
         public async Task Confirm_ValidRequest_ShouldSucceed()
@@ -593,6 +631,7 @@ namespace ColdChainX.UnitTests
                 PlannedDepartureTime = DateTime.UtcNow.AddHours(1),
                 Status = "PLANNED"
             });
+            AddVehicleTelemetry(10.8466m, 106.8043m);
             await _db.SaveChangesAsync();
 
             var handler = new CheckinDriverCommandHandler(_db, _configuration);
@@ -600,8 +639,8 @@ namespace ColdChainX.UnitTests
             {
                 StopId = stopId,
                 ProofImageUrl = "https://example.com/proofs/arrival.jpg",
-                Latitude = 10.8466m,
-                Longitude = 106.8043m,
+                Latitude = 11.5000m,
+                Longitude = 107.5000m,
                 LocationTimestamp = DateTimeOffset.UtcNow,
                 AccuracyMeters = 10,
                 UserId = _userId
@@ -618,6 +657,122 @@ namespace ColdChainX.UnitTests
             Assert.NotNull(dbStop);
             Assert.NotNull(dbStop.ActualArrivalTime);
             Assert.Equal("ARRIVED", dbStop.Status);
+        }
+
+        [Fact]
+        public async Task Checkin_PrefersFreshRedisVehicleGpsOverSqlAndClientGps()
+        {
+            var stopId = Guid.NewGuid();
+            var locationId = Guid.NewGuid();
+            _db.Locations.Add(new Location
+            {
+                LocationId = locationId,
+                Address = "Test Destination",
+                Latitude = 10.8465m,
+                Longitude = 106.8042m
+            });
+            _db.TripStops.Add(new TripStop
+            {
+                StopId = stopId,
+                TripId = _tripId,
+                LocationId = locationId,
+                StopSequence = 16,
+                StopType = "DELIVERY",
+                PlannedArrivalTime = DateTime.UtcNow,
+                PlannedDepartureTime = DateTime.UtcNow.AddHours(1),
+                Status = "PLANNED"
+            });
+            AddVehicleTelemetry(11.5000m, 107.5000m);
+            await _db.SaveChangesAsync();
+
+            var realtimeTelemetry = new FakeRealtimeTelemetryService(new RealtimeGpsPosition
+            {
+                DeviceCode = "IOT-CHECKIN-001",
+                Latitude = 10.8466m,
+                Longitude = 106.8043m,
+                Timestamp = DateTimeOffset.UtcNow
+            });
+            var handler = new CheckinDriverCommandHandler(
+                _db,
+                _configuration,
+                realtimeTelemetryService: realtimeTelemetry);
+            var command = new CheckinDriverCommand
+            {
+                StopId = stopId,
+                ProofImageUrl = "https://example.com/proofs/redis-arrival.jpg",
+                Latitude = 11.6000m,
+                Longitude = 107.6000m,
+                LocationTimestamp = DateTimeOffset.UtcNow,
+                AccuracyMeters = 5,
+                UserId = _userId
+            };
+
+            var result = await handler.Handle(command, CancellationToken.None);
+
+            Assert.True(result.Success);
+            var stopEvent = await _db.TripStopEvents.SingleAsync(
+                eventRecord => eventRecord.StopId == stopId && eventRecord.EventType == "DRIVER_CHECKIN");
+            Assert.Contains("GpsSource: REDIS_REALTIME", stopEvent.MetaData);
+        }
+
+        [Fact]
+        public async Task Checkin_IgnoresTelemetryFromAnotherVehicleAndClientGps()
+        {
+            var otherVehicleId = Guid.NewGuid();
+            var otherDeviceId = Guid.NewGuid();
+            var stopId = Guid.NewGuid();
+            var locationId = Guid.NewGuid();
+            _db.Vehicles.Add(new Vehicle
+            {
+                VehicleId = otherVehicleId,
+                TruckPlate = "51C-OTHER",
+                VehicleType = "REFRIGERATED_TRUCK",
+                Status = "ON_TRIP"
+            });
+            _db.IotDevices.Add(new IotDevice
+            {
+                DeviceId = otherDeviceId,
+                DeviceCode = "IOT-OTHER-001",
+                VehicleId = otherVehicleId,
+                Status = "ACTIVE",
+                IsOnline = true
+            });
+            _db.Locations.Add(new Location
+            {
+                LocationId = locationId,
+                Address = "Test Destination",
+                Latitude = 10.8465m,
+                Longitude = 106.8042m
+            });
+            _db.TripStops.Add(new TripStop
+            {
+                StopId = stopId,
+                TripId = _tripId,
+                LocationId = locationId,
+                StopSequence = 17,
+                StopType = "DELIVERY",
+                PlannedArrivalTime = DateTime.UtcNow,
+                PlannedDepartureTime = DateTime.UtcNow.AddHours(1),
+                Status = "PLANNED"
+            });
+            AddVehicleTelemetry(10.8466m, 106.8043m, deviceId: otherDeviceId);
+            await _db.SaveChangesAsync();
+
+            var handler = new CheckinDriverCommandHandler(_db, _configuration);
+            var command = new CheckinDriverCommand
+            {
+                StopId = stopId,
+                ProofImageUrl = "https://example.com/proofs/arrival.jpg",
+                Latitude = 10.8466m,
+                Longitude = 106.8043m,
+                LocationTimestamp = DateTimeOffset.UtcNow,
+                AccuracyMeters = 5,
+                UserId = _userId
+            };
+
+            var exception = await Assert.ThrowsAsync<ValidationException>(() =>
+                handler.Handle(command, CancellationToken.None));
+            Assert.Equal("Không nhận được GPS từ xe.", exception.Message);
         }
 
         [Fact]
@@ -659,7 +814,7 @@ namespace ColdChainX.UnitTests
         }
 
         [Fact]
-        public async Task Checkin_TooFar700m_ShouldThrowValidationException()
+        public async Task Checkin_WithVehicleMoreThan10KmAway_ShouldThrowValidationException()
         {
             var stopId = Guid.NewGuid();
             var locationId = Guid.NewGuid();
@@ -681,6 +836,7 @@ namespace ColdChainX.UnitTests
                 PlannedDepartureTime = DateTime.UtcNow.AddHours(1),
                 Status = "PLANNED"
             });
+            AddVehicleTelemetry(11.5000m, 107.5000m);
             await _db.SaveChangesAsync();
 
             var handler = new CheckinDriverCommandHandler(_db, _configuration);
@@ -688,8 +844,8 @@ namespace ColdChainX.UnitTests
             {
                 StopId = stopId,
                 ProofImageUrl = "https://example.com/proofs/arrival.jpg",
-                Latitude = 11.5000m, // Far away (> 700m)
-                Longitude = 107.5000m,
+                Latitude = 10.8466m, // Client GPS is near but must not be used.
+                Longitude = 106.8043m,
                 LocationTimestamp = DateTimeOffset.UtcNow,
                 AccuracyMeters = 10,
                 UserId = _userId
@@ -699,7 +855,7 @@ namespace ColdChainX.UnitTests
         }
 
         [Fact]
-        public async Task Checkin_WithStaleClientGps_ShouldThrowValidationException()
+        public async Task Checkin_WithStaleVehicleGpsAndFreshClientGps_ShouldThrowValidationException()
         {
             var stopId = Guid.NewGuid();
             var locationId = Guid.NewGuid();
@@ -721,6 +877,7 @@ namespace ColdChainX.UnitTests
                 PlannedDepartureTime = DateTime.UtcNow.AddHours(1),
                 Status = "PLANNED"
             });
+            AddVehicleTelemetry(10.8466m, 106.8043m, DateTime.UtcNow.AddMinutes(-10));
             await _db.SaveChangesAsync();
 
             var handler = new CheckinDriverCommandHandler(_db, _configuration);
@@ -730,12 +887,14 @@ namespace ColdChainX.UnitTests
                 ProofImageUrl = "https://example.com/proofs/arrival.jpg",
                 Latitude = 10.8466m,
                 Longitude = 106.8043m,
-                LocationTimestamp = DateTimeOffset.UtcNow.AddMinutes(-10),
+                LocationTimestamp = DateTimeOffset.UtcNow,
                 AccuracyMeters = 10,
                 UserId = _userId
             };
 
-            await Assert.ThrowsAsync<ValidationException>(() => handler.Handle(command, CancellationToken.None));
+            var exception = await Assert.ThrowsAsync<ValidationException>(() =>
+                handler.Handle(command, CancellationToken.None));
+            Assert.Equal("Không nhận được GPS từ xe.", exception.Message);
         }
 
         [Fact]
@@ -771,7 +930,9 @@ namespace ColdChainX.UnitTests
                 UserId = _userId
             };
 
-            await Assert.ThrowsAsync<ValidationException>(() => handler.Handle(command, CancellationToken.None));
+            var exception = await Assert.ThrowsAsync<ValidationException>(() =>
+                handler.Handle(command, CancellationToken.None));
+            Assert.Equal("Không nhận được GPS từ xe.", exception.Message);
         }
 
         [Fact]
@@ -1252,6 +1413,22 @@ namespace ColdChainX.UnitTests
             string origin, string destination, string? waypoints, CancellationToken cancellationToken = default)
         {
             return Task.FromResult(new ColdChainX.Application.DTOs.Dispatch.GoongOptimizedRouteResult());
+        }
+    }
+
+    internal sealed class FakeRealtimeTelemetryService : IRealtimeTelemetryService
+    {
+        private readonly RealtimeGpsPosition? _position;
+
+        public FakeRealtimeTelemetryService(RealtimeGpsPosition? position)
+        {
+            _position = position;
+        }
+
+        public Task<RealtimeGpsPosition?> GetLatestGpsPositionAsync(string deviceCode)
+        {
+            return Task.FromResult(
+                _position != null && _position.DeviceCode == deviceCode ? _position : null);
         }
     }
 

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -18,6 +19,8 @@ public class CheckinDriverCommand : IRequest<ApiResponse<CheckinDriverResponse>>
 {
     public IFormFile? ProofImageFile { get; set; }
     public string ProofImageUrl { get; set; } = string.Empty;
+    // Optional client metadata kept for backward compatibility. It must never
+    // participate in check-in eligibility; only vehicle telemetry is authoritative.
     public decimal? Latitude { get; set; }
     public decimal? Longitude { get; set; }
     public DateTimeOffset? LocationTimestamp { get; set; }
@@ -91,42 +94,52 @@ public class CheckinDriverCommandHandler : IRequestHandler<CheckinDriverCommand,
         if (location == null)
             throw new NotFoundException($"Location for trip stop was not found.");
 
-        decimal? driverLat = null;
-        decimal? driverLon = null;
+        decimal? vehicleLat = null;
+        decimal? vehicleLon = null;
         string gpsSource = "UNKNOWN";
         var now = DateTimeOffset.UtcNow;
         var maxGpsAge = TimeSpan.FromSeconds(GetPositiveConfigurationValue(
             "DeliverySettings:MaxGpsAgeSeconds",
             300));
-        var maxClientAccuracyMeters = GetPositiveConfigurationValue(
-            "DeliverySettings:MaxClientGpsAccuracyMeters",
-            100);
 
-        if (_realtimeTelemetryService != null && trip.VehicleId.HasValue)
+        var vehicleDevices = trip.VehicleId.HasValue
+            ? await _context.IotDevices
+                .Where(device => device.VehicleId == trip.VehicleId.Value)
+                .OrderByDescending(device => device.IsOnline)
+                .ThenByDescending(device => device.LastPingTime)
+                .ToListAsync(cancellationToken)
+            : new List<IotDevice>();
+
+        if (_realtimeTelemetryService != null)
         {
-            var deviceCode = await _context.IotDevices
-                .Where(d => d.VehicleId == trip.VehicleId.Value && !string.IsNullOrEmpty(d.DeviceCode))
-                .Select(d => d.DeviceCode)
-                .FirstOrDefaultAsync(cancellationToken);
-
-            if (!string.IsNullOrWhiteSpace(deviceCode))
+            RealtimeGpsPosition? latestRedisGps = null;
+            foreach (var vehicleDevice in vehicleDevices.Where(device => !string.IsNullOrWhiteSpace(device.DeviceCode)))
             {
-                var redisGps = await _realtimeTelemetryService.GetLatestGpsPositionAsync(deviceCode);
+                var redisGps = await _realtimeTelemetryService.GetLatestGpsPositionAsync(vehicleDevice.DeviceCode!);
                 if (redisGps != null
                     && HasUsableCoordinates(redisGps.Latitude, redisGps.Longitude)
-                    && IsFresh(redisGps.Timestamp, now, maxGpsAge))
+                    && IsFresh(redisGps.Timestamp, now, maxGpsAge)
+                    && (latestRedisGps == null || redisGps.Timestamp > latestRedisGps.Timestamp))
                 {
-                    driverLat = redisGps.Latitude;
-                    driverLon = redisGps.Longitude;
-                    gpsSource = $"REDIS_REALTIME (device={deviceCode}, age={now - redisGps.Timestamp:mm\\:ss})";
+                    latestRedisGps = redisGps;
                 }
+            }
+
+            if (latestRedisGps != null)
+            {
+                vehicleLat = latestRedisGps.Latitude;
+                vehicleLon = latestRedisGps.Longitude;
+                gpsSource = $"REDIS_REALTIME (device={latestRedisGps.DeviceCode}, age={now - latestRedisGps.Timestamp:mm\\:ss})";
             }
         }
 
-        if (!driverLat.HasValue)
+        if (!vehicleLat.HasValue && vehicleDevices.Count > 0)
         {
+            var vehicleDeviceIds = vehicleDevices.Select(device => device.DeviceId).ToList();
             var latestTelemetry = await _context.TelemetryLogs
-                .Where(t => t.TripId == trip.TripId)
+                .Where(telemetry => telemetry.TripId == trip.TripId
+                    && telemetry.DeviceId.HasValue
+                    && vehicleDeviceIds.Contains(telemetry.DeviceId.Value))
                 .OrderByDescending(t => t.Timestamp)
                 .FirstOrDefaultAsync(cancellationToken);
 
@@ -138,34 +151,19 @@ public class CheckinDriverCommandHandler : IRequestHandler<CheckinDriverCommand,
                 && HasUsableCoordinates(latestTelemetry.Latitude, latestTelemetry.Longitude)
                 && IsFresh(telemetryTimestamp.Value, now, maxGpsAge))
             {
-                driverLat = latestTelemetry.Latitude;
-                driverLon = latestTelemetry.Longitude;
-                gpsSource = $"SQL_TELEMETRY_LOGS (age={now - telemetryTimestamp.Value:mm\\:ss})";
+                vehicleLat = latestTelemetry.Latitude;
+                vehicleLon = latestTelemetry.Longitude;
+                gpsSource = $"SQL_TELEMETRY_LOGS (device={latestTelemetry.DeviceId}, age={now - telemetryTimestamp.Value:mm\\:ss})";
             }
         }
 
-        if (!driverLat.HasValue
-            && request.Latitude.HasValue
-            && request.Longitude.HasValue
-            && request.LocationTimestamp.HasValue
-            && request.AccuracyMeters.HasValue
-            && request.AccuracyMeters.Value <= maxClientAccuracyMeters
-            && HasUsableCoordinates(request.Latitude.Value, request.Longitude.Value)
-            && IsFresh(request.LocationTimestamp.Value, now, maxGpsAge))
+        if (!vehicleLat.HasValue || !vehicleLon.HasValue)
         {
-            driverLat = request.Latitude;
-            driverLon = request.Longitude;
-            gpsSource = $"CLIENT_GPS_FALLBACK (age={now - request.LocationTimestamp.Value:mm\\:ss}, accuracy={request.AccuracyMeters.Value:F0}m)";
+            throw new ValidationException("Không nhận được GPS từ xe.");
         }
 
-        if (!driverLat.HasValue || !driverLon.HasValue)
-        {
-            throw new ValidationException(
-                $"Không có GPS hợp lệ và còn mới để check-in. GPS phải mới trong {maxGpsAge.TotalSeconds:F0} giây; GPS điện thoại phải có độ chính xác không quá {maxClientAccuracyMeters:F0} m.");
-        }
-
-        var resolvedLat = driverLat.Value;
-        var resolvedLon = driverLon.Value;
+        var resolvedLat = vehicleLat.Value;
+        var resolvedLon = vehicleLon.Value;
 
         double distanceMeters = 0;
         bool usedGoong = false;
@@ -199,7 +197,7 @@ public class CheckinDriverCommandHandler : IRequestHandler<CheckinDriverCommand,
 
         if (distanceMeters > maxDistance)
         {
-            throw new ValidationException($"Check-in failed. You are too far from the stop location '{location.Address}'. Current distance: {distanceMeters:F0}m (max {maxDistance:F0}m). GPS source: {gpsSource}. Driver coords: ({resolvedLat},{resolvedLon}), Stop coords: ({location.Latitude},{location.Longitude}).");
+            throw new ValidationException($"Xe chưa ở trong phạm vi {maxDistance / 1000:F0} km của điểm giao hàng '{location.Address}'. Khoảng cách hiện tại: {distanceMeters:F0} m. Nguồn GPS: {gpsSource}. Tọa độ xe: ({resolvedLat},{resolvedLon}), tọa độ điểm giao: ({location.Latitude},{location.Longitude}).");
         }
 
         string proofUrl = request.ProofImageUrl;
@@ -224,7 +222,7 @@ public class CheckinDriverCommandHandler : IRequestHandler<CheckinDriverCommand,
             StopId = stop.StopId,
             EventType = "DRIVER_CHECKIN",
             EventTime = checkinTime,
-            MetaData = $"ProofImageUrl: {proofUrl}, DistanceMeters: {distanceMeters:F1}, GpsSource: {gpsSource}, DriverCoords: ({resolvedLat},{resolvedLon})"
+            MetaData = $"ProofImageUrl: {proofUrl}, DistanceMeters: {distanceMeters:F1}, GpsSource: {gpsSource}, VehicleCoords: ({resolvedLat},{resolvedLon})"
         });
 
         await _context.SaveChangesAsync(cancellationToken);
@@ -240,7 +238,7 @@ public class CheckinDriverCommandHandler : IRequestHandler<CheckinDriverCommand,
 
         return ApiResponse<CheckinDriverResponse>.SuccessResponse(
             response,
-            $"Driver checked in and confirmed arrival successfully with geofence verification (within {maxDistance:F0}m) and proof image.");
+            $"Driver checked in successfully using vehicle GPS with geofence verification (within {maxDistance:F0}m) and proof image.");
     }
 
     private static double CalculateDistanceInMeters(double lat1, double lon1, double lat2, double lon2)
