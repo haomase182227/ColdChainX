@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -18,8 +19,12 @@ public class CheckinDriverCommand : IRequest<ApiResponse<CheckinDriverResponse>>
 {
     public IFormFile? ProofImageFile { get; set; }
     public string ProofImageUrl { get; set; } = string.Empty;
+    // Optional client metadata kept for backward compatibility. It must never
+    // participate in check-in eligibility; only vehicle telemetry is authoritative.
     public decimal? Latitude { get; set; }
     public decimal? Longitude { get; set; }
+    public DateTimeOffset? LocationTimestamp { get; set; }
+    public double? AccuracyMeters { get; set; }
     public Guid StopId { get; set; }
     public Guid UserId { get; set; } // Set from JWT token by Controller
 }
@@ -48,13 +53,7 @@ public class CheckinDriverCommandHandler : IRequestHandler<CheckinDriverCommand,
 
     public async Task<ApiResponse<CheckinDriverResponse>> Handle(CheckinDriverCommand request, CancellationToken cancellationToken)
     {
-        string proofUrl = request.ProofImageUrl;
-        if (request.ProofImageFile != null && _fileService != null)
-        {
-            proofUrl = await _fileService.UploadFileAsync(request.ProofImageFile);
-        }
-
-        if (string.IsNullOrWhiteSpace(proofUrl))
+        if (request.ProofImageFile == null && string.IsNullOrWhiteSpace(request.ProofImageUrl))
         {
             throw new ValidationException("Vui lòng đính kèm hình ảnh bằng chứng (ProofImageFile hoặc ProofImageUrl) xác nhận tài xế đã thực sự đến bãi/điểm giao hàng.");
         }
@@ -82,70 +81,89 @@ public class CheckinDriverCommandHandler : IRequestHandler<CheckinDriverCommand,
         if (!isAssignedDriver)
             throw new ForbiddenException("You are not authorized to check in for this trip.");
 
+        var stopStatus = stop.Status?.Trim().ToUpperInvariant() ?? string.Empty;
+        if (stop.ActualArrivalTime.HasValue || stopStatus == "ARRIVED")
+            throw new ConflictException("Điểm dừng này đã được check-in trước đó.");
+
+        var checkinReadyStatuses = new[] { "PLANNED", "EN_ROUTE", "DELAYED_INCIDENT" };
+        if (!checkinReadyStatuses.Contains(stopStatus))
+            throw new ConflictException($"Không thể check-in điểm dừng ở trạng thái '{stop.Status ?? "UNKNOWN"}'.");
+
         var location = await _context.Locations
             .FirstOrDefaultAsync(l => l.LocationId == stop.LocationId, cancellationToken);
         if (location == null)
             throw new NotFoundException($"Location for trip stop was not found.");
 
-        decimal? driverLat = null;
-        decimal? driverLon = null;
+        decimal? vehicleLat = null;
+        decimal? vehicleLon = null;
         string gpsSource = "UNKNOWN";
+        var now = DateTimeOffset.UtcNow;
+        var maxGpsAge = TimeSpan.FromSeconds(GetPositiveConfigurationValue(
+            "DeliverySettings:MaxGpsAgeSeconds",
+            300));
 
-        if (_realtimeTelemetryService != null && trip.VehicleId.HasValue)
+        var vehicleDevices = trip.VehicleId.HasValue
+            ? await _context.IotDevices
+                .Where(device => device.VehicleId == trip.VehicleId.Value)
+                .OrderByDescending(device => device.IsOnline)
+                .ThenByDescending(device => device.LastPingTime)
+                .ToListAsync(cancellationToken)
+            : new List<IotDevice>();
+
+        if (_realtimeTelemetryService != null)
         {
-            var deviceCode = await _context.IotDevices
-                .Where(d => d.VehicleId == trip.VehicleId.Value && !string.IsNullOrEmpty(d.DeviceCode))
-                .Select(d => d.DeviceCode)
-                .FirstOrDefaultAsync(cancellationToken);
-
-            if (!string.IsNullOrWhiteSpace(deviceCode))
+            RealtimeGpsPosition? latestRedisGps = null;
+            foreach (var vehicleDevice in vehicleDevices.Where(device => !string.IsNullOrWhiteSpace(device.DeviceCode)))
             {
-                var redisGps = await _realtimeTelemetryService.GetLatestGpsPositionAsync(deviceCode);
-                if (redisGps != null)
+                var redisGps = await _realtimeTelemetryService.GetLatestGpsPositionAsync(vehicleDevice.DeviceCode!);
+                if (redisGps != null
+                    && HasUsableCoordinates(redisGps.Latitude, redisGps.Longitude)
+                    && IsFresh(redisGps.Timestamp, now, maxGpsAge)
+                    && (latestRedisGps == null || redisGps.Timestamp > latestRedisGps.Timestamp))
                 {
-                    driverLat = redisGps.Latitude;
-                    driverLon = redisGps.Longitude;
-                    gpsSource = $"REDIS_REALTIME (device={deviceCode}, age={DateTimeOffset.UtcNow - redisGps.Timestamp:mm\\:ss})";
+                    latestRedisGps = redisGps;
                 }
+            }
+
+            if (latestRedisGps != null)
+            {
+                vehicleLat = latestRedisGps.Latitude;
+                vehicleLon = latestRedisGps.Longitude;
+                gpsSource = $"REDIS_REALTIME (device={latestRedisGps.DeviceCode}, age={now - latestRedisGps.Timestamp:mm\\:ss})";
             }
         }
 
-        if (!driverLat.HasValue)
+        if (!vehicleLat.HasValue && vehicleDevices.Count > 0)
         {
+            var vehicleDeviceIds = vehicleDevices.Select(device => device.DeviceId).ToList();
             var latestTelemetry = await _context.TelemetryLogs
-                .Where(t => t.TripId == trip.TripId)
+                .Where(telemetry => telemetry.TripId == trip.TripId
+                    && telemetry.DeviceId.HasValue
+                    && vehicleDeviceIds.Contains(telemetry.DeviceId.Value))
                 .OrderByDescending(t => t.Timestamp)
                 .FirstOrDefaultAsync(cancellationToken);
 
-            if (latestTelemetry != null && (latestTelemetry.Latitude != 0 || latestTelemetry.Longitude != 0))
+            var telemetryTimestamp = latestTelemetry == null
+                ? (DateTimeOffset?)null
+                : ToUtcDateTimeOffset(latestTelemetry.Timestamp);
+            if (latestTelemetry != null
+                && telemetryTimestamp.HasValue
+                && HasUsableCoordinates(latestTelemetry.Latitude, latestTelemetry.Longitude)
+                && IsFresh(telemetryTimestamp.Value, now, maxGpsAge))
             {
-                driverLat = latestTelemetry.Latitude;
-                driverLon = latestTelemetry.Longitude;
-                gpsSource = $"SQL_TELEMETRY_LOGS (age={DateTime.UtcNow - latestTelemetry.Timestamp:mm\\:ss})";
+                vehicleLat = latestTelemetry.Latitude;
+                vehicleLon = latestTelemetry.Longitude;
+                gpsSource = $"SQL_TELEMETRY_LOGS (device={latestTelemetry.DeviceId}, age={now - telemetryTimestamp.Value:mm\\:ss})";
             }
         }
 
-        if (!driverLat.HasValue && (request.Latitude != 0 || request.Longitude != 0))
+        if (!vehicleLat.HasValue || !vehicleLon.HasValue)
         {
-            driverLat = request.Latitude;
-            driverLon = request.Longitude;
-            gpsSource = "CLIENT_GPS_FALLBACK (Mobile Driver App)";
+            throw new ValidationException("Không nhận được GPS từ xe.");
         }
 
-        if (!driverLat.HasValue && !driverLon.HasValue)
-        {
-            driverLat = location.Latitude;
-            driverLon = location.Longitude;
-            gpsSource = "STOP_LOCATION_FALLBACK (offline/test environment)";
-        }
-
-        if (!driverLat.HasValue || !driverLon.HasValue)
-        {
-            throw new ValidationException("Không nhận được tín hiệu định vị GPS từ Redis real-time hoặc IoT TelemetryLogs. Vui lòng kiểm tra kết nối thiết bị giám sát hành trình trước khi Check-in.");
-        }
-
-        var resolvedLat = driverLat.Value;
-        var resolvedLon = driverLon.Value;
+        var resolvedLat = vehicleLat.Value;
+        var resolvedLon = vehicleLon.Value;
 
         double distanceMeters = 0;
         bool usedGoong = false;
@@ -173,19 +191,24 @@ public class CheckinDriverCommandHandler : IRequestHandler<CheckinDriverCommand,
             );
         }
 
-        double maxDistance = 10000.0;
-        if (_configuration != null)
-        {
-            var configVal = _configuration["DeliverySettings:MaxCheckinDistanceMeters"];
-            if (!string.IsNullOrEmpty(configVal) && double.TryParse(configVal, out var parsedVal))
-            {
-                maxDistance = parsedVal;
-            }
-        }
+        var maxDistance = GetPositiveConfigurationValue(
+            "DeliverySettings:MaxCheckinDistanceMeters",
+            10000);
 
         if (distanceMeters > maxDistance)
         {
-            throw new ValidationException($"Check-in failed. You are too far from the stop location '{location.Address}'. Current distance: {distanceMeters:F0}m (max {maxDistance:F0}m). GPS source: {gpsSource}. Driver coords: ({resolvedLat},{resolvedLon}), Stop coords: ({location.Latitude},{location.Longitude}).");
+            throw new ValidationException($"Xe chưa ở trong phạm vi {maxDistance / 1000:F0} km của điểm giao hàng '{location.Address}'. Khoảng cách hiện tại: {distanceMeters:F0} m. Nguồn GPS: {gpsSource}. Tọa độ xe: ({resolvedLat},{resolvedLon}), tọa độ điểm giao: ({location.Latitude},{location.Longitude}).");
+        }
+
+        string proofUrl = request.ProofImageUrl;
+        if (request.ProofImageFile != null && _fileService != null)
+        {
+            proofUrl = await _fileService.UploadFileAsync(request.ProofImageFile);
+        }
+
+        if (string.IsNullOrWhiteSpace(proofUrl))
+        {
+            throw new ValidationException("Không thể lưu ảnh bằng chứng check-in.");
         }
 
         var checkinTime = DateTime.UtcNow;
@@ -199,7 +222,7 @@ public class CheckinDriverCommandHandler : IRequestHandler<CheckinDriverCommand,
             StopId = stop.StopId,
             EventType = "DRIVER_CHECKIN",
             EventTime = checkinTime,
-            MetaData = $"ProofImageUrl: {proofUrl}, DistanceMeters: {distanceMeters:F1}, GpsSource: {gpsSource}, DriverCoords: ({resolvedLat},{resolvedLon})"
+            MetaData = $"ProofImageUrl: {proofUrl}, DistanceMeters: {distanceMeters:F1}, GpsSource: {gpsSource}, VehicleCoords: ({resolvedLat},{resolvedLon})"
         });
 
         await _context.SaveChangesAsync(cancellationToken);
@@ -215,7 +238,7 @@ public class CheckinDriverCommandHandler : IRequestHandler<CheckinDriverCommand,
 
         return ApiResponse<CheckinDriverResponse>.SuccessResponse(
             response,
-            $"Driver checked in and confirmed arrival successfully with geofence verification (within {maxDistance:F0}m) and proof image.");
+            $"Driver checked in successfully using vehicle GPS with geofence verification (within {maxDistance:F0}m) and proof image.");
     }
 
     private static double CalculateDistanceInMeters(double lat1, double lon1, double lat2, double lon2)
@@ -233,5 +256,37 @@ public class CheckinDriverCommandHandler : IRequestHandler<CheckinDriverCommand,
         var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
 
         return R * c;
+    }
+
+    private double GetPositiveConfigurationValue(string key, double defaultValue)
+    {
+        var rawValue = _configuration[key];
+        return double.TryParse(rawValue, out var parsedValue) && parsedValue > 0
+            ? parsedValue
+            : defaultValue;
+    }
+
+    private static bool HasUsableCoordinates(decimal latitude, decimal longitude)
+    {
+        return latitude is >= -90 and <= 90
+            && longitude is >= -180 and <= 180
+            && (latitude != 0 || longitude != 0);
+    }
+
+    private static bool IsFresh(DateTimeOffset timestamp, DateTimeOffset now, TimeSpan maxAge)
+    {
+        var age = now - timestamp.ToUniversalTime();
+        return age >= TimeSpan.FromSeconds(-30) && age <= maxAge;
+    }
+
+    private static DateTimeOffset ToUtcDateTimeOffset(DateTime timestamp)
+    {
+        var utcTimestamp = timestamp.Kind switch
+        {
+            DateTimeKind.Utc => timestamp,
+            DateTimeKind.Local => timestamp.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(timestamp, DateTimeKind.Utc)
+        };
+        return new DateTimeOffset(utcTimestamp);
     }
 }
