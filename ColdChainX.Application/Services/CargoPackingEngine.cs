@@ -30,6 +30,7 @@ namespace ColdChainX.Application.Services
         public Guid LpnId { get; set; }
         public Guid? PackageLineId { get; set; }
         public string? PackageLabel { get; set; }
+        public int DeliveryStopSequence { get; set; }
         public decimal X { get; set; }
         public decimal Y { get; set; }
         public decimal Z { get; set; }
@@ -175,6 +176,7 @@ namespace ColdChainX.Application.Services
                         LpnId = item.LpnId,
                         PackageLineId = item.PackageLineId,
                         PackageLabel = item.PackageLabel,
+                        DeliveryStopSequence = item.RouteStopSequence,
                         X = placement.x,
                         Y = placement.y,
                         Z = placement.z,

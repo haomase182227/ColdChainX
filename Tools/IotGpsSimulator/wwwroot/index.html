@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -245,8 +245,10 @@
 
     let allTrips = [];
     let currentPolylineLayer = null;
+    let stopMarkerLayer = null;
     let tripPolylineTimer = null;
     let lastLoadedTripId = "";
+    let currentStopPoints = [];
 
     function decodePolyline(str, precision) {
         var index = 0, lat = 0, lng = 0, coordinates = [], shift = 0, result = 0, byte = null, latitude_change, longitude_change, factor = Math.pow(10, precision || 5);
@@ -279,10 +281,39 @@
                 map.removeLayer(currentPolylineLayer);
             }
             currentPolylineLayer = L.polyline(latlngs, {color: 'blue', weight: 5, opacity: 0.7}).addTo(map);
+            drawStopMarkers(currentStopPoints);
             map.fitBounds(currentPolylineLayer.getBounds());
         } catch (e) {
             console.error("Lỗi giải mã Polyline", e);
         }
+    }
+
+    function drawStopMarkers(stopPoints) {
+        if (stopMarkerLayer) {
+            map.removeLayer(stopMarkerLayer);
+        }
+
+        stopMarkerLayer = L.layerGroup().addTo(map);
+        if (!Array.isArray(stopPoints) || stopPoints.length === 0) return;
+
+        stopPoints.forEach((point, index) => {
+            const lat = point.lat ?? point.Lat;
+            const lon = point.lon ?? point.Lon;
+            if (lat == null || lon == null) return;
+
+            const address = point.address ?? point.Address ?? '';
+            const markerIcon = L.divIcon({
+                className: 'destination-marker',
+                html: `<div class="destination-pin"><span>${index + 1}</span></div>`,
+                iconSize: [38, 50],
+                iconAnchor: [19, 48],
+                popupAnchor: [0, -45]
+            });
+
+            L.marker([lat, lon], { icon: markerIcon })
+                .bindPopup(`<b>Diem giao ${index + 1}</b>${address ? `<br>${address}` : ''}`)
+                .addTo(stopMarkerLayer);
+        });
     }
 
     function loadTripsFromDb() {
@@ -369,6 +400,7 @@
             const data = await res.json();
             if(data.polyline) {
                 document.getElementById('inputPolyline').value = data.polyline;
+                currentStopPoints = Array.isArray(data.stopPoints) ? data.stopPoints : [];
                 drawPolylineOnMap(data.polyline);
                 lastLoadedTripId = tripId;
                 if(data.deviceCode) {
@@ -410,6 +442,7 @@
         const payload = {
             deviceId: document.getElementById('inputDeviceId').value || document.getElementById('inputCustomIotCode').value,
             polyline: rawPolyline,
+            stopPoints: currentStopPoints,
             speedKmh: parseFloat(document.getElementById('inputSpeed').value),
             targetTemperature: parseFloat(document.getElementById('inputTemp').value),
             isHybridMode: document.getElementById('inputHybrid').checked,
@@ -602,6 +635,44 @@
 
 <style>
     .truck-icon { font-size: 24px; line-height: 24px; text-align: center; }
+    .destination-marker { background: transparent; border: 0; }
+    .destination-pin {
+        position: relative;
+        width: 34px;
+        height: 34px;
+        background: #ff5a3d;
+        border: 4px solid #111;
+        border-radius: 50% 50% 50% 0;
+        transform: rotate(-45deg);
+        box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+    }
+    .destination-pin::after {
+        content: "";
+        position: absolute;
+        width: 13px;
+        height: 13px;
+        left: 6px;
+        top: 6px;
+        background: white;
+        border: 3px solid #111;
+        border-radius: 50%;
+    }
+    .destination-pin span {
+        position: absolute;
+        left: 6px;
+        top: -22px;
+        min-width: 22px;
+        height: 22px;
+        line-height: 22px;
+        text-align: center;
+        background: #111;
+        color: white;
+        border-radius: 999px;
+        font-weight: 700;
+        font-size: 12px;
+        transform: rotate(45deg);
+        z-index: 2;
+    }
 </style>
 </body>
 </html>
