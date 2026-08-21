@@ -149,8 +149,14 @@ public class DeliveryController : ControllerBase
     }
 
     [HttpPost("/api/Delivery/depart")]
+    [Authorize(Roles = "Driver")]
     public async Task<IActionResult> CloseShift([FromBody] CloseShiftCommand command)
     {
+        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
+            return Unauthorized(ApiResponse<object>.Failure("Unauthorized."));
+
+        command.UserId = userId;
         var result = await _mediator.Send(command);
         if (!result.Success) return StatusCode(result.StatusCode != 0 ? result.StatusCode : 400, result);
         return Ok(result);

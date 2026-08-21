@@ -660,7 +660,10 @@ public class IncidentRescueService : IIncidentRescueService
 
         try
         {
-            if (!await _db.Users.AnyAsync(u => u.UserId == confirmedBy))
+            var confirmingUser = await _db.Users
+                .Include(user => user.Role)
+                .FirstOrDefaultAsync(user => user.UserId == confirmedBy);
+            if (confirmingUser == null)
                 return ApiResponse<ExternalReeferWorkflowResult>.Failure("Confirming user not found.", 404);
             var incident = await _db.IncidentReports.FirstOrDefaultAsync(i => i.IncidentId == incidentId);
             if (incident == null || !incident.TripId.HasValue)
@@ -683,6 +686,18 @@ public class IncidentRescueService : IIncidentRescueService
             var warehouse = await _db.Warehouses.FirstOrDefaultAsync(w => w.WarehouseId == plan.DestinationWarehouseId);
             if (trip == null || warehouse == null)
                 return ApiResponse<ExternalReeferWorkflowResult>.Failure("Trip or route destination warehouse not found.");
+
+            var isWarehouseWorker = confirmingUser.Role?.RoleName.Equals(
+                "WarehouseWorker",
+                StringComparison.OrdinalIgnoreCase) == true;
+            if (isWarehouseWorker && confirmingUser.WarehouseId != warehouse.WarehouseId)
+            {
+                return ApiResponse<ExternalReeferWorkflowResult>.Failure(
+                    $"Lô hàng được chỉ định trả về {warehouse.WarehouseName}; nhân viên kho khác không thể nhập lô này.",
+                    403);
+            }
+
+            var isNoShowReturn = IsNoShowReturnIncident(incident);
             var inboundSeal = request.SealNumber.Trim();
             if (!string.IsNullOrWhiteSpace(plan.SealNumber)
                 && !string.Equals(plan.SealNumber, inboundSeal, StringComparison.OrdinalIgnoreCase))
@@ -696,6 +711,11 @@ public class IncidentRescueService : IIncidentRescueService
                 .ToListAsync();
             if (lpns.Count != plan.LpnIds.Distinct().Count())
                 return ApiResponse<ExternalReeferWorkflowResult>.Failure("Not all LPNs handed to the external reefer could be found.");
+            if (isNoShowReturn && lpns.Any(lpn => lpn.State != LpnState.RETURN_PENDING))
+            {
+                return ApiResponse<ExternalReeferWorkflowResult>.Failure(
+                    "No-Show return inbound only accepts LPNs in RETURN_PENDING state.");
+            }
 
             var now = DbNow();
             var inboundReceiptIds = new List<Guid>();
@@ -705,17 +725,23 @@ public class IncidentRescueService : IIncidentRescueService
                 var receipt = new WarehouseReceipt
                 {
                     ReceiptId = Guid.NewGuid(),
-                    ReceiptCode = $"INC-IN-{incident.IncidentId.ToString("N")[..8]}-{orderGroup.Key.ToString("N")[..8]}",
+                    ReceiptCode = isNoShowReturn
+                        ? $"NS-IN-{incident.IncidentId.ToString("N")[..8]}-{orderGroup.Key.ToString("N")[..8]}"
+                        : $"INC-IN-{incident.IncidentId.ToString("N")[..8]}-{orderGroup.Key.ToString("N")[..8]}",
                     ReferenceDocNo = incident.IncidentId.ToString(),
                     OrderId = orderGroup.Key,
                     WarehouseId = warehouse.WarehouseId,
-                    ReceiptType = "INCIDENT_RELAY_INBOUND",
-                    Reason = incident.IncidentType,
+                    ReceiptType = isNoShowReturn ? "NO_SHOW_RETURN" : "INCIDENT_RELAY",
+                    Reason = isNoShowReturn ? "CUSTOMER_NO_SHOW" : incident.IncidentType,
                     TotalExpectedQty = orderGroup.Sum(l => l.Quantity),
                     TotalActualQty = orderGroup.Sum(l => l.Quantity),
-                    DelivererName = $"{plan.RentalProvider} - {plan.DriverName}",
+                    DelivererName = isNoShowReturn
+                        ? plan.DriverName
+                        : $"{plan.RentalProvider} - {plan.DriverName}",
                     ReceiverId = confirmedBy,
-                    Note = $"Inbound bằng seal {request.SealNumber.Trim()}, bỏ qua QC theo luồng cứu hộ sự cố.",
+                    Note = isNoShowReturn
+                        ? $"Nhập lại hàng khách vắng mặt bằng seal {inboundSeal}; bỏ qua QC theo luồng Inbound sự cố."
+                        : $"Inbound bằng seal {inboundSeal}, bỏ qua QC theo luồng cứu hộ sự cố.",
                     CreatedAt = now
                 };
                 _db.WarehouseReceipts.Add(receipt);
@@ -729,6 +755,8 @@ public class IncidentRescueService : IIncidentRescueService
                     lpn.State = LpnState.IN_STOCK;
                     lpn.InboundTime = now;
                     lpn.UpdatedAt = now;
+                    if (isNoShowReturn)
+                        lpn.RouteId = null;
                 }
 
                 order.MasterTripId = null;
@@ -737,19 +765,35 @@ public class IncidentRescueService : IIncidentRescueService
             plan.ArrivedAt = now;
             plan.ArrivalConfirmedBy = confirmedBy;
             plan.InboundReceiptIds = inboundReceiptIds;
-            plan.ArrivalNote = $"Warehouse Worker đã inbound bằng seal {request.SealNumber.Trim()}, không qua QC.";
+            plan.ArrivalNote = isNoShowReturn
+                ? $"Warehouse Worker đã nhập lại hàng No-Show bằng seal {inboundSeal}, không qua QC."
+                : $"Warehouse Worker đã inbound bằng seal {inboundSeal}, không qua QC.";
             incident.RescuePlanDetails = JsonSerializer.Serialize(plan);
             incident.Status = "READY_FOR_REDISPATCH";
             incident.HandledBy = confirmedBy;
             incident.HandledAt = now;
-            incident.RedispatchPlan = $"Chờ Dispatcher ghép chuyến mới từ {warehouse.WarehouseName} bằng manual-dispatch.";
-            trip.Status = "RELAY_COMPLETED";
-            foreach (var stop in trip.TripStops.Where(s => s.Status is not ("COMPLETED" or "ARRIVED" or "CANCELLED")))
-                stop.Status = "CANCELLED";
-            foreach (var tripDriver in trip.TripDrivers)
+            incident.RedispatchPlan = isNoShowReturn
+                ? $"Hàng No-Show đã nhập lại {warehouse.WarehouseName}; chờ Dispatcher ghép chuyến giao lại bằng manual-dispatch."
+                : $"Chờ Dispatcher ghép chuyến mới từ {warehouse.WarehouseName} bằng manual-dispatch.";
+
+            if (isNoShowReturn)
             {
-                if (tripDriver.Driver?.Status is "ONTRIP" or "ON_TRIP" or "PLANNING")
-                    tripDriver.Driver.Status = "ACTIVE";
+                incident.ResolvedBy = null;
+                incident.ResolvedAt = null;
+                incident.ResolutionNote = null;
+                trip.Status = "COMPLETED";
+                trip.CompletedAt ??= now;
+            }
+            else
+            {
+                trip.Status = "RELAY_COMPLETED";
+                foreach (var stop in trip.TripStops.Where(s => s.Status is not ("COMPLETED" or "ARRIVED" or "CANCELLED")))
+                    stop.Status = "CANCELLED";
+                foreach (var tripDriver in trip.TripDrivers)
+                {
+                    if (tripDriver.Driver?.Status is "ONTRIP" or "ON_TRIP" or "PLANNING")
+                        tripDriver.Driver.Status = "ACTIVE";
+                }
             }
 
             var coordinates = await ResolveWarehouseCoordinatesAsync(new[] { warehouse });
@@ -763,8 +807,10 @@ public class IncidentRescueService : IIncidentRescueService
                 incident,
                 trip,
                 plan,
-                $"Đã inbound {lpns.Count} LPN tại {warehouse.WarehouseName} bằng seal; chờ Dispatcher ghép chuyến mới.");
-            if (_workflowNotificationService != null)
+                isNoShowReturn
+                    ? $"Đã nhập lại {lpns.Count} LPN khách vắng mặt tại {warehouse.WarehouseName} bằng seal; không qua QC và sẵn sàng ghép chuyến giao lại."
+                    : $"Đã inbound {lpns.Count} LPN tại {warehouse.WarehouseName} bằng seal; chờ Dispatcher ghép chuyến mới.");
+            if (!isNoShowReturn && _workflowNotificationService != null)
             {
                 await NotifyRouteWarehouseInboundAudiencesAsync(
                     incident,
@@ -777,10 +823,17 @@ public class IncidentRescueService : IIncidentRescueService
             }
             else
             {
+                var eventName = isNoShowReturn
+                    ? "NoShowCargoReadyForRedispatch"
+                    : "IncidentCargoInboundedAtRouteWarehouse";
                 await _hubContext.Clients.Groups("Group_Dispatcher", "Group_Admin", "Group_WarehouseWorker")
-                    .SendAsync("IncidentCargoInboundedAtRouteWarehouse", result);
+                    .SendAsync(eventName, result);
             }
-            return ApiResponse<ExternalReeferWorkflowResult>.SuccessResponse(result, "Cargo inbounded at route warehouse without QC.");
+            return ApiResponse<ExternalReeferWorkflowResult>.SuccessResponse(
+                result,
+                isNoShowReturn
+                    ? "No-Show cargo returned without QC and is ready for redispatch."
+                    : "Cargo inbounded at route warehouse without QC.");
         }
         catch (Exception ex)
         {
@@ -932,6 +985,11 @@ public class IncidentRescueService : IIncidentRescueService
                 : "CREATE_REDISPATCH_TRIP",
             Message = message
         };
+
+    private static bool IsNoShowReturnIncident(IncidentReport incident)
+        => incident.IncidentType.Equals(
+            IncidentType.CUSTOMER_NO_SHOW_RETURN.ToString(),
+            StringComparison.OrdinalIgnoreCase);
 
     private static string NormalizeExternalVehicleText(string? value, string fallback)
         => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();

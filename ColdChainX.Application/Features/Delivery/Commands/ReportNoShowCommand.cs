@@ -36,13 +36,7 @@ public class ReportNoShowCommandHandler : IRequestHandler<ReportNoShowCommand, A
 
     public async Task<ApiResponse<string>> Handle(ReportNoShowCommand request, CancellationToken cancellationToken)
     {
-        string proofUrl = request.EvidenceImageUrl;
-        if (request.EvidenceImageFile != null && _fileService != null)
-        {
-            proofUrl = await _fileService.UploadFileAsync(request.EvidenceImageFile);
-        }
-
-        if (string.IsNullOrWhiteSpace(proofUrl))
+        if (request.EvidenceImageFile == null && string.IsNullOrWhiteSpace(request.EvidenceImageUrl))
         {
             throw new ValidationException("Vui lòng đính kèm hình ảnh bằng chứng (EvidenceImageFile hoặc EvidenceImageUrl) xác nhận tình trạng khách hàng không xuất hiện / từ chối nhận hàng.");
         }
@@ -62,8 +56,58 @@ public class ReportNoShowCommandHandler : IRequestHandler<ReportNoShowCommand, A
         if (stop.ActualArrivalTime == null)
             throw new ApiException("Tài xế chưa check-in tại điểm dừng này.", 400);
 
+        var reporter = await _context.Users
+            .Include(user => user.Role)
+            .FirstOrDefaultAsync(user => user.UserId == request.DriverId, cancellationToken);
+        if (reporter == null)
+            throw new ForbiddenException("Không tìm thấy tài khoản đang báo khách vắng mặt.");
+
+        if (reporter.Role?.RoleName.Equals("Driver", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            var assignedToTrip = await _context.TripDrivers
+                .AnyAsync(
+                    tripDriver => tripDriver.TripId == stop.TripId
+                                  && tripDriver.Driver.UserId == request.DriverId,
+                    cancellationToken);
+            if (!assignedToTrip)
+                throw new ForbiddenException("Bạn không phải tài xế được phân công cho chuyến này.");
+        }
+
+        var noShowOrders = stop.Trip?.TransportOrders
+            .Where(order =>
+                order.DropoffStopId == stop.StopId
+                || (!order.DropoffStopId.HasValue
+                    && stop.LocationId.HasValue
+                    && order.DestLocation == stop.LocationId.Value))
+            .ToList() ?? new List<TransportOrder>();
+        if (noShowOrders.Count == 0)
+            throw new ValidationException("Điểm dừng này không có đơn hàng nào để ghi nhận khách vắng mặt.");
+
+        var noShowOrderIds = noShowOrders.Select(order => order.OrderId).ToList();
+        var existingEpod = await _context.DeliveryEpods
+            .FirstOrDefaultAsync(
+                epod => epod.OrderId.HasValue
+                        && noShowOrderIds.Contains(epod.OrderId.Value)
+                        && epod.HandoverConfirmedAt != null,
+                cancellationToken);
+        if (existingEpod != null)
+        {
+            var completedOrder = noShowOrders.First(order => order.OrderId == existingEpod.OrderId);
+            throw new ConflictException(
+                $"Order '{completedOrder.TrackingCode}' already has a completed ePOD ({existingEpod.EpodId}). Cannot report no-show again.");
+        }
+
+        string proofUrl = request.EvidenceImageUrl;
+        if (request.EvidenceImageFile != null && _fileService != null)
+            proofUrl = await _fileService.UploadFileAsync(request.EvidenceImageFile);
+        if (string.IsNullOrWhiteSpace(proofUrl))
+        {
+            throw new ValidationException("Không thể lưu ảnh bằng chứng khách vắng mặt. Vui lòng thử lại.");
+        }
+
+        var now = DateTime.UtcNow;
         stop.Status = "SKIPPED_NOSHOW";
-        stop.ActualDepartureTime = DateTime.UtcNow;
+        stop.ActualDepartureTime = now;
 
         stop.Note = $"{stop.Note} [No-Show Evidence: {proofUrl}]".Trim();
         _context.TripStopEvents.Add(new TripStopEvent
@@ -71,47 +115,37 @@ public class ReportNoShowCommandHandler : IRequestHandler<ReportNoShowCommand, A
             EventId = Guid.NewGuid(),
             StopId = stop.StopId,
             EventType = "NO_SHOW_REPORT",
-            EventTime = DateTime.UtcNow,
+            EventTime = now,
             MetaData = $"ProofImageUrl: {proofUrl}"
         });
 
-        if (stop.Trip?.TransportOrders != null && stop.LocationId != null)
+        var lpns = await _context.Lpns
+            .Where(lpn => noShowOrderIds.Contains(lpn.OrderId))
+            .ToListAsync(cancellationToken);
+        foreach (var order in noShowOrders)
         {
-            var order = stop.Trip.TransportOrders.FirstOrDefault(o => o.DestLocation == stop.LocationId);
-            if (order != null)
+            order.Status = "DELIVERY_FAILED_NOSHOW";
+
+            _context.DeliveryEpods.Add(new DeliveryEpod
             {
-                var existingEpod = await _context.DeliveryEpods
-                    .FirstOrDefaultAsync(e => e.OrderId == order.OrderId && e.HandoverConfirmedAt != null, cancellationToken);
-                if (existingEpod != null)
-                    throw new ConflictException($"Order '{order.TrackingCode}' already has a completed ePOD ({existingEpod.EpodId}). Cannot report no-show again.");
-
-                order.Status = "DELIVERY_FAILED_NOSHOW";
-
-                var lpns = await _context.Lpns.Where(l => l.OrderId == order.OrderId).ToListAsync(cancellationToken);
-                foreach (var lpn in lpns)
-                {
-                    lpn.State = ColdChainX.Core.Enums.LpnState.RETURN_PENDING;
-                }
-
-                var now = DateTime.UtcNow;
-                _context.DeliveryEpods.Add(new DeliveryEpod
-                {
-                    EpodId = Guid.NewGuid(),
-                    OrderId = order.OrderId,
-                    CheckinTime = stop.ActualArrivalTime ?? now,
-                    SignedAt = now,
-                    HandoverConfirmedAt = now,
-                    SignLatitude = stop.Location?.Latitude,
-                    SignLongitude = stop.Location?.Longitude,
-                    Status = "NO_SHOW",
-                    CodAmount = 0m,
-                    CodAmountPaid = 0m,
-                    PaymentStatus = "SKIPPED_NO_SHOW",
-                    Note = $"Customer no-show / refused to receive. Evidence: {proofUrl}",
-                    CreatedAt = now
-                });
-            }
+                EpodId = Guid.NewGuid(),
+                OrderId = order.OrderId,
+                CheckinTime = stop.ActualArrivalTime ?? now,
+                SignedAt = now,
+                HandoverConfirmedAt = now,
+                SignLatitude = stop.Location?.Latitude,
+                SignLongitude = stop.Location?.Longitude,
+                Status = "NO_SHOW",
+                CodAmount = 0m,
+                CodAmountPaid = 0m,
+                PaymentStatus = "SKIPPED_NO_SHOW",
+                Note = $"Customer no-show / refused to receive. Evidence: {proofUrl}",
+                CreatedAt = now
+            });
         }
+
+        foreach (var lpn in lpns)
+            lpn.State = ColdChainX.Core.Enums.LpnState.RETURN_PENDING;
 
         if (stop.Trip?.TripStops != null && stop.Location != null)
         {

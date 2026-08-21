@@ -163,7 +163,6 @@ public class GetNearestReturnWarehousesQueryHandler : IRequestHandler<GetNearest
 
         var sortedWarehouses = warehouseDistances
             .OrderBy(item => item.DistanceMeters)
-            .Take(5)
             .Select(item => new
             {
                 WarehouseId = item.Warehouse.WarehouseId,
