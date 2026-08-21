@@ -1015,6 +1015,70 @@ namespace ColdChainX.UnitTests
         }
 
         [Fact]
+        public async Task ReportNoShow_OrderAssignedThroughLpnAndDestination_ShouldSucceed()
+        {
+            var stopId = Guid.NewGuid();
+            var locationId = Guid.NewGuid();
+            var orderId = Guid.NewGuid();
+            var lpnId = Guid.NewGuid();
+
+            _db.Locations.Add(new Location
+            {
+                LocationId = locationId,
+                Address = "LPN-linked delivery destination",
+                Latitude = 10.8m,
+                Longitude = 106.8m
+            });
+            _db.TripStops.Add(new TripStop
+            {
+                StopId = stopId,
+                TripId = _tripId,
+                LocationId = locationId,
+                StopSequence = 2,
+                StopType = "DELIVERY",
+                ActualArrivalTime = DateTime.UtcNow,
+                Status = "ARRIVED"
+            });
+            _db.TransportOrders.Add(new TransportOrder
+            {
+                OrderId = orderId,
+                MasterTripId = null,
+                TrackingCode = "TRK-NOSHOW-LPN",
+                ItemName = "Frozen cargo",
+                Category = "FROZEN",
+                Quantity = 1,
+                PackingType = "BOX",
+                TempCondition = "FROZEN",
+                DropoffStopId = Guid.NewGuid(),
+                DestLocation = locationId,
+                Status = "IN_TRANSIT"
+            });
+            _db.Lpns.Add(new Lpn
+            {
+                LpnId = lpnId,
+                LpnCode = "LPN-NOSHOW-LINKED",
+                OrderId = orderId,
+                TripId = _tripId,
+                State = LpnState.SHIPPING
+            });
+            await _db.SaveChangesAsync();
+
+            var handler = new ReportNoShowCommandHandler(_db, new FakeGoongService());
+            var result = await handler.Handle(new ReportNoShowCommand
+            {
+                TripStopId = stopId,
+                DriverId = _userId,
+                EvidenceImageUrl = "https://example.com/proofs/lpn-no-show.jpg"
+            }, CancellationToken.None);
+
+            Assert.True(result.Success);
+            Assert.Equal("SKIPPED_NOSHOW", (await _db.TripStops.FindAsync(stopId))!.Status);
+            Assert.Equal("DELIVERY_FAILED_NOSHOW", (await _db.TransportOrders.FindAsync(orderId))!.Status);
+            Assert.Equal(LpnState.RETURN_PENDING, (await _db.Lpns.FindAsync(lpnId))!.State);
+            Assert.Contains(_db.DeliveryEpods, epod => epod.OrderId == orderId && epod.Status == "NO_SHOW");
+        }
+
+        [Fact]
         public async Task ReportNoShow_DriverNotAssignedToTrip_ShouldBeForbidden()
         {
             var otherUserId = Guid.NewGuid();

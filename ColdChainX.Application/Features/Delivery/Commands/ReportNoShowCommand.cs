@@ -44,8 +44,6 @@ public class ReportNoShowCommandHandler : IRequestHandler<ReportNoShowCommand, A
         var stop = await _context.TripStops
             .Include(s => s.Location)
             .Include(s => s.Trip)
-                .ThenInclude(t => t!.TransportOrders)
-            .Include(s => s.Trip)
                 .ThenInclude(t => t!.TripStops)
                     .ThenInclude(ts => ts.Location)
             .FirstOrDefaultAsync(s => s.StopId == request.TripStopId, cancellationToken);
@@ -73,13 +71,15 @@ public class ReportNoShowCommandHandler : IRequestHandler<ReportNoShowCommand, A
                 throw new ForbiddenException("Bạn không phải tài xế được phân công cho chuyến này.");
         }
 
-        var noShowOrders = stop.Trip?.TransportOrders
+        var noShowOrders = await _context.TransportOrders
             .Where(order =>
-                order.DropoffStopId == stop.StopId
-                || (!order.DropoffStopId.HasValue
-                    && stop.LocationId.HasValue
-                    && order.DestLocation == stop.LocationId.Value))
-            .ToList() ?? new List<TransportOrder>();
+                (order.MasterTripId == stop.TripId
+                 || _context.Lpns.Any(lpn =>
+                     lpn.TripId == stop.TripId && lpn.OrderId == order.OrderId))
+                && (order.DropoffStopId == stop.StopId
+                    || (stop.LocationId.HasValue
+                        && order.DestLocation == stop.LocationId.Value)))
+            .ToListAsync(cancellationToken);
         if (noShowOrders.Count == 0)
             throw new ValidationException("Điểm dừng này không có đơn hàng nào để ghi nhận khách vắng mặt.");
 
