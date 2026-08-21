@@ -104,7 +104,7 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPut("{orderId:guid}/admin")]
-        [Authorize(Roles = "Admin,Sales,Customer")]
+        [Authorize(Roles = "Admin,Sales")]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> AdminUpdateOrder(Guid orderId, [FromForm] UpdateOrderRequest request)
         {
