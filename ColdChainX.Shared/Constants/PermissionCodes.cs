@@ -10,6 +10,7 @@ public static class PermissionCodes
     public const string WorkAssignmentExecute = "WORK_ASSIGNMENT.EXECUTE";
 
     public const string OrderUpdateAny = "ORDER.UPDATE_ANY";
+    public const string OrderUpdateOwn = "ORDER.UPDATE_OWN";
 
     public const string WarehouseTaskView = "WAREHOUSE.TASK.VIEW";
     public const string WarehouseAsnView = "WAREHOUSE.ASN.VIEW";

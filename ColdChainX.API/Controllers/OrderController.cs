@@ -92,7 +92,8 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPut("{orderId:guid}")]
-        [Authorize(Roles = "Sales,Customer")]
+        [Authorize(Roles = "Customer")]
+        [HasPermission(PermissionCodes.OrderUpdateOwn)]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> UpdateOrder(Guid orderId, [FromForm] UpdateOrderRequest request)
         {

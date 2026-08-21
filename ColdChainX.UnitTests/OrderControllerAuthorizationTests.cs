@@ -27,4 +27,23 @@ public class OrderControllerAuthorizationTests
         Assert.DoesNotContain("Customer", roles);
         Assert.Equal($"{HasPermissionAttribute.PolicyPrefix}{PermissionCodes.OrderUpdateAny}", permission.Policy);
     }
+
+    [Fact]
+    public void UpdateOrder_AllowsOnlyCustomersWithUpdateOwnPermission()
+    {
+        var action = typeof(OrderController).GetMethod(nameof(OrderController.UpdateOrder));
+        Assert.NotNull(action);
+        var method = action!;
+
+        var authorize = Assert.Single(
+            method.GetCustomAttributes<AuthorizeAttribute>(),
+            attribute => attribute.Roles != null);
+        var roles = authorize.Roles!
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var permission = Assert.Single(method.GetCustomAttributes<HasPermissionAttribute>());
+
+        Assert.Equal(["Customer"], roles);
+        Assert.DoesNotContain("Sales", roles);
+        Assert.Equal($"{HasPermissionAttribute.PolicyPrefix}{PermissionCodes.OrderUpdateOwn}", permission.Policy);
+    }
 }
