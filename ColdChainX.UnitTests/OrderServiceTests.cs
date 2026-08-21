@@ -400,6 +400,8 @@ namespace ColdChainX.UnitTests
             var newRouteId = Guid.NewGuid();
             var oldScheduleId = Guid.NewGuid();
             var newScheduleId = Guid.NewGuid();
+            var oldStopId = Guid.NewGuid();
+            var newStopId = Guid.NewGuid();
             var locationId = Guid.NewGuid();
 
             _db.RouteMasters.AddRange(
@@ -445,6 +447,9 @@ namespace ColdChainX.UnitTests
             _db.WeightTiers.AddRange(
                 new WeightTier { Id = Guid.NewGuid(), RouteId = oldRouteId, MinWeightKg = 0m, PricePerKg = 100m },
                 new WeightTier { Id = Guid.NewGuid(), RouteId = newRouteId, MinWeightKg = 0m, PricePerKg = 200m });
+            _db.RouteStops.AddRange(
+                new RouteStop { StopId = oldStopId, RouteId = oldRouteId, StopName = "Old stop" },
+                new RouteStop { StopId = newStopId, RouteId = newRouteId, StopName = "New stop" });
             _db.Locations.Add(new Location
             {
                 LocationId = locationId,
@@ -464,6 +469,7 @@ namespace ColdChainX.UnitTests
                 TempCondition = "-18",
                 Status = "PENDING_REVIEW",
                 ScheduleId = oldScheduleId,
+                DropoffStopId = oldStopId,
                 DestLocation = locationId,
                 OrderDimension = new OrderDimension
                 {
@@ -488,13 +494,82 @@ namespace ColdChainX.UnitTests
 
             var result = await _service.AdminUpdateOrderAsync(
                 orderId,
-                new UpdateOrderRequest { ScheduleId = newScheduleId },
+                new UpdateOrderRequest { ScheduleId = newScheduleId, DropoffStopId = newStopId },
                 Guid.NewGuid());
 
             Assert.True(result.Success, result.Message);
             var quotation = await _db.Quotations.SingleAsync(item => item.OrderId == orderId && item.Status == "DRAFT");
             Assert.Equal(10_000m, quotation.BaseFreight);
             Assert.Equal(10_800m, quotation.FinalAmount);
+        }
+
+        [Fact]
+        public async Task UpdateOrder_WhenDropoffDoesNotBelongToScheduleRoute_ReturnsFailure()
+        {
+            var customerId = Guid.NewGuid();
+            var orderId = Guid.NewGuid();
+            var routeId = Guid.NewGuid();
+            var otherRouteId = Guid.NewGuid();
+            var scheduleId = Guid.NewGuid();
+            var validStopId = Guid.NewGuid();
+            var invalidStopId = Guid.NewGuid();
+
+            _db.RouteMasters.AddRange(
+                new RouteMaster
+                {
+                    RouteId = routeId,
+                    RouteCode = "VALID",
+                    OriginCity = "HCM",
+                    DestCity = "Hanoi",
+                    TransitTime = "2 days",
+                    Status = "ACTIVE"
+                },
+                new RouteMaster
+                {
+                    RouteId = otherRouteId,
+                    RouteCode = "OTHER",
+                    OriginCity = "HCM",
+                    DestCity = "Hue",
+                    TransitTime = "1 day",
+                    Status = "ACTIVE"
+                });
+            _db.RouteSchedules.Add(new RouteSchedule
+            {
+                ScheduleId = scheduleId,
+                RouteId = routeId,
+                ScheduleName = "Valid schedule",
+                DepartureDate = DateTime.UtcNow.AddDays(3),
+                DepartureTime = new TimeSpan(8, 0, 0),
+                CutOffTime = new TimeSpan(6, 0, 0),
+                Status = "ACTIVE"
+            });
+            _db.RouteStops.AddRange(
+                new RouteStop { StopId = validStopId, RouteId = routeId, StopName = "Valid stop" },
+                new RouteStop { StopId = invalidStopId, RouteId = otherRouteId, StopName = "Invalid stop" });
+            _db.TransportOrders.Add(new TransportOrder
+            {
+                OrderId = orderId,
+                TrackingCode = "TRK-INVALID-STOP-01",
+                CustomerId = customerId,
+                ItemName = "Frozen cargo",
+                Category = "MEAT_SEAFOOD",
+                Quantity = 1,
+                PackingType = "Carton Box",
+                TempCondition = "-18",
+                Status = "PENDING_REVIEW",
+                ScheduleId = scheduleId,
+                DropoffStopId = validStopId
+            });
+            await _db.SaveChangesAsync();
+
+            var result = await _service.UpdateOrderAsync(
+                orderId,
+                new UpdateOrderRequest { DropoffStopId = invalidStopId },
+                customerId);
+
+            Assert.False(result.Success);
+            Assert.Contains("does not belong", result.Message);
+            Assert.Equal(validStopId, (await _db.TransportOrders.FindAsync(orderId))!.DropoffStopId);
         }
 
         [Fact]

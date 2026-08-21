@@ -489,6 +489,17 @@ namespace ColdChainX.Infrastructure.Services
                         return ApiResponse<CreateOrderResponse>.Failure(recipientValidationError, 400);
                 }
 
+                RouteSchedule? validatedSchedule = null;
+                if (request.ScheduleId.HasValue || request.DropoffStopId.HasValue)
+                {
+                    var scheduleValidation = await ValidateScheduleAndDropoffAsync(
+                        request.ScheduleId ?? order.ScheduleId,
+                        request.DropoffStopId ?? order.DropoffStopId);
+                    if (scheduleValidation.Error != null)
+                        return ApiResponse<CreateOrderResponse>.Failure(scheduleValidation.Error, 400);
+                    validatedSchedule = scheduleValidation.Schedule;
+                }
+
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
                 var pricingChanged =
@@ -554,9 +565,7 @@ namespace ColdChainX.Infrastructure.Services
                     if (order.ScheduleId != request.ScheduleId.Value)
                     {
                         pricingChanged = true;
-                        order.Schedule = await _db.RouteSchedules
-                            .Include(schedule => schedule.Route)
-                            .FirstOrDefaultAsync(schedule => schedule.ScheduleId == request.ScheduleId.Value);
+                        order.Schedule = validatedSchedule;
                     }
                     order.ScheduleId = request.ScheduleId.Value;
                 }
@@ -680,6 +689,17 @@ namespace ColdChainX.Infrastructure.Services
                         "Order can only be updated while pending review or when it requires an update (PENDING_REVIEW, NEEDS_UPDATE)");
                 }
 
+                RouteSchedule? validatedSchedule = null;
+                if (request.ScheduleId.HasValue || request.DropoffStopId.HasValue)
+                {
+                    var scheduleValidation = await ValidateScheduleAndDropoffAsync(
+                        request.ScheduleId ?? order.ScheduleId,
+                        request.DropoffStopId ?? order.DropoffStopId);
+                    if (scheduleValidation.Error != null)
+                        return ApiResponse<CreateOrderResponse>.Failure(scheduleValidation.Error, 400);
+                    validatedSchedule = scheduleValidation.Schedule;
+                }
+
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
                 var pricingChanged =
@@ -747,9 +767,7 @@ namespace ColdChainX.Infrastructure.Services
                     if (order.ScheduleId != request.ScheduleId.Value)
                     {
                         pricingChanged = true;
-                        order.Schedule = await _db.RouteSchedules
-                            .Include(schedule => schedule.Route)
-                            .FirstOrDefaultAsync(schedule => schedule.ScheduleId == request.ScheduleId.Value);
+                        order.Schedule = validatedSchedule;
                     }
                     order.ScheduleId = request.ScheduleId.Value;
                 }
@@ -1108,6 +1126,39 @@ namespace ColdChainX.Infrastructure.Services
                 order,
                 order.Schedule.Route,
                 order.DestLocationNavigation));
+        }
+
+        private async Task<(RouteSchedule? Schedule, string? Error)> ValidateScheduleAndDropoffAsync(
+            Guid? scheduleId,
+            Guid? dropoffStopId)
+        {
+            if (!scheduleId.HasValue || scheduleId.Value == Guid.Empty)
+                return (null, "Schedule_ID is required and must be valid.");
+            if (!dropoffStopId.HasValue || dropoffStopId.Value == Guid.Empty)
+                return (null, "Dropoff_Stop_ID is required and must be valid.");
+
+            var schedule = await _db.RouteSchedules
+                .Include(item => item.Route)
+                .FirstOrDefaultAsync(item => item.ScheduleId == scheduleId.Value);
+            if (schedule == null
+                || !string.Equals(schedule.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(schedule.Route?.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
+            {
+                return (null, "Schedule_ID or Route is invalid or inactive.");
+            }
+
+            var vietnamNow = DateTime.SpecifyKind(DateTime.UtcNow.AddHours(7), DateTimeKind.Unspecified);
+            var bookingCutOff = schedule.DepartureDate.Date.Add(schedule.CutOffTime);
+            if (vietnamNow >= bookingCutOff)
+                return (null, "Schedule is no longer accepting order updates.");
+
+            var stopBelongsToRoute = await _db.RouteStops
+                .AsNoTracking()
+                .AnyAsync(stop => stop.StopId == dropoffStopId.Value && stop.RouteId == schedule.RouteId);
+            if (!stopBelongsToRoute)
+                return (null, "Dropoff_Stop_ID does not belong to the selected schedule route.");
+
+            return (schedule, null);
         }
 
         private async Task<decimal> GetSystemConfigDecimalAsync(string key, decimal fallback)
