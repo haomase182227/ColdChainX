@@ -1,8 +1,8 @@
 (function () {
     const orderExample = [
-        { label: "Thung 5kg", capacityKg: 5, quantity: 4 },
-        { label: "Thung 10kg", capacityKg: 10, quantity: 6 },
-        { label: "Thung 22kg", capacityKg: 22, quantity: 3 }
+        { capacityKg: 5, quantity: 4, sizeClass: "M" },
+        { capacityKg: 10, quantity: 6, sizeClass: "M" },
+        { capacityKg: 22, quantity: 3, sizeClass: "L" }
     ];
 
     const qcExample = [
@@ -76,7 +76,7 @@
             }
             .ccx-field-grid {
                 display: grid;
-                grid-template-columns: repeat(4, minmax(120px, 1fr));
+                grid-template-columns: repeat(3, minmax(120px, 1fr));
                 gap: 10px;
             }
             .ccx-field-grid.qc {
@@ -89,7 +89,8 @@
                 color: #374151;
                 font-weight: 700;
             }
-            .ccx-field input {
+            .ccx-field input,
+            .ccx-field select {
                 width: 100%;
                 min-height: 32px;
                 padding: 6px 8px;
@@ -178,6 +179,17 @@
         return value.length > 0 ? value : fallback;
     }
 
+    function packageLabelFromCapacity(capacityKg) {
+        const value = Number(capacityKg);
+        if (!Number.isFinite(value) || value <= 0) return "Thung khac";
+
+        const formatted = Number.isInteger(value)
+            ? String(value)
+            : value.toFixed(2).replace(/\.?0+$/, "");
+
+        return `Thung ${formatted}kg`;
+    }
+
     function createInput(label, type, value) {
         const wrapper = document.createElement("div");
         wrapper.className = "ccx-field";
@@ -191,6 +203,22 @@
         }
         wrapper.appendChild(input);
         return { wrapper, input };
+    }
+
+    function createSelect(label, value, options) {
+        const wrapper = document.createElement("div");
+        wrapper.className = "ccx-field";
+        wrapper.innerHTML = `<label>${label}</label>`;
+        const select = document.createElement("select");
+        options.forEach(option => {
+            const element = document.createElement("option");
+            element.value = option.value;
+            element.textContent = option.label;
+            if (option.value === value) element.selected = true;
+            select.appendChild(element);
+        });
+        wrapper.appendChild(select);
+        return { wrapper, input: select };
     }
 
     function createOrderLine(container, initial, sync) {
@@ -209,15 +237,20 @@
         const grid = document.createElement("div");
         grid.className = "ccx-field-grid";
 
-        const label = createInput("Label", "text", initial.label);
         const capacity = createInput("Capacity kg", "number", initial.capacityKg);
         const quantity = createInput("Quantity", "number", initial.quantity);
+        const sizeClass = createSelect("Size class", initial.sizeClass || "M", [
+            { value: "S", label: "S - thung gon/thap" },
+            { value: "M", label: "M - thung thuong" },
+            { value: "L", label: "L - thung lon/cao" },
+            { value: "XL", label: "XL - rat cong kenh" }
+        ]);
 
-        grid.append(label.wrapper, capacity.wrapper, quantity.wrapper);
+        grid.append(capacity.wrapper, quantity.wrapper, sizeClass.wrapper);
         card.append(top, grid);
         container.appendChild(card);
 
-        const controls = [label.input, capacity.input, quantity.input];
+        const controls = [capacity.input, quantity.input, sizeClass.input];
         controls.forEach(input => input.addEventListener("input", sync));
         remove.addEventListener("click", () => {
             card.remove();
@@ -227,9 +260,10 @@
         return {
             card,
             read: () => ({
-                label: textValue(label.input, "Package"),
                 capacityKg: numberValue(capacity.input, 0),
-                quantity: Math.round(numberValue(quantity.input, 0))
+                quantity: Math.round(numberValue(quantity.input, 0)),
+                sizeClass: sizeClass.input.value,
+                label: packageLabelFromCapacity(numberValue(capacity.input, 0))
             })
         };
     }
@@ -327,7 +361,7 @@
         }
 
         addButton.addEventListener("click", () => {
-            lines.push(createOrderLine(linesContainer, { label: "Thung khac", capacityKg: 1, quantity: 1 }, sync));
+            lines.push(createOrderLine(linesContainer, { capacityKg: 1, quantity: 1, sizeClass: "M" }, sync));
             sync();
         });
 

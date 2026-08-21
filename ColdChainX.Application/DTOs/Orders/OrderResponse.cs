@@ -110,5 +110,6 @@ namespace ColdChainX.Application.DTOs.Orders
         public string Label { get; set; } = null!;
         public decimal CapacityKg { get; set; }
         public int Quantity { get; set; }
+        public string SizeClass { get; set; } = null!;
     }
 }

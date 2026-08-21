@@ -23,9 +23,6 @@ namespace ColdChainX.Application.DTOs.Orders
         [FromForm(Name = "Package_Lines")]
         public string? PackageLinesJson { get; set; }
 
-        [FromForm(Name = "Customer_Provided_Total_CBM")]
-        public decimal? CustomerProvidedTotalCbm { get; set; }
-
         [FromForm(Name = "Packaging_Type")]
         public string PackagingType { get; set; } = null!;
 
@@ -71,6 +68,7 @@ namespace ColdChainX.Application.DTOs.Orders
         public string? Label { get; set; }
         public decimal CapacityKg { get; set; }
         public int Quantity { get; set; }
+        public string? SizeClass { get; set; }
     }
 }
 

@@ -19,6 +19,7 @@ public sealed class GoongMapService : IGoongMapService
         string origin,
         string destination,
         string? waypoints,
+        bool optimize = true,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(origin))
@@ -36,7 +37,7 @@ public sealed class GoongMapService : IGoongMapService
             .Append("?origin=").Append(Uri.EscapeDataString(origin))
             .Append("&destination=").Append(Uri.EscapeDataString(destination))
             .Append("&vehicle=car")
-            .Append("&optimize=true");
+            .Append("&optimize=").Append(optimize ? "true" : "false");
 
         if (!string.IsNullOrWhiteSpace(waypoints))
         {

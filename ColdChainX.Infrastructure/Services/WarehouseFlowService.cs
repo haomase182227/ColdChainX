@@ -12,7 +12,6 @@ namespace ColdChainX.Infrastructure.Services;
 
 public class WarehouseFlowService : IWarehouseFlowService
 {
-    private const decimal DiscrepancyThresholdPercent = 5m;
     private readonly ApplicationDbContext _db;
     private readonly IHubContext<NotificationHub> _hubContext;
 
@@ -36,10 +35,6 @@ public class WarehouseFlowService : IWarehouseFlowService
             return ApiResponse<LpnResponse>.Failure("Actual weight and dimensions must be greater than 0.");
 
         var actualCbm = CalculateCbm(request.LengthCm, request.WidthCm, request.HeightCm, order.Quantity);
-        var weightDiff = CalculateDiffPercent((order.OrderDimension?.ExpectedWeightKg ?? 0m), request.ActualWeightKg);
-        var cbmDiff = CalculateDiffPercent((order.OrderDimension?.ExpectedCbm ?? 0m), actualCbm);
-        var maxDiff = Math.Max(weightDiff, cbmDiff);
-        var hasDiscrepancy = maxDiff > DiscrepancyThresholdPercent;
         var now = DateTime.UtcNow;
 
         bool isFastTrack = false;
@@ -58,7 +53,7 @@ public class WarehouseFlowService : IWarehouseFlowService
             }
         }
 
-        var initialState = hasDiscrepancy ? LpnState.DISCREPANCY_HOLD : (isFastTrack ? LpnState.IN_STOCK : LpnState.RECEIVING);
+        var initialState = isFastTrack ? LpnState.IN_STOCK : LpnState.RECEIVING;
 
         await using var tx = await _db.Database.BeginTransactionAsync();
 
@@ -80,9 +75,7 @@ public class WarehouseFlowService : IWarehouseFlowService
             RequiredTemperature = ParseTemperature(order.TempCondition),
             RecordedTemperature = request.RecordedTemperature,
             State = initialState,
-            DiscrepancyReason = hasDiscrepancy
-                ? $"Actual cargo differs from expected by {maxDiff:0.##}% (weight {weightDiff:0.##}%, cbm {cbmDiff:0.##}%). Actual dimensions: {request.LengthCm:0.##} x {request.WidthCm:0.##} x {request.HeightCm:0.##} cm."
-                : null,
+            DiscrepancyReason = null,
             SlaDeadline = CalculateSlaDeadline(order.Schedule),
             InboundTime = now,
             IsFastTrack = isFastTrack,
@@ -92,27 +85,12 @@ public class WarehouseFlowService : IWarehouseFlowService
         _db.Lpns.Add(lpn);
         order.OrderDimension.ActualWeightKg = request.ActualWeightKg;
         order.OrderDimension.ActualCbm = actualCbm;
-        order.Status = hasDiscrepancy ? "DISCREPANCY_HOLD" : (isFastTrack ? "IN_STOCK" : "RECEIVING");
+        order.Status = isFastTrack ? "IN_STOCK" : "RECEIVING";
 
         await _db.SaveChangesAsync();
         await tx.CommitAsync();
 
-        if (hasDiscrepancy)
-        {
-            await _hubContext.Clients.Group("Group_Sales").SendAsync("InboundDiscrepancyDetected", new
-            {
-                lpn.LpnId,
-                lpn.LpnCode,
-                order.OrderId,
-                order.TrackingCode,
-                MaxDiffPercent = maxDiff,
-                lpn.DiscrepancyReason
-            });
-        }
-
-        var message = hasDiscrepancy
-            ? "Inbound QC completed with discrepancy hold."
-            : "Inbound QC completed and GRN generated.";
+        var message = "Inbound QC completed and GRN generated.";
 
         return ApiResponse<LpnResponse>.SuccessResponse(ToResponse(lpn, order.TrackingCode), message);
     }

@@ -2855,6 +2855,13 @@ namespace ColdChainX.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("quantity");
 
+                    b.Property<string>("SizeClass")
+                        .IsRequired()
+                        .HasMaxLength(5)
+                        .HasColumnType("character varying(5)")
+                        .HasColumnName("size_class")
+                        .HasDefaultValue("M");
+
                     b.HasKey("OrderPackageLineId")
                         .HasName("order_package_lines_pkey");
 

@@ -248,15 +248,15 @@ namespace ColdChainX.Infrastructure.Services
                 return ApiResponse<CreateOrderResponse>.Failure("Expected weight must be greater than 0", 400);
             if (totalPackageQuantity <= 0)
                 return ApiResponse<CreateOrderResponse>.Failure("Quantity must be greater than 0", 400);
+
             if (!hasPackageLines
-                && !request.CustomerProvidedTotalCbm.HasValue
                 && (!request.LengthCm.HasValue
                     || !request.WidthCm.HasValue
                     || !request.HeightCm.HasValue
                     || request.LengthCm.Value <= 0
                     || request.WidthCm.Value <= 0
                     || request.HeightCm.Value <= 0))
-                return ApiResponse<CreateOrderResponse>.Failure("Dimensions must be greater than 0 when package lines or total CBM are not provided", 400);
+                return ApiResponse<CreateOrderResponse>.Failure("Dimensions must be greater than 0 when package lines are not provided", 400);
 
             var strategy = _db.Database.CreateExecutionStrategy();
 
@@ -286,7 +286,7 @@ namespace ColdChainX.Infrastructure.Services
 
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
-                var cbmEstimate = CalculateExpectedCbm(request, expectedWeightKg, totalPackageQuantity, hasPackageLines);
+                var cbmEstimate = CalculateExpectedCbm(request, packageLines, expectedWeightKg, totalPackageQuantity, hasPackageLines);
                 var coordinates = await _locationService.GetCoordinatesAsync(request.DestAddressText);
 
                 var location = new Location
@@ -326,7 +326,7 @@ namespace ColdChainX.Infrastructure.Services
                         HeightCm = hasPackageLines ? 0m : request.HeightCm ?? 0m,
                         CbmEstimationMethod = cbmEstimate.Method,
                         CbmEstimationConfidence = cbmEstimate.Confidence,
-                        CustomerProvidedTotalCbm = request.CustomerProvidedTotalCbm,
+                        CustomerProvidedTotalCbm = null,
                         TotalPackageQuantity = totalPackageQuantity
                     },
                     ScheduleId = request.ScheduleId!.Value,
@@ -343,11 +343,10 @@ namespace ColdChainX.Infrastructure.Services
                     {
                         OrderPackageLineId = Guid.NewGuid(),
                         OrderId = order.OrderId,
-                        Label = packageLine.Label?.Trim() is { Length: > 0 } label
-                            ? label
-                            : $"Thùng {packageLine.CapacityKg:0.##}kg",
+                        Label = BuildPackageLabel(packageLine.CapacityKg),
                         CapacityKg = packageLine.CapacityKg,
                         Quantity = packageLine.Quantity,
+                        SizeClass = NormalizeSizeClass(packageLine.SizeClass),
                         CreatedAt = DbNow()
                     });
                 }
@@ -1230,6 +1229,8 @@ namespace ColdChainX.Infrastructure.Services
                         return (false, lines, $"Package_Lines[{i}].CapacityKg must be greater than 0");
                     if (lines[i].Quantity <= 0)
                         return (false, lines, $"Package_Lines[{i}].Quantity must be greater than 0");
+                    lines[i].Label = BuildPackageLabel(lines[i].CapacityKg);
+                    lines[i].SizeClass = NormalizeSizeClass(lines[i].SizeClass);
                 }
 
                 return (true, lines, null);
@@ -1240,44 +1241,71 @@ namespace ColdChainX.Infrastructure.Services
             }
         }
 
+        private static string BuildPackageLabel(decimal capacityKg)
+        {
+            return $"Thung {capacityKg:0.##}kg";
+        }
+
         private static CbmEstimate CalculateExpectedCbm(
             CreateOrderRequest request,
+            IReadOnlyCollection<OrderPackageLineRequest> packageLines,
             decimal expectedWeightKg,
             int totalPackageQuantity,
             bool hasPackageLines)
         {
-            if (request.CustomerProvidedTotalCbm.HasValue)
-            {
-                return new CbmEstimate(
-                    Math.Round(request.CustomerProvidedTotalCbm.Value, 4),
-                    "CUSTOMER_PROVIDED_TOTAL_CBM",
-                    "CUSTOMER_PROVIDED");
-            }
-
             if (hasPackageLines)
             {
                 var density = GetConservativeDensity(request.Category);
                 var tempFactor = GetTemperatureFactor(request.TempCondition!.Value, request.PackagingType);
                 var boxFactor = GetPackagingFactor(request.PackagingType);
-                var expectedCbm = Math.Round((expectedWeightKg / density) * tempFactor * boxFactor, 4);
+                var lineCbm = packageLines.Sum(line =>
+                    line.Quantity
+                    * (line.CapacityKg / density)
+                    * GetCapacityScaleFactor(line.CapacityKg, request.PackagingType)
+                    * GetSizeClassFactor(line.SizeClass));
+                var expectedCbm = Math.Round(lineCbm * tempFactor * boxFactor, 4);
 
-                return new CbmEstimate(expectedCbm, "DENSITY_FACTOR", GetEstimationConfidence(request.Category, request.PackagingType));
+                return new CbmEstimate(expectedCbm, "DENSITY_FACTOR_CAPACITY_SIZE_CLASS", GetEstimationConfidence(request.Category, request.PackagingType));
             }
 
             var legacyCbm = Math.Round(request.LengthCm!.Value * request.WidthCm!.Value * request.HeightCm!.Value * totalPackageQuantity / 1000000m, 4);
             return new CbmEstimate(legacyCbm, "LEGACY_DIMENSION", "HIGH");
         }
 
+        private static decimal GetCapacityScaleFactor(decimal capacityKg, string packagingType)
+        {
+            var growthRate = GetPackagingGrowthRate(packagingType);
+            var scale = 1d + (double)growthRate * Math.Log2((double)(capacityKg / 10m));
+            return Math.Clamp((decimal)scale, 0.50m, 1.80m);
+        }
+
+        private static string NormalizeSizeClass(string? sizeClass)
+        {
+            var normalized = sizeClass?.Trim().ToUpperInvariant();
+            return normalized is "S" or "M" or "L" or "XL" ? normalized : "M";
+        }
+
+        private static decimal GetSizeClassFactor(string? sizeClass)
+        {
+            return NormalizeSizeClass(sizeClass) switch
+            {
+                "S" => 0.96m,
+                "L" => 1.07m,
+                "XL" => 1.14m,
+                _ => 1.00m
+            };
+        }
+
         private static decimal GetConservativeDensity(string category)
         {
             return category.Trim().ToUpperInvariant() switch
             {
-                "MEAT_SEAFOOD" => 380m,
-                "FRUITS_VEGGIES" or "FROZEN_FRUITS_VEGGIES" => 450m,
-                "ICE_CREAM_BEVERAGES" => 350m,
-                "PHARMACEUTICALS" => 280m,
-                "RAW_MATERIALS_OTHERS" => 450m,
-                _ => 450m
+                "MEAT_SEAFOOD" => 390m,
+                "FRUITS_VEGGIES" or "FROZEN_FRUITS_VEGGIES" => 460m,
+                "ICE_CREAM_BEVERAGES" => 360m,
+                "PHARMACEUTICALS" => 290m,
+                "RAW_MATERIALS_OTHERS" => 460m,
+                _ => 460m
             };
         }
 
@@ -1287,9 +1315,9 @@ namespace ColdChainX.Infrastructure.Services
                 return 1.00m;
 
             if (tempCondition >= 2m && tempCondition <= 5m) return 1.00m;
-            if (tempCondition >= -5m && tempCondition <= 0m) return 1.02m;
-            if (tempCondition >= -10m && tempCondition <= -6m) return 1.05m;
-            if (tempCondition >= -18m && tempCondition <= -11m) return 1.10m;
+            if (tempCondition >= -5m && tempCondition <= 0m) return 1.01m;
+            if (tempCondition >= -10m && tempCondition <= -6m) return 1.03m;
+            if (tempCondition >= -18m && tempCondition <= -11m) return 1.06m;
 
             return 1.00m;
         }
@@ -1321,13 +1349,38 @@ namespace ColdChainX.Infrastructure.Services
             return packagingType.Trim() switch
             {
                 "Carton Box" => 1.05m,
-                "ThÃ¹ng" or "Thùng" => 1.08m,
-                "Plastic Box" => 1.10m,
-                "Pallet" => 1.15m,
-                "Bao" => 1.15m,
-                "Foam Box" => 1.25m,
-                "CustomUnknown" => 1.25m,
-                _ => 1.08m
+                "Plastic Box" => 1.08m,
+                "Pallet" => 1.12m,
+                "Bao" => 1.12m,
+                "Foam Box" => 1.18m,
+                "CustomUnknown" => 1.18m,
+                _ => 1.06m
+            };
+        }
+
+        private static decimal GetPackagingGrowthRate(string packagingType)
+        {
+            var types = packagingType
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            if (types.Length == 0)
+                return 0.200m;
+
+            return types.Max(GetPackagingGrowthRateSingle);
+        }
+
+        private static decimal GetPackagingGrowthRateSingle(string packagingType)
+        {
+            return packagingType.Trim() switch
+            {
+                "Carton Box" => 0.220m,
+                "Foam Box" => 0.400m,
+                "Plastic Box" => 0.150m,
+                "Bao" => 0.050m,
+                "Pallet" => 0.020m,
+                "MixedPackaging" => 0.220m,
+                "CustomUnknown" => 0.220m,
+                _ => 0.200m
             };
         }
 
@@ -1434,7 +1487,8 @@ namespace ColdChainX.Infrastructure.Services
                         OrderPackageLineId = line.OrderPackageLineId,
                         Label = line.Label,
                         CapacityKg = line.CapacityKg,
-                        Quantity = line.Quantity
+                        Quantity = line.Quantity,
+                        SizeClass = line.SizeClass
                     })
                     .ToList(),
                 DropoffStopId = order.DropoffStopId,

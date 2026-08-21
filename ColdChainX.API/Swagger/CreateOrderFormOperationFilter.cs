@@ -32,15 +32,16 @@ namespace ColdChainX.API.Swagger
             ApplyStringExample(
                 mediaType.Schema,
                 "Package_Lines",
-                """[{"label":"Thung 5kg","capacityKg":5,"quantity":4},{"label":"Thung 10kg","capacityKg":10,"quantity":6},{"label":"Thung 22kg","capacityKg":22,"quantity":3}]""",
-                "Paste JSON array of package lines. Backend calculates ExpectedWeightKg and ExpectedCbm from this value.");
+                """[{"capacityKg":5,"quantity":4,"sizeClass":"M"},{"capacityKg":10,"quantity":6,"sizeClass":"M"},{"capacityKg":22,"quantity":3,"sizeClass":"L"}]""",
+                "Paste JSON array of package lines. sizeClass supports S, M, L, XL. Backend generates label from capacityKg and calculates ExpectedWeightKg and ExpectedCbm from this value.");
 
             RemoveProperties(mediaType.Schema,
                 "Length_CM",
                 "Width_CM",
                 "Height_CM",
                 "Expected_Weight_KG",
-                "Quantity");
+                "Quantity",
+                "Customer_Provided_Total_CBM");
         }
 
         private static void ApplyEnum(OpenApiSchema schema, string propertyName, IEnumerable<string> values)

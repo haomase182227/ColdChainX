@@ -20,7 +20,6 @@ namespace ColdChainX.Application.Validators
         public static readonly string[] AllowedPackagingTypes =
         [
             "Pallet",
-            "Thùng",
             "Bao",
             "Plastic Box",
             "Foam Box",
@@ -68,32 +67,27 @@ namespace ColdChainX.Application.Validators
 
             RuleFor(x => x.LengthCm)
                 .NotNull()
-                .When(x => string.IsNullOrWhiteSpace(x.PackageLinesJson) && !x.CustomerProvidedTotalCbm.HasValue)
-                .WithMessage("Length_CM is required when Package_Lines and Customer_Provided_Total_CBM are not provided")
+                .When(x => string.IsNullOrWhiteSpace(x.PackageLinesJson))
+                .WithMessage("Length_CM is required when Package_Lines is not provided")
                 .GreaterThan(0)
-                .When(x => string.IsNullOrWhiteSpace(x.PackageLinesJson) && !x.CustomerProvidedTotalCbm.HasValue)
-                .WithMessage("Length_CM must be greater than 0 when Package_Lines and Customer_Provided_Total_CBM are not provided");
+                .When(x => string.IsNullOrWhiteSpace(x.PackageLinesJson))
+                .WithMessage("Length_CM must be greater than 0 when Package_Lines is not provided");
 
             RuleFor(x => x.WidthCm)
                 .NotNull()
-                .When(x => string.IsNullOrWhiteSpace(x.PackageLinesJson) && !x.CustomerProvidedTotalCbm.HasValue)
-                .WithMessage("Width_CM is required when Package_Lines and Customer_Provided_Total_CBM are not provided")
+                .When(x => string.IsNullOrWhiteSpace(x.PackageLinesJson))
+                .WithMessage("Width_CM is required when Package_Lines is not provided")
                 .GreaterThan(0)
-                .When(x => string.IsNullOrWhiteSpace(x.PackageLinesJson) && !x.CustomerProvidedTotalCbm.HasValue)
-                .WithMessage("Width_CM must be greater than 0 when Package_Lines and Customer_Provided_Total_CBM are not provided");
+                .When(x => string.IsNullOrWhiteSpace(x.PackageLinesJson))
+                .WithMessage("Width_CM must be greater than 0 when Package_Lines is not provided");
 
             RuleFor(x => x.HeightCm)
                 .NotNull()
-                .When(x => string.IsNullOrWhiteSpace(x.PackageLinesJson) && !x.CustomerProvidedTotalCbm.HasValue)
-                .WithMessage("Height_CM is required when Package_Lines and Customer_Provided_Total_CBM are not provided")
+                .When(x => string.IsNullOrWhiteSpace(x.PackageLinesJson))
+                .WithMessage("Height_CM is required when Package_Lines is not provided")
                 .GreaterThan(0)
-                .When(x => string.IsNullOrWhiteSpace(x.PackageLinesJson) && !x.CustomerProvidedTotalCbm.HasValue)
-                .WithMessage("Height_CM must be greater than 0 when Package_Lines and Customer_Provided_Total_CBM are not provided");
-
-            RuleFor(x => x.CustomerProvidedTotalCbm)
-                .GreaterThan(0)
-                .When(x => x.CustomerProvidedTotalCbm.HasValue)
-                .WithMessage("Customer_Provided_Total_CBM must be greater than 0");
+                .When(x => string.IsNullOrWhiteSpace(x.PackageLinesJson))
+                .WithMessage("Height_CM must be greater than 0 when Package_Lines is not provided");
 
             RuleFor(x => x.DestAddressText)
                 .NotEmpty().WithMessage("Dest_Address_Text is required")

@@ -621,7 +621,7 @@ public sealed class ColdChainMonitoringController : ControllerBase
         if (string.IsNullOrEmpty(apiKey))
             return StatusCode(500, new { Success = false, Error = "GoongApiKey is missing in environment variables (.env file) or configuration." });
 
-        var url = $"https://rsapi.goong.io/Direction?origin={originStr}&destination={destStr}&waypoints={waypointsStr}&vehicle=truck&api_key={apiKey}";
+        var url = $"https://rsapi.goong.io/Direction?origin={originStr}&destination={destStr}&waypoints={waypointsStr}&vehicle=truck&optimize=false&api_key={apiKey}";
 
         var client = _httpClientFactory.CreateClient();
         var response = await client.GetAsync(url, cancellationToken);

@@ -137,7 +137,7 @@ public class ReportNoShowCommandHandler : IRequestHandler<ReportNoShowCommand, A
                     }
 
                     var optimizedResult = await _goongMapService.GetOptimizedRouteAsync(
-                        originCoord, destCoord, waypointsCoord, cancellationToken);
+                        originCoord, destCoord, waypointsCoord, cancellationToken: cancellationToken);
 
                     if (optimizedResult != null && optimizedResult.WaypointOrder.Count == remainingStops.Count - 1)
                     {

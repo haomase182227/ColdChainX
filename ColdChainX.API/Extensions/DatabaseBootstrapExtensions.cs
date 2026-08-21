@@ -444,6 +444,62 @@ END $$;";
 
             try
             {
+                var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>();
+                var adminRole = await db.Roles.FirstOrDefaultAsync(r => r.RoleName == "Admin");
+                var warehouseWorkerRole = await db.Roles.FirstOrDefaultAsync(r => r.RoleName == "WarehouseWorker");
+                var customerRole = await db.Roles.FirstOrDefaultAsync(r => r.RoleName == "Customer");
+                var driverRole = await db.Roles.FirstOrDefaultAsync(r => r.RoleName == "Driver");
+
+                await RepairSeedUserAsync(
+                    db,
+                    passwordHasher,
+                    Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                    "admin01",
+                    "admin01@coldchainx.com",
+                    "System Admin",
+                    adminRole?.RoleId,
+                    "Password@123");
+
+                await RepairSeedUserAsync(
+                    db,
+                    passwordHasher,
+                    Guid.Parse("22222222-2222-2222-2222-222222222222"),
+                    "warehouseworker01",
+                    "warehouseworker01@coldchainx.com",
+                    "Warehouse Worker",
+                    warehouseWorkerRole?.RoleId,
+                    "Password@123");
+
+                await RepairSeedUserAsync(
+                    db,
+                    passwordHasher,
+                    Guid.Parse("33333333-3333-3333-3333-333333333333"),
+                    "customer01",
+                    "customer01@coldchainx.com",
+                    "Vinamilk Customer",
+                    customerRole?.RoleId,
+                    "Password@123");
+
+                await RepairSeedUserAsync(
+                    db,
+                    passwordHasher,
+                    Guid.Parse("44444444-4444-4444-4444-444444444444"),
+                    "driver01",
+                    "driver01@coldchainx.com",
+                    "Main Driver",
+                    driverRole?.RoleId,
+                    "Password@123");
+
+                await db.SaveChangesAsync();
+                logger.LogInformation("Default seed users repaired.");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to repair default seed users.");
+            }
+
+            try
+            {
                 var vehicleId = Guid.Parse("77777777-7777-7777-7777-777777777777");
                 if (!await db.Vehicles.AnyAsync(v => v.VehicleId == vehicleId))
                 {
@@ -531,6 +587,41 @@ END $$;";
             {
                 logger.LogError(ex, "Failed to seed fleet sample data.");
             }
+        }
+
+        private static async Task RepairSeedUserAsync(
+            ApplicationDbContext db,
+            IPasswordHasher<User> passwordHasher,
+            Guid userId,
+            string username,
+            string email,
+            string fullName,
+            Guid? roleId,
+            string password)
+        {
+            if (roleId == null) return;
+
+            var user = await db.Users.FirstOrDefaultAsync(u => u.UserId == userId)
+                       ?? await db.Users.FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == email.ToLower());
+
+            if (user == null)
+            {
+                user = new User
+                {
+                    UserId = userId,
+                    CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
+                };
+                db.Users.Add(user);
+            }
+
+            user.Username = username;
+            user.Email = email;
+            user.FullName = fullName;
+            user.RoleId = roleId.Value;
+            user.Status = "ACTIVE";
+            user.DeletedAt = null;
+            user.PasswordHash = passwordHasher.HashPassword(user, password);
+            user.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
         }
     }
 }

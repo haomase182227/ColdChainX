@@ -1986,6 +1986,7 @@ public partial class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.Label).HasMaxLength(100).HasColumnName("label");
             entity.Property(e => e.CapacityKg).HasPrecision(10, 2).HasColumnName("capacity_kg");
             entity.Property(e => e.Quantity).HasColumnName("quantity");
+            entity.Property(e => e.SizeClass).HasMaxLength(5).HasDefaultValue("M").HasColumnName("size_class");
             entity.Property(e => e.CreatedAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");

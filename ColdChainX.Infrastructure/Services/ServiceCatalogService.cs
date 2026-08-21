@@ -52,6 +52,11 @@ namespace ColdChainX.Infrastructure.Services
 
         public async Task<ApiResponse<ServiceCatalogDto>> CreateAsync(CreateServiceCatalogRequest request)
         {
+            if (request.DefaultPrice < 0)
+            {
+                return ApiResponse<ServiceCatalogDto>.Failure("Default price cannot be negative");
+            }
+
             var exists = await _db.ServiceCatalogs.AnyAsync(s => s.ServiceCode.ToLower() == request.ServiceCode.ToLower());
             if (exists)
             {
@@ -78,6 +83,11 @@ namespace ColdChainX.Infrastructure.Services
 
         public async Task<ApiResponse<ServiceCatalogDto>> UpdateAsync(Guid id, UpdateServiceCatalogRequest request)
         {
+            if (request.DefaultPrice < 0)
+            {
+                return ApiResponse<ServiceCatalogDto>.Failure("Default price cannot be negative");
+            }
+
             var service = await _db.ServiceCatalogs.FindAsync(id);
             if (service == null)
             {

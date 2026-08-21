@@ -14,6 +14,8 @@ public partial class OrderPackageLine
 
     public int Quantity { get; set; }
 
+    public string SizeClass { get; set; } = null!;
+
     public DateTime? CreatedAt { get; set; }
 
     public virtual TransportOrder Order { get; set; } = null!;

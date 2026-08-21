@@ -14,21 +14,15 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
     private readonly IApplicationDbContext _context;
     private readonly ILogger<ProcessInboundQcCommandHandler> _logger;
     private readonly IFileService _fileService;
-    private readonly IMediator _mediator;
-    private readonly IContractAppendixService _appendixService;
 
     public ProcessInboundQcCommandHandler(
         IApplicationDbContext context,
         ILogger<ProcessInboundQcCommandHandler> logger,
-        IFileService fileService,
-        IMediator mediator,
-        IContractAppendixService appendixService)
+        IFileService fileService)
     {
         _context = context;
         _logger = logger;
         _fileService = fileService;
-        _mediator = mediator;
-        _appendixService = appendixService;
     }
 
     public async Task<ProcessInboundQcResponse> Handle(ProcessInboundQcCommand request, CancellationToken cancellationToken)
@@ -233,55 +227,6 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
             ReceiptId = receipt?.ReceiptId,
             DiffPercent = 0m
         };
-    }
-
-    private async Task EnsureNotificationTemplateAsync(string templateId, CancellationToken cancellationToken)
-    {
-        var existing = await _context.NotificationTemplates.FirstOrDefaultAsync(t => t.TemplateId == templateId, cancellationToken);
-
-        var typeId = await _context.Messagetypes
-            .Where(t => t.TypeName == "ORDER_STATUS")
-            .Select(t => (Guid?)t.TypeId)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (!typeId.HasValue)
-        {
-            var type = new Messagetype
-            {
-                TypeId = Guid.NewGuid(),
-                TypeName = "ORDER_STATUS",
-                Description = "Cập nhật trạng thái đơn hàng, báo giá, hợp đồng"
-            };
-            _context.Messagetypes.Add(type);
-            await _context.SaveChangesAsync(cancellationToken);
-            typeId = type.TypeId;
-        }
-
-        var expectedTitle = "Đơn hàng {{Tracking_Code}} bị giữ lại do chênh lệch QC";
-        var expectedBody = "Phát hiện chênh lệch >5% tại Inbound QC. Biên bản bất thường: {{Pdf_URL}}. Phụ lục hợp đồng nháp: {{Appendix_Number}} (ID: {{Appendix_Id}})";
-
-        if (existing != null)
-        {
-            if (existing.BodyTemplate != expectedBody || existing.TitleTemplate != expectedTitle)
-            {
-                existing.TitleTemplate = expectedTitle;
-                existing.BodyTemplate = expectedBody;
-                await _context.SaveChangesAsync(cancellationToken);
-            }
-        }
-        else
-        {
-            _context.NotificationTemplates.Add(new NotificationTemplate
-            {
-                TemplateId = templateId,
-                TypeId = typeId.Value,
-                TitleTemplate = expectedTitle,
-                BodyTemplate = expectedBody,
-                Channel = "IN_APP",
-                Status = "ACTIVE"
-            });
-            await _context.SaveChangesAsync(cancellationToken);
-        }
     }
 
     private static ProcessInboundQcResponse Failure(string message)
