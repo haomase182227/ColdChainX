@@ -491,6 +491,16 @@ namespace ColdChainX.Infrastructure.Services
 
                 await using var transaction = await _db.Database.BeginTransactionAsync();
 
+                var pricingChanged =
+                    (request.Category != null && !string.Equals(order.Category, request.Category.Trim(), StringComparison.Ordinal))
+                    || (request.PackagingType != null && !string.Equals(order.PackingType, request.PackagingType.Trim(), StringComparison.Ordinal))
+                    || (request.TempCondition.HasValue
+                        && !string.Equals(
+                            order.TempCondition,
+                            request.TempCondition.Value.ToString("0.##", CultureInfo.InvariantCulture),
+                            StringComparison.Ordinal))
+                    || request.Quantity.HasValue;
+
                 if (request.ItemName != null) order.ItemName = request.ItemName.Trim();
                 if (request.Category != null) order.Category = request.Category.Trim();
                 if (request.Quantity.HasValue) order.Quantity = request.Quantity.Value;
@@ -501,17 +511,15 @@ namespace ColdChainX.Infrastructure.Services
                 if (request.ReceiverName != null) order.ReceiverName = request.ReceiverName.Trim();
                 if (request.ReceiverPhone != null) order.ReceiverPhone = request.ReceiverPhone.Trim();
 
-                bool dimensionChanged = false;
-
                 if (request.PackageLinesJson != null)
                 {
                     ApplyPackageLineUpdate(order, packageLinesResult.PackageLines, request.CustomerProvidedTotalCbm);
-                    dimensionChanged = true;
+                    pricingChanged = true;
                 }
                 else if (request.CustomerProvidedTotalCbm.HasValue && order.OrderDimension != null)
                 {
                     if (order.OrderDimension.ExpectedCbm != request.CustomerProvidedTotalCbm.Value)
-                        dimensionChanged = true;
+                        pricingChanged = true;
                     order.OrderDimension.CustomerProvidedTotalCbm = request.CustomerProvidedTotalCbm.Value;
                     order.OrderDimension.ExpectedCbm = Math.Round(request.CustomerProvidedTotalCbm.Value, 4);
                     order.OrderDimension.ActualCbm = order.OrderDimension.ExpectedCbm;
@@ -521,7 +529,7 @@ namespace ColdChainX.Infrastructure.Services
 
                 if (request.PackageLinesJson == null && request.ExpectedWeightKg.HasValue && order.OrderDimension != null)
                 {
-                    if (order.OrderDimension.ExpectedWeightKg != request.ExpectedWeightKg.Value) dimensionChanged = true;
+                    if (order.OrderDimension.ExpectedWeightKg != request.ExpectedWeightKg.Value) pricingChanged = true;
                     order.OrderDimension.ExpectedWeightKg = request.ExpectedWeightKg.Value;
                     order.OrderDimension.ActualWeightKg = request.ExpectedWeightKg.Value;
                 }
@@ -529,7 +537,7 @@ namespace ColdChainX.Infrastructure.Services
                 if (request.PackageLinesJson == null && request.LengthCm.HasValue && request.WidthCm.HasValue && request.HeightCm.HasValue && request.Quantity.HasValue && order.OrderDimension != null)
                 {
                     var expectedCbm = Math.Round(request.LengthCm.Value * request.WidthCm.Value * request.HeightCm.Value * request.Quantity.Value / 1000000m, 4);
-                    if (order.OrderDimension.ExpectedCbm != expectedCbm) dimensionChanged = true;
+                    if (order.OrderDimension.ExpectedCbm != expectedCbm) pricingChanged = true;
                     order.OrderDimension.ExpectedCbm = expectedCbm;
                     order.OrderDimension.ActualCbm = expectedCbm;
                     order.OrderDimension.LengthCm = request.LengthCm.Value;
@@ -543,12 +551,18 @@ namespace ColdChainX.Infrastructure.Services
                     order.DestLocationNavigation.Address = request.DestAddressText.Trim();
                     order.DestLocationNavigation.Latitude = coordinates.Latitude;
                     order.DestLocationNavigation.Longitude = coordinates.Longitude;
-                    dimensionChanged = true; // Destination change affects pricing
+                    pricingChanged = true;
                 }
 
                 if (request.ScheduleId.HasValue) 
                 {
-                    if (order.ScheduleId != request.ScheduleId.Value) dimensionChanged = true;
+                    if (order.ScheduleId != request.ScheduleId.Value)
+                    {
+                        pricingChanged = true;
+                        order.Schedule = await _db.RouteSchedules
+                            .Include(schedule => schedule.Route)
+                            .FirstOrDefaultAsync(schedule => schedule.ScheduleId == request.ScheduleId.Value);
+                    }
                     order.ScheduleId = request.ScheduleId.Value;
                 }
                 if (request.DropoffStopId.HasValue) order.DropoffStopId = request.DropoffStopId.Value;
@@ -589,17 +603,7 @@ namespace ColdChainX.Infrastructure.Services
                     }
                 }
 
-                if (dimensionChanged && order.Schedule?.Route != null && order.DestLocationNavigation != null)
-                {
-                    var existingQuotations = await _db.Quotations.Where(q => q.OrderId == orderId).ToListAsync();
-                    if (existingQuotations.Any())
-                    {
-                        _db.Quotations.RemoveRange(existingQuotations);
-                        
-                        var draftQuotation = await BuildAutoDraftQuotationAsync(order, order.Schedule.Route, order.DestLocationNavigation);
-                        _db.Quotations.Add(draftQuotation);
-                    }
-                }
+                await RebuildDraftQuotationAsync(order, pricingChanged);
 
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
@@ -650,6 +654,8 @@ namespace ColdChainX.Infrastructure.Services
                     .Include(o => o.OrderDimension)
                     .Include(o => o.OrderPackageLines)
                     .Include(o => o.DestLocationNavigation)
+                    .Include(o => o.Schedule)
+                    .ThenInclude(schedule => schedule!.Route)
                     .FirstOrDefaultAsync(o => o.OrderId == orderId && o.CustomerId == customerId);
 
                 if (order == null)
@@ -680,6 +686,22 @@ namespace ColdChainX.Infrastructure.Services
                 }
 
                 await using var transaction = await _db.Database.BeginTransactionAsync();
+
+                var pricingChanged =
+                    (request.Category != null && !string.Equals(order.Category, request.Category.Trim(), StringComparison.Ordinal))
+                    || (request.PackagingType != null && !string.Equals(order.PackingType, request.PackagingType.Trim(), StringComparison.Ordinal))
+                    || (request.TempCondition.HasValue
+                        && !string.Equals(
+                            order.TempCondition,
+                            request.TempCondition.Value.ToString("0.##", CultureInfo.InvariantCulture),
+                            StringComparison.Ordinal))
+                    || request.Quantity.HasValue
+                    || request.ExpectedWeightKg.HasValue
+                    || request.CustomerProvidedTotalCbm.HasValue
+                    || request.LengthCm.HasValue
+                    || request.WidthCm.HasValue
+                    || request.HeightCm.HasValue
+                    || request.PackageLinesJson != null;
 
                 if (request.ItemName != null) order.ItemName = request.ItemName.Trim();
                 if (request.Category != null) order.Category = request.Category.Trim();
@@ -726,9 +748,20 @@ namespace ColdChainX.Infrastructure.Services
                     order.DestLocationNavigation.Address = request.DestAddressText.Trim();
                     order.DestLocationNavigation.Latitude = coordinates.Latitude;
                     order.DestLocationNavigation.Longitude = coordinates.Longitude;
+                    pricingChanged = true;
                 }
 
-                if (request.ScheduleId.HasValue) order.ScheduleId = request.ScheduleId.Value;
+                if (request.ScheduleId.HasValue)
+                {
+                    if (order.ScheduleId != request.ScheduleId.Value)
+                    {
+                        pricingChanged = true;
+                        order.Schedule = await _db.RouteSchedules
+                            .Include(schedule => schedule.Route)
+                            .FirstOrDefaultAsync(schedule => schedule.ScheduleId == request.ScheduleId.Value);
+                    }
+                    order.ScheduleId = request.ScheduleId.Value;
+                }
                 if (request.DropoffStopId.HasValue) order.DropoffStopId = request.DropoffStopId.Value;
 
                 var uploadedBy = await ResolveCustomerUserIdAsync(customerId);
@@ -772,6 +805,8 @@ namespace ColdChainX.Infrastructure.Services
                 {
                     order.Status = PendingReview;
                 }
+
+                await RebuildDraftQuotationAsync(order, pricingChanged);
 
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
@@ -1064,6 +1099,24 @@ namespace ColdChainX.Infrastructure.Services
                 Status = Draft,
                 CreatedAt = DbNow()
             };
+        }
+
+        private async Task RebuildDraftQuotationAsync(TransportOrder order, bool pricingChanged)
+        {
+            if (!pricingChanged || order.Schedule?.Route == null || order.DestLocationNavigation == null)
+                return;
+
+            var draftQuotations = await _db.Quotations
+                .Where(quotation => quotation.OrderId == order.OrderId && quotation.Status == Draft)
+                .ToListAsync();
+            if (draftQuotations.Count == 0)
+                return;
+
+            _db.Quotations.RemoveRange(draftQuotations);
+            _db.Quotations.Add(await BuildAutoDraftQuotationAsync(
+                order,
+                order.Schedule.Route,
+                order.DestLocationNavigation));
         }
 
         private async Task<decimal> GetSystemConfigDecimalAsync(string key, decimal fallback)

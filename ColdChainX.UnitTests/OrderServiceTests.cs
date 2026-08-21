@@ -299,6 +299,204 @@ namespace ColdChainX.UnitTests
             Assert.Equal("DENSITY_FACTOR", savedOrder.OrderDimension.CbmEstimationMethod);
         }
 
+        [Fact]
+        public async Task UpdateOrder_WhenPricingChanges_RebuildsDraftQuotation()
+        {
+            var customerId = Guid.NewGuid();
+            var orderId = Guid.NewGuid();
+            var routeId = Guid.NewGuid();
+            var scheduleId = Guid.NewGuid();
+            var locationId = Guid.NewGuid();
+            var oldQuoteId = Guid.NewGuid();
+
+            _db.RouteMasters.Add(new RouteMaster
+            {
+                RouteId = routeId,
+                RouteCode = "PRICE-ROUTE",
+                OriginCity = "HCM",
+                DestCity = "Hanoi",
+                TransitTime = "2 days",
+                Status = "ACTIVE"
+            });
+            _db.RouteSchedules.Add(new RouteSchedule
+            {
+                ScheduleId = scheduleId,
+                RouteId = routeId,
+                ScheduleName = "Pricing schedule",
+                DepartureDate = DateTime.UtcNow.AddDays(2),
+                DepartureTime = new TimeSpan(8, 0, 0),
+                CutOffTime = new TimeSpan(6, 0, 0),
+                Status = "ACTIVE"
+            });
+            _db.Locations.Add(new Location
+            {
+                LocationId = locationId,
+                CustomerId = customerId,
+                Address = "Customer destination",
+                Status = "ACTIVE"
+            });
+            _db.WeightTiers.Add(new WeightTier
+            {
+                Id = Guid.NewGuid(),
+                RouteId = routeId,
+                MinWeightKg = 0m,
+                PricePerKg = 100m
+            });
+            _db.TransportOrders.Add(new TransportOrder
+            {
+                OrderId = orderId,
+                TrackingCode = "TRK-REPRICE-01",
+                CustomerId = customerId,
+                ItemName = "Frozen cargo",
+                Category = "MEAT_SEAFOOD",
+                Quantity = 1,
+                PackingType = "Carton Box",
+                TempCondition = "-18",
+                Status = "PENDING_REVIEW",
+                ScheduleId = scheduleId,
+                DestLocation = locationId,
+                OrderDimension = new OrderDimension
+                {
+                    OrderId = orderId,
+                    ExpectedWeightKg = 20m,
+                    ActualWeightKg = 20m,
+                    ExpectedCbm = 0.02m,
+                    ActualCbm = 0.02m,
+                    LengthCm = 10m,
+                    WidthCm = 10m,
+                    HeightCm = 10m
+                }
+            });
+            _db.Quotations.Add(new Quotation
+            {
+                QuoteId = oldQuoteId,
+                OrderId = orderId,
+                BaseFreight = 2_000m,
+                VatAmount = 160m,
+                FinalAmount = 2_160m,
+                PricingSource = "AUTO",
+                Status = "DRAFT"
+            });
+            await _db.SaveChangesAsync();
+
+            var result = await _service.UpdateOrderAsync(
+                orderId,
+                new UpdateOrderRequest { ExpectedWeightKg = 50m },
+                customerId);
+
+            Assert.True(result.Success, result.Message);
+            var quotation = await _db.Quotations.SingleAsync(item => item.OrderId == orderId && item.Status == "DRAFT");
+            Assert.NotEqual(oldQuoteId, quotation.QuoteId);
+            Assert.Equal(5_000m, quotation.BaseFreight);
+            Assert.Equal(5_400m, quotation.FinalAmount);
+        }
+
+        [Fact]
+        public async Task AdminUpdateOrder_WhenScheduleChanges_RepricesUsingNewRoute()
+        {
+            var orderId = Guid.NewGuid();
+            var customerId = Guid.NewGuid();
+            var oldRouteId = Guid.NewGuid();
+            var newRouteId = Guid.NewGuid();
+            var oldScheduleId = Guid.NewGuid();
+            var newScheduleId = Guid.NewGuid();
+            var locationId = Guid.NewGuid();
+
+            _db.RouteMasters.AddRange(
+                new RouteMaster
+                {
+                    RouteId = oldRouteId,
+                    RouteCode = "OLD",
+                    OriginCity = "HCM",
+                    DestCity = "Danang",
+                    TransitTime = "1 day",
+                    Status = "ACTIVE"
+                },
+                new RouteMaster
+                {
+                    RouteId = newRouteId,
+                    RouteCode = "NEW",
+                    OriginCity = "HCM",
+                    DestCity = "Hanoi",
+                    TransitTime = "2 days",
+                    Status = "ACTIVE"
+                });
+            _db.RouteSchedules.AddRange(
+                new RouteSchedule
+                {
+                    ScheduleId = oldScheduleId,
+                    RouteId = oldRouteId,
+                    ScheduleName = "Old schedule",
+                    DepartureDate = DateTime.UtcNow.AddDays(2),
+                    DepartureTime = new TimeSpan(8, 0, 0),
+                    CutOffTime = new TimeSpan(6, 0, 0),
+                    Status = "ACTIVE"
+                },
+                new RouteSchedule
+                {
+                    ScheduleId = newScheduleId,
+                    RouteId = newRouteId,
+                    ScheduleName = "New schedule",
+                    DepartureDate = DateTime.UtcNow.AddDays(3),
+                    DepartureTime = new TimeSpan(8, 0, 0),
+                    CutOffTime = new TimeSpan(6, 0, 0),
+                    Status = "ACTIVE"
+                });
+            _db.WeightTiers.AddRange(
+                new WeightTier { Id = Guid.NewGuid(), RouteId = oldRouteId, MinWeightKg = 0m, PricePerKg = 100m },
+                new WeightTier { Id = Guid.NewGuid(), RouteId = newRouteId, MinWeightKg = 0m, PricePerKg = 200m });
+            _db.Locations.Add(new Location
+            {
+                LocationId = locationId,
+                CustomerId = customerId,
+                Address = "Customer destination",
+                Status = "ACTIVE"
+            });
+            _db.TransportOrders.Add(new TransportOrder
+            {
+                OrderId = orderId,
+                TrackingCode = "TRK-REPRICE-ROUTE-01",
+                CustomerId = customerId,
+                ItemName = "Frozen cargo",
+                Category = "MEAT_SEAFOOD",
+                Quantity = 1,
+                PackingType = "Carton Box",
+                TempCondition = "-18",
+                Status = "PENDING_REVIEW",
+                ScheduleId = oldScheduleId,
+                DestLocation = locationId,
+                OrderDimension = new OrderDimension
+                {
+                    OrderId = orderId,
+                    ExpectedWeightKg = 50m,
+                    ActualWeightKg = 50m,
+                    ExpectedCbm = 0.02m,
+                    ActualCbm = 0.02m
+                }
+            });
+            _db.Quotations.Add(new Quotation
+            {
+                QuoteId = Guid.NewGuid(),
+                OrderId = orderId,
+                BaseFreight = 5_000m,
+                VatAmount = 400m,
+                FinalAmount = 5_400m,
+                PricingSource = "AUTO",
+                Status = "DRAFT"
+            });
+            await _db.SaveChangesAsync();
+
+            var result = await _service.AdminUpdateOrderAsync(
+                orderId,
+                new UpdateOrderRequest { ScheduleId = newScheduleId },
+                Guid.NewGuid());
+
+            Assert.True(result.Success, result.Message);
+            var quotation = await _db.Quotations.SingleAsync(item => item.OrderId == orderId && item.Status == "DRAFT");
+            Assert.Equal(10_000m, quotation.BaseFreight);
+            Assert.Equal(10_800m, quotation.FinalAmount);
+        }
+
         #region Mock Classes
 
         private class MockLocationService : ILocationService
