@@ -466,12 +466,14 @@ namespace ColdChainX.API.Controllers
                     var destination = ColdChainX.Infrastructure.Services.GoongMapService.FormatCoordinate(actualDestinationLocation.Latitude, actualDestinationLocation.Longitude);
                     var waypoints = string.Join("|", trip.Stops
                         .Where(s => s.Location != null && s.Location.LocationId != actualDestinationLocation.LocationId)
+                        .OrderBy(s => s.StopSequence)
                         .Select(s => ColdChainX.Infrastructure.Services.GoongMapService.FormatCoordinate(s.Location.Latitude, s.Location.Longitude)));
 
                     var optimizedRoute = await _goongMapService.GetOptimizedRouteAsync(
                         origin,
                         destination,
-                        string.IsNullOrWhiteSpace(waypoints) ? null : waypoints);
+                        string.IsNullOrWhiteSpace(waypoints) ? null : waypoints,
+                        optimize: false);
                     
                     encodedPolyline = optimizedRoute.OverviewPolyline;
                 }

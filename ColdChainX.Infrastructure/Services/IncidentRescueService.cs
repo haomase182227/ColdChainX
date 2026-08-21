@@ -1853,7 +1853,7 @@ public class IncidentRescueService : IIncidentRescueService
                     .Select(s => GoongMapService.FormatCoordinate(s.Location!.Latitude, s.Location.Longitude)));
 
                 var route = await _goongMapService.GetOptimizedRouteAsync(
-                    origin, destination, string.IsNullOrWhiteSpace(waypoints) ? null : waypoints);
+                    origin, destination, string.IsNullOrWhiteSpace(waypoints) ? null : waypoints, optimize: false);
                 goongTotalSeconds = route.TotalDurationSeconds;
             }
             catch (Exception goongEx)

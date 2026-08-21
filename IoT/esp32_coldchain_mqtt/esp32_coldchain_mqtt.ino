@@ -1,4 +1,4 @@
-#define TINY_GSM_MODEM_BG96 // Profile chuẩn cho Quectel EG800K
+#define TINY_GSM_MODEM_SIM7600 // Profile tuong thich SIMCOM A768C/A76xx
 #define TINY_GSM_RX_BUFFER 1024
 
 #include <WiFi.h>
@@ -68,6 +68,7 @@ void connect4G();
 void connectMqtt();
 void publishTelemetry(float currentTemp);
 void updateHybridLocation();
+bool updateLocationFromHereApi(const String& payload);
 String getIsoTimestamp();
 void handleMqttMessage(char* topic, byte* payload, unsigned int length);
 void handleCommandPayload(const uint8_t* payload, size_t length);
@@ -92,14 +93,12 @@ void setup() {
   SerialAT.begin(MCU_SIM_BAUDRATE, SERIAL_8N1, MCU_SIM_RX_PIN, MCU_SIM_TX_PIN);
   delay(3000);
 
-  Serial.println("Đang khởi tạo Module Quectel...");
+  Serial.println("Dang khoi tao Module SIMCOM A768C...");
   modem.restart();
   
   connect4G();
 
-  Serial.println("Đang kích hoạt GNSS (Vệ tinh)...");
-  modem.sendAT("+QGPS=1");
-  modem.waitResponse(1000); 
+  Serial.println("Bo qua GNSS ve tinh (SIMCOM A768C khong co GNSS).");
 
   mqttClient.setServer(MQTT_HOST, MQTT_PORT);
   mqttClient.setCallback(handleMqttMessage);
@@ -168,40 +167,13 @@ void updateHybridLocation() {
       return;
   }
 
-  Serial.println("\n--- ĐANG ĐỊNH VỊ (GPS -> Wi-Fi -> LBS) ---");
+  Serial.println("\n--- ĐANG ĐỊNH VỊ (Wi-Fi HERE -> LBS) ---");
   
   // =====================================
-  // [LỚP 1]: GPS VỆ TINH
+  // [LỚP 1]: WI-FI HERE API
   // =====================================
-  modem.sendAT("+QGPSLOC=0");
-  int res = modem.waitResponse(2000, "+QGPSLOC: ", "ERROR");
-
-  if (res == 1) { 
-    String timeStr = modem.stream.readStringUntil(',');
-    String latStr = modem.stream.readStringUntil(',');  
-    String lonStr = modem.stream.readStringUntil(',');  
-    modem.waitResponse(); 
-
-    int dotLat = latStr.indexOf('.');
-    if(dotLat >= 2) {
-      currentLat = latStr.substring(0, dotLat - 2).toFloat() + (latStr.substring(dotLat - 2, latStr.length() - 1).toFloat() / 60.0);
-      if (latStr.endsWith("S")) currentLat = -currentLat;
-    }
-    int dotLon = lonStr.indexOf('.');
-    if(dotLon >= 2) {
-      currentLon = lonStr.substring(0, dotLon - 2).toFloat() + (lonStr.substring(dotLon - 2, lonStr.length() - 1).toFloat() / 60.0);
-      if (lonStr.endsWith("W")) currentLon = -currentLon;
-    }
-    Serial.printf("=> [GPS] Thành công: %.6f, %.6f\n", currentLat, currentLon);
-    return;
-  }
-
-  // =====================================
-  // [LỚP 2]: WI-FI HERE API
-  // =====================================
-  Serial.println("=> [GPS] Mất sóng. Đang quét Wi-Fi...");
+  Serial.println("=> Đang quét Wi-Fi...");
   
-  // Dùng chế độ quét bất đồng bộ để chống kẹt driver
   int n = WiFi.scanNetworks(false, true); 
   
   Serial.printf("=> [DEBUG Wi-Fi] Mã trả về từ lệnh quét (n) = %d\n", n);
@@ -209,8 +181,7 @@ void updateHybridLocation() {
   if (n < 0) {
       Serial.println("=> [LỖI] Chip Wi-Fi của ESP32 báo lỗi (Có thể chưa bật mode STA hoặc lỗi Anten)!");
   } else if (n >= 2) { 
-    Serial.println("=> [Wi-Fi] Bắt đầu lấy tọa độ từ HERE API...");
-    // Gửi tối đa 10 mạng Wi-Fi (thay vì 2) để tăng tỷ lệ định vị thành công trên HERE API
+    Serial.println("=> [Wi-Fi] Bắt đầu lấy tọa độ từ HERE API qua SIMCOM HTTPS AT...");
     String payload = "{\"wlan\":[";
     int limit = (n > 10) ? 10 : n;
     for (int i = 0; i < limit; ++i) { 
@@ -219,66 +190,34 @@ void updateHybridLocation() {
     }
     payload += "]}";
 
-    // ÉP HTTPS SỬ DỤNG SOCKET 1 ĐỂ TRÁNH XUNG ĐỘT VỚI MQTT
-    TinyGsmClientSecure secureClient(modem, 1); 
-    HttpClient http(secureClient, "pos.ls.hereapi.com", 443);
-    
-    String url = String("/positioning/v1/locate?apiKey=") + HERE_API_KEY;
-    http.beginRequest();
-    http.post(url);
-    http.sendHeader("Content-Type", "application/json");
-    http.sendHeader("Content-Length", payload.length());
-    http.beginBody();
-    http.print(payload);
-    http.endRequest();
-    
-    int statusCode = http.responseStatusCode();
-    Serial.printf("=> [DEBUG HERE API] HTTP Status Code = %d\n", statusCode);
-
-    if (statusCode == 200) {
-      StaticJsonDocument<512> doc;
-      deserializeJson(doc, http.responseBody());
-      currentLat = doc["location"]["lat"];
-      currentLon = doc["location"]["lng"];
-      Serial.printf("=> [Wi-Fi HERE] Thành công (Sai số %dm): %.6f, %.6f\n", (int)doc["location"]["accuracy"], currentLat, currentLon);
-      
-      http.stop();
-      secureClient.stop(); 
-      delay(3000); 
+    if (updateLocationFromHereApi(payload)) {
       WiFi.scanDelete();
       return;
-    } else {
-      Serial.println("=> [LỖI] Server HERE từ chối (Sai Key hoặc cú pháp JSON).");
-      Serial.println(http.responseBody());
     }
-    
-    http.stop();
-    secureClient.stop(); 
-    delay(3000); 
   } else {
       Serial.println("=> [Wi-Fi] Thất bại do không đủ 2 mạng (chỉ tìm thấy 0 hoặc 1 mạng).");
   }
   WiFi.scanDelete();
 
   // =====================================
-  // [LỚP 3]: LBS NHÀ MẠNG
+  // [LỚP 2]: LBS NHÀ MẠNG
   // =====================================
-  Serial.println("=> [Wi-Fi] Thất bại. Gọi LBS nhà mạng...");
+  Serial.println("=> [Wi-Fi HERE] Thất bại. Gọi LBS nhà mạng...");
   
   // Kiểm tra xem PDP Context đã được kích hoạt chưa
-  modem.sendAT("+QIACT?");
+  modem.sendAT("+CGACT?");
   Serial.print("=> [DEBUG LBS] Trạng thái Context: ");
   modem.waitResponse(2000);
 
-  // Ép LBS dùng chung Context 1 với MQTT
-  modem.sendAT("+QLBSCFG=\"contextid\",1");
+  // Ép LBS dùng chung profile 1 với MQTT
+  modem.sendAT("+CLBSCFG=1");
   modem.waitResponse(1000); 
 
-  Serial.println("=> [DEBUG LBS] Đang gửi lệnh AT+QLBS (Timeout 30s)...");
-  modem.sendAT("+QLBS");
+  Serial.println("=> [DEBUG LBS] Dang gui lenh AT+CLBS (Timeout 30s)...");
+  modem.sendAT("+CLBS=1");
   
   // Chờ phản hồi, bắt thêm cả chữ ERROR để in ra. LBS có thể mất tới 30 giây!
-  int lbsRes = modem.waitResponse(30000, "+QLBS: 0,", "ERROR", "+CME ERROR:");
+  int lbsRes = modem.waitResponse(30000, "+CLBS: 0,", "ERROR", "+CME ERROR:");
   
   if (lbsRes == 1) {
     currentLat = modem.stream.readStringUntil(',').toFloat();
@@ -286,12 +225,127 @@ void updateHybridLocation() {
     modem.waitResponse();
     Serial.printf("=> [LBS] Thành công: %.6f, %.6f\n", currentLat, currentLon);
   } else if (lbsRes == 2) {
-    Serial.println("=> [LBS] Lỗi: Module trả về chữ ERROR (Có thể EG800K chưa cấu hình Server LBS mặc định).");
+    Serial.println("=> [LBS] Lỗi: Module trả về chữ ERROR (Có thể A768C chưa cấu hình Server LBS mặc định).");
   } else if (lbsRes == 3) {
     Serial.println("=> [LBS] Lỗi: +CME ERROR (Lỗi viễn thông cấp thấp).");
   } else {
     Serial.println("=> [LBS] Thất bại hoàn toàn (Timeout). Giữ tọa độ cũ.");
   }
+}
+
+bool updateLocationFromHereApi(const String& payload) {
+  String url = String("https://pos.ls.hereapi.com/positioning/v1/locate?apiKey=") + HERE_API_KEY;
+
+  modem.sendAT("+HTTPTERM");
+  modem.waitResponse(1000);
+
+  modem.sendAT("+HTTPINIT");
+  if (modem.waitResponse(5000) != 1) {
+    Serial.println("=> [HERE] Loi HTTPINIT.");
+    return false;
+  }
+
+  // KHÔNG DÙNG LỆNH "CID" VÀ "HTTPSSL" CHO SIMCOM 4G (A768C)
+  // Module sẽ tự động bắt https:// từ URL để mã hóa SSL và dùng PDP Context mặc định
+
+  modem.sendAT("+HTTPPARA=\"URL\",\"", url, "\"");
+  if (modem.waitResponse(5000) != 1) {
+    Serial.println("=> [HERE] Loi HTTPPARA URL.");
+    modem.sendAT("+HTTPTERM");
+    modem.waitResponse(1000);
+    return false;
+  }
+
+  modem.sendAT("+HTTPPARA=\"CONTENT\",\"application/json\"");
+  modem.waitResponse(3000);
+
+  modem.sendAT("+HTTPDATA=", payload.length(), ",10000");
+  if (modem.waitResponse(10000, "DOWNLOAD") != 1) {
+    Serial.println("=> [HERE] Module khong vao che do HTTPDATA DOWNLOAD.");
+    modem.sendAT("+HTTPTERM");
+    modem.waitResponse(1000);
+    return false;
+  }
+
+  modem.stream.print(payload);
+  if (modem.waitResponse(15000) != 1) {
+    Serial.println("=> [HERE] Loi gui JSON payload.");
+    modem.sendAT("+HTTPTERM");
+    modem.waitResponse(1000);
+    return false;
+  }
+
+  modem.sendAT("+HTTPACTION=1"); // 1 = POST
+  if (modem.waitResponse(60000, "+HTTPACTION: ") != 1) {
+    Serial.println("=> [HERE] HTTPACTION timeout.");
+    modem.sendAT("+HTTPTERM");
+    modem.waitResponse(1000);
+    return false;
+  }
+
+  // Đọc phản hồi HTTPACTION
+  modem.stream.readStringUntil(','); // Bỏ qua Method (1)
+  int statusCode = modem.stream.readStringUntil(',').toInt(); // Status Code (200)
+  int dataLength = modem.stream.readStringUntil('\n').toInt(); // Length
+  modem.waitResponse(3000);
+  Serial.printf("=> [DEBUG HERE API] HTTP Status Code = %d, Length = %d\n", statusCode, dataLength);
+
+  if (statusCode != 200 || dataLength <= 0) {
+    Serial.println("=> [HERE] Server tu choi hoac khong co body.");
+    modem.sendAT("+HTTPTERM");
+    modem.waitResponse(1000);
+    return false;
+  }
+
+  // SỬA CÚ PHÁP ĐỌC DATA (Bỏ số '0,' đi so với code cũ để tương thích 4G)
+  modem.sendAT("+HTTPREAD=", dataLength);
+  if (modem.waitResponse(10000, "+HTTPREAD: ") != 1) {
+    Serial.println("=> [HERE] Loi HTTPREAD.");
+    modem.sendAT("+HTTPTERM");
+    modem.waitResponse(1000);
+    return false;
+  }
+
+  modem.stream.readStringUntil('\n'); // Bỏ qua dòng độ dài
+  String response = "";
+  uint32_t deadline = millis() + 10000;
+  while (millis() < deadline) {
+    while (modem.stream.available()) {
+      response += static_cast<char>(modem.stream.read());
+    }
+    if (response.indexOf("\r\nOK") >= 0) break; // Thoát nhanh nếu đã đọc xong
+    delay(10);
+  }
+
+  modem.sendAT("+HTTPTERM");
+  modem.waitResponse(1000);
+
+  int jsonStart = response.indexOf('{');
+  int jsonEnd = response.lastIndexOf('}');
+  if (jsonStart < 0 || jsonEnd <= jsonStart) {
+    Serial.println("=> [HERE] Khong tim thay JSON trong response.");
+    return false;
+  }
+
+  String json = response.substring(jsonStart, jsonEnd + 1);
+  StaticJsonDocument<768> doc;
+  DeserializationError err = deserializeJson(doc, json);
+  if (err) {
+    Serial.println("=> [HERE] Parse JSON that bai.");
+    return false;
+  }
+
+  currentLat = doc["location"]["lat"] | 0.0;
+  currentLon = doc["location"]["lng"] | 0.0;
+  int accuracy = doc["location"]["accuracy"] | 0;
+
+  if (currentLat == 0.0 && currentLon == 0.0) {
+    Serial.println("=> [HERE] Response khong co toa do hop le.");
+    return false;
+  }
+
+  Serial.printf("=> [Wi-Fi HERE] Thanh cong (Sai so %dm): %.6f, %.6f\n", accuracy, currentLat, currentLon);
+  return true;
 }
 
 

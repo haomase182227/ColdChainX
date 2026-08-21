@@ -7,6 +7,7 @@ using ColdChainX.Infrastructure.Persistence;
 using ColdChainX.Shared.Responses;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 
 namespace ColdChainX.Infrastructure.Services;
 
@@ -19,6 +20,78 @@ public class WarehouseFlowService : IWarehouseFlowService
     {
         _db = db;
         _hubContext = hubContext;
+    }
+
+    public async Task<ApiResponse<LpnResponse>> ProcessInboundQcAsync(Guid orderId, ProcessInboundQcRequest request, Guid receiverId)
+    {
+        var order = await _db.TransportOrders
+            .Include(o => o.Schedule)
+                .ThenInclude(s => s!.Route)
+            .FirstOrDefaultAsync(o => o.OrderId == orderId);
+
+        if (order == null)
+            return ApiResponse<LpnResponse>.Failure("Order not found.");
+
+        if (request.ActualWeightKg <= 0 || request.LengthCm <= 0 || request.WidthCm <= 0 || request.HeightCm <= 0)
+            return ApiResponse<LpnResponse>.Failure("Actual weight and dimensions must be greater than 0.");
+
+        var actualCbm = CalculateCbm(request.LengthCm, request.WidthCm, request.HeightCm, order.Quantity);
+        var now = DateTime.UtcNow;
+
+        bool isFastTrack = false;
+        if (order.Schedule != null)
+        {
+            var cutoffTime = order.Schedule.DepartureDate.Date.Add(order.Schedule.CutOffTime);
+            var minutesLate = (now - cutoffTime).TotalMinutes;
+            
+            if (minutesLate > 60)
+            {
+                return ApiResponse<LpnResponse>.Failure($"CẢNH BÁO ĐỎ: Hàng tới trễ hơn 60 phút so với giờ Cut-off ({cutoffTime:HH:mm}). Hệ thống chặn (Hard-block). Bắt buộc phải dời chuyến (Push to Next Trip)!");
+            }
+            else if (minutesLate > 0)
+            {
+                isFastTrack = true;
+            }
+        }
+
+        var initialState = isFastTrack ? LpnState.IN_STOCK : LpnState.RECEIVING;
+
+        await using var tx = await _db.Database.BeginTransactionAsync();
+
+        var lpn = new Lpn
+        {
+            LpnId = Guid.NewGuid(),
+            LpnCode = GenerateCode("LPN"),
+            OrderId = order.OrderId,
+            Order = order,
+            CustomerId = order.CustomerId,
+            RouteId = order.Schedule?.RouteId,
+            TripId = order.MasterTripId,
+            Quantity = order.Quantity,
+            ActualWeightKg = request.ActualWeightKg,
+            ActualCbm = actualCbm,
+            LengthCm = request.LengthCm,
+            WidthCm = request.WidthCm,
+            HeightCm = request.HeightCm,
+            RequiredTemperature = ParseTemperature(order.TempCondition),
+            RecordedTemperature = request.RecordedTemperature,
+            State = initialState,
+            DiscrepancyReason = null,
+            SlaDeadline = CalculateSlaDeadline(order.Schedule),
+            InboundTime = now,
+            IsFastTrack = isFastTrack,
+            CreatedAt = now
+        };
+
+        _db.Lpns.Add(lpn);
+        order.OrderDimension.ActualWeightKg = request.ActualWeightKg;
+        order.OrderDimension.ActualCbm = actualCbm;
+        order.Status = isFastTrack ? "IN_STOCK" : "RECEIVING";
+
+        await _db.SaveChangesAsync();
+        await tx.CommitAsync();
+
+        return ApiResponse<LpnResponse>.SuccessResponse(ToResponse(lpn, order.TrackingCode), "Inbound QC completed and GRN generated.");
     }
 
     public async Task<ApiResponse<object>> ResolveDiscrepancyAsync(Guid lpnId, ResolveDiscrepancyRequest request, Guid salesUserId)
@@ -233,6 +306,33 @@ public class WarehouseFlowService : IWarehouseFlowService
             return actual > 0 ? 100m : 0m;
 
         return Math.Round(Math.Abs(actual - expected) / expected * 100m, 2);
+    }
+
+    private static decimal CalculateCbm(decimal lengthCm, decimal widthCm, decimal heightCm, int quantity)
+        => Math.Round(lengthCm * widthCm * heightCm * Math.Max(quantity, 1) / 1_000_000m, 4);
+
+    private static decimal? ParseTemperature(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var normalized = new string(value
+                .Where(ch => char.IsDigit(ch) || ch == '-' || ch == '.' || ch == ',')
+                .ToArray())
+            .Replace(',', '.')
+            .Trim();
+
+        return decimal.TryParse(normalized, NumberStyles.Any, CultureInfo.InvariantCulture, out var temp)
+            ? temp
+            : null;
+    }
+
+    private static DateTime? CalculateSlaDeadline(RouteSchedule? schedule)
+    {
+        if (schedule == null)
+            return DateTime.UtcNow.AddHours(24);
+
+        return schedule.DepartureDate.Date.Add(schedule.CutOffTime).AddHours(24);
     }
 
     private static string GenerateCode(string prefix)

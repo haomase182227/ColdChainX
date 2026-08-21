@@ -1451,6 +1451,7 @@ public class DispatchController : ControllerBase
                 origin,
                 destination,
                 string.IsNullOrWhiteSpace(waypoints) ? null : waypoints,
+                optimize: false,
                 HttpContext.RequestAborted);
             var response = await BuildTripRouteResponseAsync(trip, actualDestinationLocation, deliveryStops, optimizedRoute);
             return Ok(new { Success = true, Data = response });

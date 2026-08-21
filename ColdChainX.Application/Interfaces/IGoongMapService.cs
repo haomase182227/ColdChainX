@@ -8,5 +8,6 @@ public interface IGoongMapService
         string origin,
         string destination,
         string? waypoints,
+        bool optimize = true,
         CancellationToken cancellationToken = default);
 }
