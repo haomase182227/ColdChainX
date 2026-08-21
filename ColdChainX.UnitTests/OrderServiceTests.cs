@@ -232,6 +232,73 @@ namespace ColdChainX.UnitTests
             Assert.Equal("PENDING_REVIEW", result.Data.Status);
         }
 
+        [Fact]
+        public async Task UpdateOrder_WithPackageLines_ReplacesLinesAndSynchronizesTotals()
+        {
+            var customerId = Guid.NewGuid();
+            var orderId = Guid.NewGuid();
+            _db.TransportOrders.Add(new TransportOrder
+            {
+                OrderId = orderId,
+                TrackingCode = "TRK-PACKAGE-UPDATE-01",
+                CustomerId = customerId,
+                ItemName = "Frozen seafood",
+                Category = "MEAT_SEAFOOD",
+                Quantity = 1,
+                PackingType = "Carton Box",
+                TempCondition = "-18",
+                Status = "PENDING_REVIEW",
+                OrderDimension = new OrderDimension
+                {
+                    OrderId = orderId,
+                    ExpectedWeightKg = 5m,
+                    ActualWeightKg = 5m,
+                    ExpectedCbm = 0.02m,
+                    ActualCbm = 0.02m,
+                    TotalPackageQuantity = 1
+                },
+                OrderPackageLines =
+                {
+                    new OrderPackageLine
+                    {
+                        OrderPackageLineId = Guid.NewGuid(),
+                        OrderId = orderId,
+                        Label = "Old",
+                        CapacityKg = 5m,
+                        Quantity = 1
+                    }
+                }
+            });
+            await _db.SaveChangesAsync();
+
+            var request = new UpdateOrderRequest
+            {
+                PackageLinesJson = """
+                    [
+                      { "label": "Small", "capacityKg": 5, "quantity": 2 },
+                      { "label": "Large", "capacityKg": 10, "quantity": 1 }
+                    ]
+                    """
+            };
+
+            var result = await _service.UpdateOrderAsync(orderId, request, customerId);
+
+            Assert.True(result.Success, result.Message);
+            Assert.Equal(3, result.Data!.Quantity);
+            Assert.Equal(20m, result.Data.ExpectedWeightKg);
+            Assert.Equal(0.0553m, result.Data.ExpectedCbm);
+
+            var savedOrder = await _db.TransportOrders
+                .Include(order => order.OrderDimension)
+                .Include(order => order.OrderPackageLines)
+                .SingleAsync(order => order.OrderId == orderId);
+            Assert.Equal(3, savedOrder.Quantity);
+            Assert.Equal(3, savedOrder.OrderDimension!.TotalPackageQuantity);
+            Assert.Equal(2, savedOrder.OrderPackageLines.Count);
+            Assert.Equal(20m, savedOrder.OrderDimension.ExpectedWeightKg);
+            Assert.Equal("DENSITY_FACTOR", savedOrder.OrderDimension.CbmEstimationMethod);
+        }
+
         #region Mock Classes
 
         private class MockLocationService : ILocationService

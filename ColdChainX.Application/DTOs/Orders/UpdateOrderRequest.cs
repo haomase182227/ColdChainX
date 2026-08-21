@@ -20,6 +20,12 @@ namespace ColdChainX.Application.DTOs.Orders
         [FromForm(Name = "Quantity")]
         public int? Quantity { get; set; }
 
+        [FromForm(Name = "Package_Lines")]
+        public string? PackageLinesJson { get; set; }
+
+        [FromForm(Name = "Customer_Provided_Total_CBM")]
+        public decimal? CustomerProvidedTotalCbm { get; set; }
+
         [FromForm(Name = "Packaging_Type")]
         public string? PackagingType { get; set; }
 
