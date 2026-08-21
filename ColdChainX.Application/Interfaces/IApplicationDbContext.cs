@@ -16,6 +16,7 @@ namespace ColdChainX.Application.Interfaces
         DbSet<Warehouse> Warehouses { get; }
         DbSet<WarehouseReceipt> WarehouseReceipts { get; }
         DbSet<WeightTier> WeightTiers { get; }
+        DbSet<SystemConfig> SystemConfigs { get; }
         DbSet<InboundAsn> InboundAsns { get; }
 
         DbSet<OutboundOrder> OutboundOrders { get; }

@@ -1,15 +1,13 @@
 using ColdChainX.Application.Features.Inbound.Queries;
 using ColdChainX.Application.Helpers;
 using ColdChainX.Application.Interfaces;
+using ColdChainX.Application.Helpers;
 using ColdChainX.Core.Entities;
 using ColdChainX.Core.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
+using System.Text.Json;
 
 namespace ColdChainX.Application.Features.Inbound.Commands;
 
@@ -18,21 +16,20 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
     private readonly IApplicationDbContext _context;
     private readonly ILogger<ReEvaluateInboundQcCommandHandler> _logger;
     private readonly IFileService _fileService;
-    private readonly IMediator _mediator;
 
     public ReEvaluateInboundQcCommandHandler(
         IApplicationDbContext context,
         ILogger<ReEvaluateInboundQcCommandHandler> logger,
-        IFileService fileService,
-        IMediator mediator)
+        IFileService fileService)
     {
         _context = context;
         _logger = logger;
         _fileService = fileService;
-        _mediator = mediator;
     }
 
-    public async Task<ReEvaluateInboundQcResponse> Handle(ReEvaluateInboundQcCommand request, CancellationToken cancellationToken)
+    public async Task<ReEvaluateInboundQcResponse> Handle(
+        ReEvaluateInboundQcCommand request,
+        CancellationToken cancellationToken)
     {
         if (request.LpnId == Guid.Empty)
             return Failure("LpnId is required.");
@@ -65,35 +62,39 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
         var asn = await _context.InboundAsns
             .FirstOrDefaultAsync(a => a.OrderId == lpn.OrderId, cancellationToken);
 
-        if (asn != null && asn.WarehouseId.HasValue && request.WarehouseId != Guid.Empty && asn.WarehouseId.Value != request.WarehouseId)
-            return Failure("ASN does not belong to current warehouse.");
+        var preconditionFailure = ValidateEditableLpn(currentLpn, request.WarehouseId);
+        if (preconditionFailure != null)
+            return Failure(preconditionFailure);
 
-        var receipt = lpn.Receipt;
-        if (receipt == null)
-            return Failure("Warehouse Receipt not found for this LPN.");
-
-        string? evidenceImageUrl = lpn.EvidenceImageUrl;
-        if (request.EvidenceImages != null && request.EvidenceImages.Count > 0)
+        string? evidenceImageUrl = null;
+        if (request.EvidenceImages is { Count: > 0 })
         {
-            var uploadedUrls = new System.Collections.Generic.List<string>();
+            var uploadedUrls = new List<string>();
             foreach (var file in request.EvidenceImages)
             {
-                var url = await _fileService.UploadFileAsync(file);
-                uploadedUrls.Add(url);
+                if (file.Length > 10 * 1024 * 1024)
+                    return Failure($"File {file.FileName} exceeds the 10MB size limit.");
+
+                uploadedUrls.Add(await _fileService.UploadFileAsync(file));
             }
-            evidenceImageUrl = string.Join(";", uploadedUrls);
+
+            evidenceImageUrl = string.Join(",", uploadedUrls);
         }
 
         var now = DateTime.UtcNow;
         var storedExpectedCbm = order.OrderDimension.ExpectedCbm;
-        var expectedCbm = order.OrderDimension.ExpectedCbm;
+        var expectedCbm = InboundQcMeasurementCalculator.CalculateExpectedCbm(order.OrderDimension, order.Quantity);
         var actualCbm = InboundQcMeasurementCalculator.CalculateCbm(request.LengthCm, request.WidthCm, request.HeightCm, order.Quantity);
 
 #if DEBUG
         _logger.LogDebug(
-            "Inbound QC re-evaluation CBM trace storedExpectedCbm={StoredExpectedCbm} actualCbm={ActualCbm} actualDimensionsCm={ActualLengthCm}x{ActualWidthCm}x{ActualHeightCm}",
+            "Inbound QC re-evaluation CBM trace storedExpectedCbm={StoredExpectedCbm} calculatedExpectedCbmFromDimensions={CalculatedExpectedCbmFromDimensions} actualCbm={ActualCbm} expectedDimensionsCm={ExpectedLengthCm}x{ExpectedWidthCm}x{ExpectedHeightCm} actualDimensionsCm={ActualLengthCm}x{ActualWidthCm}x{ActualHeightCm}",
             storedExpectedCbm,
+            expectedCbm,
             actualCbm,
+            order.OrderDimension.LengthCm,
+            order.OrderDimension.WidthCm,
+            order.OrderDimension.HeightCm,
             request.LengthCm,
             request.WidthCm,
             request.HeightCm);
@@ -102,6 +103,7 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
         var weightDiff = CalculateDiffPercent(order.OrderDimension.ExpectedWeightKg, request.ActualWeightKg);
         var cbmDiff = CalculateDiffPercent(expectedCbm, actualCbm);
         var maxDiff = Math.Max(weightDiff, cbmDiff);
+        var hasDiscrepancy = maxDiff > DiscrepancyThresholdPercent;
 
         lpn.ActualWeightKg = request.ActualWeightKg;
         lpn.ActualCbm = actualCbm;
@@ -109,8 +111,10 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
         lpn.WidthCm = request.WidthCm;
         lpn.HeightCm = request.HeightCm;
         lpn.RecordedTemperature = request.Temperature;
-        lpn.State = LpnState.RECEIVING;
-        lpn.DiscrepancyReason = null;
+        lpn.State = hasDiscrepancy ? LpnState.DISCREPANCY_HOLD : LpnState.RECEIVING;
+        lpn.DiscrepancyReason = hasDiscrepancy
+            ? $"Actual cargo differs from expected by {maxDiff:0.##}% (weight {weightDiff:0.##}%, cbm {cbmDiff:0.##}%). (Re-evaluated)"
+            : null;
         if (!string.IsNullOrEmpty(evidenceImageUrl))
         {
             lpn.EvidenceImageUrl = evidenceImageUrl;
@@ -125,30 +129,75 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
 
         if (asn != null)
         {
-            asn.Status = "QC_PASSED";
+            asn.Status = hasDiscrepancy ? "DISCREPANCY_HOLD" : "QC_PASSED";
         }
 
-        receipt.ReferenceDocNo = "PENDING_PUTAWAY";
-        receipt.Reason = null;
+        receipt.ReferenceDocNo = hasDiscrepancy ? "DISCREPANCY_HOLD" : "PENDING_PUTAWAY";
+        receipt.Reason = hasDiscrepancy ? "QC discrepancy hold (Re-evaluated)" : null;
         receipt.RecordedTemperature = request.Temperature;
-        receipt.Note = "QC passed and waiting putaway. (Re-evaluated)";
+        receipt.Note = hasDiscrepancy ? "QC discrepancy hold. (Re-evaluated)" : "QC passed and waiting putaway. (Re-evaluated)";
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        var pdfBytes = await _mediator.Send(new GenerateReceiptPdfQuery(receipt.ReceiptId), cancellationToken);
+        var pdfBytes = hasDiscrepancy
+            ? await _mediator.Send(new GenerateDiscrepancyPdfQuery(receipt.ReceiptId), cancellationToken)
+            : await _mediator.Send(new GenerateReceiptPdfQuery(receipt.ReceiptId), cancellationToken);
 
-        var pdfFileName = $"grn-{order.TrackingCode}-{now:yyyyMMddHHmmss}.pdf";
+        var pdfFileName = hasDiscrepancy 
+            ? $"discrepancy-{order.TrackingCode}-{now:yyyyMMddHHmmss}.pdf" 
+            : $"grn-{order.TrackingCode}-{now:yyyyMMddHHmmss}.pdf";
             
         var pdfUrl = await _fileService.UploadFileAsync(pdfBytes, pdfFileName);
         
         receipt.PdfUrl = pdfUrl;
 
+        var existingDoc = await _context.TransportDocuments
+            .FirstOrDefaultAsync(d => d.OrderId == order.OrderId && d.DocType == "DISCREPANCY_REPORT", cancellationToken);
+
+        if (hasDiscrepancy)
+        {
+            if (existingDoc == null)
+            {
+                _context.TransportDocuments.Add(new TransportDocument
+                {
+                    DocId = Guid.NewGuid(),
+                    OrderId = order.OrderId,
+                    DocType = "DISCREPANCY_REPORT",
+                    ImageUrl = pdfUrl,
+                    UploadedBy = receipt.ReceiverId,
+                    CreatedAt = now
+                });
+            }
+            else
+            {
+                existingDoc.ImageUrl = pdfUrl;
+                existingDoc.CreatedAt = now;
+            }
+        }
+        else
+        {
+            if (existingDoc != null)
+            {
+            }
+        }
+
         await _context.SaveChangesAsync(cancellationToken);
+
+        if (hasDiscrepancy)
+        {
+            _logger.LogWarning(
+                "Inbound QC re-evaluation: discrepancy still detected lpn={LpnCode} order={OrderId} maxDiff={MaxDiffPercent}",
+                lpn.LpnCode,
+                order.OrderId,
+                maxDiff);
+        }
 
         return new ReEvaluateInboundQcResponse
         {
             Success = true,
-            Message = "Re-evaluation passed successfully. LPN ready for putaway.",
+            Message = hasDiscrepancy
+                ? "Re-evaluation completed. LPN remains in DISCREPANCY_HOLD."
+                : "Re-evaluation passed successfully. LPN ready for putaway.",
             LpnId = lpn.LpnId,
             LpnCode = lpn.LpnCode,
             State = lpn.State.ToString(),
@@ -160,11 +209,6 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
     private static ReEvaluateInboundQcResponse Failure(string message)
         => new() { Success = false, Message = message };
 
-    private static decimal CalculateDiffPercent(decimal expected, decimal actual)
-    {
-        if (expected <= 0)
-            throw new ArgumentOutOfRangeException(nameof(expected), "Expected measurement must be greater than 0.");
-
-        return Math.Round(Math.Abs(actual - expected) / expected * 100m, 2);
-    }
+    private static DateTime DbNow()
+        => DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
 }

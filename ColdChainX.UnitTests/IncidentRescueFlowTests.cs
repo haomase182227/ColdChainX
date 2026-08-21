@@ -1,5 +1,6 @@
 using ColdChainX.Application.DTOs.Dispatch;
 using ColdChainX.Application.DTOs.Incident;
+using ColdChainX.Application.Features.Delivery.Commands;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
 using ColdChainX.Core.Enums;
@@ -509,7 +510,8 @@ public sealed class IncidentRescueFlowTests : IDisposable
         Assert.Equal("READY_FOR_ROUTING", (await _db.TransportOrders.FindAsync(_orderId))!.Status);
         Assert.Equal("RELAY_COMPLETED", (await _db.MasterTrips.FindAsync(_tripId))!.Status);
         var receipt = await _db.WarehouseReceipts.SingleAsync(r => r.ReceiptId == lpnAtWarehouse.ReceiptId);
-        Assert.Equal("INCIDENT_RELAY_INBOUND", receipt.ReceiptType);
+        Assert.Equal("INCIDENT_RELAY", receipt.ReceiptType);
+        Assert.True(receipt.ReceiptType.Length <= 20);
         Assert.Contains("EXT-SEAL-001", receipt.Note);
         Assert.Contains("bỏ qua QC", receipt.Note);
     }
@@ -569,6 +571,214 @@ public sealed class IncidentRescueFlowTests : IDisposable
         Assert.Equal("CREATE_REDISPATCH_TRIP", inbound.Data.RequiredWarehouseAction);
         var incident = await _db.IncidentReports.FindAsync(_incidentId);
         Assert.Contains("WAREHOUSE-SEAL-001", incident!.RescuePlanDetails);
+    }
+
+    [Fact]
+    public async Task NoShowReturn_SelectedWarehouse_ReusesIncidentInboundBySealWithoutQc()
+    {
+        var warehouseId = Guid.NewGuid();
+        var otherWarehouseId = Guid.NewGuid();
+        var warehouseWorkerId = Guid.NewGuid();
+        var otherWarehouseWorkerId = Guid.NewGuid();
+        var driverRole = new Role { RoleId = Guid.NewGuid(), RoleName = "Driver" };
+        var warehouseRole = new Role { RoleId = Guid.NewGuid(), RoleName = "WarehouseWorker" };
+        var vehicle = BuildVehicle(_brokenVehicleId, "51C-NOSHOW", "ON_TRIP", 5000m, 30m, -20m, 10m);
+        var warehouse = new Warehouse
+        {
+            WarehouseId = warehouseId,
+            WarehouseCode = "PMH-COLD",
+            WarehouseName = "Kho lạnh Phú Mỹ Hưng",
+            WarehouseType = "COLD_STORAGE",
+            Address = "10.732537,106.714447",
+            MaxPallets = 100,
+            Status = "ACTIVE"
+        };
+        var otherWarehouse = new Warehouse
+        {
+            WarehouseId = otherWarehouseId,
+            WarehouseCode = "OTHER-COLD",
+            WarehouseName = "Kho lạnh khác",
+            WarehouseType = "COLD_STORAGE",
+            Address = "10.800000,106.700000",
+            MaxPallets = 100,
+            Status = "ACTIVE"
+        };
+        var driverUser = new User
+        {
+            UserId = _driverUserId,
+            Username = "noshow_driver",
+            FullName = "No Show Driver",
+            Role = driverRole,
+            RoleId = driverRole.RoleId,
+            Status = "ACTIVE"
+        };
+        var warehouseWorker = new User
+        {
+            UserId = warehouseWorkerId,
+            Username = "pmh_warehouse",
+            FullName = "PMH Warehouse Worker",
+            Role = warehouseRole,
+            RoleId = warehouseRole.RoleId,
+            WarehouseId = warehouseId,
+            Status = "ACTIVE"
+        };
+        var otherWarehouseWorker = new User
+        {
+            UserId = otherWarehouseWorkerId,
+            Username = "other_warehouse",
+            FullName = "Other Warehouse Worker",
+            Role = warehouseRole,
+            RoleId = warehouseRole.RoleId,
+            WarehouseId = otherWarehouseId,
+            Status = "ACTIVE"
+        };
+        var driver = new Driver
+        {
+            DriverId = _driverId,
+            UserId = _driverUserId,
+            FullName = "No Show Driver",
+            IdentityNumber = "DRV-NOSHOW",
+            PhoneNumber = "0900000000",
+            DateOfBirth = new DateOnly(1990, 1, 1),
+            JoinDate = new DateOnly(2024, 1, 1),
+            Status = "ON_TRIP"
+        };
+        var trip = new MasterTrip
+        {
+            TripId = _tripId,
+            VehicleId = vehicle.VehicleId,
+            OriginLocationId = Guid.NewGuid(),
+            DestinationLocationId = Guid.NewGuid(),
+            SealNumber = "RETURN-SEAL-001",
+            TargetTemperature = -5m,
+            PlannedStartTime = DateTime.UtcNow.AddHours(-4),
+            PlannedEndTime = DateTime.UtcNow,
+            Status = "IN_TRANSIT"
+        };
+        var order = new TransportOrder
+        {
+            OrderId = _orderId,
+            TrackingCode = "CT-HCM-NOSHOW",
+            ItemName = "Frozen cargo",
+            Category = "FROZEN",
+            Quantity = 10,
+            PackingType = "PALLET",
+            TempCondition = "-5",
+            Status = "DELIVERY_FAILED_NOSHOW",
+            MasterTripId = null
+        };
+        var lpn = new Lpn
+        {
+            LpnId = _lpnId,
+            LpnCode = "LPN-CT-HCM-NOSHOW",
+            OrderId = order.OrderId,
+            ReceiptId = Guid.NewGuid(),
+            TripId = trip.TripId,
+            RouteId = Guid.NewGuid(),
+            Quantity = 10,
+            State = LpnState.SHIPPING
+        };
+
+        _db.Roles.AddRange(driverRole, warehouseRole);
+        _db.Users.AddRange(driverUser, warehouseWorker, otherWarehouseWorker);
+        _db.Drivers.Add(driver);
+        _db.Vehicles.Add(vehicle);
+        _db.Warehouses.AddRange(warehouse, otherWarehouse);
+        _db.MasterTrips.Add(trip);
+        _db.TripDrivers.Add(new TripDriver
+        {
+            TripDriverId = Guid.NewGuid(),
+            TripId = trip.TripId,
+            DriverId = driver.DriverId,
+            DriverRole = "PRIMARY"
+        });
+        _db.TransportOrders.Add(order);
+        _db.Lpns.Add(lpn);
+        _db.DeliveryEpods.Add(new DeliveryEpod
+        {
+            EpodId = Guid.NewGuid(),
+            OrderId = order.OrderId,
+            HandoverConfirmedAt = DateTime.UtcNow,
+            Status = "NO_SHOW",
+            PaymentStatus = "SKIPPED_NO_SHOW",
+            CreatedAt = DateTime.UtcNow
+        });
+        await _db.SaveChangesAsync();
+
+        var closeShift = new CloseShiftCommandHandler(
+            _db,
+            new FakeDeliveryEventService(),
+            new FakeDriverAvailabilityService());
+        await Assert.ThrowsAsync<ColdChainX.Shared.Exceptions.ValidationException>(() =>
+            closeShift.Handle(new CloseShiftCommand
+            {
+                TripId = trip.TripId,
+                WarehouseId = warehouse.WarehouseId,
+                UserId = driverUser.UserId
+            }, CancellationToken.None));
+
+        Assert.Empty(_db.IncidentReports.Where(item =>
+            item.IncidentType == IncidentType.CUSTOMER_NO_SHOW_RETURN.ToString()));
+        lpn.State = LpnState.RETURN_PENDING;
+        await _db.SaveChangesAsync();
+
+        var closeResult = await closeShift.Handle(new CloseShiftCommand
+        {
+            TripId = trip.TripId,
+            WarehouseId = warehouse.WarehouseId,
+            UserId = driverUser.UserId
+        }, CancellationToken.None);
+
+        Assert.True(closeResult.Success);
+        var incident = await _db.IncidentReports.SingleAsync(item =>
+            item.IncidentType == IncidentType.CUSTOMER_NO_SHOW_RETURN.ToString());
+        Assert.Equal("EXTERNAL_REEFER_IN_TRANSIT", incident.Status);
+        var plan = JsonSerializer.Deserialize<ExternalReeferPlanRecord>(incident.RescuePlanDetails!);
+        Assert.NotNull(plan);
+        Assert.Equal(warehouse.WarehouseId, plan.DestinationWarehouseId);
+        Assert.Contains(lpn.LpnId, plan.LpnIds);
+
+        var wrongWarehouseInbound = await _service.InboundRouteWarehouseAsync(
+            incident.IncidentId,
+            new InboundRouteWarehouseRequest { SealNumber = "RETURN-SEAL-001" },
+            otherWarehouseWorker.UserId);
+
+        Assert.False(wrongWarehouseInbound.Success);
+        Assert.Equal(403, wrongWarehouseInbound.StatusCode);
+        Assert.Equal(LpnState.RETURN_PENDING, lpn.State);
+        Assert.Empty(_db.WarehouseReceipts);
+
+        var wrongSealInbound = await _service.InboundRouteWarehouseAsync(
+            incident.IncidentId,
+            new InboundRouteWarehouseRequest { SealNumber = "WRONG-SEAL" },
+            warehouseWorker.UserId);
+
+        Assert.False(wrongSealInbound.Success);
+        Assert.Equal(LpnState.RETURN_PENDING, lpn.State);
+        Assert.Empty(_db.WarehouseReceipts);
+
+        var inbound = await _service.InboundRouteWarehouseAsync(
+            incident.IncidentId,
+            new InboundRouteWarehouseRequest { SealNumber = "RETURN-SEAL-001" },
+            warehouseWorker.UserId);
+
+        Assert.True(inbound.Success, inbound.Message);
+        Assert.Equal("READY_FOR_REDISPATCH", inbound.Data!.IncidentStatus);
+        Assert.Equal("CREATE_REDISPATCH_TRIP", inbound.Data.RequiredWarehouseAction);
+        Assert.Equal(LpnState.IN_STOCK, lpn.State);
+        Assert.Equal(warehouse.WarehouseId, lpn.WarehouseId);
+        Assert.Null(lpn.TripId);
+        Assert.Null(lpn.RouteId);
+        Assert.Equal("READY_FOR_ROUTING", order.Status);
+        Assert.Null(order.MasterTripId);
+        Assert.Equal("COMPLETED", trip.Status);
+
+        var receipt = await _db.WarehouseReceipts.SingleAsync(item => item.OrderId == order.OrderId);
+        Assert.Equal("NO_SHOW_RETURN", receipt.ReceiptType);
+        Assert.True(receipt.ReceiptType.Length <= 20);
+        Assert.Contains("bỏ qua QC", receipt.Note);
+        Assert.Contains("RETURN-SEAL-001", receipt.Note);
+        Assert.Empty(_db.InboundQcPackageLines);
     }
 
     [Fact]
@@ -979,6 +1189,51 @@ public sealed class IncidentRescueFlowTests : IDisposable
                 StreamingDeviceCodes.Remove(deviceCode);
             return Task.FromResult(PublishSucceeds);
         }
+    }
+
+    private sealed class FakeDeliveryEventService : IDeliveryEventService
+    {
+        public Task NotifyHandoverPartialReturnAsync(
+            Guid orderId,
+            string trackingCode,
+            Guid epodId,
+            int rejectedLpnCount,
+            int totalLpnCount,
+            string orderStatus,
+            string handoverPdfUrl,
+            CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task NotifyCodPaymentConfirmedAsync(
+            Guid orderId,
+            string trackingCode,
+            Guid epodId,
+            decimal amountPaid,
+            string paymentMethod,
+            string orderStatus,
+            string epodPdfUrl,
+            string? receiverName,
+            CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task NotifyTripCompletedAsync(
+            Guid tripId,
+            string tripCode,
+            DateTime completedAt,
+            CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+    }
+
+    private sealed class FakeDriverAvailabilityService : IDriverAvailabilityService
+    {
+        public Task<DriverAvailability> CheckAsync(Guid driverId, decimal additionalHours, DateOnly day)
+            => Task.FromResult(new DriverAvailability { DriverId = driverId, CanAssign = true });
+
+        public Task RecordWorkAsync(Guid driverId, Guid tripId, decimal hours, DateOnly day)
+            => Task.CompletedTask;
+
+        public Task ReconcileStatusAsync(Driver driver, Guid? excludedTripId = null)
+            => Task.CompletedTask;
     }
 
     private sealed class FakeNotificationHubContext : IHubContext<NotificationHub>

@@ -7,5 +7,6 @@ public enum IncidentType
     TEMP_EXCURSION = 3,
     DAMAGE_CARGO = 4,
     DELAY = 5,
-    REEFER_BREAKDOWN = 6
+    REEFER_BREAKDOWN = 6,
+    CUSTOMER_NO_SHOW_RETURN = 7
 }

@@ -13,6 +13,7 @@ public class DriverAvailabilityService : IDriverAvailabilityService
 
     public const decimal MaxDailyHours = 10m;
     public const decimal MaxWeeklyHours = 48m;
+    public static readonly TimeSpan RecoveryPeriod = TimeSpan.FromHours(4);
 
     private const string StatusRelax = "RELAX";
     private const string StatusAvailable = "ACTIVE";
@@ -38,13 +39,11 @@ public class DriverAvailabilityService : IDriverAvailabilityService
 
         if (dayHours + additionalHours > MaxDailyHours)
         {
-            result.CanAssign = false;
-            result.Reason = $"Vượt giới hạn lái xe trong ngày: {dayHours:F1}h + {additionalHours:F1}h > {MaxDailyHours:F0}h/ngày.";
+            result.Reason = $"Cảnh báo giờ lái dự kiến trong ngày: {dayHours:F1}h + {additionalHours:F1}h > {MaxDailyHours:F0}h. Tài xế cần luân phiên và nghỉ trong chuyến.";
         }
         else if (weekHours + additionalHours > MaxWeeklyHours)
         {
-            result.CanAssign = false;
-            result.Reason = $"Vượt giới hạn lái xe trong tuần: {weekHours:F1}h + {additionalHours:F1}h > {MaxWeeklyHours:F0}h/tuần.";
+            result.Reason = $"Cảnh báo giờ lái dự kiến trong tuần: {weekHours:F1}h + {additionalHours:F1}h > {MaxWeeklyHours:F0}h. Tài xế cần luân phiên và nghỉ trong chuyến.";
         }
 
         return result;
@@ -74,12 +73,14 @@ public class DriverAvailabilityService : IDriverAvailabilityService
             return;
         }
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var (dayHours, weekHours) = await SumHoursAsync(driver.DriverId, today, excludedTripId);
+        var lastCompletedAt = await _context.TripDrivers
+            .Where(td => td.DriverId == driver.DriverId
+                && td.Trip.CompletedAt.HasValue
+                && (!excludedTripId.HasValue || td.TripId != excludedTripId.Value))
+            .MaxAsync(td => td.Trip.CompletedAt);
 
-        var overLimit = dayHours >= MaxDailyHours || weekHours >= MaxWeeklyHours;
-
-        if (overLimit)
+        if (lastCompletedAt.HasValue
+            && DateTime.UtcNow < lastCompletedAt.Value.Add(RecoveryPeriod))
         {
             driver.Status = StatusRelax;
         }

@@ -8,4 +8,17 @@ public class CheckinDriverRequest
 {
     [Required(ErrorMessage = "Vui lòng đính kèm file hình ảnh chụp hiện trường xe đã tới kho/bãi giao hàng.")]
     public IFormFile ProofImageFile { get; set; } = null!;
+
+    // Optional phone GPS metadata for backward compatibility/reference only.
+    // Check-in authorization is based exclusively on the assigned vehicle's GPS.
+    [Range(-90, 90)]
+    public decimal? Latitude { get; set; }
+
+    [Range(-180, 180)]
+    public decimal? Longitude { get; set; }
+
+    public DateTimeOffset? LocationTimestamp { get; set; }
+
+    [Range(0, 10000)]
+    public double? AccuracyMeters { get; set; }
 }

@@ -11,8 +11,8 @@ using Microsoft.AspNetCore.Authorization;
 using FleetCreateDriverRequest = ColdChainX.Application.DTOs.Fleet.CreateDriverRequest;
 using FleetUpdateDriverRequest = ColdChainX.Application.DTOs.Fleet.UpdateDriverRequest;
 using ColdChainX.Application.DTOs.Fleet;
+using ColdChainX.Core.Entities;
 using System.Security.Claims;
-using Microsoft.AspNetCore.Authorization;
 
 namespace ColdChainX.API.Controllers
 {
@@ -115,6 +115,101 @@ namespace ColdChainX.API.Controllers
             if (Guid.TryParse(driverIdClaim, out var driverId))
                 return driverId;
             return Guid.Empty;
+        }
+
+        private async Task<bool> EnsureAssignedTripStopsAsync(
+            Guid tripId,
+            Guid driverId,
+            CancellationToken cancellationToken)
+        {
+            var trip = await _dbContext.MasterTrips
+                .Include(masterTrip => masterTrip.TripStops)
+                .FirstOrDefaultAsync(
+                    masterTrip => masterTrip.TripId == tripId
+                                  && masterTrip.TripDrivers.Any(tripDriver => tripDriver.DriverId == driverId),
+                    cancellationToken);
+            if (trip == null)
+            {
+                return false;
+            }
+
+            var terminalStatuses = new[] { "COMPLETED", "CANCELLED", "CLOSED" };
+            if (terminalStatuses.Contains(trip.Status ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            var tripOrders = await _dbContext.TransportOrders
+                .Where(order => order.DestLocation.HasValue
+                    && (order.MasterTripId == tripId
+                        || _dbContext.Lpns.Any(lpn => lpn.TripId == tripId && lpn.OrderId == order.OrderId)))
+                .OrderBy(order => order.CreatedAt)
+                .ThenBy(order => order.OrderId)
+                .ToListAsync(cancellationToken);
+
+            var destinationIds = tripOrders
+                .Select(order => order.DestLocation!.Value)
+                .Where(locationId => locationId != trip.OriginLocationId)
+                .Distinct()
+                .ToList();
+
+            if (trip.DestinationLocationId != trip.OriginLocationId)
+            {
+                destinationIds.Remove(trip.DestinationLocationId);
+                destinationIds.Add(trip.DestinationLocationId);
+            }
+
+            var validLocationIds = (await _dbContext.Locations
+                    .Where(location => destinationIds.Contains(location.LocationId))
+                    .Select(location => location.LocationId)
+                    .ToListAsync(cancellationToken))
+                .ToHashSet();
+            destinationIds = destinationIds
+                .Where(validLocationIds.Contains)
+                .ToList();
+
+            if (destinationIds.Count == 0)
+            {
+                return true;
+            }
+
+            var stopsByLocation = trip.TripStops
+                .Where(stop => stop.LocationId.HasValue)
+                .GroupBy(stop => stop.LocationId!.Value)
+                .ToDictionary(group => group.Key, group => group.OrderBy(stop => stop.StopSequence).First());
+            var nextSequence = trip.TripStops.Count == 0
+                ? 1
+                : trip.TripStops.Max(stop => stop.StopSequence) + 1;
+            var tripDuration = trip.PlannedEndTime > trip.PlannedStartTime
+                ? trip.PlannedEndTime - trip.PlannedStartTime
+                : TimeSpan.FromHours(Math.Max(destinationIds.Count, 1));
+            var intervalTicks = tripDuration.Ticks / Math.Max(destinationIds.Count, 1);
+
+            foreach (var locationId in destinationIds)
+            {
+                if (!stopsByLocation.TryGetValue(locationId, out var stop))
+                {
+                    var plannedPosition = destinationIds.IndexOf(locationId) + 1;
+                    var arrival = trip.PlannedStartTime.AddTicks(intervalTicks * plannedPosition);
+                    stop = new TripStop
+                    {
+                        StopId = Guid.NewGuid(),
+                        TripId = trip.TripId,
+                        LocationId = locationId,
+                        StopSequence = nextSequence++,
+                        StopType = "DELIVERY",
+                        Status = "PLANNED",
+                        PlannedArrivalTime = arrival,
+                        PlannedDepartureTime = arrival.AddMinutes(30),
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    _dbContext.TripStops.Add(stop);
+                    stopsByLocation[locationId] = stop;
+                }
+            }
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return true;
         }
 
         [Authorize(Roles = "Driver")]
@@ -220,6 +315,8 @@ namespace ColdChainX.API.Controllers
                     {
                         s.StopId,
                         s.LocationId,
+                        Latitude = s.Location != null ? s.Location.Latitude : (decimal?)null,
+                        Longitude = s.Location != null ? s.Location.Longitude : (decimal?)null,
                         s.StopSequence,
                         Address = s.Location != null ? s.Location.Address : "N/A",
                         s.PlannedArrivalTime,
@@ -286,6 +383,15 @@ namespace ColdChainX.API.Controllers
             var driverId = GetDriverId();
             if (driverId == Guid.Empty) return Unauthorized(new { success = false, message = "Driver ID not found in token." });
 
+            var isAssignedTrip = await EnsureAssignedTripStopsAsync(
+                tripId,
+                driverId,
+                HttpContext.RequestAborted);
+            if (!isAssignedTrip)
+            {
+                return NotFound(new { success = false, message = "Trip not found or not assigned to driver." });
+            }
+
             var replacementVehicle = await (from i in _dbContext.IncidentReports
                                             where i.TripId == tripId && i.ReplacementVehicleId != null && i.Status != "CANCELLED" && i.Status != "REJECTED"
                                             orderby i.ReportedAt descending
@@ -321,6 +427,8 @@ namespace ColdChainX.API.Controllers
                     {
                         s.StopId,
                         s.LocationId,
+                        Latitude = s.Location != null ? s.Location.Latitude : (decimal?)null,
+                        Longitude = s.Location != null ? s.Location.Longitude : (decimal?)null,
                         s.StopSequence,
                         Address = s.Location != null ? s.Location.Address : "N/A",
                         s.PlannedArrivalTime,

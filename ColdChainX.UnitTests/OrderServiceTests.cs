@@ -232,6 +232,494 @@ namespace ColdChainX.UnitTests
             Assert.Equal("PENDING_REVIEW", result.Data.Status);
         }
 
+        [Fact]
+        public async Task UpdateOrder_WithPackageLines_ReplacesLinesAndSynchronizesTotals()
+        {
+            var customerId = Guid.NewGuid();
+            var orderId = Guid.NewGuid();
+            _db.TransportOrders.Add(new TransportOrder
+            {
+                OrderId = orderId,
+                TrackingCode = "TRK-PACKAGE-UPDATE-01",
+                CustomerId = customerId,
+                ItemName = "Frozen seafood",
+                Category = "MEAT_SEAFOOD",
+                Quantity = 1,
+                PackingType = "Carton Box",
+                TempCondition = "-18",
+                Status = "PENDING_REVIEW",
+                OrderDimension = new OrderDimension
+                {
+                    OrderId = orderId,
+                    ExpectedWeightKg = 5m,
+                    ActualWeightKg = 5m,
+                    ExpectedCbm = 0.02m,
+                    ActualCbm = 0.02m,
+                    TotalPackageQuantity = 1
+                },
+                OrderPackageLines =
+                {
+                    new OrderPackageLine
+                    {
+                        OrderPackageLineId = Guid.NewGuid(),
+                        OrderId = orderId,
+                        Label = "Old",
+                        CapacityKg = 5m,
+                        Quantity = 1
+                    }
+                }
+            });
+            await _db.SaveChangesAsync();
+
+            var request = new UpdateOrderRequest
+            {
+                PackageLinesJson = """
+                    [
+                      { "label": "Small", "capacityKg": 5, "quantity": 2 },
+                      { "label": "Large", "capacityKg": 10, "quantity": 1 }
+                    ]
+                    """
+            };
+
+            var result = await _service.UpdateOrderAsync(orderId, request, customerId);
+
+            Assert.True(result.Success, result.Message);
+            Assert.Equal(3, result.Data!.Quantity);
+            Assert.Equal(20m, result.Data.ExpectedWeightKg);
+            Assert.Equal(0.0553m, result.Data.ExpectedCbm);
+
+            var savedOrder = await _db.TransportOrders
+                .Include(order => order.OrderDimension)
+                .Include(order => order.OrderPackageLines)
+                .SingleAsync(order => order.OrderId == orderId);
+            Assert.Equal(3, savedOrder.Quantity);
+            Assert.Equal(3, savedOrder.OrderDimension!.TotalPackageQuantity);
+            Assert.Equal(2, savedOrder.OrderPackageLines.Count);
+            Assert.Equal(20m, savedOrder.OrderDimension.ExpectedWeightKg);
+            Assert.Equal("DENSITY_FACTOR", savedOrder.OrderDimension.CbmEstimationMethod);
+        }
+
+        [Fact]
+        public async Task UpdateOrder_WhenPricingChanges_RebuildsDraftQuotation()
+        {
+            var customerId = Guid.NewGuid();
+            var orderId = Guid.NewGuid();
+            var routeId = Guid.NewGuid();
+            var scheduleId = Guid.NewGuid();
+            var locationId = Guid.NewGuid();
+            var oldQuoteId = Guid.NewGuid();
+
+            _db.RouteMasters.Add(new RouteMaster
+            {
+                RouteId = routeId,
+                RouteCode = "PRICE-ROUTE",
+                OriginCity = "HCM",
+                DestCity = "Hanoi",
+                TransitTime = "2 days",
+                Status = "ACTIVE"
+            });
+            _db.RouteSchedules.Add(new RouteSchedule
+            {
+                ScheduleId = scheduleId,
+                RouteId = routeId,
+                ScheduleName = "Pricing schedule",
+                DepartureDate = DateTime.UtcNow.AddDays(2),
+                DepartureTime = new TimeSpan(8, 0, 0),
+                CutOffTime = new TimeSpan(6, 0, 0),
+                Status = "ACTIVE"
+            });
+            _db.Locations.Add(new Location
+            {
+                LocationId = locationId,
+                CustomerId = customerId,
+                Address = "Customer destination",
+                Status = "ACTIVE"
+            });
+            _db.WeightTiers.Add(new WeightTier
+            {
+                Id = Guid.NewGuid(),
+                RouteId = routeId,
+                MinWeightKg = 0m,
+                PricePerKg = 100m
+            });
+            _db.TransportOrders.Add(new TransportOrder
+            {
+                OrderId = orderId,
+                TrackingCode = "TRK-REPRICE-01",
+                CustomerId = customerId,
+                ItemName = "Frozen cargo",
+                Category = "MEAT_SEAFOOD",
+                Quantity = 1,
+                PackingType = "Carton Box",
+                TempCondition = "-18",
+                Status = "PENDING_REVIEW",
+                ScheduleId = scheduleId,
+                DestLocation = locationId,
+                OrderDimension = new OrderDimension
+                {
+                    OrderId = orderId,
+                    ExpectedWeightKg = 20m,
+                    ActualWeightKg = 20m,
+                    ExpectedCbm = 0.02m,
+                    ActualCbm = 0.02m,
+                    LengthCm = 10m,
+                    WidthCm = 10m,
+                    HeightCm = 10m
+                }
+            });
+            _db.Quotations.Add(new Quotation
+            {
+                QuoteId = oldQuoteId,
+                OrderId = orderId,
+                BaseFreight = 2_000m,
+                VatAmount = 160m,
+                FinalAmount = 2_160m,
+                PricingSource = "AUTO",
+                Status = "DRAFT"
+            });
+            await _db.SaveChangesAsync();
+
+            var result = await _service.UpdateOrderAsync(
+                orderId,
+                new UpdateOrderRequest { ExpectedWeightKg = 50m },
+                customerId);
+
+            Assert.True(result.Success, result.Message);
+            var quotation = await _db.Quotations.SingleAsync(item => item.OrderId == orderId && item.Status == "DRAFT");
+            Assert.NotEqual(oldQuoteId, quotation.QuoteId);
+            Assert.Equal(5_000m, quotation.BaseFreight);
+            Assert.Equal(5_400m, quotation.FinalAmount);
+        }
+
+        [Fact]
+        public async Task AdminUpdateOrder_WhenScheduleChanges_RepricesUsingNewRoute()
+        {
+            var orderId = Guid.NewGuid();
+            var customerId = Guid.NewGuid();
+            var oldRouteId = Guid.NewGuid();
+            var newRouteId = Guid.NewGuid();
+            var oldScheduleId = Guid.NewGuid();
+            var newScheduleId = Guid.NewGuid();
+            var oldStopId = Guid.NewGuid();
+            var newStopId = Guid.NewGuid();
+            var locationId = Guid.NewGuid();
+
+            _db.RouteMasters.AddRange(
+                new RouteMaster
+                {
+                    RouteId = oldRouteId,
+                    RouteCode = "OLD",
+                    OriginCity = "HCM",
+                    DestCity = "Danang",
+                    TransitTime = "1 day",
+                    Status = "ACTIVE"
+                },
+                new RouteMaster
+                {
+                    RouteId = newRouteId,
+                    RouteCode = "NEW",
+                    OriginCity = "HCM",
+                    DestCity = "Hanoi",
+                    TransitTime = "2 days",
+                    Status = "ACTIVE"
+                });
+            _db.RouteSchedules.AddRange(
+                new RouteSchedule
+                {
+                    ScheduleId = oldScheduleId,
+                    RouteId = oldRouteId,
+                    ScheduleName = "Old schedule",
+                    DepartureDate = DateTime.UtcNow.AddDays(2),
+                    DepartureTime = new TimeSpan(8, 0, 0),
+                    CutOffTime = new TimeSpan(6, 0, 0),
+                    Status = "ACTIVE"
+                },
+                new RouteSchedule
+                {
+                    ScheduleId = newScheduleId,
+                    RouteId = newRouteId,
+                    ScheduleName = "New schedule",
+                    DepartureDate = DateTime.UtcNow.AddDays(3),
+                    DepartureTime = new TimeSpan(8, 0, 0),
+                    CutOffTime = new TimeSpan(6, 0, 0),
+                    Status = "ACTIVE"
+                });
+            _db.WeightTiers.AddRange(
+                new WeightTier { Id = Guid.NewGuid(), RouteId = oldRouteId, MinWeightKg = 0m, PricePerKg = 100m },
+                new WeightTier { Id = Guid.NewGuid(), RouteId = newRouteId, MinWeightKg = 0m, PricePerKg = 200m });
+            _db.RouteStops.AddRange(
+                new RouteStop { StopId = oldStopId, RouteId = oldRouteId, StopName = "Old stop" },
+                new RouteStop { StopId = newStopId, RouteId = newRouteId, StopName = "New stop" });
+            _db.Locations.Add(new Location
+            {
+                LocationId = locationId,
+                CustomerId = customerId,
+                Address = "Customer destination",
+                Status = "ACTIVE"
+            });
+            _db.TransportOrders.Add(new TransportOrder
+            {
+                OrderId = orderId,
+                TrackingCode = "TRK-REPRICE-ROUTE-01",
+                CustomerId = customerId,
+                ItemName = "Frozen cargo",
+                Category = "MEAT_SEAFOOD",
+                Quantity = 1,
+                PackingType = "Carton Box",
+                TempCondition = "-18",
+                Status = "PENDING_REVIEW",
+                ScheduleId = oldScheduleId,
+                DropoffStopId = oldStopId,
+                DestLocation = locationId,
+                OrderDimension = new OrderDimension
+                {
+                    OrderId = orderId,
+                    ExpectedWeightKg = 50m,
+                    ActualWeightKg = 50m,
+                    ExpectedCbm = 0.02m,
+                    ActualCbm = 0.02m
+                }
+            });
+            _db.Quotations.Add(new Quotation
+            {
+                QuoteId = Guid.NewGuid(),
+                OrderId = orderId,
+                BaseFreight = 5_000m,
+                VatAmount = 400m,
+                FinalAmount = 5_400m,
+                PricingSource = "AUTO",
+                Status = "DRAFT"
+            });
+            await _db.SaveChangesAsync();
+
+            var result = await _service.AdminUpdateOrderAsync(
+                orderId,
+                new UpdateOrderRequest { ScheduleId = newScheduleId, DropoffStopId = newStopId },
+                Guid.NewGuid());
+
+            Assert.True(result.Success, result.Message);
+            var quotation = await _db.Quotations.SingleAsync(item => item.OrderId == orderId && item.Status == "DRAFT");
+            Assert.Equal(10_000m, quotation.BaseFreight);
+            Assert.Equal(10_800m, quotation.FinalAmount);
+        }
+
+        [Fact]
+        public async Task UpdateOrder_WhenDropoffDoesNotBelongToScheduleRoute_ReturnsFailure()
+        {
+            var customerId = Guid.NewGuid();
+            var orderId = Guid.NewGuid();
+            var routeId = Guid.NewGuid();
+            var otherRouteId = Guid.NewGuid();
+            var scheduleId = Guid.NewGuid();
+            var validStopId = Guid.NewGuid();
+            var invalidStopId = Guid.NewGuid();
+
+            _db.RouteMasters.AddRange(
+                new RouteMaster
+                {
+                    RouteId = routeId,
+                    RouteCode = "VALID",
+                    OriginCity = "HCM",
+                    DestCity = "Hanoi",
+                    TransitTime = "2 days",
+                    Status = "ACTIVE"
+                },
+                new RouteMaster
+                {
+                    RouteId = otherRouteId,
+                    RouteCode = "OTHER",
+                    OriginCity = "HCM",
+                    DestCity = "Hue",
+                    TransitTime = "1 day",
+                    Status = "ACTIVE"
+                });
+            _db.RouteSchedules.Add(new RouteSchedule
+            {
+                ScheduleId = scheduleId,
+                RouteId = routeId,
+                ScheduleName = "Valid schedule",
+                DepartureDate = DateTime.UtcNow.AddDays(3),
+                DepartureTime = new TimeSpan(8, 0, 0),
+                CutOffTime = new TimeSpan(6, 0, 0),
+                Status = "ACTIVE"
+            });
+            _db.RouteStops.AddRange(
+                new RouteStop { StopId = validStopId, RouteId = routeId, StopName = "Valid stop" },
+                new RouteStop { StopId = invalidStopId, RouteId = otherRouteId, StopName = "Invalid stop" });
+            _db.TransportOrders.Add(new TransportOrder
+            {
+                OrderId = orderId,
+                TrackingCode = "TRK-INVALID-STOP-01",
+                CustomerId = customerId,
+                ItemName = "Frozen cargo",
+                Category = "MEAT_SEAFOOD",
+                Quantity = 1,
+                PackingType = "Carton Box",
+                TempCondition = "-18",
+                Status = "PENDING_REVIEW",
+                ScheduleId = scheduleId,
+                DropoffStopId = validStopId
+            });
+            await _db.SaveChangesAsync();
+
+            var result = await _service.UpdateOrderAsync(
+                orderId,
+                new UpdateOrderRequest { DropoffStopId = invalidStopId },
+                customerId);
+
+            Assert.False(result.Success);
+            Assert.Contains("does not belong", result.Message);
+            Assert.Equal(validStopId, (await _db.TransportOrders.FindAsync(orderId))!.DropoffStopId);
+        }
+
+        [Fact]
+        public async Task UpdateOrder_WhenOnlyQuantityChanges_RecalculatesLegacyCbmAndPackageTotal()
+        {
+            var customerId = Guid.NewGuid();
+            var orderId = Guid.NewGuid();
+            _db.TransportOrders.Add(new TransportOrder
+            {
+                OrderId = orderId,
+                TrackingCode = "TRK-PARTIAL-QTY-01",
+                CustomerId = customerId,
+                ItemName = "Legacy cargo",
+                Category = "MEAT_SEAFOOD",
+                Quantity = 2,
+                PackingType = "Carton Box",
+                TempCondition = "-18",
+                Status = "PENDING_REVIEW",
+                OrderDimension = new OrderDimension
+                {
+                    OrderId = orderId,
+                    ExpectedWeightKg = 20m,
+                    ActualWeightKg = 20m,
+                    ExpectedCbm = 0.012m,
+                    ActualCbm = 0.012m,
+                    LengthCm = 10m,
+                    WidthCm = 20m,
+                    HeightCm = 30m,
+                    TotalPackageQuantity = 2
+                }
+            });
+            await _db.SaveChangesAsync();
+
+            var result = await _service.UpdateOrderAsync(
+                orderId,
+                new UpdateOrderRequest { Quantity = 4 },
+                customerId);
+
+            Assert.True(result.Success, result.Message);
+            Assert.Equal(0.024m, result.Data!.ExpectedCbm);
+            var dimension = await _db.Set<OrderDimension>().SingleAsync(item => item.OrderId == orderId);
+            Assert.Equal(4, dimension.TotalPackageQuantity);
+            Assert.Equal(0.024m, dimension.ExpectedCbm);
+            Assert.Equal("LEGACY_DIMENSION", dimension.CbmEstimationMethod);
+        }
+
+        [Fact]
+        public async Task UpdateOrder_WhenOneDimensionChanges_UsesStoredValuesForRemainingDimensions()
+        {
+            var customerId = Guid.NewGuid();
+            var orderId = Guid.NewGuid();
+            _db.TransportOrders.Add(new TransportOrder
+            {
+                OrderId = orderId,
+                TrackingCode = "TRK-PARTIAL-DIM-01",
+                CustomerId = customerId,
+                ItemName = "Legacy cargo",
+                Category = "MEAT_SEAFOOD",
+                Quantity = 2,
+                PackingType = "Carton Box",
+                TempCondition = "-18",
+                Status = "PENDING_REVIEW",
+                OrderDimension = new OrderDimension
+                {
+                    OrderId = orderId,
+                    ExpectedWeightKg = 20m,
+                    ActualWeightKg = 20m,
+                    ExpectedCbm = 0.012m,
+                    ActualCbm = 0.012m,
+                    LengthCm = 10m,
+                    WidthCm = 20m,
+                    HeightCm = 30m,
+                    TotalPackageQuantity = 2
+                }
+            });
+            await _db.SaveChangesAsync();
+
+            var result = await _service.UpdateOrderAsync(
+                orderId,
+                new UpdateOrderRequest { LengthCm = 20m },
+                customerId);
+
+            Assert.True(result.Success, result.Message);
+            Assert.Equal(0.024m, result.Data!.ExpectedCbm);
+            var dimension = await _db.Set<OrderDimension>().SingleAsync(item => item.OrderId == orderId);
+            Assert.Equal(20m, dimension.LengthCm);
+            Assert.Equal(20m, dimension.WidthCm);
+            Assert.Equal(30m, dimension.HeightCm);
+        }
+
+        [Fact]
+        public async Task UpdateOrder_WhenPackagePricingInputsChange_RecalculatesDensityCbm()
+        {
+            var customerId = Guid.NewGuid();
+            var orderId = Guid.NewGuid();
+            _db.TransportOrders.Add(new TransportOrder
+            {
+                OrderId = orderId,
+                TrackingCode = "TRK-PACKAGE-CBM-01",
+                CustomerId = customerId,
+                ItemName = "Frozen seafood",
+                Category = "MEAT_SEAFOOD",
+                Quantity = 3,
+                PackingType = "Carton Box",
+                TempCondition = "-18",
+                Status = "PENDING_REVIEW",
+                OrderDimension = new OrderDimension
+                {
+                    OrderId = orderId,
+                    ExpectedWeightKg = 20m,
+                    ActualWeightKg = 20m,
+                    ExpectedCbm = 0.0553m,
+                    ActualCbm = 0.0553m,
+                    TotalPackageQuantity = 3,
+                    CbmEstimationMethod = "DENSITY_FACTOR"
+                },
+                OrderPackageLines =
+                {
+                    new OrderPackageLine
+                    {
+                        OrderPackageLineId = Guid.NewGuid(),
+                        OrderId = orderId,
+                        Label = "Small",
+                        CapacityKg = 5m,
+                        Quantity = 2
+                    },
+                    new OrderPackageLine
+                    {
+                        OrderPackageLineId = Guid.NewGuid(),
+                        OrderId = orderId,
+                        Label = "Large",
+                        CapacityKg = 10m,
+                        Quantity = 1
+                    }
+                }
+            });
+            await _db.SaveChangesAsync();
+
+            var result = await _service.UpdateOrderAsync(
+                orderId,
+                new UpdateOrderRequest { PackagingType = "Foam Box" },
+                customerId);
+
+            Assert.True(result.Success, result.Message);
+            Assert.Equal(0.0724m, result.Data!.ExpectedCbm);
+            var dimension = await _db.Set<OrderDimension>().SingleAsync(item => item.OrderId == orderId);
+            Assert.Equal(0.0724m, dimension.ExpectedCbm);
+            Assert.Equal("DENSITY_FACTOR", dimension.CbmEstimationMethod);
+        }
+
         #region Mock Classes
 
         private class MockLocationService : ILocationService

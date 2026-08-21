@@ -187,6 +187,36 @@ public class ManualDispatchFormRequest
     public string? ScreenshotBase64 { get; set; }
 }
 
+public class WarehouseRedispatchRequest
+{
+    public Guid? DispatcherId { get; set; }
+
+    public List<Guid> LpnIds { get; set; } = new();
+
+    public Guid VehicleId { get; set; }
+
+    public List<Guid> DriverIds { get; set; } = new();
+
+    public DateTime PlannedStartTime { get; set; }
+
+    public DateTime PlannedEndTime { get; set; }
+
+    public string? ScreenshotBase64 { get; set; }
+}
+
+public class WarehouseRedispatchFormRequest
+{
+    public string VehicleId { get; set; } = string.Empty;
+
+    public List<string> DriverIds { get; set; } = new();
+
+    public DateTime PlannedStartTime { get; set; }
+
+    public DateTime PlannedEndTime { get; set; }
+
+    public string? ScreenshotBase64 { get; set; }
+}
+
 public class ManualDispatchResult
 {
     public Guid TripId { get; set; }

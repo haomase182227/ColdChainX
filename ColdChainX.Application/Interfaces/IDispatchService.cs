@@ -11,6 +11,8 @@ public interface IDispatchService
 
     Task<ManualDispatchResult> ManualDispatchAsync(ManualDispatchRequest request);
 
+    Task<ManualDispatchResult> CreateTripFromWarehouseAsync(WarehouseRedispatchRequest request);
+
 
     Task<StartPickingResult> StartPickingAsync(Guid tripId);
 

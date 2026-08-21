@@ -1100,6 +1100,11 @@ public class DispatchService : IDispatchService
             ? Math.Round((decimal)directionsResult.TotalDurationSeconds / 3600m, 2)
             : Math.Round(routeResult.TotalDistanceKm / 40m, 2);
 
+        // Estimated hours are retained for workload reporting only. Long trips are
+        // allowed because drivers can alternate and take breaks while the trip is active.
+        var perDriverHours = Math.Round(estimatedDurationHours / driverIds.Count, 2);
+        var startDay = DateOnly.FromDateTime(request.PlannedStartTime);
+
         var masterTrip = new MasterTrip
         {
             TripId              = Guid.NewGuid(),
@@ -1160,22 +1165,6 @@ public class DispatchService : IDispatchService
             {
                 lpn.Order.MasterTripId = masterTrip.TripId;
                 lpn.Order.Status = "LOADING";
-            }
-        }
-
-        var perDriverHours = Math.Round(estimatedDurationHours / driverIds.Count, 2);
-        var startDay = DateOnly.FromDateTime(request.PlannedStartTime);
-
-        foreach (var driver in drivers)
-        {
-            var availability = await _driverAvailability.CheckAsync(driver.DriverId, perDriverHours, startDay);
-            if (!availability.CanAssign)
-            {
-                driver.Status = "RELAX";
-                await _context.SaveChangesAsync();
-                throw new InvalidOperationException(
-                    $"Không thể gán tài xế {driver.FullName}: {availability.Reason} " +
-                    $"Tài xế được chuyển sang trạng thái RELAX (nghỉ bắt buộc).");
             }
         }
 
@@ -1321,6 +1310,121 @@ public class DispatchService : IDispatchService
                 : null,
             SuggestedMaxPayloadKg = lateLpns.Any() ? 2000 : null
         };
+    }
+
+    public async Task<ManualDispatchResult> CreateTripFromWarehouseAsync(WarehouseRedispatchRequest request)
+    {
+        var requestedLpnIds = request.LpnIds
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToList();
+        if (requestedLpnIds.Count == 0)
+            throw new InvalidOperationException("Phải chọn ít nhất một LPN để tạo chuyến từ kho.");
+
+        var lpns = await _context.Lpns
+            .AsNoTracking()
+            .Include(l => l.Warehouse)
+            .Where(l => requestedLpnIds.Contains(l.LpnId))
+            .ToListAsync();
+
+        var missingLpnIds = requestedLpnIds.Except(lpns.Select(l => l.LpnId)).ToList();
+        if (missingLpnIds.Count > 0)
+            throw new InvalidOperationException($"Không tìm thấy các LPN sau: {string.Join(", ", missingLpnIds)}");
+
+        if (lpns.Any(l => l.State != LpnState.IN_STOCK || l.TripId.HasValue))
+            throw new InvalidOperationException("Chỉ được tạo chuyến từ kho cho LPN đang IN_STOCK và chưa thuộc chuyến nào.");
+
+        if (lpns.Any(l => !l.WarehouseId.HasValue))
+            throw new InvalidOperationException("Tất cả LPN phải được nhập kho trước khi tạo chuyến lại.");
+
+        var warehouseIds = lpns
+            .Select(l => l.WarehouseId!.Value)
+            .Distinct()
+            .ToList();
+        if (warehouseIds.Count != 1)
+            throw new InvalidOperationException("Tất cả LPN phải nằm trong cùng một kho để tạo chuyến lại.");
+
+        var noShowIncidents = await _context.IncidentReports
+            .AsNoTracking()
+            .Where(incident => incident.Status == "READY_FOR_REDISPATCH"
+                && incident.IncidentType == IncidentType.CUSTOMER_NO_SHOW_RETURN.ToString()
+                && incident.RescuePlanDetails != null)
+            .OrderByDescending(incident => incident.ReportedAt)
+            .ToListAsync();
+
+        var requestedLpnSet = requestedLpnIds.ToHashSet();
+        var matchingIncidentIds = new List<Guid>();
+        foreach (var incident in noShowIncidents)
+        {
+            ExternalReeferPlanRecord? plan;
+            try
+            {
+                plan = JsonSerializer.Deserialize<ExternalReeferPlanRecord>(incident.RescuePlanDetails!);
+            }
+            catch (JsonException)
+            {
+                continue;
+            }
+
+            if (plan?.ArrivedAt != null
+                && plan.DestinationWarehouseId == warehouseIds[0]
+                && requestedLpnSet.SetEquals(plan.LpnIds))
+            {
+                matchingIncidentIds.Add(incident.IncidentId);
+            }
+        }
+
+        if (matchingIncidentIds.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "Không tìm thấy hồ sơ khách vắng mặt READY_FOR_REDISPATCH khớp với các LPN đã chọn.");
+        }
+        if (matchingIncidentIds.Count > 1)
+        {
+            throw new InvalidOperationException(
+                "Có nhiều hồ sơ khách vắng mặt cùng khớp với các LPN đã chọn. Vui lòng kiểm tra dữ liệu Incident.");
+        }
+
+        var incidentId = matchingIncidentIds[0];
+
+        var warehouse = lpns.First().Warehouse;
+        if (warehouse == null)
+            throw new InvalidOperationException("Không tìm thấy kho đang giữ LPN.");
+        if (!string.IsNullOrWhiteSpace(warehouse.Status)
+            && !warehouse.Status.Equals("ACTIVE", StringComparison.OrdinalIgnoreCase)
+            && !warehouse.Status.Equals("OK", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"Kho {warehouse.WarehouseName} hiện không hoạt động.");
+        }
+
+        var warehouseAddress = warehouse.Address?.Trim();
+        if (string.IsNullOrWhiteSpace(warehouseAddress))
+            throw new InvalidOperationException("Kho đang giữ LPN chưa có địa chỉ để tạo điểm xuất phát.");
+
+        var originLocationId = await _context.Locations
+            .AsNoTracking()
+            .Where(l => l.Status == "ACTIVE" && l.Address == warehouseAddress)
+            .Select(l => l.LocationId)
+            .FirstOrDefaultAsync();
+        if (originLocationId == Guid.Empty)
+        {
+            throw new InvalidOperationException(
+                "Không tìm thấy Location ACTIVE trùng địa chỉ kho đang giữ LPN. Cần cấu hình Location cho kho trước khi tạo chuyến.");
+        }
+
+        return await ManualDispatchAsync(new ManualDispatchRequest
+        {
+            IncidentId = incidentId,
+            DispatcherId = request.DispatcherId,
+            ScheduleId = null,
+            LpnIds = requestedLpnIds,
+            VehicleId = request.VehicleId,
+            DriverIds = request.DriverIds,
+            OriginWarehouseLocationId = originLocationId,
+            PlannedStartTime = request.PlannedStartTime,
+            PlannedEndTime = request.PlannedEndTime,
+            ScreenshotBase64 = request.ScreenshotBase64
+        });
     }
 
     private async Task NotifyManualRedispatchAudiencesAsync(

@@ -1211,6 +1211,108 @@ public class DispatchController : ControllerBase
         }
     }
 
+    [HttpPost("create-trip-from-warehouse")]
+    [Consumes("multipart/form-data")]
+    [Authorize(Roles = "Dispatcher,Admin")]
+    public async Task<IActionResult> CreateTripFromWarehouse(
+        [FromQuery] List<string> lpnIds,
+        [FromForm] WarehouseRedispatchFormRequest form)
+    {
+        if (lpnIds == null || lpnIds.Count == 0)
+            return BadRequest(ApiResponse<object>.Failure("Vui lòng chọn ít nhất một LPN."));
+
+        if (form.PlannedStartTime >= form.PlannedEndTime)
+            return BadRequest(ApiResponse<object>.Failure("PlannedStartTime phải nhỏ hơn PlannedEndTime."));
+
+        if (!Guid.TryParse(ExtractGuid(form.VehicleId), out var vehicleId) || vehicleId == Guid.Empty)
+            return BadRequest(ApiResponse<object>.Failure("VehicleId không hợp lệ."));
+
+        var driverIds = new List<Guid>();
+        foreach (var rawDriverId in form.DriverIds ?? new List<string>())
+        {
+            if (!Guid.TryParse(ExtractGuid(rawDriverId), out var driverId) || driverId == Guid.Empty)
+                return BadRequest(ApiResponse<object>.Failure($"DriverId '{rawDriverId}' không hợp lệ."));
+            driverIds.Add(driverId);
+        }
+        driverIds = driverIds.Distinct().ToList();
+        if (driverIds.Count is < 1 or > 2)
+            return BadRequest(ApiResponse<object>.Failure("Vui lòng chọn 1 hoặc 2 tài xế cho chuyến."));
+
+        var parsedLpnIds = new List<Guid>();
+        foreach (var rawLpnId in lpnIds)
+        {
+            if (!Guid.TryParse(ExtractGuid(rawLpnId), out var lpnId) || lpnId == Guid.Empty)
+                return BadRequest(ApiResponse<object>.Failure($"LpnId '{rawLpnId}' không hợp lệ."));
+            parsedLpnIds.Add(lpnId);
+        }
+        parsedLpnIds = parsedLpnIds.Distinct().ToList();
+
+        var hasIot = await _db.IotDevices.AnyAsync(device => device.VehicleId == vehicleId);
+        if (!hasIot)
+        {
+            return BadRequest(ApiResponse<object>.Failure(
+                "Xe chưa được gắn thiết bị IoT. Vui lòng gắn thiết bị IoT trước khi tạo chuyến."));
+        }
+
+        var request = new WarehouseRedispatchRequest
+        {
+            DispatcherId = GetCurrentUserId(),
+            LpnIds = parsedLpnIds,
+            VehicleId = vehicleId,
+            DriverIds = driverIds,
+            PlannedStartTime = form.PlannedStartTime,
+            PlannedEndTime = form.PlannedEndTime,
+            ScreenshotBase64 = form.ScreenshotBase64
+        };
+
+        try
+        {
+            var result = await _dispatchService.CreateTripFromWarehouseAsync(request);
+            var baseUrl = GetPublicBaseUrl();
+            var lpnQuery = string.Join(",", request.LpnIds);
+            var lifoReportUrl = $"{baseUrl}/lifo-report.html?vehicleId={request.VehicleId}&lpnIds={lpnQuery}";
+            var pdfUrl = await _pdfService.SavePdfFromUrlAsync(lifoReportUrl, result.TripId.ToString(), "lifo");
+            result.LifoPdfUrl = pdfUrl;
+
+            if (!string.IsNullOrEmpty(pdfUrl))
+            {
+                var userIdText = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!Guid.TryParse(userIdText, out var currentUserId))
+                {
+                    var fallbackUser = await _db.Users
+                        .Include(user => user.Role)
+                        .FirstOrDefaultAsync(user => user.Role != null
+                            && (user.Role.RoleName.ToUpper() == "ADMIN"
+                                || user.Role.RoleName.ToUpper() == "WAREHOUSEWORKER"));
+                    currentUserId = fallbackUser?.UserId ?? Guid.Empty;
+                }
+
+                _db.TransportDocuments.Add(new TransportDocument
+                {
+                    DocId = Guid.NewGuid(),
+                    DocType = "LIFO-PLAN",
+                    ImageUrl = pdfUrl,
+                    CreatedAt = DateTime.UtcNow,
+                    UploadedBy = currentUserId
+                });
+                await _db.SaveChangesAsync();
+            }
+
+            return Ok(ApiResponse<ManualDispatchResult>.SuccessResponse(
+                result,
+                "Tạo chuyến mới từ kho thành công!"));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse<object>.Failure(ex.Message));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, ApiResponse<object>.Failure(
+                $"Lỗi hệ thống khi tạo chuyến từ kho: {ex.Message}"));
+        }
+    }
+
 
     [HttpPost("test-lifo-pdf")]
     public IActionResult TestLifoPdf([FromBody] TestLifoPdfRequest request)

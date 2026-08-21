@@ -86,6 +86,83 @@ public class ManualDispatchFlowTests
     }
 
     [Fact]
+    public async Task CreateTripFromWarehouse_NoShowReturn_UsesInboundWarehouseAsOrigin()
+    {
+        await using var fixture = await CreateFixtureAsync();
+        var incidentId = Guid.NewGuid();
+        var warehouseId = fixture.Lpn.WarehouseId!.Value;
+        fixture.Order.Status = "READY_FOR_ROUTING";
+        fixture.Db.IncidentReports.Add(new IncidentReport
+        {
+            IncidentId = incidentId,
+            TripId = Guid.NewGuid(),
+            IncidentType = IncidentType.CUSTOMER_NO_SHOW_RETURN.ToString(),
+            Severity = "MEDIUM",
+            RiskLevel = "MEDIUM",
+            Description = "Khách vắng mặt, hàng đã nhập lại kho gần khách.",
+            RequiresRescue = false,
+            Status = "READY_FOR_REDISPATCH",
+            ReportedBy = Guid.NewGuid(),
+            RescuePlanType = "EXTERNAL_REEFER_TO_ROUTE_WAREHOUSE",
+            RescuePlanDetails = JsonSerializer.Serialize(new ExternalReeferPlanRecord
+            {
+                RentalProvider = "Driver return",
+                VehiclePlate = "51C-RETURN",
+                DriverName = "Return Driver",
+                DestinationWarehouseId = warehouseId,
+                DestinationWarehouseName = "Kho gần khách",
+                AgreedTemperature = -18m,
+                OriginalTripId = Guid.NewGuid(),
+                DispatchedAt = DateTime.UtcNow.AddHours(-2),
+                ArrivedAt = DateTime.UtcNow.AddMinutes(-30),
+                SealNumber = "NO-SHOW-SEAL-001",
+                LpnIds = { fixture.Lpn.LpnId },
+                RecordedBy = Guid.NewGuid()
+            })
+        });
+        await fixture.Db.SaveChangesAsync();
+
+        var result = await fixture.Service.CreateTripFromWarehouseAsync(new WarehouseRedispatchRequest
+        {
+            DispatcherId = Guid.NewGuid(),
+            LpnIds = new List<Guid> { fixture.Lpn.LpnId },
+            VehicleId = fixture.Vehicle.VehicleId,
+            DriverIds = fixture.Request.DriverIds,
+            PlannedStartTime = fixture.Request.PlannedStartTime,
+            PlannedEndTime = fixture.Request.PlannedEndTime
+        });
+
+        var trip = await fixture.Db.MasterTrips.SingleAsync(item => item.TripId == result.TripId);
+        var incident = await fixture.Db.IncidentReports.SingleAsync(item => item.IncidentId == incidentId);
+        Assert.Equal(fixture.Request.OriginWarehouseLocationId, trip.OriginLocationId);
+        Assert.Null(trip.ScheduleId);
+        Assert.Null(trip.RouteId);
+        Assert.Equal("REDISPATCH_PLANNED", incident.Status);
+        Assert.Equal(result.TripId, incident.TripId);
+    }
+
+    [Fact]
+    public async Task CreateTripFromWarehouse_RejectsLpnThatHasNotBeenInbounded()
+    {
+        await using var fixture = await CreateFixtureAsync();
+        fixture.Lpn.WarehouseId = null;
+        fixture.Lpn.Warehouse = null;
+        await fixture.Db.SaveChangesAsync();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            fixture.Service.CreateTripFromWarehouseAsync(new WarehouseRedispatchRequest
+            {
+                LpnIds = new List<Guid> { fixture.Lpn.LpnId },
+                VehicleId = fixture.Vehicle.VehicleId,
+                DriverIds = fixture.Request.DriverIds,
+                PlannedStartTime = fixture.Request.PlannedStartTime,
+                PlannedEndTime = fixture.Request.PlannedEndTime
+            }));
+
+        Assert.Contains("nhập kho", exception.Message);
+    }
+
+    [Fact]
     public async Task PlanLoad_CustomerEtaNotification_ContainsDateWithoutTime()
     {
         await using var fixture = await CreateFixtureAsync();
@@ -192,7 +269,34 @@ public class ManualDispatchFlowTests
         Assert.Empty(fixture.Db.MasterTrips);
     }
 
-    private static async Task<Fixture> CreateFixtureAsync()
+    [Fact]
+    public async Task ManualDispatch_LongTripWithTwoActiveDrivers_CreatesTripAndAssignsBothDrivers()
+    {
+        await using var fixture = await CreateFixtureAsync(
+            totalDurationSeconds: 26 * 60 * 60,
+            driverCount: 2);
+
+        var result = await fixture.Service.ManualDispatchAsync(fixture.Request);
+
+        var trip = await fixture.Db.MasterTrips.SingleAsync(t => t.TripId == result.TripId);
+        var tripDrivers = await fixture.Db.TripDrivers
+            .Where(td => td.TripId == result.TripId)
+            .OrderBy(td => td.DriverRole)
+            .ToListAsync();
+        var workLogs = await fixture.Db.DriverWorkLogs
+            .Where(log => log.TripId == result.TripId)
+            .ToListAsync();
+
+        Assert.Equal(26m, trip.EstimatedDurationHours);
+        Assert.Equal(2, tripDrivers.Count);
+        Assert.Equal(fixture.Request.DriverIds.Order(), tripDrivers.Select(td => td.DriverId).Order());
+        Assert.Equal(2, workLogs.Count);
+        Assert.All(workLogs, log => Assert.Equal(13m, log.DrivingHours));
+    }
+
+    private static async Task<Fixture> CreateFixtureAsync(
+        int totalDurationSeconds = 3_600,
+        int driverCount = 1)
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase($"manual-dispatch-{Guid.NewGuid()}")
@@ -275,6 +379,16 @@ public class ManualDispatchFlowTests
             DestLocationNavigation = destination
         };
         var warehouseId = Guid.NewGuid();
+        var warehouse = new Warehouse
+        {
+            WarehouseId = warehouseId,
+            WarehouseName = "Test Origin Warehouse",
+            WarehouseCode = "WH-TEST-ORIGIN",
+            WarehouseType = "COLD_STORAGE",
+            Address = origin.Address,
+            MaxPallets = 100,
+            Status = "ACTIVE"
+        };
         var receipt = new WarehouseReceipt
         {
             ReceiptId = Guid.NewGuid(),
@@ -295,6 +409,7 @@ public class ManualDispatchFlowTests
             ReceiptId = receipt.ReceiptId,
             Receipt = receipt,
             WarehouseId = warehouseId,
+            Warehouse = warehouse,
             Quantity = 1,
             ActualWeightKg = 100m,
             ActualCbm = 1m,
@@ -342,6 +457,34 @@ public class ManualDispatchFlowTests
             Status = "ACTIVE"
         });
 
+        var drivers = new List<Driver> { driver };
+        if (driverCount == 2)
+        {
+            var secondDriver = new Driver
+            {
+                DriverId = Guid.NewGuid(),
+                FullName = "Second Test Driver",
+                IdentityNumber = "TEST-ID-002",
+                PhoneNumber = "0900000001",
+                DateOfBirth = new DateOnly(1991, 1, 1),
+                JoinDate = new DateOnly(2025, 1, 1),
+                Status = "ACTIVE",
+                CurrentLocation = warehouseId.ToString()
+            };
+            secondDriver.DriverLicenses.Add(new DriverLicense
+            {
+                LicenseId = Guid.NewGuid(),
+                DriverId = secondDriver.DriverId,
+                Driver = secondDriver,
+                LicenseNumber = "TEST-LICENSE-002",
+                LicenseClass = "C",
+                IssueDate = new DateOnly(2025, 1, 1),
+                ExpiryDate = new DateOnly(2035, 1, 1),
+                Status = "ACTIVE"
+            });
+            drivers.Add(secondDriver);
+        }
+
         db.AddRange(
             route,
             schedule,
@@ -351,17 +494,20 @@ public class ManualDispatchFlowTests
             customerUser,
             messageType,
             order,
+            warehouse,
             receipt,
             lpn,
             vehicle,
             driver);
+        if (drivers.Count > 1)
+            db.Drivers.AddRange(drivers.Skip(1));
         await db.SaveChangesAsync();
 
         var availability = new DriverAvailabilityService(db);
         var service = new DispatchService(
             db,
             null!,
-            new FakeLocationService(),
+            new FakeLocationService(totalDurationSeconds),
             null!,
             null!,
             null!,
@@ -375,7 +521,7 @@ public class ManualDispatchFlowTests
             ScheduleId = schedule.ScheduleId,
             LpnIds = new List<Guid> { lpn.LpnId },
             VehicleId = vehicle.VehicleId,
-            DriverIds = new List<Guid> { driver.DriverId },
+            DriverIds = drivers.Select(item => item.DriverId).ToList(),
             OriginWarehouseLocationId = origin.LocationId,
             PlannedStartTime = start,
             PlannedEndTime = start.AddHours(5)
@@ -399,6 +545,13 @@ public class ManualDispatchFlowTests
 
     private sealed class FakeLocationService : ILocationService
     {
+        private readonly int _totalDurationSeconds;
+
+        public FakeLocationService(int totalDurationSeconds)
+        {
+            _totalDurationSeconds = totalDurationSeconds;
+        }
+
         public Task<(decimal Latitude, decimal Longitude)> GetCoordinatesAsync(string addressText)
             => Task.FromResult((10.80m, 106.70m));
 
@@ -414,7 +567,7 @@ public class ManualDispatchFlowTests
             => Task.FromResult(new GoongDirectionsResult
             {
                 TotalDistanceKm = 10m,
-                TotalDurationSeconds = 3_600,
+                TotalDurationSeconds = _totalDurationSeconds,
                 OverviewPolyline = "test",
                 Legs = new List<GoongLeg>()
             });

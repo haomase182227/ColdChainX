@@ -14,13 +14,17 @@
         .signature-row { display: flex; justify-content: space-between; text-align: center; margin-top: 30px; }
         .sig-box { width: 20%; }
         .italic { font-style: italic; }
+        .section-title { font-weight: bold; margin-top: 15px; margin-bottom: -5px; }
+        .total-row td { font-weight: bold; background-color: #f2f2f2; }
+        .text-right { text-align: right; }
+        .nowrap { white-space: nowrap; }
     </style>
 </head>
 <body>
     <div class="flex-between">
         <div>
             <div class="bold">Đơn vị: {{CompanyName}}</div>
-            <div>Bộ phận: Inbound - {{HubName}}</div>
+            <div>Bộ phận: Nhập kho - {{HubName}}</div>
         </div>
         <div class="text-center">
             <div class="bold">Mẫu số 01 - VT</div>
@@ -38,35 +42,42 @@
         <div>- Họ và tên người giao: <b>{{DriverName}}</b></div>
         <div>- Theo đơn hàng số: <b>{{OrderCode}}</b> của Khách hàng: <b>{{CustomerName}}</b></div>
         <div>- Nhập tại kho: <b>{{HubName}}</b> - Địa chỉ: {{HubAddress}}</div>
+        <div>- Nhiệt độ ghi nhận khi kiểm kê: <b>{{RecordedTemperature}}</b></div>
+        <div>- Trạng thái hàng: <b>{{ReceiptStatus}}</b></div>
     </div>
 
+    <div class="section-title">Chi tiết kiểm kê thực nhập</div>
     <table>
         <thead>
             <tr>
-                <th rowspan="2">STT</th>
-                <th rowspan="2">Tên, nhãn hiệu, quy cách hàng hóa</th>
-                <th rowspan="2">Mã LPN</th>
-                <th rowspan="2">ĐVT</th>
-                <th colspan="2">Số lượng</th>
-                <th rowspan="2">Ghi chú</th>
-            </tr>
-            <tr>
-                <th>Theo C.Từ</th>
-                <th>Thực nhập</th>
+                <th>STT</th>
+                <th>Tên hàng / quy cách</th>
+                <th>Mã LPN</th>
+                <th>Số lượng kiện</th>
+                <th>Khối lượng thực (kg)</th>
+                <th>Kích thước mỗi kiện (cm)</th>
+                <th>Thể tích (m³)</th>
             </tr>
         </thead>
         <tbody>
-            {{#each Items}}
+            {{#each PackageLines}}
             <tr>
                 <td class="text-center">{{Index}}</td>
-                <td>{{ItemName}}</td>
-                <td>{{LpnCode}}</td>
-                <td class="text-center">{{Unit}}</td>
-                <td class="text-center">{{ExpectedQty}}</td>
-                <td class="text-center">{{ActualQty}}</td>
-                <td>{{Notes}}</td>
+                <td>{{ItemDescription}}</td>
+                <td class="text-center nowrap">{{LpnCode}}</td>
+                <td class="text-center">{{Quantity}}</td>
+                <td class="text-right">{{ActualWeightKg}}</td>
+                <td class="text-center nowrap">{{Dimensions}}</td>
+                <td class="text-right">{{ActualCbm}}</td>
             </tr>
             {{/each}}
+            <tr class="total-row">
+                <td colspan="3">Tổng thực nhập</td>
+                <td class="text-center">{{TotalPackageQuantity}}</td>
+                <td class="text-right">{{TotalActualWeightKg}}</td>
+                <td></td>
+                <td class="text-right">{{TotalActualCbm}}</td>
+            </tr>
         </tbody>
     </table>
 

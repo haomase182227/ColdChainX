@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ColdChainX.Application.DTOs.Orders;
 using ColdChainX.Application.Interfaces;
+using ColdChainX.API.Authorization;
+using ColdChainX.Shared.Constants;
 
 namespace ColdChainX.API.Controllers
 {
@@ -90,7 +92,8 @@ namespace ColdChainX.API.Controllers
         }
 
         [HttpPut("{orderId:guid}")]
-        [Authorize(Roles = "Sales,Customer")]
+        [Authorize(Roles = "Customer")]
+        [HasPermission(PermissionCodes.OrderUpdateOwn)]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> UpdateOrder(Guid orderId, [FromForm] UpdateOrderRequest request)
         {
@@ -99,12 +102,13 @@ namespace ColdChainX.API.Controllers
                 return Unauthorized("CustomerId claim is missing from token");
 
             var result = await _orderService.UpdateOrderAsync(orderId, request, customerId);
-            if (!result.Success) return BadRequest(result);
+            if (!result.Success) return StatusCode(result.StatusCode != 0 ? result.StatusCode : 400, result);
             return Ok(result);
         }
 
         [HttpPut("{orderId:guid}/admin")]
-        [Authorize(Roles = "Admin,Sales,Customer")]
+        [Authorize(Roles = "Admin,Sales")]
+        [HasPermission(PermissionCodes.OrderUpdateAny)]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> AdminUpdateOrder(Guid orderId, [FromForm] UpdateOrderRequest request)
         {
@@ -113,7 +117,7 @@ namespace ColdChainX.API.Controllers
                 return Unauthorized("UserId claim is missing from token");
 
             var result = await _orderService.AdminUpdateOrderAsync(orderId, request, salesUserId);
-            if (!result.Success) return BadRequest(result);
+            if (!result.Success) return StatusCode(result.StatusCode != 0 ? result.StatusCode : 400, result);
             return Ok(result);
         }
 

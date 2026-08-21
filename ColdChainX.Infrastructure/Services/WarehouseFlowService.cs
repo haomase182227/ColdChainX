@@ -35,6 +35,10 @@ public class WarehouseFlowService : IWarehouseFlowService
             return ApiResponse<LpnResponse>.Failure("Actual weight and dimensions must be greater than 0.");
 
         var actualCbm = CalculateCbm(request.LengthCm, request.WidthCm, request.HeightCm, order.Quantity);
+        var weightDiff = CalculateDiffPercent((order.OrderDimension?.ExpectedWeightKg ?? 0m), request.ActualWeightKg);
+        var cbmDiff = CalculateDiffPercent((order.OrderDimension?.ExpectedCbm ?? 0m), actualCbm);
+        var maxDiff = Math.Max(weightDiff, cbmDiff);
+        var hasDiscrepancy = maxDiff > DiscrepancyThresholdPercent;
         var now = DateTime.UtcNow;
 
         bool isFastTrack = false;
@@ -53,7 +57,7 @@ public class WarehouseFlowService : IWarehouseFlowService
             }
         }
 
-        var initialState = isFastTrack ? LpnState.IN_STOCK : LpnState.RECEIVING;
+        var initialState = hasDiscrepancy ? LpnState.DISCREPANCY_HOLD : (isFastTrack ? LpnState.IN_STOCK : LpnState.RECEIVING);
 
         await using var tx = await _db.Database.BeginTransactionAsync();
 
@@ -75,7 +79,9 @@ public class WarehouseFlowService : IWarehouseFlowService
             RequiredTemperature = ParseTemperature(order.TempCondition),
             RecordedTemperature = request.RecordedTemperature,
             State = initialState,
-            DiscrepancyReason = null,
+            DiscrepancyReason = hasDiscrepancy
+                ? $"Actual cargo differs from expected by {maxDiff:0.##}% (weight {weightDiff:0.##}%, cbm {cbmDiff:0.##}%). Actual dimensions: {request.LengthCm:0.##} x {request.WidthCm:0.##} x {request.HeightCm:0.##} cm."
+                : null,
             SlaDeadline = CalculateSlaDeadline(order.Schedule),
             InboundTime = now,
             IsFastTrack = isFastTrack,
@@ -85,12 +91,27 @@ public class WarehouseFlowService : IWarehouseFlowService
         _db.Lpns.Add(lpn);
         order.OrderDimension.ActualWeightKg = request.ActualWeightKg;
         order.OrderDimension.ActualCbm = actualCbm;
-        order.Status = isFastTrack ? "IN_STOCK" : "RECEIVING";
+        order.Status = hasDiscrepancy ? "DISCREPANCY_HOLD" : (isFastTrack ? "IN_STOCK" : "RECEIVING");
 
         await _db.SaveChangesAsync();
         await tx.CommitAsync();
 
-        var message = "Inbound QC completed and GRN generated.";
+        if (hasDiscrepancy)
+        {
+            await _hubContext.Clients.Group("Group_Sales").SendAsync("InboundDiscrepancyDetected", new
+            {
+                lpn.LpnId,
+                lpn.LpnCode,
+                order.OrderId,
+                order.TrackingCode,
+                MaxDiffPercent = maxDiff,
+                lpn.DiscrepancyReason
+            });
+        }
+
+        var message = hasDiscrepancy
+            ? "Inbound QC completed with discrepancy hold."
+            : "Inbound QC completed and GRN generated.";
 
         return ApiResponse<LpnResponse>.SuccessResponse(ToResponse(lpn, order.TrackingCode), message);
     }
@@ -301,37 +322,12 @@ public class WarehouseFlowService : IWarehouseFlowService
         return ApiResponse<LpnResponse>.SuccessResponse(ToResponse(lpn, lpn.Order.TrackingCode), "Return PDF generated.");
     }
 
-    private static decimal CalculateCbm(decimal lengthCm, decimal widthCm, decimal heightCm, int quantity)
-    {
-        return Math.Round(lengthCm * widthCm * heightCm * Math.Max(quantity, 1) / 1_000_000m, 4);
-    }
-
     private static decimal CalculateDiffPercent(decimal expected, decimal actual)
     {
         if (expected <= 0)
             return actual > 0 ? 100m : 0m;
 
         return Math.Round(Math.Abs(actual - expected) / expected * 100m, 2);
-    }
-
-    private static decimal? ParseTemperature(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return null;
-
-        var normalized = value.Replace("°C", "", StringComparison.OrdinalIgnoreCase)
-            .Replace("C", "", StringComparison.OrdinalIgnoreCase)
-            .Trim();
-
-        return decimal.TryParse(normalized, out var temp) ? temp : null;
-    }
-
-    private static DateTime? CalculateSlaDeadline(RouteSchedule? schedule)
-    {
-        if (schedule == null)
-            return null;
-
-        return schedule.DepartureDate.Date.Add(schedule.CutOffTime);
     }
 
     private static string GenerateCode(string prefix)

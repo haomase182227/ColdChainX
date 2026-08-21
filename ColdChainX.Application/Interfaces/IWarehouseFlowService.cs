@@ -5,8 +5,6 @@ namespace ColdChainX.Application.Interfaces;
 
 public interface IWarehouseFlowService
 {
-    Task<ApiResponse<LpnResponse>> ProcessInboundQcAsync(Guid orderId, ProcessInboundQcRequest request, Guid receiverId);
-
     Task<ApiResponse<object>> ResolveDiscrepancyAsync(Guid lpnId, ResolveDiscrepancyRequest request, Guid salesUserId);
 
     Task<ApiResponse<LpnResponse>> PutawayLpnAsync(Guid lpnId, PutawayLpnRequest request);
