@@ -14,21 +14,15 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
     private readonly IApplicationDbContext _context;
     private readonly ILogger<ProcessInboundQcCommandHandler> _logger;
     private readonly IFileService _fileService;
-    private readonly IMediator _mediator;
-    private readonly IContractAppendixService _appendixService;
 
     public ProcessInboundQcCommandHandler(
         IApplicationDbContext context,
         ILogger<ProcessInboundQcCommandHandler> logger,
-        IFileService fileService,
-        IMediator mediator,
-        IContractAppendixService appendixService)
+        IFileService fileService)
     {
         _context = context;
         _logger = logger;
         _fileService = fileService;
-        _mediator = mediator;
-        _appendixService = appendixService;
     }
 
     public async Task<ProcessInboundQcResponse> Handle(ProcessInboundQcCommand request, CancellationToken cancellationToken)
@@ -67,10 +61,16 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
         var asn = await _context.InboundAsns
             .Include(a => a.Order)
                 .ThenInclude(o => o.OrderDimension)
+            .Include(a => a.Order)
+                .ThenInclude(o => o.Schedule)
             .FirstOrDefaultAsync(a => a.AsnId == request.AsnId, cancellationToken);
 
         if (asn?.Order == null)
             return Failure("ASN or linked order was not found.");
+
+        var order = asn.Order;
+        if (order.OrderDimension == null)
+            return Failure("The order dimensions were not found. Inbound QC cannot record actual measurements.");
 
         var warehouseId = request.WarehouseId != Guid.Empty
             ? request.WarehouseId
@@ -82,26 +82,9 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
         if (receiver.WarehouseId.HasValue && receiver.WarehouseId.Value != Guid.Empty && asn.WarehouseId.HasValue && asn.WarehouseId.Value != warehouseId.Value)
             return Failure("ASN does not belong to current receiver warehouse.");
 
-        var uploadedUrls = new List<string>();
-        if (request.EvidenceImages != null && request.EvidenceImages.Any())
-        {
-            foreach (var file in request.EvidenceImages)
-            {
-                if (file.Length > 10 * 1024 * 1024)
-                {
-                    return Failure($"File {file.FileName} exceeds the 10MB size limit.");
-                }
-
-                var url = await _fileService.UploadFileAsync(file);
-                uploadedUrls.Add(url);
-            }
-        }
-        var evidenceImageUrl = uploadedUrls.Any() ? string.Join(",", uploadedUrls) : null;
-
         if (asn.WarehouseId.HasValue && asn.WarehouseId.Value != warehouseId.Value)
             return Failure("ASN does not belong to current receiver warehouse.");
 
-        var order = asn.Order;
         var now = DbNow();
         var actualWeightKg = hasActualPackageLines
             ? actualPackageLines.Sum(line => line.ActualWeightKg)
@@ -129,6 +112,29 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
 
         if (existingLpn != null)
             return Failure($"Order already has LPN {existingLpn.LpnCode}. Use putaway flow instead.");
+
+        var finalQuotationError = await CreateFinalQuotationFromActualAsync(
+            order,
+            actualWeightKg,
+            actualCbm,
+            now,
+            cancellationToken);
+        if (finalQuotationError != null)
+            return Failure(finalQuotationError);
+
+        var uploadedUrls = new List<string>();
+        if (request.EvidenceImages != null && request.EvidenceImages.Any())
+        {
+            foreach (var file in request.EvidenceImages)
+            {
+                if (file.Length > 10 * 1024 * 1024)
+                    return Failure($"File {file.FileName} exceeds the 10MB size limit.");
+
+                var url = await _fileService.UploadFileAsync(file);
+                uploadedUrls.Add(url);
+            }
+        }
+        var evidenceImageUrl = uploadedUrls.Any() ? string.Join(",", uploadedUrls) : null;
 
         var receipt = await _context.WarehouseReceipts
             .FirstOrDefaultAsync(r => r.OrderId == order.OrderId
@@ -212,14 +218,9 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
         }
 
         asn.Status = "QC_PASSED";
-        if (order.OrderDimension != null)
-        {
-            order.OrderDimension.ActualWeightKg = actualWeightKg;
-            order.OrderDimension.ActualCbm = actualCbm;
-        }
+        order.OrderDimension.ActualWeightKg = actualWeightKg;
+        order.OrderDimension.ActualCbm = actualCbm;
         order.Status = "RECEIVING";
-
-        await CreateFinalQuotationFromActualAsync(order.OrderId, actualWeightKg, actualCbm, now, cancellationToken);
 
         await _context.SaveChangesAsync(cancellationToken);
 
@@ -233,55 +234,6 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
             ReceiptId = receipt?.ReceiptId,
             DiffPercent = 0m
         };
-    }
-
-    private async Task EnsureNotificationTemplateAsync(string templateId, CancellationToken cancellationToken)
-    {
-        var existing = await _context.NotificationTemplates.FirstOrDefaultAsync(t => t.TemplateId == templateId, cancellationToken);
-
-        var typeId = await _context.Messagetypes
-            .Where(t => t.TypeName == "ORDER_STATUS")
-            .Select(t => (Guid?)t.TypeId)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (!typeId.HasValue)
-        {
-            var type = new Messagetype
-            {
-                TypeId = Guid.NewGuid(),
-                TypeName = "ORDER_STATUS",
-                Description = "Cập nhật trạng thái đơn hàng, báo giá, hợp đồng"
-            };
-            _context.Messagetypes.Add(type);
-            await _context.SaveChangesAsync(cancellationToken);
-            typeId = type.TypeId;
-        }
-
-        var expectedTitle = "Đơn hàng {{Tracking_Code}} bị giữ lại do chênh lệch QC";
-        var expectedBody = "Phát hiện chênh lệch >5% tại Inbound QC. Biên bản bất thường: {{Pdf_URL}}. Phụ lục hợp đồng nháp: {{Appendix_Number}} (ID: {{Appendix_Id}})";
-
-        if (existing != null)
-        {
-            if (existing.BodyTemplate != expectedBody || existing.TitleTemplate != expectedTitle)
-            {
-                existing.TitleTemplate = expectedTitle;
-                existing.BodyTemplate = expectedBody;
-                await _context.SaveChangesAsync(cancellationToken);
-            }
-        }
-        else
-        {
-            _context.NotificationTemplates.Add(new NotificationTemplate
-            {
-                TemplateId = templateId,
-                TypeId = typeId.Value,
-                TitleTemplate = expectedTitle,
-                BodyTemplate = expectedBody,
-                Channel = "IN_APP",
-                Status = "ACTIVE"
-            });
-            await _context.SaveChangesAsync(cancellationToken);
-        }
     }
 
     private static ProcessInboundQcResponse Failure(string message)
@@ -321,57 +273,62 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
     private static decimal CalculateCbm(decimal lengthCm, decimal widthCm, decimal heightCm, int quantity)
         => Math.Round(lengthCm * widthCm * heightCm * quantity / 1_000_000m, 4);
 
-    private async Task CreateFinalQuotationFromActualAsync(
-        Guid orderId,
+    private async Task<string?> CreateFinalQuotationFromActualAsync(
+        TransportOrder order,
         decimal actualWeightKg,
         decimal actualCbm,
         DateTime now,
         CancellationToken cancellationToken)
     {
         var existingFinal = await _context.Quotations
-            .AnyAsync(q => q.OrderId == orderId
+            .AnyAsync(q => q.OrderId == order.OrderId
                 && q.Status == "FINAL"
                 && q.PricingSource == "AUTO_ACTUAL", cancellationToken);
 
         if (existingFinal)
-            return;
+            return null;
 
         var sourceQuotation = await _context.Quotations
-            .Where(q => q.OrderId == orderId)
-            .OrderByDescending(q => q.Status == "ACCEPTED")
-            .ThenByDescending(q => q.AcceptedAt)
+            .Where(q => q.OrderId == order.OrderId && q.Status == "ACCEPTED")
+            .OrderByDescending(q => q.AcceptedAt)
             .ThenByDescending(q => q.CreatedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (sourceQuotation == null || !sourceQuotation.PricePerKg.HasValue)
-            return;
+        if (sourceQuotation == null)
+            return "The accepted initial quotation was not found. Inbound QC cannot create the final quotation.";
 
-        const decimal minChargeableWeightKg = 30m;
-        const decimal defaultVolumetricConversionRate = 250m;
-        var volumetricWeight = Math.Round(actualCbm * defaultVolumetricConversionRate, 2);
-        var chargeableWeight = Math.Max(Math.Max(actualWeightKg, volumetricWeight), minChargeableWeightKg);
-        var baseFreight = Math.Round(chargeableWeight * sourceQuotation.PricePerKg.Value, 0);
+        if (order.Schedule == null)
+            return "The order schedule was not found. Inbound QC cannot resolve final pricing.";
+
+        var pricing = await ActualQuotationPricingHelper.ResolveAsync(
+            _context,
+            order.Schedule.RouteId,
+            actualWeightKg,
+            actualCbm,
+            cancellationToken);
+        if (!pricing.IsSuccess)
+            return pricing.Error;
 
         var sourceSubtotal = sourceQuotation.FinalAmount - sourceQuotation.VatAmount;
-        var finalSubtotal = sourceSubtotal - sourceQuotation.BaseFreight + baseFreight;
+        var finalSubtotal = sourceSubtotal - sourceQuotation.BaseFreight + pricing.BaseFreight;
         var vatPercentage = sourceQuotation.VatPercentage ?? 8m;
         var vatAmount = Math.Round(finalSubtotal * vatPercentage / 100m, 0);
 
         _context.Quotations.Add(new Quotation
         {
             QuoteId = Guid.NewGuid(),
-            OrderId = orderId,
-            BaseFreight = baseFreight,
+            OrderId = order.OrderId,
+            BaseFreight = pricing.BaseFreight,
             LastMileSurcharge = sourceQuotation.LastMileSurcharge,
             VasAmount = sourceQuotation.VasAmount,
             VatPercentage = vatPercentage,
             VatAmount = vatAmount,
             FinalAmount = finalSubtotal + vatAmount,
-            ChargeableWeightKg = chargeableWeight,
-            VolumetricWeightKg = volumetricWeight,
-            PricePerKg = sourceQuotation.PricePerKg,
+            ChargeableWeightKg = pricing.ChargeableWeightKg,
+            VolumetricWeightKg = pricing.VolumetricWeightKg,
+            PricePerKg = pricing.PricePerKg,
             DistanceKm = sourceQuotation.DistanceKm,
-            SystemBaseFreight = baseFreight,
+            SystemBaseFreight = pricing.BaseFreight,
             ManualAdjustment = sourceQuotation.ManualAdjustment,
             AdditionalCharges = sourceQuotation.AdditionalCharges,
             MandatoryCharges = sourceQuotation.MandatoryCharges,
@@ -381,6 +338,8 @@ public class ProcessInboundQcCommandHandler : IRequestHandler<ProcessInboundQcCo
             Status = "FINAL",
             CreatedAt = now
         });
+
+        return null;
     }
 
     private static ProductCategory ParseProductCategory(string? value)

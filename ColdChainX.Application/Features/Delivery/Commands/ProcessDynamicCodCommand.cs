@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Http;
+using ColdChainX.Application.Helpers;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
 using ColdChainX.Core.Enums;
@@ -108,10 +109,7 @@ public class ProcessDynamicCodCommandHandler : IRequestHandler<ProcessDynamicCod
         decimal rejectedRatio = (decimal)rejectedQty / originalQty;
         string primaryReason = string.IsNullOrWhiteSpace(request.RejectionReason) ? "TEMP_VIOLATION_OSD" : request.RejectionReason;
 
-        var quotation = order.Quotations
-            .Where(q => q.Status == "ACCEPTED" || q.Status == "APPROVED" || q.Status == "DRAFT" || q.FinalAmount > 0)
-            .OrderByDescending(q => q.CreatedAt)
-            .FirstOrDefault();
+        var quotation = QuotationSelectionHelper.SelectBillingQuotation(order.Quotations);
 
         decimal baseAmount = quotation?.FinalAmount ?? 0m;
         if (baseAmount <= 0)

@@ -450,6 +450,13 @@ namespace ColdChainX.Infrastructure.Services
                 if (order == null)
                     return ApiResponse<CreateOrderResponse>.Failure("Order not found", 404);
 
+                if (HasOrderDefinitionUpdate(request))
+                {
+                    var updateLockReason = await GetOrderDefinitionUpdateLockReasonAsync(order.OrderId);
+                    if (updateLockReason != null)
+                        return ApiResponse<CreateOrderResponse>.Failure(updateLockReason, 409);
+                }
+
                 if (request.ExpectedWeightKg.HasValue && request.ExpectedWeightKg.Value <= 0)
                     return ApiResponse<CreateOrderResponse>.Failure("Expected weight must be greater than 0", 400);
 
@@ -510,7 +517,10 @@ namespace ColdChainX.Infrastructure.Services
                             order.TempCondition,
                             request.TempCondition.Value.ToString("0.##", CultureInfo.InvariantCulture),
                             StringComparison.Ordinal))
-                    || request.Quantity.HasValue;
+                    || (request.Quantity.HasValue && order.Quantity != request.Quantity.Value)
+                    || (request.PackageLinesJson != null
+                        && (!ArePackageLinesPricingEquivalent(order.OrderPackageLines, packageLinesResult.PackageLines)
+                            || order.OrderDimension?.CustomerProvidedTotalCbm != request.CustomerProvidedTotalCbm));
 
                 if (request.ItemName != null) order.ItemName = request.ItemName.Trim();
                 if (request.Category != null) order.Category = request.Category.Trim();
@@ -525,7 +535,6 @@ namespace ColdChainX.Infrastructure.Services
                 if (request.PackageLinesJson != null)
                 {
                     ApplyPackageLineUpdate(order, packageLinesResult.PackageLines, request.CustomerProvidedTotalCbm);
-                    pricingChanged = true;
                 }
                 else if (request.CustomerProvidedTotalCbm.HasValue && order.OrderDimension != null)
                 {
@@ -710,13 +719,14 @@ namespace ColdChainX.Infrastructure.Services
                             order.TempCondition,
                             request.TempCondition.Value.ToString("0.##", CultureInfo.InvariantCulture),
                             StringComparison.Ordinal))
-                    || request.Quantity.HasValue
-                    || request.ExpectedWeightKg.HasValue
-                    || request.CustomerProvidedTotalCbm.HasValue
-                    || request.LengthCm.HasValue
-                    || request.WidthCm.HasValue
-                    || request.HeightCm.HasValue
-                    || request.PackageLinesJson != null;
+                    || (request.Quantity.HasValue && order.Quantity != request.Quantity.Value)
+                    || (request.ExpectedWeightKg.HasValue
+                        && order.OrderDimension?.ExpectedWeightKg != request.ExpectedWeightKg.Value)
+                    || (request.CustomerProvidedTotalCbm.HasValue
+                        && order.OrderDimension?.ExpectedCbm != request.CustomerProvidedTotalCbm.Value)
+                    || (request.PackageLinesJson != null
+                        && (!ArePackageLinesPricingEquivalent(order.OrderPackageLines, packageLinesResult.PackageLines)
+                            || order.OrderDimension?.CustomerProvidedTotalCbm != request.CustomerProvidedTotalCbm));
 
                 if (request.ItemName != null) order.ItemName = request.ItemName.Trim();
                 if (request.Category != null) order.Category = request.Category.Trim();
@@ -1405,6 +1415,65 @@ namespace ColdChainX.Infrastructure.Services
                 || request.LengthCm.HasValue
                 || request.WidthCm.HasValue
                 || request.HeightCm.HasValue;
+
+        private static bool HasOrderDefinitionUpdate(UpdateOrderRequest request)
+            => request.ItemName != null
+                || request.Category != null
+                || request.TempCondition.HasValue
+                || request.ExpectedWeightKg.HasValue
+                || request.Quantity.HasValue
+                || request.PackageLinesJson != null
+                || request.CustomerProvidedTotalCbm.HasValue
+                || request.PackagingType != null
+                || request.LengthCm.HasValue
+                || request.WidthCm.HasValue
+                || request.HeightCm.HasValue
+                || request.DestAddressText != null
+                || request.ScheduleId.HasValue
+                || request.DropoffStopId.HasValue
+                || request.ReceiverName != null
+                || request.ReceiverPhone != null
+                || request.HasStrongOdor.HasValue
+                || request.IsStackable.HasValue;
+
+        private async Task<string?> GetOrderDefinitionUpdateLockReasonAsync(Guid orderId)
+        {
+            var hasIssuedQuotation = await _db.Quotations.AnyAsync(quotation =>
+                quotation.OrderId == orderId
+                && (quotation.Status == "SENT"
+                    || quotation.Status == "ACCEPTED"
+                    || quotation.Status == "FINAL"));
+            if (hasIssuedQuotation)
+                return "Order definition cannot be changed after a quotation has been issued. Use inbound QC to record actual measurements.";
+
+            var hasWarehouseData = await _db.InboundAsns.AnyAsync(asn => asn.OrderId == orderId)
+                || await _db.Lpns.AnyAsync(lpn => lpn.OrderId == orderId);
+            if (hasWarehouseData)
+                return "Order definition cannot be changed after ASN or warehouse processing has started.";
+
+            var hasContract = await _db.CustomerContracts.AnyAsync(contract => contract.OrderId == orderId);
+            return hasContract
+                ? "Order definition cannot be changed after contract generation has started."
+                : null;
+        }
+
+        private static bool ArePackageLinesPricingEquivalent(
+            IEnumerable<OrderPackageLine> existingLines,
+            IEnumerable<OrderPackageLineRequest> requestedLines)
+        {
+            var existing = existingLines
+                .Select(line => (line.CapacityKg, line.Quantity))
+                .OrderBy(line => line.CapacityKg)
+                .ThenBy(line => line.Quantity)
+                .ToList();
+            var requested = requestedLines
+                .Select(line => (line.CapacityKg, line.Quantity))
+                .OrderBy(line => line.CapacityKg)
+                .ThenBy(line => line.Quantity)
+                .ToList();
+
+            return existing.SequenceEqual(requested);
+        }
 
         private void ApplyPackageLineUpdate(
             TransportOrder order,

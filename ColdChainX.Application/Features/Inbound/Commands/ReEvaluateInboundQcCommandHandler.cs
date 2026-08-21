@@ -1,4 +1,5 @@
 using ColdChainX.Application.Interfaces;
+using ColdChainX.Application.Helpers;
 using ColdChainX.Core.Entities;
 using ColdChainX.Core.Enums;
 using MediatR;
@@ -10,9 +11,6 @@ namespace ColdChainX.Application.Features.Inbound.Commands;
 
 public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInboundQcCommand, ReEvaluateInboundQcResponse>
 {
-    private const decimal MinChargeableWeightKg = 30m;
-    private const decimal VolumetricConversionRate = 250m;
-
     private readonly IApplicationDbContext _context;
     private readonly ILogger<ReEvaluateInboundQcCommandHandler> _logger;
     private readonly IFileService _fileService;
@@ -77,6 +75,8 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
                     .Include(entity => entity.InboundQcPackageLines)
                     .Include(entity => entity.Order)
                         .ThenInclude(order => order.OrderDimension)
+                    .Include(entity => entity.Order)
+                        .ThenInclude(order => order.Schedule)
                     .FirstOrDefaultAsync(entity => entity.LpnId == request.LpnId, cancellationToken);
 
                 var editableFailure = ValidateEditableLpn(lpn, request.WarehouseId);
@@ -188,7 +188,25 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
                 lpn.Receipt.Reason = null;
                 lpn.Receipt.Note = "Đã cập nhật lại số đo kiểm kê, chờ xếp kho.";
 
-                UpdateFinalQuotation(finalQuotation, actualWeightKg, actualCbm);
+                if (lpn.Order.Schedule == null)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    return Failure("The order schedule was not found. Final quotation cannot be recalculated.");
+                }
+
+                var pricing = await ActualQuotationPricingHelper.ResolveAsync(
+                    _context,
+                    lpn.Order.Schedule.RouteId,
+                    actualWeightKg,
+                    actualCbm,
+                    cancellationToken);
+                if (!pricing.IsSuccess)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    return Failure(pricing.Error!);
+                }
+
+                UpdateFinalQuotation(finalQuotation, pricing);
 
                 await _context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
@@ -301,21 +319,18 @@ public class ReEvaluateInboundQcCommandHandler : IRequestHandler<ReEvaluateInbou
 
     private static void UpdateFinalQuotation(
         Quotation quotation,
-        decimal actualWeightKg,
-        decimal actualCbm)
+        ActualQuotationPricingResult pricing)
     {
-        var volumetricWeight = Math.Round(actualCbm * VolumetricConversionRate, 2);
-        var chargeableWeight = Math.Max(Math.Max(actualWeightKg, volumetricWeight), MinChargeableWeightKg);
-        var baseFreight = Math.Round(chargeableWeight * quotation.PricePerKg!.Value, 0);
         var previousSubtotal = quotation.FinalAmount - quotation.VatAmount;
-        var correctedSubtotal = previousSubtotal - quotation.BaseFreight + baseFreight;
+        var correctedSubtotal = previousSubtotal - quotation.BaseFreight + pricing.BaseFreight;
         var vatPercentage = quotation.VatPercentage ?? 8m;
         var vatAmount = Math.Round(correctedSubtotal * vatPercentage / 100m, 0);
 
-        quotation.BaseFreight = baseFreight;
-        quotation.SystemBaseFreight = baseFreight;
-        quotation.ChargeableWeightKg = chargeableWeight;
-        quotation.VolumetricWeightKg = volumetricWeight;
+        quotation.BaseFreight = pricing.BaseFreight;
+        quotation.SystemBaseFreight = pricing.BaseFreight;
+        quotation.ChargeableWeightKg = pricing.ChargeableWeightKg;
+        quotation.VolumetricWeightKg = pricing.VolumetricWeightKg;
+        quotation.PricePerKg = pricing.PricePerKg;
         quotation.VatPercentage = vatPercentage;
         quotation.VatAmount = vatAmount;
         quotation.FinalAmount = correctedSubtotal + vatAmount;

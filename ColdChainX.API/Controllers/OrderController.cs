@@ -102,7 +102,7 @@ namespace ColdChainX.API.Controllers
                 return Unauthorized("CustomerId claim is missing from token");
 
             var result = await _orderService.UpdateOrderAsync(orderId, request, customerId);
-            if (!result.Success) return BadRequest(result);
+            if (!result.Success) return StatusCode(result.StatusCode != 0 ? result.StatusCode : 400, result);
             return Ok(result);
         }
 
@@ -117,7 +117,7 @@ namespace ColdChainX.API.Controllers
                 return Unauthorized("UserId claim is missing from token");
 
             var result = await _orderService.AdminUpdateOrderAsync(orderId, request, salesUserId);
-            if (!result.Success) return BadRequest(result);
+            if (!result.Success) return StatusCode(result.StatusCode != 0 ? result.StatusCode : 400, result);
             return Ok(result);
         }
 

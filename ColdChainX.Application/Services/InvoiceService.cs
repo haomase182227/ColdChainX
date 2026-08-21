@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using ColdChainX.Application.DTOs.Common;
 using ColdChainX.Application.DTOs.Invoices;
+using ColdChainX.Application.Helpers;
 using ColdChainX.Application.Interfaces;
 using ColdChainX.Core.Entities;
 using ColdChainX.Shared.Responses;
@@ -154,7 +155,9 @@ namespace ColdChainX.Application.Services
                 var ordersToInvoice = await _db.TransportOrders
                     .Include(o => o.Quotations)
                     .Include(o => o.InvoiceLines)
-                    .Where(o => o.Status == "COMPLETED" && o.InvoiceLines.Count == 0 && o.Quotations.Any(q => q.Status == "APPROVED"))
+                    .Where(o => o.Status == "COMPLETED"
+                        && o.InvoiceLines.Count == 0
+                        && o.Quotations.Any(q => q.Status == "FINAL" && q.PricingSource == "AUTO_ACTUAL"))
                     .ToListAsync();
 
                 var customerGroups = ordersToInvoice.GroupBy(o => o.CustomerId);
@@ -165,12 +168,15 @@ namespace ColdChainX.Application.Services
 
                     var invoiceId = Guid.NewGuid();
                     decimal subTotal = 0;
+                    decimal totalTaxAmount = 0;
                     var invoiceLines = new List<ColdChainX.Core.Entities.InvoiceLine>();
 
                     foreach (var order in group)
                     {
-                        var quotation = order.Quotations.First(q => q.Status == "APPROVED");
-                        var lineAmount = quotation.BaseFreight + (quotation.LastMileSurcharge ?? 0) + (quotation.VasAmount ?? 0); // Excluding VAT
+                        var quotation = QuotationSelectionHelper.SelectBillingQuotation(order.Quotations)
+                            ?? throw new InvalidOperationException(
+                                $"Final quotation was not found for completed order {order.OrderId}.");
+                        var lineAmount = quotation.FinalAmount - quotation.VatAmount;
 
                         var line = new ColdChainX.Core.Entities.InvoiceLine
                         {
@@ -182,15 +188,15 @@ namespace ColdChainX.Application.Services
                             Quantity = 1,
                             UnitPrice = lineAmount,
                             Amount = lineAmount,
-                            TaxRate = 8 // Assume 8% VAT
+                            TaxRate = quotation.VatPercentage ?? 8m
                         };
 
                         invoiceLines.Add(line);
                         subTotal += lineAmount;
+                        totalTaxAmount += quotation.VatAmount;
                     }
 
-                    var taxAmount = subTotal * 0.08m;
-                    var grandTotal = subTotal + taxAmount;
+                    var grandTotal = subTotal + totalTaxAmount;
 
                     var invoice = new ColdChainX.Core.Entities.Invoice
                     {
@@ -199,7 +205,7 @@ namespace ColdChainX.Application.Services
                         CustomerId = group.Key.Value,
                         SubTotal = subTotal,
                         TaxRate = 8,
-                        TaxAmount = taxAmount,
+                        TaxAmount = totalTaxAmount,
                         GrandTotal = grandTotal,
                         IssuedDate = DateOnly.FromDateTime(DateTime.UtcNow),
                         DueDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(15)), // Due in 15 days
