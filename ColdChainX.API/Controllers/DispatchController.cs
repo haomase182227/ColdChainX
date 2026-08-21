@@ -974,6 +974,7 @@ public class DispatchController : ControllerBase
                     LpnCode = lpn.LpnCode,
                     PackageLineId = pi.PackageLineId,
                     PackageLabel = pi.PackageLabel,
+                    DeliveryStopSequence = pi.DeliveryStopSequence,
                     X = pi.X,
                     Y = pi.Y,
                     Z = pi.Z,

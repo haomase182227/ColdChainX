@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -545,12 +545,16 @@
                 if (!event.value && selectedMesh) {
                     clampSelectedMeshToContainer(selectedMesh);
                     updateSelectedItemFromMesh(selectedMesh);
+                    validateManualLayout();
+                    refreshSelectionLabel();
                 }
             });
             transformControls.addEventListener('objectChange', () => {
                 if (selectedMesh) {
                     clampSelectedMeshToContainer(selectedMesh);
                     updateSelectedItemFromMesh(selectedMesh);
+                    validateManualLayout();
+                    refreshSelectionLabel();
                 }
             });
             scene.add(transformControls);
@@ -627,7 +631,11 @@
 
                 if (intersects.length > 0) {
                     const data = intersects[0].object.userData;
-                    tooltip.innerHTML = `<strong>${data.lpnCode}</strong><br>Dim: ${data.w}x${data.h}x${data.d} cm`;
+                    const stopText = data.deliveryStopSequence && data.deliveryStopSequence < 999
+                        ? `<br>Delivery stop: #${data.deliveryStopSequence}`
+                        : '';
+                    const warningText = formatValidationWarnings(data.validationWarnings, '<br>');
+                    tooltip.innerHTML = `<strong>${data.lpnCode}</strong>${stopText}<br>Dim: ${data.w}x${data.h}x${data.d} cm${warningText}`;
                     tooltip.style.opacity = 1;
                     document.body.style.cursor = 'pointer';
                 } else {
@@ -704,13 +712,22 @@
 
                 const itemEdges = new THREE.EdgesGeometry(geo);
                 const itemEdgeMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 });
-                mesh.add(new THREE.LineSegments(itemEdges, itemEdgeMat));
+                const edgeLines = new THREE.LineSegments(itemEdges, itemEdgeMat);
+                mesh.add(edgeLines);
+                const sequenceBadge = createSequenceBadge(item);
+                if (sequenceBadge) {
+                    sequenceBadge.position.set(0, (item.h / 2) + 5, 0);
+                    mesh.add(sequenceBadge);
+                }
 
                 mesh.userData = {
                     item,
                     lpnCode: item.lpnCode,
                     packageLabel: item.packageLabel,
                     packageKey: item.packageKey,
+                    deliveryStopSequence: item.deliveryStopSequence,
+                    validationEdge: edgeLines,
+                    validationWarnings: [],
                     w: item.w,
                     h: item.h,
                     d: item.d
@@ -722,6 +739,58 @@
             camera.position.set(cW * 1.5, cH * 1.5, cL * 1.5);
             controls.target.set(cW / 2, cH / 2, cL / 2);
             controls.update();
+            validateManualLayout();
+        }
+
+        function createSequenceBadge(item) {
+            const sequence = Number(item.deliveryStopSequence || 0);
+            if (!sequence || sequence >= 999) return null;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = 160;
+            canvas.height = 96;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return null;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+            roundRect(ctx, 24, 12, 112, 60, 14);
+            ctx.fill();
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = '#f8fafc';
+            ctx.stroke();
+
+            ctx.fillStyle = '#facc15';
+            ctx.font = '700 34px Inter, Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`#${sequence}`, 80, 42);
+
+            ctx.fillStyle = '#cbd5e1';
+            ctx.font = '600 13px Inter, Arial, sans-serif';
+            ctx.fillText('STOP', 80, 66);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.needsUpdate = true;
+            const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+            const sprite = new THREE.Sprite(material);
+            sprite.scale.set(Math.max(36, Number(item.w) * 0.75), 24, 1);
+            sprite.renderOrder = 10;
+            return sprite;
+        }
+
+        function roundRect(ctx, x, y, width, height, radius) {
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
         }
 
         function setTransformMode(mode) {
@@ -741,9 +810,8 @@
             }
 
             transformControls.attach(selectedMesh);
-            const data = selectedMesh.userData;
-            selectionLabel.textContent = `${data.packageLabel || data.lpnCode}: ${data.w} x ${data.h} x ${data.d} cm`;
-            setActivePackage(data.packageKey);
+            refreshSelectionLabel();
+            setActivePackage(selectedMesh.userData.packageKey);
         }
 
         function clampSelectedMeshToContainer(mesh) {
@@ -768,11 +836,125 @@
             item.rotationY = Number(mesh.rotation.y.toFixed(4));
         }
 
+        function refreshSelectionLabel() {
+            if (!selectedMesh) return;
+
+            const data = selectedMesh.userData;
+            const stopText = data.deliveryStopSequence && data.deliveryStopSequence < 999
+                ? ` | giao #${data.deliveryStopSequence}`
+                : '';
+            const warningText = formatValidationWarnings(data.validationWarnings, ' | ');
+            selectionLabel.textContent = `${data.packageLabel || data.lpnCode}${stopText}: ${data.w} x ${data.h} x ${data.d} cm${warningText}`;
+        }
+
+        function validateManualLayout() {
+            if (!currentPlan || interactableMeshes.length === 0) return;
+
+            const containerLength = Number(currentPlan.containerLength || 0);
+            const containerHeight = Number(currentPlan.containerHeight || 0);
+            const evaporatorHeight = Math.min(containerHeight * 0.3, 60);
+            const airflowFrontDepth = 45;
+            const lifoToleranceCm = 10;
+            const minStopSequence = Math.min(...interactableMeshes
+                .map(mesh => Number(mesh.userData.deliveryStopSequence || 999))
+                .filter(sequence => sequence > 0 && sequence < 999));
+
+            for (const mesh of interactableMeshes) {
+                const warnings = [];
+                const box = getMeshBox(mesh);
+                const sequence = Number(mesh.userData.deliveryStopSequence || 999);
+
+                if (box.minY > 0.5) {
+                    const supportRatio = calculateSupportRatio(mesh, box);
+                    if (supportRatio < 0.70) {
+                        warnings.push(`Support ${(supportRatio * 100).toFixed(0)}% < 70%`);
+                    }
+                }
+
+                const nearEvaporator = box.minZ < airflowFrontDepth;
+                const blocksUpperFrontAir = box.maxY > (containerHeight - evaporatorHeight - 10);
+                if (nearEvaporator && blocksUpperFrontAir) {
+                    warnings.push('Có thể chắn dàn lạnh/luồng gió đầu xe');
+                }
+
+                if (sequence > 0 && sequence < 999) {
+                    if (sequence === minStopSequence && box.centerZ < containerLength * 0.55) {
+                        warnings.push(`#${sequence} đang quá sâu; hàng giao trước nên gần cửa`);
+                    }
+
+                    const laterStopInFront = interactableMeshes.some(other => {
+                        if (other === mesh) return false;
+                        const otherSequence = Number(other.userData.deliveryStopSequence || 999);
+                        if (otherSequence <= sequence || otherSequence >= 999) return false;
+                        return getMeshBox(other).centerZ > box.centerZ + lifoToleranceCm;
+                    });
+
+                    if (laterStopInFront) {
+                        warnings.push(`LIFO: stop #${sequence} nên ở gần cửa hơn stop sau`);
+                    }
+                }
+
+                mesh.userData.validationWarnings = warnings;
+                applyValidationStyle(mesh, warnings);
+            }
+        }
+
+        function getMeshBox(mesh) {
+            const halfX = mesh.userData.w / 2;
+            const halfY = mesh.userData.h / 2;
+            const halfZ = mesh.userData.d / 2;
+            return {
+                minX: mesh.position.x - halfX,
+                maxX: mesh.position.x + halfX,
+                minY: mesh.position.y - halfY,
+                maxY: mesh.position.y + halfY,
+                minZ: mesh.position.z - halfZ,
+                maxZ: mesh.position.z + halfZ,
+                centerZ: mesh.position.z
+            };
+        }
+
+        function calculateSupportRatio(mesh, box) {
+            let supportedArea = 0;
+            for (const other of interactableMeshes) {
+                if (other === mesh) continue;
+                const otherBox = getMeshBox(other);
+                if (Math.abs(otherBox.maxY - box.minY) > 2) continue;
+
+                const overlapX = Math.max(0, Math.min(box.maxX, otherBox.maxX) - Math.max(box.minX, otherBox.minX));
+                const overlapZ = Math.max(0, Math.min(box.maxZ, otherBox.maxZ) - Math.max(box.minZ, otherBox.minZ));
+                supportedArea += overlapX * overlapZ;
+            }
+
+            const baseArea = mesh.userData.w * mesh.userData.d;
+            return baseArea > 0 ? Math.min(1, supportedArea / baseArea) : 0;
+        }
+
+        function applyValidationStyle(mesh, warnings) {
+            const hasWarning = warnings.length > 0;
+            if (mesh.userData.validationEdge?.material?.color) {
+                mesh.userData.validationEdge.material.color.setHex(hasWarning ? 0xfacc15 : 0xffffff);
+                mesh.userData.validationEdge.material.opacity = hasWarning ? 1 : 0.4;
+            }
+
+            if (mesh.material?.emissive && mesh !== selectedMesh) {
+                mesh.material.emissive.setHex(hasWarning ? 0x4a2d00 : 0x000000);
+            }
+        }
+
+        function formatValidationWarnings(warnings, separator) {
+            if (!Array.isArray(warnings) || warnings.length === 0) return '';
+            const prefix = separator === '<br>' ? '<br><span style="color:#facc15">⚠ ' : ' | ⚠ ';
+            const suffix = separator === '<br>' ? '</span>' : '';
+            return `${prefix}${warnings.map(escapeHtml).join(separator)}${suffix}`;
+        }
+
         function preparePackageGroups(plan) {
             const groups = new Map();
             for (const item of plan.placedItems) {
                 const label = item.packageLabel || item.lpnCode || 'Package';
-                const key = `${label}|${item.w}|${item.h}|${item.d}|${item.color}`;
+                const deliveryStopSequence = item.deliveryStopSequence || 999;
+                const key = `${deliveryStopSequence}|${label}|${item.w}|${item.h}|${item.d}|${item.color}`;
                 item.packageKey = key;
 
                 if (!groups.has(key)) {
@@ -783,6 +965,7 @@
                         h: item.h,
                         d: item.d,
                         color: item.color || '#3b82f6',
+                        deliveryStopSequence,
                         count: 0
                     });
                 }
@@ -806,7 +989,7 @@
                     <span class="package-swatch" style="background:${escapeHtml(group.color)}"></span>
                     <span>
                         <span class="package-name">${escapeHtml(group.label)}</span>
-                        <span class="package-dims">${group.w} x ${group.h} x ${group.d} cm</span>
+                        <span class="package-dims">${formatDeliveryStop(group.deliveryStopSequence)}${group.w} x ${group.h} x ${group.d} cm</span>
                     </span>
                     <span class="package-count">x${group.count}</span>`;
                 row.addEventListener('click', () => selectNextPackageInGroup(group.key));
@@ -850,6 +1033,11 @@
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#039;');
+        }
+
+        function formatDeliveryStop(sequence) {
+            const value = Number(sequence || 0);
+            return value && value < 999 ? `Giao #${value} | ` : '';
         }
     </script>
 </body>
