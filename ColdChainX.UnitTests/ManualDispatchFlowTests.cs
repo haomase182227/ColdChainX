@@ -86,6 +86,83 @@ public class ManualDispatchFlowTests
     }
 
     [Fact]
+    public async Task CreateTripFromWarehouse_NoShowReturn_UsesInboundWarehouseAsOrigin()
+    {
+        await using var fixture = await CreateFixtureAsync();
+        var incidentId = Guid.NewGuid();
+        var warehouseId = fixture.Lpn.WarehouseId!.Value;
+        fixture.Order.Status = "READY_FOR_ROUTING";
+        fixture.Db.IncidentReports.Add(new IncidentReport
+        {
+            IncidentId = incidentId,
+            TripId = Guid.NewGuid(),
+            IncidentType = IncidentType.CUSTOMER_NO_SHOW_RETURN.ToString(),
+            Severity = "MEDIUM",
+            RiskLevel = "MEDIUM",
+            Description = "Khách vắng mặt, hàng đã nhập lại kho gần khách.",
+            RequiresRescue = false,
+            Status = "READY_FOR_REDISPATCH",
+            ReportedBy = Guid.NewGuid(),
+            RescuePlanType = "EXTERNAL_REEFER_TO_ROUTE_WAREHOUSE",
+            RescuePlanDetails = JsonSerializer.Serialize(new ExternalReeferPlanRecord
+            {
+                RentalProvider = "Driver return",
+                VehiclePlate = "51C-RETURN",
+                DriverName = "Return Driver",
+                DestinationWarehouseId = warehouseId,
+                DestinationWarehouseName = "Kho gần khách",
+                AgreedTemperature = -18m,
+                OriginalTripId = Guid.NewGuid(),
+                DispatchedAt = DateTime.UtcNow.AddHours(-2),
+                ArrivedAt = DateTime.UtcNow.AddMinutes(-30),
+                SealNumber = "NO-SHOW-SEAL-001",
+                LpnIds = { fixture.Lpn.LpnId },
+                RecordedBy = Guid.NewGuid()
+            })
+        });
+        await fixture.Db.SaveChangesAsync();
+
+        var result = await fixture.Service.CreateTripFromWarehouseAsync(new WarehouseRedispatchRequest
+        {
+            DispatcherId = Guid.NewGuid(),
+            LpnIds = new List<Guid> { fixture.Lpn.LpnId },
+            VehicleId = fixture.Vehicle.VehicleId,
+            DriverIds = fixture.Request.DriverIds,
+            PlannedStartTime = fixture.Request.PlannedStartTime,
+            PlannedEndTime = fixture.Request.PlannedEndTime
+        });
+
+        var trip = await fixture.Db.MasterTrips.SingleAsync(item => item.TripId == result.TripId);
+        var incident = await fixture.Db.IncidentReports.SingleAsync(item => item.IncidentId == incidentId);
+        Assert.Equal(fixture.Request.OriginWarehouseLocationId, trip.OriginLocationId);
+        Assert.Null(trip.ScheduleId);
+        Assert.Null(trip.RouteId);
+        Assert.Equal("REDISPATCH_PLANNED", incident.Status);
+        Assert.Equal(result.TripId, incident.TripId);
+    }
+
+    [Fact]
+    public async Task CreateTripFromWarehouse_RejectsLpnThatHasNotBeenInbounded()
+    {
+        await using var fixture = await CreateFixtureAsync();
+        fixture.Lpn.WarehouseId = null;
+        fixture.Lpn.Warehouse = null;
+        await fixture.Db.SaveChangesAsync();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            fixture.Service.CreateTripFromWarehouseAsync(new WarehouseRedispatchRequest
+            {
+                LpnIds = new List<Guid> { fixture.Lpn.LpnId },
+                VehicleId = fixture.Vehicle.VehicleId,
+                DriverIds = fixture.Request.DriverIds,
+                PlannedStartTime = fixture.Request.PlannedStartTime,
+                PlannedEndTime = fixture.Request.PlannedEndTime
+            }));
+
+        Assert.Contains("nhập kho", exception.Message);
+    }
+
+    [Fact]
     public async Task PlanLoad_CustomerEtaNotification_ContainsDateWithoutTime()
     {
         await using var fixture = await CreateFixtureAsync();
@@ -275,6 +352,16 @@ public class ManualDispatchFlowTests
             DestLocationNavigation = destination
         };
         var warehouseId = Guid.NewGuid();
+        var warehouse = new Warehouse
+        {
+            WarehouseId = warehouseId,
+            WarehouseName = "Test Origin Warehouse",
+            WarehouseCode = "WH-TEST-ORIGIN",
+            WarehouseType = "COLD_STORAGE",
+            Address = origin.Address,
+            MaxPallets = 100,
+            Status = "ACTIVE"
+        };
         var receipt = new WarehouseReceipt
         {
             ReceiptId = Guid.NewGuid(),
@@ -295,6 +382,7 @@ public class ManualDispatchFlowTests
             ReceiptId = receipt.ReceiptId,
             Receipt = receipt,
             WarehouseId = warehouseId,
+            Warehouse = warehouse,
             Quantity = 1,
             ActualWeightKg = 100m,
             ActualCbm = 1m,
@@ -351,6 +439,7 @@ public class ManualDispatchFlowTests
             customerUser,
             messageType,
             order,
+            warehouse,
             receipt,
             lpn,
             vehicle,

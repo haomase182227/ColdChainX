@@ -763,13 +763,13 @@ public sealed class IncidentRescueFlowTests : IDisposable
             warehouseWorker.UserId);
 
         Assert.True(inbound.Success, inbound.Message);
-        Assert.Equal("RETURNED_TO_HUB", inbound.Data!.IncidentStatus);
-        Assert.Equal("RETURN_COMPLETED", inbound.Data.RequiredWarehouseAction);
+        Assert.Equal("READY_FOR_REDISPATCH", inbound.Data!.IncidentStatus);
+        Assert.Equal("CREATE_REDISPATCH_TRIP", inbound.Data.RequiredWarehouseAction);
         Assert.Equal(LpnState.IN_STOCK, lpn.State);
         Assert.Equal(warehouse.WarehouseId, lpn.WarehouseId);
         Assert.Null(lpn.TripId);
         Assert.Null(lpn.RouteId);
-        Assert.Equal("RETURNED_TO_HUB", order.Status);
+        Assert.Equal("READY_FOR_ROUTING", order.Status);
         Assert.Null(order.MasterTripId);
         Assert.Equal("COMPLETED", trip.Status);
 
