@@ -665,7 +665,7 @@ public sealed class IncidentRescueFlowTests : IDisposable
             PackingType = "PALLET",
             TempCondition = "-5",
             Status = "DELIVERY_FAILED_NOSHOW",
-            MasterTripId = trip.TripId
+            MasterTripId = null
         };
         var lpn = new Lpn
         {

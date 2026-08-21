@@ -73,7 +73,10 @@ public class CloseShiftCommandHandler : IRequestHandler<CloseShiftCommand, ApiRe
         }
 
         var pendingOrders = await _context.TransportOrders
-            .Where(o => o.MasterTripId == trip.TripId)
+            .Where(order =>
+                order.MasterTripId == trip.TripId
+                || _context.Lpns.Any(lpn =>
+                    lpn.TripId == trip.TripId && lpn.OrderId == order.OrderId))
             .ToListAsync(cancellationToken);
 
         if (pendingOrders.Any())
