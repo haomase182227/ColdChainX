@@ -66,19 +66,19 @@ namespace ColdChainX.UnitTests
         }
 
         [Fact]
-        public async Task CheckAsync_BlocksWhenExceedsDailyLimit()
+        public async Task CheckAsync_AllowsWithWarningWhenProjectedDailyHoursAreHigh()
         {
             var day = new DateOnly(2026, 6, 24);
             await LogHoursAsync(8m, day);
 
             var result = await _service.CheckAsync(_driverId, 3m, day); // 8 + 3 = 11 > 10
 
-            Assert.False(result.CanAssign);
+            Assert.True(result.CanAssign);
             Assert.NotNull(result.Reason);
         }
 
         [Fact]
-        public async Task CheckAsync_BlocksWhenExceedsWeeklyLimit()
+        public async Task CheckAsync_AllowsWithWarningWhenProjectedWeeklyHoursAreHigh()
         {
             await LogHoursAsync(9m, new DateOnly(2026, 6, 22));
             await LogHoursAsync(9m, new DateOnly(2026, 6, 23));
@@ -88,12 +88,13 @@ namespace ColdChainX.UnitTests
 
             var result = await _service.CheckAsync(_driverId, 5m, new DateOnly(2026, 6, 24)); // week 45 + 5 = 50 > 48
 
-            Assert.False(result.CanAssign);
+            Assert.True(result.CanAssign);
             Assert.Equal(45m, result.WeekHours);
+            Assert.NotNull(result.Reason);
         }
 
         [Fact]
-        public async Task ReconcileStatusAsync_SetsRelaxWhenOverDailyLimit()
+        public async Task ReconcileStatusAsync_DoesNotForceRelaxFromLoggedHours()
         {
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
             await LogHoursAsync(10m, today);
@@ -101,13 +102,53 @@ namespace ColdChainX.UnitTests
             var driver = await _db.Drivers.FindAsync(_driverId);
             await _service.ReconcileStatusAsync(driver!);
 
-            Assert.Equal("RELAX", driver!.Status);
+            Assert.Equal("ACTIVE", driver!.Status);
         }
 
         [Fact]
-        public async Task ReconcileStatusAsync_ClearsRelaxWhenWindowExpired()
+        public async Task ReconcileStatusAsync_KeepsRelaxBeforeFourHourRecoveryPeriodEnds()
         {
-            await LogHoursAsync(10m, DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-30));
+            var tripId = Guid.NewGuid();
+            _db.MasterTrips.Add(new MasterTrip
+            {
+                TripId = tripId,
+                Status = "COMPLETED",
+                CompletedAt = DateTime.UtcNow.AddHours(-3)
+            });
+            _db.TripDrivers.Add(new TripDriver
+            {
+                TripDriverId = Guid.NewGuid(),
+                TripId = tripId,
+                DriverId = _driverId,
+                DriverRole = "PRIMARY"
+            });
+            await _db.SaveChangesAsync();
+
+            var driver = await _db.Drivers.FindAsync(_driverId);
+            driver!.Status = "RELAX";
+            await _service.ReconcileStatusAsync(driver);
+
+            Assert.Equal("RELAX", driver.Status);
+        }
+
+        [Fact]
+        public async Task ReconcileStatusAsync_ClearsRelaxAfterFourHourRecoveryPeriod()
+        {
+            var tripId = Guid.NewGuid();
+            _db.MasterTrips.Add(new MasterTrip
+            {
+                TripId = tripId,
+                Status = "COMPLETED",
+                CompletedAt = DateTime.UtcNow.Subtract(DriverAvailabilityService.RecoveryPeriod).AddMinutes(-1)
+            });
+            _db.TripDrivers.Add(new TripDriver
+            {
+                TripDriverId = Guid.NewGuid(),
+                TripId = tripId,
+                DriverId = _driverId,
+                DriverRole = "PRIMARY"
+            });
+            await _db.SaveChangesAsync();
 
             var driver = await _db.Drivers.FindAsync(_driverId);
             driver!.Status = "RELAX";
