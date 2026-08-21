@@ -139,6 +139,10 @@ public class DeliveryController : ControllerBase
         var command = new CheckinDriverCommand
         {
             ProofImageFile = request.ProofImageFile,
+            Latitude = request.Latitude,
+            Longitude = request.Longitude,
+            LocationTimestamp = request.LocationTimestamp,
+            AccuracyMeters = request.AccuracyMeters,
             StopId = stopId,
             UserId = userId
         };

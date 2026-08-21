@@ -602,6 +602,8 @@ namespace ColdChainX.UnitTests
                 ProofImageUrl = "https://example.com/proofs/arrival.jpg",
                 Latitude = 10.8466m,
                 Longitude = 106.8043m,
+                LocationTimestamp = DateTimeOffset.UtcNow,
+                AccuracyMeters = 10,
                 UserId = _userId
             };
 
@@ -688,10 +690,139 @@ namespace ColdChainX.UnitTests
                 ProofImageUrl = "https://example.com/proofs/arrival.jpg",
                 Latitude = 11.5000m, // Far away (> 700m)
                 Longitude = 107.5000m,
+                LocationTimestamp = DateTimeOffset.UtcNow,
+                AccuracyMeters = 10,
                 UserId = _userId
             };
 
             await Assert.ThrowsAsync<ValidationException>(() => handler.Handle(command, CancellationToken.None));
+        }
+
+        [Fact]
+        public async Task Checkin_WithStaleClientGps_ShouldThrowValidationException()
+        {
+            var stopId = Guid.NewGuid();
+            var locationId = Guid.NewGuid();
+            _db.Locations.Add(new Location
+            {
+                LocationId = locationId,
+                Address = "Test Destination",
+                Latitude = 10.8465m,
+                Longitude = 106.8042m
+            });
+            _db.TripStops.Add(new TripStop
+            {
+                StopId = stopId,
+                TripId = _tripId,
+                LocationId = locationId,
+                StopSequence = 13,
+                StopType = "DELIVERY",
+                PlannedArrivalTime = DateTime.UtcNow,
+                PlannedDepartureTime = DateTime.UtcNow.AddHours(1),
+                Status = "PLANNED"
+            });
+            await _db.SaveChangesAsync();
+
+            var handler = new CheckinDriverCommandHandler(_db, _configuration);
+            var command = new CheckinDriverCommand
+            {
+                StopId = stopId,
+                ProofImageUrl = "https://example.com/proofs/arrival.jpg",
+                Latitude = 10.8466m,
+                Longitude = 106.8043m,
+                LocationTimestamp = DateTimeOffset.UtcNow.AddMinutes(-10),
+                AccuracyMeters = 10,
+                UserId = _userId
+            };
+
+            await Assert.ThrowsAsync<ValidationException>(() => handler.Handle(command, CancellationToken.None));
+        }
+
+        [Fact]
+        public async Task Checkin_WithoutAnyGps_ShouldThrowValidationException()
+        {
+            var stopId = Guid.NewGuid();
+            var locationId = Guid.NewGuid();
+            _db.Locations.Add(new Location
+            {
+                LocationId = locationId,
+                Address = "Test Destination",
+                Latitude = 10.8465m,
+                Longitude = 106.8042m
+            });
+            _db.TripStops.Add(new TripStop
+            {
+                StopId = stopId,
+                TripId = _tripId,
+                LocationId = locationId,
+                StopSequence = 14,
+                StopType = "DELIVERY",
+                PlannedArrivalTime = DateTime.UtcNow,
+                PlannedDepartureTime = DateTime.UtcNow.AddHours(1),
+                Status = "PLANNED"
+            });
+            await _db.SaveChangesAsync();
+
+            var handler = new CheckinDriverCommandHandler(_db, _configuration);
+            var command = new CheckinDriverCommand
+            {
+                StopId = stopId,
+                ProofImageUrl = "https://example.com/proofs/arrival.jpg",
+                UserId = _userId
+            };
+
+            await Assert.ThrowsAsync<ValidationException>(() => handler.Handle(command, CancellationToken.None));
+        }
+
+        [Fact]
+        public async Task Checkin_WhenAlreadyArrived_ShouldThrowConflictWithoutCreatingAnotherEvent()
+        {
+            var stopId = Guid.NewGuid();
+            var locationId = Guid.NewGuid();
+            var originalArrival = DateTime.UtcNow.AddMinutes(-5);
+            _db.Locations.Add(new Location
+            {
+                LocationId = locationId,
+                Address = "Test Destination",
+                Latitude = 10.8465m,
+                Longitude = 106.8042m
+            });
+            _db.TripStops.Add(new TripStop
+            {
+                StopId = stopId,
+                TripId = _tripId,
+                LocationId = locationId,
+                StopSequence = 15,
+                StopType = "DELIVERY",
+                PlannedArrivalTime = DateTime.UtcNow,
+                PlannedDepartureTime = DateTime.UtcNow.AddHours(1),
+                ActualArrivalTime = originalArrival,
+                Status = "ARRIVED"
+            });
+            _db.TripStopEvents.Add(new TripStopEvent
+            {
+                EventId = Guid.NewGuid(),
+                StopId = stopId,
+                EventType = "DRIVER_CHECKIN",
+                EventTime = originalArrival
+            });
+            await _db.SaveChangesAsync();
+
+            var handler = new CheckinDriverCommandHandler(_db, _configuration);
+            var command = new CheckinDriverCommand
+            {
+                StopId = stopId,
+                ProofImageUrl = "https://example.com/proofs/arrival-again.jpg",
+                Latitude = 10.8466m,
+                Longitude = 106.8043m,
+                LocationTimestamp = DateTimeOffset.UtcNow,
+                AccuracyMeters = 10,
+                UserId = _userId
+            };
+
+            await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(command, CancellationToken.None));
+            Assert.Equal(1, await _db.TripStopEvents.CountAsync(e => e.StopId == stopId && e.EventType == "DRIVER_CHECKIN"));
+            Assert.Equal(originalArrival, (await _db.TripStops.FindAsync(stopId))!.ActualArrivalTime);
         }
 
         [Fact]
