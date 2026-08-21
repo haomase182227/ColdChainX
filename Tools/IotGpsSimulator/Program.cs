@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Text.Json;
 using MQTTnet;
 using MQTTnet.Client;
@@ -284,13 +284,13 @@ app.MapGet("/api/fleet/trip/{tripId}/polyline", async (string tripId, IConfigura
         {
             var poly = polylineElement.GetString();
             if (string.IsNullOrEmpty(poly)) return Results.BadRequest("Polyline is empty");
-            return Results.Ok(new { polyline = poly, deviceCode = deviceCode });
+            return Results.Ok(new { polyline = poly, deviceCode = deviceCode, stopPoints = ExtractRouteStopPoints(data) });
         }
         
         if (doc.RootElement.TryGetProperty("Data", out var dataCap) &&
             dataCap.TryGetProperty("OverviewPolyline", out var polylineElementCap))
         {
-            return Results.Ok(new { polyline = polylineElementCap.GetString(), deviceCode = deviceCode });
+            return Results.Ok(new { polyline = polylineElementCap.GetString(), deviceCode = deviceCode, stopPoints = ExtractRouteStopPoints(dataCap) });
         }
 
         return Results.BadRequest("Polyline not found in response.");
@@ -312,6 +312,68 @@ static string ResolveBackendApiUrl(IConfiguration config)
     }
 
     return configuredUrl.TrimEnd('/');
+}
+
+static List<RouteStopPoint> ExtractRouteStopPoints(JsonElement routeData)
+{
+    var points = new List<RouteStopPoint>();
+
+    if (TryGetPropertyCaseInsensitive(routeData, "optimizedStops", out var stopsElement) &&
+        stopsElement.ValueKind == JsonValueKind.Array)
+    {
+        foreach (var stop in stopsElement.EnumerateArray())
+        {
+            if (TryReadCoordinate(stop, out var point))
+            {
+                points.Add(point);
+            }
+        }
+    }
+
+    if (TryGetPropertyCaseInsensitive(routeData, "destination", out var destinationElement) &&
+        TryReadCoordinate(destinationElement, out var destination))
+    {
+        points.Add(destination);
+    }
+
+    return points;
+}
+
+static bool TryReadCoordinate(JsonElement element, out RouteStopPoint point)
+{
+    point = new RouteStopPoint();
+
+    if (!TryGetPropertyCaseInsensitive(element, "lat", out var latElement) ||
+        !TryGetPropertyCaseInsensitive(element, "lon", out var lonElement))
+    {
+        return false;
+    }
+
+    point.Lat = latElement.GetDouble();
+    point.Lon = lonElement.GetDouble();
+
+    if (TryGetPropertyCaseInsensitive(element, "address", out var addressElement) &&
+        addressElement.ValueKind == JsonValueKind.String)
+    {
+        point.Address = addressElement.GetString();
+    }
+
+    return true;
+}
+
+static bool TryGetPropertyCaseInsensitive(JsonElement element, string propertyName, out JsonElement value)
+{
+    foreach (var property in element.EnumerateObject())
+    {
+        if (string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+        {
+            value = property.Value;
+            return true;
+        }
+    }
+
+    value = default;
+    return false;
 }
 
 app.MapPost("/api/fleet/start", async (SimulationRequest req, ILoggerFactory loggerFactory, IConfiguration config) =>
@@ -403,6 +465,7 @@ app.MapPost("/api/fleet/start", async (SimulationRequest req, ILoggerFactory log
     };
     
     if(state.Path.Count == 0) return Results.BadRequest("Invalid polyline.");
+    state.StopPointIndexes = ResolveStopPointIndexes(req.StopPoints, state.Path);
     
     state.CurrentLat = state.Path[0].Lat;
     state.CurrentLon = state.Path[0].Lon;
@@ -515,8 +578,47 @@ static double CalculateDistanceKm(double lat1, double lon1, double lat2, double 
     return R * c;
 }
 
-static void InterpolatePosition(VehicleSimulationState state, double distanceToMoveKm)
+static List<int> ResolveStopPointIndexes(IReadOnlyList<RouteStopPoint>? stopPoints, IReadOnlyList<Coordinate> path)
 {
+    if (stopPoints == null || stopPoints.Count == 0 || path.Count == 0)
+        return new List<int>();
+
+    var indexes = new List<int>();
+    var previousIndex = 0;
+
+    foreach (var stop in stopPoints)
+    {
+        var bestIndex = -1;
+        var bestDistance = double.MaxValue;
+
+        for (var i = previousIndex; i < path.Count; i++)
+        {
+            var distance = CalculateDistanceKm(stop.Lat, stop.Lon, path[i].Lat, path[i].Lon);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestIndex = i;
+            }
+        }
+
+        if (bestIndex >= 0)
+        {
+            indexes.Add(bestIndex);
+            previousIndex = bestIndex;
+        }
+    }
+
+    return indexes
+        .Where(index => index > 0)
+        .Distinct()
+        .OrderBy(index => index)
+        .ToList();
+}
+
+static (bool ReachedCheckpoint, bool ReachedDestination) InterpolatePosition(VehicleSimulationState state, double distanceToMoveKm)
+{
+    var checkpointIndex = GetNextCheckpointIndex(state);
+
     while (distanceToMoveKm > 0 && state.CurrentPointIndex < state.Path.Count - 1)
     {
         var p1Lat = state.CurrentLat;
@@ -531,6 +633,12 @@ static void InterpolatePosition(VehicleSimulationState state, double distanceToM
             state.CurrentPointIndex++;
             state.CurrentLat = p2.Lat;
             state.CurrentLon = p2.Lon;
+
+            if (checkpointIndex.HasValue && state.CurrentPointIndex >= checkpointIndex.Value)
+            {
+                SnapToCheckpoint(state, checkpointIndex.Value);
+                return (true, state.CurrentPointIndex >= state.Path.Count);
+            }
         }
         else
         {
@@ -548,6 +656,31 @@ static void InterpolatePosition(VehicleSimulationState state, double distanceToM
         state.CurrentLon = lastPoint.Lon;
         state.CurrentPointIndex = state.Path.Count;
     }
+
+    return (state.CurrentPointIndex >= state.Path.Count, state.CurrentPointIndex >= state.Path.Count);
+}
+
+static int? GetNextCheckpointIndex(VehicleSimulationState state)
+{
+    while (state.NextStopPointIndex < state.StopPointIndexes.Count &&
+           state.StopPointIndexes[state.NextStopPointIndex] <= state.CurrentPointIndex)
+    {
+        state.NextStopPointIndex++;
+    }
+
+    if (state.NextStopPointIndex >= state.StopPointIndexes.Count)
+        return null;
+
+    return state.StopPointIndexes[state.NextStopPointIndex];
+}
+
+static void SnapToCheckpoint(VehicleSimulationState state, int checkpointIndex)
+{
+    var point = state.Path[Math.Clamp(checkpointIndex, 0, state.Path.Count - 1)];
+    state.CurrentLat = point.Lat;
+    state.CurrentLon = point.Lon;
+    state.CurrentPointIndex = checkpointIndex >= state.Path.Count - 1 ? state.Path.Count : checkpointIndex;
+    state.NextStopPointIndex++;
 }
 
 async Task RunVehicleSimulation(VehicleSimulationState state, ILogger logger, IConfiguration config)
@@ -623,7 +756,11 @@ async Task RunVehicleSimulation(VehicleSimulationState state, ILogger logger, IC
                         } else {
                             if (!state.IsPaused)
                             {
-                                InterpolatePosition(state, (DateTime.UtcNow - lastMessageTime).TotalSeconds * (state.SpeedKmh / 3600.0));
+                                var moveResult = InterpolatePosition(state, (DateTime.UtcNow - lastMessageTime).TotalSeconds * (state.SpeedKmh / 3600.0));
+                                if (moveResult.ReachedCheckpoint && !moveResult.ReachedDestination)
+                                {
+                                    state.IsPaused = true;
+                                }
                             }
                         }
                         lastMessageTime = DateTime.UtcNow;
@@ -676,6 +813,16 @@ async Task RunVehicleSimulation(VehicleSimulationState state, ILogger logger, IC
 
             while (state.CurrentPointIndex < state.Path.Count && !state.CancellationTokenSource.Token.IsCancellationRequested)
             {
+                var reachedCheckpoint = false;
+                var reachedDestination = false;
+                if (!state.IsPaused && state.HasPublishedInitialPosition)
+                {
+                    double distanceKm = (state.SpeedKmh / 3600.0) * (tickDelayMs / 1000.0);
+                    var moveResult = InterpolatePosition(state, distanceKm);
+                    reachedCheckpoint = moveResult.ReachedCheckpoint;
+                    reachedDestination = moveResult.ReachedDestination;
+                }
+
                 double temp = state.TargetTemperature + (rnd.NextDouble() * 1.0 - 0.5);
                 state.CurrentTemperature = Math.Round(temp, 1);
 
@@ -700,6 +847,7 @@ async Task RunVehicleSimulation(VehicleSimulationState state, ILogger logger, IC
 
                 await mqttClient.PublishAsync(msg, state.CancellationTokenSource.Token);
                 logger.LogInformation($"[{state.DeviceId}] Published: {state.CurrentLat},{state.CurrentLon} Temp:{state.CurrentTemperature}C");
+                state.HasPublishedInitialPosition = true;
                 
                 try
                 {
@@ -708,11 +856,17 @@ async Task RunVehicleSimulation(VehicleSimulationState state, ILogger logger, IC
                     await conn.ExecuteAsync(@"UPDATE iot_devices SET ""IsOnline"" = true, last_ping_time = CURRENT_TIMESTAMP WHERE device_code = @dc", new { dc = state.DeviceId });
                 }
                 catch { }
-                
-                if (!state.IsPaused)
+
+                if (reachedDestination)
                 {
-                    double distanceKm = (state.SpeedKmh / 3600.0) * (tickDelayMs / 1000.0);
-                    InterpolatePosition(state, distanceKm);
+                    logger.LogInformation($"[{state.DeviceId}] Arrived at destination. Simulation will stop at final coordinate.");
+                    break;
+                }
+
+                if (reachedCheckpoint)
+                {
+                    state.IsPaused = true;
+                    logger.LogInformation($"[{state.DeviceId}] Arrived at delivery checkpoint. Simulation paused at stop coordinate.");
                 }
                 
                 await Task.Delay(tickDelayMs, state.CancellationTokenSource.Token);
@@ -1037,6 +1191,7 @@ public class SimulationRequest
 {
     public string? Polyline { get; set; }
     public string? DeviceId { get; set; }
+    public List<RouteStopPoint>? StopPoints { get; set; }
     public double SpeedKmh { get; set; } = 60;
     public double? TargetTemperature { get; set; }
     public bool IsHybridMode { get; set; }
@@ -1088,6 +1243,13 @@ public class Coordinate
     public Coordinate(double lat, double lon) { Lat = lat; Lon = lon; }
 }
 
+public class RouteStopPoint
+{
+    public double Lat { get; set; }
+    public double Lon { get; set; }
+    public string? Address { get; set; }
+}
+
 public class VehicleSimulationState
 {
     public string DeviceId { get; set; } = "";
@@ -1096,6 +1258,7 @@ public class VehicleSimulationState
     public bool IsHybridMode { get; set; }
     public bool InjectTemp { get; set; }
     public bool UseRealGps { get; set; }
+    public bool HasPublishedInitialPosition { get; set; }
     public double SpeedKmh { get; set; }
     public double CurrentLat { get; set; }
     public double CurrentLon { get; set; }
@@ -1104,9 +1267,13 @@ public class VehicleSimulationState
     public bool IsDoorOpen { get; set; }
 
     public int CurrentPointIndex { get; set; }
+    public int NextStopPointIndex { get; set; }
     
     [System.Text.Json.Serialization.JsonIgnore]
     public List<Coordinate> Path { get; set; } = new();
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public List<int> StopPointIndexes { get; set; } = new();
     
     [System.Text.Json.Serialization.JsonIgnore]
     public CancellationTokenSource? CancellationTokenSource { get; set; }
