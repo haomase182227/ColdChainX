@@ -497,6 +497,154 @@ namespace ColdChainX.UnitTests
             Assert.Equal(10_800m, quotation.FinalAmount);
         }
 
+        [Fact]
+        public async Task UpdateOrder_WhenOnlyQuantityChanges_RecalculatesLegacyCbmAndPackageTotal()
+        {
+            var customerId = Guid.NewGuid();
+            var orderId = Guid.NewGuid();
+            _db.TransportOrders.Add(new TransportOrder
+            {
+                OrderId = orderId,
+                TrackingCode = "TRK-PARTIAL-QTY-01",
+                CustomerId = customerId,
+                ItemName = "Legacy cargo",
+                Category = "MEAT_SEAFOOD",
+                Quantity = 2,
+                PackingType = "Carton Box",
+                TempCondition = "-18",
+                Status = "PENDING_REVIEW",
+                OrderDimension = new OrderDimension
+                {
+                    OrderId = orderId,
+                    ExpectedWeightKg = 20m,
+                    ActualWeightKg = 20m,
+                    ExpectedCbm = 0.012m,
+                    ActualCbm = 0.012m,
+                    LengthCm = 10m,
+                    WidthCm = 20m,
+                    HeightCm = 30m,
+                    TotalPackageQuantity = 2
+                }
+            });
+            await _db.SaveChangesAsync();
+
+            var result = await _service.UpdateOrderAsync(
+                orderId,
+                new UpdateOrderRequest { Quantity = 4 },
+                customerId);
+
+            Assert.True(result.Success, result.Message);
+            Assert.Equal(0.024m, result.Data!.ExpectedCbm);
+            var dimension = await _db.Set<OrderDimension>().SingleAsync(item => item.OrderId == orderId);
+            Assert.Equal(4, dimension.TotalPackageQuantity);
+            Assert.Equal(0.024m, dimension.ExpectedCbm);
+            Assert.Equal("LEGACY_DIMENSION", dimension.CbmEstimationMethod);
+        }
+
+        [Fact]
+        public async Task UpdateOrder_WhenOneDimensionChanges_UsesStoredValuesForRemainingDimensions()
+        {
+            var customerId = Guid.NewGuid();
+            var orderId = Guid.NewGuid();
+            _db.TransportOrders.Add(new TransportOrder
+            {
+                OrderId = orderId,
+                TrackingCode = "TRK-PARTIAL-DIM-01",
+                CustomerId = customerId,
+                ItemName = "Legacy cargo",
+                Category = "MEAT_SEAFOOD",
+                Quantity = 2,
+                PackingType = "Carton Box",
+                TempCondition = "-18",
+                Status = "PENDING_REVIEW",
+                OrderDimension = new OrderDimension
+                {
+                    OrderId = orderId,
+                    ExpectedWeightKg = 20m,
+                    ActualWeightKg = 20m,
+                    ExpectedCbm = 0.012m,
+                    ActualCbm = 0.012m,
+                    LengthCm = 10m,
+                    WidthCm = 20m,
+                    HeightCm = 30m,
+                    TotalPackageQuantity = 2
+                }
+            });
+            await _db.SaveChangesAsync();
+
+            var result = await _service.UpdateOrderAsync(
+                orderId,
+                new UpdateOrderRequest { LengthCm = 20m },
+                customerId);
+
+            Assert.True(result.Success, result.Message);
+            Assert.Equal(0.024m, result.Data!.ExpectedCbm);
+            var dimension = await _db.Set<OrderDimension>().SingleAsync(item => item.OrderId == orderId);
+            Assert.Equal(20m, dimension.LengthCm);
+            Assert.Equal(20m, dimension.WidthCm);
+            Assert.Equal(30m, dimension.HeightCm);
+        }
+
+        [Fact]
+        public async Task UpdateOrder_WhenPackagePricingInputsChange_RecalculatesDensityCbm()
+        {
+            var customerId = Guid.NewGuid();
+            var orderId = Guid.NewGuid();
+            _db.TransportOrders.Add(new TransportOrder
+            {
+                OrderId = orderId,
+                TrackingCode = "TRK-PACKAGE-CBM-01",
+                CustomerId = customerId,
+                ItemName = "Frozen seafood",
+                Category = "MEAT_SEAFOOD",
+                Quantity = 3,
+                PackingType = "Carton Box",
+                TempCondition = "-18",
+                Status = "PENDING_REVIEW",
+                OrderDimension = new OrderDimension
+                {
+                    OrderId = orderId,
+                    ExpectedWeightKg = 20m,
+                    ActualWeightKg = 20m,
+                    ExpectedCbm = 0.0553m,
+                    ActualCbm = 0.0553m,
+                    TotalPackageQuantity = 3,
+                    CbmEstimationMethod = "DENSITY_FACTOR"
+                },
+                OrderPackageLines =
+                {
+                    new OrderPackageLine
+                    {
+                        OrderPackageLineId = Guid.NewGuid(),
+                        OrderId = orderId,
+                        Label = "Small",
+                        CapacityKg = 5m,
+                        Quantity = 2
+                    },
+                    new OrderPackageLine
+                    {
+                        OrderPackageLineId = Guid.NewGuid(),
+                        OrderId = orderId,
+                        Label = "Large",
+                        CapacityKg = 10m,
+                        Quantity = 1
+                    }
+                }
+            });
+            await _db.SaveChangesAsync();
+
+            var result = await _service.UpdateOrderAsync(
+                orderId,
+                new UpdateOrderRequest { PackagingType = "Foam Box" },
+                customerId);
+
+            Assert.True(result.Success, result.Message);
+            Assert.Equal(0.0724m, result.Data!.ExpectedCbm);
+            var dimension = await _db.Set<OrderDimension>().SingleAsync(item => item.OrderId == orderId);
+            Assert.Equal(0.0724m, dimension.ExpectedCbm);
+            Assert.Equal("DENSITY_FACTOR", dimension.CbmEstimationMethod);
+        }
+
         #region Mock Classes
 
         private class MockLocationService : ILocationService

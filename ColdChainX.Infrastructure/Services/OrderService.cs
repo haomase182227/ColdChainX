@@ -533,16 +533,11 @@ namespace ColdChainX.Infrastructure.Services
                     order.OrderDimension.ExpectedWeightKg = request.ExpectedWeightKg.Value;
                     order.OrderDimension.ActualWeightKg = request.ExpectedWeightKg.Value;
                 }
-                
-                if (request.PackageLinesJson == null && request.LengthCm.HasValue && request.WidthCm.HasValue && request.HeightCm.HasValue && request.Quantity.HasValue && order.OrderDimension != null)
+
+                if (request.PackageLinesJson == null)
                 {
-                    var expectedCbm = Math.Round(request.LengthCm.Value * request.WidthCm.Value * request.HeightCm.Value * request.Quantity.Value / 1000000m, 4);
-                    if (order.OrderDimension.ExpectedCbm != expectedCbm) pricingChanged = true;
-                    order.OrderDimension.ExpectedCbm = expectedCbm;
-                    order.OrderDimension.ActualCbm = expectedCbm;
-                    order.OrderDimension.LengthCm = request.LengthCm.Value;
-                    order.OrderDimension.WidthCm = request.WidthCm.Value;
-                    order.OrderDimension.HeightCm = request.HeightCm.Value;
+                    pricingChanged |= ApplyPartialLegacyDimensionUpdate(order, request);
+                    pricingChanged |= RecalculateExistingPackageLineCbm(order, request);
                 }
 
                 if (request.DestAddressText != null && order.DestLocationNavigation != null)
@@ -731,15 +726,11 @@ namespace ColdChainX.Infrastructure.Services
                     order.OrderDimension.ExpectedWeightKg = request.ExpectedWeightKg.Value;
                     order.OrderDimension.ActualWeightKg = request.ExpectedWeightKg.Value;
                 }
-                
-                if (request.PackageLinesJson == null && request.LengthCm.HasValue && request.WidthCm.HasValue && request.HeightCm.HasValue && request.Quantity.HasValue && order.OrderDimension != null)
+
+                if (request.PackageLinesJson == null)
                 {
-                    var expectedCbm = Math.Round(request.LengthCm.Value * request.WidthCm.Value * request.HeightCm.Value * request.Quantity.Value / 1000000m, 4);
-                    order.OrderDimension.ExpectedCbm = expectedCbm;
-                    order.OrderDimension.ActualCbm = expectedCbm;
-                    order.OrderDimension.LengthCm = request.LengthCm.Value;
-                    order.OrderDimension.WidthCm = request.WidthCm.Value;
-                    order.OrderDimension.HeightCm = request.HeightCm.Value;
+                    pricingChanged |= ApplyPartialLegacyDimensionUpdate(order, request);
+                    pricingChanged |= RecalculateExistingPackageLineCbm(order, request);
                 }
 
                 if (request.DestAddressText != null && order.DestLocationNavigation != null)
@@ -1378,7 +1369,7 @@ namespace ColdChainX.Infrastructure.Services
                 ? Math.Round(customerProvidedTotalCbm.Value, 4)
                 : Math.Round(
                     (expectedWeightKg / GetConservativeDensity(order.Category))
-                    * GetTemperatureFactor(decimal.Parse(order.TempCondition, CultureInfo.InvariantCulture), order.PackingType)
+                    * GetTemperatureFactor(ParseOrderTemperature(order.TempCondition), order.PackingType)
                     * GetPackagingFactor(order.PackingType),
                     4);
 
@@ -1415,6 +1406,77 @@ namespace ColdChainX.Infrastructure.Services
                 ? "CUSTOMER_PROVIDED"
                 : GetEstimationConfidence(order.Category, order.PackingType);
         }
+
+        private static bool ApplyPartialLegacyDimensionUpdate(
+            TransportOrder order,
+            UpdateOrderRequest request)
+        {
+            if (order.OrderDimension == null
+                || order.OrderPackageLines.Count > 0
+                || (!request.Quantity.HasValue
+                    && !request.LengthCm.HasValue
+                    && !request.WidthCm.HasValue
+                    && !request.HeightCm.HasValue))
+            {
+                return false;
+            }
+
+            var dimension = order.OrderDimension;
+            if (request.LengthCm.HasValue) dimension.LengthCm = request.LengthCm.Value;
+            if (request.WidthCm.HasValue) dimension.WidthCm = request.WidthCm.Value;
+            if (request.HeightCm.HasValue) dimension.HeightCm = request.HeightCm.Value;
+            dimension.TotalPackageQuantity = order.Quantity;
+
+            if (request.CustomerProvidedTotalCbm.HasValue)
+                return false;
+
+            var expectedCbm = Math.Round(
+                dimension.LengthCm * dimension.WidthCm * dimension.HeightCm * order.Quantity / 1000000m,
+                4);
+            var changed = dimension.ExpectedCbm != expectedCbm;
+            dimension.ExpectedCbm = expectedCbm;
+            dimension.ActualCbm = expectedCbm;
+            dimension.CustomerProvidedTotalCbm = null;
+            dimension.CbmEstimationMethod = "LEGACY_DIMENSION";
+            dimension.CbmEstimationConfidence = "HIGH";
+            return changed;
+        }
+
+        private static bool RecalculateExistingPackageLineCbm(
+            TransportOrder order,
+            UpdateOrderRequest request)
+        {
+            if (order.OrderDimension == null
+                || order.OrderPackageLines.Count == 0
+                || order.OrderDimension.CustomerProvidedTotalCbm.HasValue
+                || (request.Category == null
+                    && request.PackagingType == null
+                    && !request.TempCondition.HasValue))
+            {
+                return false;
+            }
+
+            var expectedWeightKg = order.OrderPackageLines.Sum(line => line.CapacityKg * line.Quantity);
+            var expectedCbm = Math.Round(
+                (expectedWeightKg / GetConservativeDensity(order.Category))
+                * GetTemperatureFactor(ParseOrderTemperature(order.TempCondition), order.PackingType)
+                * GetPackagingFactor(order.PackingType),
+                4);
+            var changed = order.OrderDimension.ExpectedCbm != expectedCbm;
+            order.OrderDimension.ExpectedWeightKg = expectedWeightKg;
+            order.OrderDimension.ActualWeightKg = expectedWeightKg;
+            order.OrderDimension.ExpectedCbm = expectedCbm;
+            order.OrderDimension.ActualCbm = expectedCbm;
+            order.OrderDimension.TotalPackageQuantity = order.OrderPackageLines.Sum(line => line.Quantity);
+            order.OrderDimension.CbmEstimationMethod = "DENSITY_FACTOR";
+            order.OrderDimension.CbmEstimationConfidence = GetEstimationConfidence(order.Category, order.PackingType);
+            return changed;
+        }
+
+        private static decimal ParseOrderTemperature(string value)
+            => decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var temperature)
+                ? temperature
+                : 0m;
 
         private static CbmEstimate CalculateExpectedCbm(
             CreateOrderRequest request,
